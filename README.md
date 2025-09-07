@@ -4,18 +4,20 @@ Predict NFL win probability using curated team-game features. No scraping. Uses 
 
 ---
 
-## TL;DR
-
 ```bash
 # 1) Create CSVs
 pip install nfl-data-py pandas numpy
 python scripts/build_csvs.py --start 2014 --end 2023 --out-dir data
 # Outputs: data/team_game_{base,iter1,iter2,iter3}.csv + schema files
+```
 
-# 2) Train models
+## **2) Train models**
+
+```bash
 pip install scikit-learn lightgbm joblib
 python train_models.py
-# Outputs: models/{preprocessor.joblib, nn_model.joblib, gbm_model.txt, metadata.json}
+```
+## **Outputs: models/{preprocessor.joblib, nn_model.joblib, gbm_model.txt, metadata.json}**
 
 # 3) Serve API
 pip install fastapi uvicorn
