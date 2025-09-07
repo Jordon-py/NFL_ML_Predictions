@@ -1,0 +1,13 @@
+2025-09-06 09:16:48,852 | INFO | data_pipeline | Starting data pipeline with years=[2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023]
+2025-09-06 09:16:48,853 | INFO | data_pipeline | [by_play] import_pbp_data years=[2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023]
+2025-09-06 09:18:21,744 | INFO | data_pipeline | [by_play] kept_cols=49  train=(327215, 50)  val=(49852, 50)  test=(57046, 50)
+2025-09-06 09:18:21,796 | INFO | data_pipeline | [by_week] importing weekly data years=[2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023]
+2025-09-06 09:18:27,798 | INFO | data_pipeline | [by_week] train=(37598, 53)  val=(5631, 53)  test=(5653, 53)
+2025-09-06 09:18:28,605 | INFO | data_pipeline | [team_schedule] team_descriptions rows=36
+2025-09-06 09:18:29,416 | INFO | data_pipeline | [team_schedule] schedule rows=2458
+2025-09-06 09:18:29,450 | INFO | data_pipeline | [team_schedule] importing depth_charts years=[2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023]
+2025-09-06 09:18:35,930 | INFO | data_pipeline | [team_schedule] importing qbr_rating years=[2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023]
+2025-09-06 09:18:36,936 | INFO | data_pipeline | [team_schedule] importing FTN charts years=[2022, 2023]
+2025-09-06 09:18:38,165 | INFO | data_pipeline | [team_schedule] merging team metadata into schedule
+2025-09-06 09:18:38,244 | INFO | data_pipeline | [team_schedule] enriched rows=2458
+2025-09-06 09:18:38,255 | INFO | data_pipeline | Data pipeline completed.

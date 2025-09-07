@@ -1,0 +1,29 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Start Backend (uvicorn)",
+			"type": "shell",
+			"command": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+			"args": [
+				"-m",
+				"uvicorn",
+				"backend.app.main:app",
+				"--host",
+				"127.0.0.1",
+				"--port",
+				"8000"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"isBackground": true,
+			"group": "build"
+		},
+		{
+			"label": "Check npm version",
+			"type": "shell",
+			"command": "npm --version"
+		}
+	]
+}

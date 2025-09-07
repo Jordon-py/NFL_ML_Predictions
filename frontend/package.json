@@ -1,0 +1,32 @@
+{
+  "name": "nfl-prediction-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "React frontend for NFL game prediction system",
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-scripts": "5.0.1",
+    "axios": "^1.4.0",
+    "chart.js": "^4.4.0"
+  },
+  "proxy": "http://127.0.0.1:8000",
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  }
+}

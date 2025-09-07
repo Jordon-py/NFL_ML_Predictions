@@ -1,0 +1,7 @@
+2025-09-07 14:55:46,410 | INFO | Logging to data\build_csvs.log
+2025-09-07 14:55:46,410 | INFO | Seasons=[2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023] | Teams=32 | OutDir=data
+2025-09-07 14:55:46,412 | INFO | Loading pbp for seasons=[2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023]
+2025-09-07 14:58:18,972 | INFO | Wrote data\team_game_base.csv
+2025-09-07 14:58:19,486 | INFO | Wrote data\team_game_iter1.csv
+2025-09-07 14:58:24,251 | INFO | Wrote data\team_game_iter2.csv
+2025-09-07 14:58:25,320 | INFO | Wrote data\team_game_iter3.csv

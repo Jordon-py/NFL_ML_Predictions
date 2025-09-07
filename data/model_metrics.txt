@@ -1,0 +1,4 @@
+Ridge points_for MAE: 2.468 ± 0.084
+Ridge points_for R2:  0.898 ± 0.004
+LogReg win ACC:       0.964 ± 0.006
+LogReg win ROC-AUC:   0.995 ± 0.001
