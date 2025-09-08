@@ -23,17 +23,43 @@ import math
 import subprocess
 from pathlib import Path
 from typing import Optional, Dict, Any
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
+from fastapi import BackgroundTasks
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Determine paths relative to this file
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
+BASE_DIR = Path(__file__).resolve().parent.parent
 MODELS_DIR = BASE_DIR / 'models'
 
-app = FastAPI(title="NFL Game Prediction API",
-              description="Predict the probability of a home team winning an NFL game.",
-              version="1.0.0")
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    global model_objects
+    try:
+        model_objects = load_objects()
+    except Exception as e:
+        # As a last resort, set fallback
+        model_objects = {'mode': 'fallback', 'reason': f'load-error: {e}'}
+    
+    yield
+    
+    # Shutdown (if needed)
+    pass
+
+app = FastAPI(
+    title="NFL Game Prediction API",
+    description="Predict the probability of a home team winning an NFL game.",
+    version="1.0.0",
+    lifespan=lifespan
+)
 
 
 class GameStats(BaseModel):
@@ -108,14 +134,34 @@ def load_objects():
 model_objects = None  # Will be initialised on startup
 
 
-@app.on_event("startup")
-def startup_event():
+@app.get("/health")
+def health():
+    """Health check endpoint."""
     global model_objects
-    try:
-        model_objects = load_objects()
-    except Exception as e:
-        # As a last resort, set fallback
-        model_objects = {'mode': 'fallback', 'reason': f'load-error: {e}'}
+    if model_objects is None:
+        return {"status": "unhealthy", "reason": "models not loaded"}
+    
+    return {
+        "status": "healthy", 
+        "mode": model_objects.get('mode', 'unknown'),
+        "reason": model_objects.get('reason', None)
+    }
+
+
+@app.get("/")
+def root():
+    """Root endpoint with API information."""
+    return {
+        "name": "NFL Game Prediction API",
+        "version": "1.0.0",
+        "endpoints": {
+            "/health": "Health check",
+            "/predict": "Predict game outcome with simplified input",
+            "/predict_raw": "Predict with full feature set",
+            "/retrain": "Retrain models",
+            "/update_data": "Rebuild datasets and retrain"
+        }
+    }
 
 
 @app.post("/predict")
@@ -275,3 +321,26 @@ def retrain(new_data_path: Optional[str] = None):
     # Reload models after retraining
     model_objects = load_objects()
     return {'detail': 'Models retrained successfully.'}
+
+@app.post("/update_data")
+def update_data():
+    """Build CSVs and retrain. One-click refresh from the UI."""
+    import subprocess, sys
+    try:
+        # 1) Rebuild CSVs (adjust seasons/out dir as desired)
+        build = subprocess.run(
+            [sys.executable, "scripts/build_csvs.py", "--start", "2014", "--end", "2024", "--out-dir", "data"],
+            check=True, capture_output=True, text=True
+        )
+        logger.info("build_csvs stdout:\n%s", build.stdout)
+        logger.info("build_csvs stderr:\n%s", build.stderr)
+
+        # 2) Retrain models on the fresh CSV
+        train = subprocess.run([sys.executable, "train_models.py"], check=True, capture_output=True, text=True)
+        logger.info("train_models stdout:\n%s", train.stdout)
+        logger.info("train_models stderr:\n%s", train.stderr)
+
+        return {"detail": "Data updated and models retrained."}
+    except subprocess.CalledProcessError as e:
+        logger.error("Update failed: %s", e.stderr)
+        return {"detail": "Update failed", "stderr": e.stderr}

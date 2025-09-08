@@ -38,8 +38,8 @@ from sklearn.neural_network import MLPClassifier
 
 
 # Directory configuration
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
-DATA_PATH = BASE_DIR / 'data' / 'nfl_team_stats_2002-2024.csv'
+BASE_DIR = Path(__file__).resolve().parent.parent
+DATA_PATH = BASE_DIR / 'data' / 'Nfl_data.csv'  # Fixed path - data is in project root/data/
 MODELS_DIR = BASE_DIR / 'models'
 MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -66,37 +66,29 @@ def _parse_possession_to_seconds(col: pd.Series) -> pd.Series:
 
 
 def build_prepared_frames(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.Series]:
-    """Prepare raw dataframe: target, engineered numeric fields, and drop leaks.
-
-    Returns X (raw features DataFrame before ColumnTransformer) and y (Series).
+    """Prepare features and target from raw team-game data.
+    
+    Expected columns in df:
+    - 'points_for': points scored by the team
+    - 'points_allowed': points allowed by the team  
+    - 'win': binary target (1 if team won, 0 if lost)
+    - Various other game statistics columns
     """
     df = df.copy()
-
-    # Target: home win
-    if not {'score_home', 'score_away'}.issubset(df.columns):
-        raise ValueError("Dataset must contain 'score_home' and 'score_away' columns.")
-    y = (df['score_home'] > df['score_away']).astype(np.int64)
-
-    # Engineer possession seconds
-    if 'possession_home' in df.columns:
-        df['possession_home_seconds'] = _parse_possession_to_seconds(df['possession_home'])
-        df.drop(columns=['possession_home'], inplace=True)
-    if 'possession_away' in df.columns:
-        df['possession_away_seconds'] = _parse_possession_to_seconds(df['possession_away'])
-        df.drop(columns=['possession_away'], inplace=True)
-
-    # Normalise boolean
-    if 'neutral' in df.columns:
-        # cast to int (0/1) while preserving NaN if any
-        df['neutral'] = df['neutral'].astype('float64')
-
-    # Drop clear non-predictive text columns
-    drop_cols = [c for c in ['date', 'time_et'] if c in df.columns]
-    if drop_cols:
-        df.drop(columns=drop_cols, inplace=True)
-
-    # Remove direct leakage of outcome scores from features
-    for c in ['score_home', 'score_away']:
+    
+    # Validate required columns exist
+    required_cols = ['points_for', 'points_allowed', 'win']
+    missing_cols = [c for c in required_cols if c not in df.columns]
+    if missing_cols:
+        available_cols = list(df.columns)
+        raise ValueError(f"Dataset must contain {required_cols} columns. Missing: {missing_cols}. Available columns: {available_cols}")
+    
+    # Target variable
+    y = df['win'].astype(int)
+    
+    # Remove target and direct outcome leakage columns
+    drop_cols = ['win', 'points_for', 'points_allowed', 'point_diff']
+    for c in drop_cols:
         if c in df.columns:
             df.drop(columns=[c], inplace=True)
 
@@ -189,26 +181,40 @@ def main() -> None:
     X_val_df, y_val = build_prepared_frames(val_raw)
     X_test_df, y_test = build_prepared_frames(test_raw)
 
-    # Identify column types
-    categorical_cols = [c for c in X_train_df.columns if c in ('home', 'away')]
+    # Identify column types - categorical are object type columns, but exclude non-predictive ones
+    all_categorical_cols = X_train_df.select_dtypes(include=['object']).columns.tolist()
+    # Filter out non-predictive categorical columns
+    exclude_categorical = ['game_id', 'team_name', 'opponent_name']  # These are too specific or redundant
+    categorical_cols = [c for c in all_categorical_cols if c not in exclude_categorical]
+    
     # All remaining numeric/boolean columns (float/int); exclude categoricals
     numeric_cols = [c for c in X_train_df.columns
                     if c not in categorical_cols and pdt.is_numeric_dtype(X_train_df[c])]
 
+    print(f"Categorical columns: {categorical_cols}")
+    print(f"Numeric columns: {len(numeric_cols)} columns")
+    print(f"Total features: {len(categorical_cols) + len(numeric_cols)}")
+    
     # ColumnTransformer: scale numeric, one-hot teams (dense output)
+    transformers = []
+    
+    if numeric_cols:
+        transformers.append(('num',
+                           Pipeline([
+                               ('imputer', SimpleImputer(strategy='median')),
+                               ('scaler', StandardScaler())
+                           ]), numeric_cols))
+    
+    if categorical_cols:
+        transformers.append(('cat',
+                           Pipeline([
+                               ('imputer', SimpleImputer(strategy='constant', fill_value='UNK')),
+                               ('ohe', OneHotEncoder(handle_unknown='ignore', sparse_output=False))
+                           ]), categorical_cols))
+    
     preprocessor = ColumnTransformer(
-        transformers=[
-            ('num',
-             make_numeric := Pipeline([
-                 ('imputer', SimpleImputer(strategy='median')),
-                 ('scaler', StandardScaler())
-             ]), numeric_cols),
-            ('cat',
-             make_categorical := Pipeline([
-                 ('imputer', SimpleImputer(strategy='constant', fill_value='UNK')),
-                 ('ohe', OneHotEncoder(handle_unknown='ignore', sparse_output=False))
-             ]), categorical_cols)
-        ], remainder='drop'
+        transformers=transformers,
+        remainder='drop'
     )
 
     # Fit on train, transform all splits

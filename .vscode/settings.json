@@ -1,3 +1,7 @@
 {
-    "terminal.integrated.scrollback": 200000
+    "terminal.integrated.scrollback": 200000,
+    "editor.fontSize": 17,
+    "editor.formatOnSave": true,
+    "files.autoSave": "afterDelay",
+    "editor.defaultFormatter": "ms-python.vscode-pylance"
 }
