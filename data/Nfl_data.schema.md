@@ -75,3 +75,65 @@
 | `script_pass_edge` | `float64` | 0.906 | -0.323333 | 0.323333 | 0.0115074798619102 |  |
 
 > Tip: Add human descriptions over time, then commit.
+
+## walk_forward.py
+
+from typing import List, Tuple, Dict
+import pandas as pd
+import numpy as np
+from sklearn.metrics import mean_absolute_error
+
+def walk_forward_backtest(
+    df: pd.DataFrame,
+    features: List[str],
+    target: str,
+    cut_points: List[Tuple[int, int]],  # sequence of (season, week) cutoffs
+    pipeline_builder,                    # function -> returns fit-ready Pipeline/Estimator
+) -> pd.DataFrame:
+    """
+    For each cut point C=(season,week):
+      - Train on all rows with time_key <= C
+      - Predict next block (e.g., next week or fixed horizon)
+    Collect MAE per cut. Returns a summary DataFrame.
+    """
+    data = df.copy()
+    data["time_key"] = (data["season"].astype(int) * 100) + data["week"].astype(int)
+    data = data.sort_values("time_key").reset_index(drop=True)
+
+    rows: List[Dict] = []
+
+    for season_c, week_c in cut_points:
+        cut = season_c * 100 + week_c
+        train_mask = data["time_key"] <= cut
+        # Next step horizon: predict exactly week_c+1 of same season (if exists)
+        next_week_key = season_c * 100 + (week_c + 1)
+        test_mask = data["time_key"] == next_week_key
+
+        if not test_mask.any():
+            # No data to evaluate at this horizon; skip silently
+            continue
+
+        X_tr, y_tr = data.loc[train_mask, features], data.loc[train_mask, target]
+        X_te, y_te = data.loc[test_mask, features], data.loc[test_mask, target]
+
+        model = pipeline_builder()
+        model.fit(X_tr, y_tr)
+        preds = model.predict(X_te)
+
+        mae = mean_absolute_error(y_te, preds)
+        rows.append({
+            "season_cut": season_c,
+            "week_cut": week_c,
+            "n_train": int(train_mask.sum()),
+            "n_test": int(test_mask.sum()),
+            "mae_next_week": float(mae)
+        })
+
+    return pd.DataFrame(rows)
+
+### Example cut points: last 8 weeks of 2022
+
+cuts = [(2022, w) for w in range(10, 18)]
+summary = walk_forward_backtest(df, FEATURES, "point_diff", cuts,
+                                pipeline_builder=lambda: build_regression_pipeline(NUM_FEATS, CAT_FEATS))
+print(summary)
