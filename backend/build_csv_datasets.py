@@ -271,13 +271,22 @@ def build_dataset(start: int, end: int, out_dir: Path) -> Path:
     # Final feature-augmented, one row per game
     final_df = add_features(schedules, windows=(3, 5))
     final_df[final_df.filter(regex=r'^(home|away)_prior_').columns] = final_df.filter(regex=r'^(home|away)_prior_').fillna(final_df.filter(regex=r'^(home|away)_prior_').mean())
+    
+
+    dff = final_df.copy()
+    print('last 5 rows', dff.tail())
+    print(dff.columns.str.strip())
+    # sort by date
+    dff = dff.sort_values(by='game_date')
+    print(dff[['game_date', 'home_team', 'away_team', 'home_points_for', 'away_points_for']].tail(20))
+    dff.to_csv('Nfl_data_sorted.csv', index=False)
 
     # Write once
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / "Nfl_data.csv"
     final_df.to_csv(out_path, index=False)
     logging.info("Wrote %s with %d games", out_path, len(final_df))
-    return out_path
+    return out_path, dff
 
 
 def parse_args() -> argparse.Namespace:

@@ -77,7 +77,7 @@ def build_prepared_frames(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.Series]:
     df = df.copy()
     
     # Validate required columns exist
-    required_cols = ['points_for', 'points_allowed', 'win']
+    required_cols = ['home_points_for', 'away_points_for', 'win']
     missing_cols = [c for c in required_cols if c not in df.columns]
     if missing_cols:
         available_cols = list(df.columns)
