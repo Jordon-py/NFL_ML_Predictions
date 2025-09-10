@@ -19,6 +19,71 @@ h1 {
   color: #003366;
 }
 
+/* Updated layout styles for enhanced NFL prediction system */
+
+.app-header {
+  text-align: center;
+  margin-bottom: 3rem;
+  padding: 2rem 0;
+  border-bottom: 2px solid #e1e8ed;
+}
+
+.app-header h1 {
+  color: #003366;
+  font-size: 2.5rem;
+  margin-bottom: 0.5rem;
+  font-weight: 700;
+}
+
+.app-header p {
+  color: #666;
+  font-size: 1.1rem;
+  margin: 0;
+}
+
+.app-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #e1e8ed;
+}
+
+.section-header h2 {
+  color: #003366;
+  font-size: 1.8rem;
+  margin: 0;
+  font-weight: 600;
+}
+
+.section-header p {
+  color: #666;
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.clear-button {
+  background: #e74c3c;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background-color 0.2s ease;
+}
+
+.clear-button:hover {
+  background: #c0392b;
+}
+
 /* Form styling */
 .prediction-form {
   background-color: #fff;
@@ -97,4 +162,324 @@ h1 {
 .chart-container h2 {
   margin-top: 0;
   margin-bottom: 1rem;
+}
+
+/* TeamGrid section */
+.team-grid-section {
+  background: white;
+  padding: 2rem;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* Prediction form section */
+.prediction-form-section {
+  background: white;
+  padding: 2rem;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* Current prediction section */
+.current-prediction-section {
+  background: white;
+  padding: 2rem;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.teamgrid-prediction-result {
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-top: 1rem;
+}
+
+.teamgrid-prediction-result h3 {
+  color: #003366;
+  margin-top: 0;
+  margin-bottom: 1rem;
+  font-size: 1.3rem;
+}
+
+.matchup-info {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.team {
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-weight: bold;
+}
+
+.team.away {
+  background: #e74c3c;
+  color: white;
+}
+
+.team.home {
+  background: #27ae60;
+  color: white;
+}
+
+.at-symbol {
+  color: #666;
+  font-weight: normal;
+}
+
+.prediction-details {
+  text-align: center;
+}
+
+.scores {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  font-size: 1.5rem;
+  font-weight: bold;
+}
+
+.score {
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  min-width: 60px;
+  text-align: center;
+}
+
+.score.home-score {
+  background: #27ae60;
+  color: white;
+}
+
+.score.away-score {
+  background: #e74c3c;
+  color: white;
+}
+
+.separator {
+  color: #666;
+  font-size: 1.2rem;
+}
+
+.spread {
+  color: #666;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+/* Error section */
+.error-section {
+  background: white;
+  padding: 2rem;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.error-message {
+  background: #f8d7da;
+  border: 1px solid #f5c6cb;
+  border-radius: 8px;
+  padding: 1rem;
+  text-align: center;
+}
+
+.error-message h3 {
+  color: #721c24;
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+}
+
+.error-message p {
+  color: #721c24;
+  margin: 0;
+}
+
+/* History section */
+.history-section {
+  background: white;
+  padding: 2rem;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* Enhanced form styling */
+.prediction-form {
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+  margin-bottom: 0;
+}
+
+.prediction-form h2 {
+  display: none; /* Hide since we have section header */
+}
+
+.prediction-form .grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1.5rem;
+}
+
+.prediction-form .form-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.prediction-form label {
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: #333;
+  font-size: 0.9rem;
+}
+
+.prediction-form input {
+  padding: 0.75rem;
+  border: 2px solid #e1e8ed;
+  border-radius: 6px;
+  font-size: 1rem;
+  transition: border-color 0.2s ease;
+}
+
+.prediction-form input:focus {
+  outline: none;
+  border-color: #003366;
+  box-shadow: 0 0 0 3px rgba(0, 51, 102, 0.1);
+}
+
+.prediction-form button {
+  margin-top: 1.5rem;
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(135deg, #003366 0%, #00509e 100%);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.prediction-form button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.prediction-form button:active {
+  transform: translateY(0);
+}
+
+/* Enhanced result card */
+.result-card {
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+  margin-bottom: 0;
+}
+
+.result-card h2 {
+  display: none; /* Hide since we have section header */
+}
+
+/* Enhanced chart container */
+.chart-container {
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+}
+
+.chart-container h2 {
+  display: none; /* Hide since we have section header */
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .container {
+    padding: 1rem;
+  }
+
+  .app-header {
+    margin-bottom: 2rem;
+    padding: 1rem 0;
+  }
+
+  .app-header h1 {
+    font-size: 2rem;
+  }
+
+  .app-main {
+    gap: 1.5rem;
+  }
+
+  .section-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .section-header h2 {
+    font-size: 1.5rem;
+  }
+
+  .team-grid-section,
+  .prediction-form-section,
+  .current-prediction-section,
+  .error-section,
+  .history-section {
+    padding: 1.5rem;
+  }
+
+  .prediction-form .grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .matchup-info {
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .scores {
+    font-size: 1.3rem;
+  }
+
+  .score {
+    padding: 0.4rem 0.8rem;
+    min-width: 50px;
+  }
+}
+
+@media (max-width: 480px) {
+  .app-header h1 {
+    font-size: 1.8rem;
+  }
+
+  .section-header h2 {
+    font-size: 1.3rem;
+  }
+
+  .team-grid-section,
+  .prediction-form-section,
+  .current-prediction-section,
+  .error-section,
+  .history-section {
+    padding: 1rem;
+  }
+
+  .prediction-form input {
+    padding: 0.6rem;
+  }
+
+  .prediction-form button {
+    padding: 0.6rem 1.2rem;
+  }
 }
