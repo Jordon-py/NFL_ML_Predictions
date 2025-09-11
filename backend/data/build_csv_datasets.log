@@ -1,0 +1,6 @@
+2025-09-11 06:57:43,385 INFO Logger initialized. Writing to backend\data\build_csv_datasets.log
+2025-09-11 06:57:43,386 INFO Building dataset for seasons=[2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025]
+2025-09-11 06:57:43,386 INFO Loading schedules for seasons=[2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025]
+2025-09-11 06:57:44,365 INFO Schedules loaded: 3026 games
+2025-09-11 06:57:44,448 INFO Wrote sorted dataset to Nfl_data_sorted.csv
+2025-09-11 06:57:44,472 INFO Wrote backend\data\Nfl_data.csv with 3026 games
