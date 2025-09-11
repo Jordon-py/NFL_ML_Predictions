@@ -68,6 +68,7 @@ logger = logging.getLogger(__name__)
 # Project paths (kept consistent with current layout)
 BASE_DIR = Path(__file__).resolve().parent.parent
 MODELS_DIR = BASE_DIR / "backend" / "models"
+DATASET_PATH = BASE_DIR / "Nfl_data_sorted.csv"
 
 # -----------------------------------------------------------------------------
 # Data models (pydantic)
@@ -192,13 +193,19 @@ def load_objects() -> Dict[str, Any]:
         meta = json.load(f)
 
     preprocessor = joblib.load(MODELS_DIR / meta["preprocessor"])
-    nn_model = joblib.load(MODELS_DIR / meta["models"]["nn_model"])
-    gbm_model = Booster(model_file=str(MODELS_DIR / meta["models"]["gbm_model"]))
+    models_meta = meta.get("models", {})
+    # Updated: load regression models for scores
+    home_model_path = MODELS_DIR / models_meta.get("home_model", "home_model.joblib")
+    away_model_path = MODELS_DIR / models_meta.get("away_model", "away_model.joblib")
+    if not home_model_path.exists() or not away_model_path.exists():
+        raise FileNotFoundError("Home/Away regression models not found. Retrain to generate them.")
+    home_model = joblib.load(home_model_path)
+    away_model = joblib.load(away_model_path)
     return {
         "mode": "models",
         "preprocessor": preprocessor,
-        "nn_model": nn_model,
-        "gbm_model": gbm_model,
+        "home_model": home_model,
+        "away_model": away_model,
         "raw_feature_columns": meta.get("raw_feature_columns", {}),
     }
 
@@ -208,13 +215,26 @@ def load_objects() -> Dict[str, Any]:
 # -----------------------------------------------------------------------------
 
 model_objects: Optional[Dict[str, Any]] = None
+dataset_df: Optional[pd.DataFrame] = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Load models before serving any requests; fail fast if not available."""
-    global model_objects
+    global model_objects, dataset_df
     model_objects = load_objects()
     logger.info("Models loaded successfully.")
+    # Load rolling priors dataset used for feature construction
+    if not DATASET_PATH.exists():
+        logger.error("Dataset not found at %s", DATASET_PATH)
+        raise RuntimeError(f"Dataset not found: {DATASET_PATH}")
+    try:
+        df = pd.read_csv(DATASET_PATH)
+        df.columns = [c.strip() for c in df.columns]
+        dataset_df = df
+        logger.info("Loaded dataset for inference: %s (rows=%d)", DATASET_PATH.name, len(dataset_df))
+    except Exception as e:
+        logger.error("Failed to load dataset: %s", e, exc_info=True)
+        raise
     yield
     # No explicit teardown is required.
 
@@ -374,46 +394,62 @@ def predict_game(payload: PredictionRequest):
             home_team, away_team, season, week
         )
 
-        # Minimal feature frame — structure must match the preprocessor expectations.
-        # NOTE: These priors are placeholders; connect to your built dataset to
-        # fetch true rolling priors for the given teams/season/week.
-        input_df = pd.DataFrame(
-            {
-                "season": [season],
-                "week": [week],
-                "home_team": [home_team],
-                "away_team": [away_team],
-                "home_prior_pa_avg_3": [22.5],
-                "home_prior_pa_avg_5": [22.5],
-                "home_prior_pf_avg_3": [23.0],
-                "home_prior_pf_avg_5": [23.0],
-                "home_prior_win_pct_3": [0.5],
-                "home_prior_win_pct_5": [0.5],
-                "away_prior_pa_avg_3": [22.5],
-                "away_prior_pa_avg_5": [22.5],
-                "away_prior_pf_avg_3": [23.0],
-                "away_prior_pf_avg_5": [23.0],
-                "away_prior_win_pct_3": [0.5],
-                "away_prior_win_pct_5": [0.5],
-            }
+        # Canonicalize to abbreviations for dataset matching
+        home_abbr = get_team_abbreviation(home_team)
+        away_abbr = get_team_abbreviation(away_team)
+
+        # Pull rolling priors from dataset for exact (season, week, home, away)
+        global dataset_df
+        if dataset_df is None:
+            logger.error("Dataset not loaded at startup; cannot build features")
+            raise HTTPException(status_code=500, detail="Dataset not loaded")
+
+        mask = (
+            (dataset_df.get("season") == season)
+            & (dataset_df.get("week") == week)
+            & (dataset_df.get("home_team") == home_abbr)
+            & (dataset_df.get("away_team") == away_abbr)
         )
+        rows = dataset_df.loc[mask]
+        if rows.empty:
+            detail = f"No matching game in dataset for season={season}, week={week}, home={home_abbr}, away={away_abbr}"
+            logger.error(detail)
+            raise HTTPException(status_code=404, detail=detail)
+        if len(rows) > 1:
+            logger.warning("Multiple matches found for the same game; using the first row")
+        row = rows.iloc[0]
+
+        feature_cols = [
+            "home_prior_pa_avg_3", "home_prior_pa_avg_5", "home_prior_pf_avg_3",
+            "home_prior_pf_avg_5", "home_prior_win_pct_3", "home_prior_win_pct_5",
+            "away_prior_pa_avg_3", "away_prior_pa_avg_5", "away_prior_pf_avg_3",
+            "away_prior_pf_avg_5", "away_prior_win_pct_3", "away_prior_win_pct_5",
+        ]
+        missing = [c for c in feature_cols if c not in row.index]
+        if missing:
+            logger.error("Dataset missing required feature columns: %s", missing)
+            raise HTTPException(status_code=500, detail=f"Missing feature columns: {missing}")
+        input_df = pd.DataFrame({c: [row[c]] for c in feature_cols})
 
         X = model_objects["preprocessor"].transform(input_df)
-        nn_prob = float(model_objects["nn_model"].predict_proba(X)[:, 1][0])
-        gbm_prob = float(model_objects["gbm_model"].predict_proba(X)[:, 1][0])
-
-        # Ensemble average; simple score shaping around ~23-21 baseline
-        home_win_prob = (nn_prob + gbm_prob) / 2.0
-        adj = (home_win_prob - 0.5) * 10.0
-        home_score = round(max(0.0, min(60.0, 23.0 + adj)), 1)
-        away_score = round(max(0.0, min(60.0, 20.5 - adj)), 1)
+        # Predict scores directly
+        home_score = float(model_objects["home_model"].predict(X)[0])
+        away_score = float(model_objects["away_model"].predict(X)[0])
+        # Clamp to a reasonable NFL score range
+        home_score = round(max(0.0, min(70.0, home_score)), 1)
+        away_score = round(max(0.0, min(70.0, away_score)), 1)
         point_diff = round(home_score - away_score, 1)
+
+        # Derive win probabilities from point spread via logistic mapping
+        # k tunes spread-to-probability steepness; can be calibrated later
+        k = 0.22
+        home_win_prob = 1.0 / (1.0 + np.exp(-k * point_diff))
 
         return PredictionResponse(
             home_score=home_score,
             away_score=away_score,
-            home_win_probability=round(home_win_prob, 3),
-            away_win_probability=round(1 - home_win_prob, 3),
+            home_win_probability=round(float(home_win_prob), 3),
+            away_win_probability=round(float(1 - home_win_prob), 3),
             point_diff=point_diff,
             mode="models",
         )

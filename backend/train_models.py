@@ -5,17 +5,17 @@ train_models.py
 
 Purpose
 -------
-Train a pair of classifiers (MLP "neural net" + LightGBM) to predict home win
-probability using the game-level dataset built by `build_csv_datasets.py`.
+Train two regressors (LightGBM) to directly predict home and away points.
+The API will compute point_diff = home_points_for - away_points_for from these
+predictions. This aligns the web app with score-based outputs.
 
 Key Steps
 ---------
-1) Load raw CSV: `<repo_root>/backend/data/Nfl_data.csv`
-2) Prepare frames: derive target (`win = home_points_for > away_points_for`),
-   drop outcome leakage columns, keep remaining features.
-3) ColumnTransformer: scale numeric, one-hot encode categoricals.
-4) Train MLPClassifier + LGBMClassifier; evaluate on 2024 validation/test splits.
-5) Persist artefacts to `<repo_root>/backend/models/` + write `metadata.json`.
+1) Load CSV: `<repo_root>/Nfl_data_sorted.csv`
+2) Select engineered prior features (no outcome leakage)
+3) ColumnTransformer: impute + scale numeric features
+4) Train LGBMRegressor for home_points_for and away_points_for on ALL data
+5) Persist artefacts to `<repo_root>/backend/models/` + write `metadata.json`
 
 External Dependencies
 ---------------------
@@ -23,143 +23,73 @@ pandas, numpy, scikit-learn, lightgbm, joblib
 
 Usage Notes
 -----------
-- Time-aware split: Train = seasons 2002–2023; Val/Test = 2024 (weeks ≤4 vs ≥5).
-- Artefacts expected by API (`main.py`) via `metadata.json` keys:
-- preprocessor.joblib, nn_model.joblib, gbm_model.txt
-
-**IMPORTANT** TO RUN:
-python backend/train_models.py  
-
+- Trains on all available rows to maximize data for production predictions.
+- For offline evaluation (e.g., 2025 week 1), use `backend/test_train_models.py`.
 """
 from __future__ import annotations
 
 import json
 import logging
 from pathlib import Path
-from typing import Tuple
+from typing import Tuple, List
 
 import numpy as np
 import pandas as pd
-import pandas.api.types as pdt
 import joblib
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
-from sklearn.metrics import accuracy_score, brier_score_loss, log_loss
-from sklearn.neural_network import MLPClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
-from lightgbm import LGBMClassifier
+from lightgbm import LGBMRegressor
 
 # -----------------------------------------------------------------------------
 # Paths & logging
 # -----------------------------------------------------------------------------
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-DATA_PATH = BASE_DIR / "backend" / "data" / "Nfl_data.csv"
+# Use the sorted dataset used elsewhere in the repo
+DATA_PATH = BASE_DIR / "Nfl_data_sorted.csv"
 MODELS_DIR = BASE_DIR / "backend" / "models"
 MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-SimpleNN = MLPClassifier  # alias for clarity
+def _get_feature_list(df: pd.DataFrame) -> List[str]:
+    """Return the numeric prior features used for score prediction.
 
-
-# -----------------------------------------------------------------------------
-# Data preparation
-# -----------------------------------------------------------------------------
-
-def build_prepared_frames(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.Series]:
+    This function validates presence and provides a single source of truth
+    for features for both training and inference.
     """
-    Produce (X, y) from raw game-level dataframe.
-
-    Required columns
-    ----------------
-    - 'home_points_for', 'away_points_for', 'home_team', 'away_team'
-    """
-    df = df.copy()
-    required = ["home_points_for", "away_points_for", "home_team", "away_team"]
-    missing = [c for c in required if c not in df.columns]
+    features = [
+        'home_prior_pa_avg_3', 'home_prior_pa_avg_5', 'home_prior_pf_avg_3',
+        'home_prior_pf_avg_5', 'home_prior_win_pct_3', 'home_prior_win_pct_5',
+        'away_prior_pa_avg_3', 'away_prior_pa_avg_5', 'away_prior_pf_avg_3',
+        'away_prior_pf_avg_5', 'away_prior_win_pct_3', 'away_prior_win_pct_5'
+    ]
+    missing = [c for c in features if c not in df.columns]
     if missing:
-        raise ValueError(f"Missing required columns: {missing}")
-
-    # Target: 1 if home wins, else 0
-    y = (df["home_points_for"] > df["away_points_for"]).astype(int)
-
-    # Drop target and direct outcome leakage columns
-    drop_cols = ["home_points_for", "away_points_for", "point_diff", "winner"]
-    X = df.drop(columns=[c for c in drop_cols if c in df.columns], errors="ignore")
-    return X, y
-
-
-def load_raw_splits() -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """
-    Load CSV and create time-aware splits:
-      - Train: seasons 2002–2023
-      - Val:   2024 weeks ≤ 4
-      - Test:  2024 weeks ≥ 5
-    """
-    df = pd.read_csv(DATA_PATH)
-    df.columns = [c.strip() for c in df.columns]
-
-    if "season" in df.columns:
-        df["season"] = pd.to_numeric(df["season"], errors="coerce")
-    if "week" in df.columns:
-        df["week"] = pd.to_numeric(df["week"], errors="coerce")
-
-    train_df = df[df["season"].between(2002, 2023)].reset_index(drop=True)
-    season_2024 = df[df["season"] == 2024].reset_index(drop=True)
-
-    if "week" in season_2024.columns and not season_2024.empty:
-        val_df = season_2024[season_2024["week"] <= 4].reset_index(drop=True)
-        test_df = season_2024[season_2024["week"] >= 5].reset_index(drop=True)
-    else:
-        # Deterministic fallback if 'week' missing; fail fast if empty.
-        split_idx = max(1, int(0.25 * len(season_2024))) if len(season_2024) else 0
-        val_df = season_2024.iloc[:split_idx].reset_index(drop=True)
-        test_df = season_2024.iloc[split_idx:].reset_index(drop=True)
-
-    if val_df.empty or test_df.empty:
-        raise RuntimeError("Validation/test split is empty; check 2024 data and 'week' column.")
-    return train_df, val_df, test_df
+        raise ValueError(f"Missing required feature columns: {missing}")
+    return features
 
 
 # -----------------------------------------------------------------------------
 # Modeling helpers
 # -----------------------------------------------------------------------------
 
-def train_neural_network(
-    X_train: np.ndarray, y_train: np.ndarray, num_epochs: int = 40, batch_size: int = 128, lr: float = 1e-3
-) -> SimpleNN:
-    """Fit a small MLP; returns trained estimator."""
-    mlp = MLPClassifier(
-        hidden_layer_sizes=(128, 64),
-        activation="relu",
-        solver="adam",
-        learning_rate_init=lr,
-        max_iter=num_epochs,
-        batch_size=batch_size,
+def _fit_lgbm_regressor(X: np.ndarray, y: np.ndarray) -> LGBMRegressor:
+    """Train a LightGBM regressor with sensible defaults."""
+    model = LGBMRegressor(
+        n_estimators=500,
+        learning_rate=0.05,
+        max_depth=-1,
+        num_leaves=31,
+        subsample=0.8,
+        colsample_bytree=0.8,
         random_state=42,
     )
-    mlp.fit(X_train, y_train)
-    return mlp
-
-
-def evaluate_predictions(y_true: np.ndarray, y_proba: np.ndarray) -> dict:
-    """Return accuracy, log loss, and Brier score for probability outputs."""
-    y_hat = (y_proba >= 0.5).astype(int)
-    return {
-        "accuracy": accuracy_score(y_true, y_hat),
-        "log_loss": log_loss(y_true, y_proba),
-        "brier_score": brier_score_loss(y_true, y_proba),
-    }
-
-
-def _dense2d(a) -> np.ndarray:
-    """Ensure 2D dense numpy array from various estimator outputs."""
-    toarray = getattr(a, "toarray", None)
-    arr = np.asarray(toarray()) if callable(toarray) else np.asarray(a)
-    return arr if arr.ndim == 2 else arr.reshape(-1, 2)
+    model.fit(X, y)
+    return model
 
 
 # -----------------------------------------------------------------------------
@@ -167,97 +97,56 @@ def _dense2d(a) -> np.ndarray:
 # -----------------------------------------------------------------------------
 
 def main() -> None:
-    # 1) Load time-aware splits
-    train_raw, val_raw, test_raw = load_raw_splits()
+    # Load entire dataset
+    df = pd.read_csv(DATA_PATH)
+    df.columns = [c.strip() for c in df.columns]
+    logger.info("Loaded %d rows from %s", len(df), DATA_PATH)
 
-    # 2) Prepare features/targets
-    X_train_df, y_train = build_prepared_frames(train_raw)
-    X_val_df, y_val = build_prepared_frames(val_raw)
-    X_test_df, y_test = build_prepared_frames(test_raw)
+    # Feature matrix
+    features = _get_feature_list(df)
+    X = df[features]
 
-    # 3) Identify column types
-    all_cat = X_train_df.select_dtypes(include=["object"]).columns.tolist()
-    exclude_cat = ["game_id", "team_name", "opponent_name"]  # highly specific keys; avoid overfit
-    cat_cols = [c for c in all_cat if c not in exclude_cat]
-    num_cols = [c for c in X_train_df.columns if c not in cat_cols and pdt.is_numeric_dtype(X_train_df[c])]
+    # Targets
+    if not {'home_points_for', 'away_points_for'}.issubset(df.columns):
+        raise ValueError("Dataset is missing 'home_points_for' and/or 'away_points_for'.")
+    y_home = df['home_points_for']
+    y_away = df['away_points_for']
 
-    logger.info("Categorical columns: %s", cat_cols)
-    logger.info("Numeric columns: %d columns", len(num_cols))
-    logger.info("Total features: %d", len(cat_cols) + len(num_cols))
+    # Preprocessing
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ("num", Pipeline([("imputer", SimpleImputer(strategy="median")), ("scaler", StandardScaler())]), features)
+        ],
+        remainder="drop",
+    )
 
-    # 4) Preprocess: impute→scale numerics, impute→OHE categoricals
-    transformers = []
-    if num_cols:
-        transformers.append(
-            ("num", Pipeline([("imputer", SimpleImputer(strategy="median")), ("scaler", StandardScaler())]), num_cols)
-        )
-    if cat_cols:
-        transformers.append(
-            ("cat", Pipeline([("imputer", SimpleImputer(fill_value="UNK", strategy="constant")),
-                              ("ohe", OneHotEncoder(handle_unknown="ignore", sparse_output=False))]), cat_cols)
-        )
+    X_proc = preprocessor.fit_transform(X)
+    logger.info("Preprocessing fitted on full dataset.")
 
-    preprocessor = ColumnTransformer(transformers=transformers, remainder="drop")
+    # Train regressors
+    home_model = _fit_lgbm_regressor(X_proc, y_home)
+    away_model = _fit_lgbm_regressor(X_proc, y_away)
 
-    # Fit/transform (note: ensures dense arrays downstream)
-    X_train = np.asarray(preprocessor.fit_transform(X_train_df))
-    X_val = np.asarray(preprocessor.transform(X_val_df))
-    X_test = np.asarray(preprocessor.transform(X_test_df))
-
-    y_train = np.asarray(y_train)
-    y_val = np.asarray(y_val)
-    y_test = np.asarray(y_test)
-
-    # 5) Train models
-    nn_model = train_neural_network(X_train, y_train)
-
-    gbm_model = LGBMClassifier(
-        n_estimators=300,
-        learning_rate=0.05,
-        max_depth=-1,
-        num_leaves=31,
-        subsample=0.8,
-        colsample_bytree=0.8,
-        random_state=42,
-    ).fit(X_train, y_train)
-
-    # 6) Evaluate
-    nn_val = nn_model.predict_proba(X_val)[:, 1]
-    nn_test = nn_model.predict_proba(X_test)[:, 1]
-
-    gbm_val = _dense2d(gbm_model.predict_proba(X_val))[:, 1]
-    gbm_test = _dense2d(gbm_model.predict_proba(X_test))[:, 1]
-
-    ens_val = (nn_val + gbm_val) / 2.0
-    ens_test = (nn_test + gbm_test) / 2.0
-
-    logger.info("Validation metrics:")
-    for name, proba in [("neural_network", nn_val), ("gradient_boosting", gbm_val), ("ensemble", ens_val)]:
-        m = evaluate_predictions(y_val, proba)
-        logger.info(" %s: accuracy=%.3f, log_loss=%.3f, brier_score=%.3f", name, m["accuracy"], m["log_loss"], m["brier_score"])
-
-    logger.info("Test metrics:")
-    for name, proba in [("neural_network", nn_test), ("gradient_boosting", gbm_test), ("ensemble", ens_test)]:
-        m = evaluate_predictions(y_test, proba)
-        logger.info(" %s: accuracy=%.3f, log_loss=%.3f, brier_score=%.3f", name, m["accuracy"], m["log_loss"], m["brier_score"])
-
-    # 7) Persist artefacts
+    # Persist
     joblib.dump(preprocessor, MODELS_DIR / "preprocessor.joblib")
-    joblib.dump(nn_model, MODELS_DIR / "nn_model.joblib")
-    gbm_model.booster_.save_model(str(MODELS_DIR / "gbm_model.txt"))
+    joblib.dump(home_model, MODELS_DIR / "home_model.joblib")
+    joblib.dump(away_model, MODELS_DIR / "away_model.joblib")
+    logger.info("Saved preprocessor and models to %s", MODELS_DIR)
 
-    # 8) Metadata for API loader
-    feature_names = []
+    # Metadata for API loader
+    feature_names: List[str] = []
     try:
         feature_names = preprocessor.get_feature_names_out().tolist()
     except Exception:
-        pass
+        feature_names = []
 
     meta = {
-        "raw_feature_columns": {"numeric": num_cols, "categorical": cat_cols},
+        "raw_feature_columns": {"numeric": features, "categorical": []},
         "transformed_feature_names": feature_names,
-        "models": {"nn_model": "nn_model.joblib", "gbm_model": "gbm_model.txt"},
+        "models": {"home_model": "home_model.joblib", "away_model": "away_model.joblib"},
         "preprocessor": "preprocessor.joblib",
+        "target_names": ["home_points_for", "away_points_for"],
+        "dataset_path": str(DATA_PATH),
     }
     with open(MODELS_DIR / "metadata.json", "w") as f:
         json.dump(meta, f, indent=2)
@@ -269,9 +158,7 @@ if __name__ == "__main__":
 # -----------------------------
 # Suggested Enhancements
 # -----------------------------
-# 1) Replace fixed 2024-based split with season-aware walk-forward CV to better
-#    estimate generalization for future weeks (saves fold metrics & plots).
-# 2) Add calibrated probabilities (e.g., Platt/Isotonic on validation) to improve
-#    probability quality used by the API for score shaping.
+# 1) Add walk-forward evaluation to quantify MAE/RMSE per season/week.
+# 2) Add post-processing to avoid impossible scores (clip 0–70).
 # 3) Log model + data hashes (e.g., md5 of CSV, model params) into metadata.json
 #    for reproducibility and cache invalidation in deployment.
