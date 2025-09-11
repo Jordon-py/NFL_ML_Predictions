@@ -1,0 +1,43 @@
+{
+  "raw_feature_columns": {
+    "numeric": [
+      "home_prior_pa_avg_3",
+      "home_prior_pa_avg_5",
+      "home_prior_pf_avg_3",
+      "home_prior_pf_avg_5",
+      "home_prior_win_pct_3",
+      "home_prior_win_pct_5",
+      "away_prior_pa_avg_3",
+      "away_prior_pa_avg_5",
+      "away_prior_pf_avg_3",
+      "away_prior_pf_avg_5",
+      "away_prior_win_pct_3",
+      "away_prior_win_pct_5"
+    ],
+    "categorical": []
+  },
+  "transformed_feature_names": [
+    "num__home_prior_pa_avg_3",
+    "num__home_prior_pa_avg_5",
+    "num__home_prior_pf_avg_3",
+    "num__home_prior_pf_avg_5",
+    "num__home_prior_win_pct_3",
+    "num__home_prior_win_pct_5",
+    "num__away_prior_pa_avg_3",
+    "num__away_prior_pa_avg_5",
+    "num__away_prior_pf_avg_3",
+    "num__away_prior_pf_avg_5",
+    "num__away_prior_win_pct_3",
+    "num__away_prior_win_pct_5"
+  ],
+  "models": {
+    "home_model": "home_model.joblib",
+    "away_model": "away_model.joblib"
+  },
+  "preprocessor": "preprocessor.joblib",
+  "target_names": [
+    "home_points_for",
+    "away_points_for"
+  ],
+  "dataset_path": "C:\\Users\\iProg\\OneDrive\\Documents\\Football_predict\\nfl_prediction_system\\nfl_prediction_system\\Nfl_data_sorted.csv"
+}
