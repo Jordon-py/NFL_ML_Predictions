@@ -1,4 +1,20 @@
 {
+  "training_timestamp": "2025-09-13T18:23:34.750977",
+  "dataset_hash": "5ee82bdc",
+  "dataset_path": "C:\\Users\\iProg\\OneDrive\\Documents\\Football_predict\\nfl_prediction_system\\nfl_prediction_system\\Nfl_data_sorted.csv",
+  "training_samples": 3027,
+  "season_range": [
+    2014,
+    2025
+  ],
+  "week_range": [
+    1,
+    22
+  ],
+  "model_scores": {
+    "home_r2": 0.8081129756827008,
+    "away_r2": 0.8048282559486348
+  },
   "raw_feature_columns": {
     "numeric": [
       "home_prior_pa_avg_3",
@@ -38,6 +54,5 @@
   "target_names": [
     "home_points_for",
     "away_points_for"
-  ],
-  "dataset_path": "C:\\Users\\iProg\\OneDrive\\Documents\\Football_predict\\nfl_prediction_system\\nfl_prediction_system\\Nfl_data_sorted.csv"
+  ]
 }

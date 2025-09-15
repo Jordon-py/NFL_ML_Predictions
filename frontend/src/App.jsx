@@ -53,35 +53,41 @@
  */
 
 import React, { useState } from 'react';
-import PredictionForm from './components/PredictionForm';
-import PredictionResult from './components/PredictionResult';
-import HistoryChart from './components/HistoryChart';
-import TeamGrid from './components/TeamGrid';
+import PredictionForm from './components/PredictionForm.jsx';
+import PredictionResult from './components/PredictionResult.jsx';
+import HistoryChart from './components/HistoryChart.jsx';
+import TeamGrid from './components/TeamGrid.jsx';
 import { predictGame } from './api/client.js';
 import './styles.css';
 
+
+
+/* ---------------------------------------------------------------------------
+ Main Application Component
+---------------------------------------------------------------------------- */
 function App() {
   const [result, setResult] = useState(null);
   const [history, setHistory] = useState([]);
   const [currentPrediction, setCurrentPrediction] = useState(null);
   const [error, setError] = useState(null);
-
-  /* ============================================================================
-   Handler Functions
-  ========================================================================== */
-
+  const [loading, setLoading] = useState(false);
+  
   /**
    * Submit handler invoked by the PredictionForm with game stats.
    * Posts data to the backend and stores the prediction result.
+   * 
    * @param {object} gameStats - Game statistics for prediction
    */
+  
   const handlePredict = async (gameStats) => {
     try {
       setError(null);
+      setLoading(true);
       const response = await predictGame(gameStats);
-      const data = response;
+      const data = JSON.parse(response.body);
 
       setResult(data);
+      console.log(data);
       setCurrentPrediction(null); // Clear TeamGrid prediction when using form
 
       // Archive this prediction in history
@@ -103,12 +109,13 @@ function App() {
    * @param {object} prediction - Prediction result from API
    */
   const handleTeamGridPrediction = (game, prediction) => {
+    setResult(null); // Clear form prediction when using TeamGrid
     setCurrentPrediction({
       game,
       prediction,
       timestamp: new Date()
     });
-    setResult(null); // Clear form prediction when using TeamGrid
+    
 
     // Archive this prediction in history
     setHistory((prev) => [...prev, {
@@ -157,7 +164,7 @@ function App() {
               <h2>Current Prediction</h2>
               <button
                 className="clear-button"
-                onClick={clearCurrentPrediction}
+                onClick={result ? (setHistory((history) => [...history, result]) & clearCurrentPrediction) : clearCurrentPrediction}
                 aria-label="Clear current prediction"
               >
                 Clear
@@ -204,6 +211,7 @@ function App() {
         )}
 
         {/* Prediction history */}
+        {}
         {history.length > 0 && (
           <section className="history-section">
             <div className="section-header">

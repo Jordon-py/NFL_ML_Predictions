@@ -1,40 +1,48 @@
-/* TeamGrid.css - Styling for NFL matchup grid component */
+
 
 .team-grid {
-  max-width: 1200px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: stretch;
+  max-width: 1500px;
+  width: 100%;
   margin: 0 auto;
-  padding: 20px;
+  padding: 10px;
 }
 
 .team-grid-header {
   text-align: center;
-  margin-bottom: 30px;
+  margin-bottom: 10px;
 }
 
 .team-grid-header h2 {
-  color: #2c3e50;
+  color: #488ed4;
   font-size: 2.5rem;
-  margin-bottom: 10px;
+  margin-bottom: 2px;
   font-weight: 700;
 }
 
 .team-grid-header p {
-  color: #7f8c8d;
-  font-size: 1.1rem;
+  color: #999fa0;
+  font-size: 1.2rem;
   margin: 0;
 }
 
 .matchups-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-  gap: 20px;
-  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  width: 100%;
+  flex-wrap: wrap;
+  gap: 30px;
+  margin-top: 30px;
 }
 
 .matchup-card {
-  background: white;
+  background: rgba(255, 255, 255, 0.156);
   border-radius: 12px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  box-shadow: 1px 4px 6px grey;
   padding: 20px;
   cursor: pointer;
   transition: all 0.3s ease;
@@ -44,8 +52,13 @@
 }
 
 .matchup-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+  transform: translateY(-4px);
+  background: rgba(219, 241, 255, 0.25);
+    padding: 20px;
+    box-shadow:
+      0 10px 6px 1px white,
+      0.3em 0.3em 2rem -2px rgba(69, 1, 1, 0.6);
+
   border-color: #3498db;
 }
 
@@ -61,8 +74,8 @@
 }
 
 .matchup-card.has-prediction {
-  border-color: #27ae60;
-  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-color: #2766ae;
+  background: linear-gradient(135deg, #ffffff 0%,#003260d4 45%, #003264 100%);
 }
 
 .matchup-teams {
@@ -74,7 +87,6 @@
 
 .away-team,
 .home-team {
-  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -82,9 +94,9 @@
 }
 
 .vs-indicator {
-  font-size: 1.5rem;
+  font-size: 2.5rem;
   font-weight: bold;
-  color: #7f8c8d;
+  color: #00181a;
   margin: 0 15px;
 }
 
@@ -96,8 +108,8 @@
 }
 
 .team-logo {
-  width: 60px;
-  height: 60px;
+  width: 80px;
+  height: 80px;
   object-fit: contain;
   border-radius: 8px;
 }
@@ -116,6 +128,7 @@
 }
 
 .team-info {
+  font-size: 2rem;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -124,21 +137,23 @@
 
 .team-name {
   font-weight: 600;
-  font-size: 0.9rem;
-  color: #2c3e50;
+  font-size: 1.5rem;
+  color: #000000;
   text-align: center;
   line-height: 1.2;
 }
 
 .team-abbr {
-  font-size: 0.8rem;
-  color: #7f8c8d;
+  font-size: 1rem;
+  color: #000000;
   font-weight: 500;
 }
 
 .home-indicator {
-  font-size: 0.7rem;
-  color: #e74c3c;
+  display: flex;
+  flex-direction: column-reverse;
+  font-size: 0.9rem;
+  color: #ff6969;
   font-weight: bold;
   margin-top: 2px;
 }
@@ -152,8 +167,8 @@
 
 .matchup-time {
   text-align: center;
-  color: #7f8c8d;
-  font-size: 0.9rem;
+  color: #ff6262;
+  font-size: 1.1rem;
   font-weight: 500;
   margin-bottom: 15px;
 }
@@ -175,11 +190,11 @@
 }
 
 .prediction-result {
-  background: #d4edda;
-  border: 1px solid #c3e6cb;
+  background: #ffffffd1;
+  border: 1px solid #ffffff;
   border-radius: 8px;
-  padding: 15px;
-  margin-top: 15px;
+  padding: 3%;
+  margin-top: 1rem;
   text-align: center;
 }
 
@@ -187,26 +202,25 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  margin-bottom: 8px;
+  gap: 6rem;
 }
 
 .score {
-  font-size: 1.8rem;
+  font-size: 2rem;
   font-weight: bold;
-  padding: 5px 10px;
+  padding: 5px 5px;
   border-radius: 6px;
   min-width: 50px;
   text-align: center;
 }
 
 .home-score {
-  background: #27ae60;
+  
   color: white;
 }
 
 .away-score {
-  background: #e74c3c;
+  
   color: white;
 }
 
@@ -217,8 +231,8 @@
 }
 
 .point-diff {
-  font-size: 0.9rem;
-  color: #27ae60;
+  font-size: 1rem;
+  color: #000000;
   font-weight: 600;
 }
 
@@ -279,6 +293,14 @@
 /* Responsive design */
 @media (max-width: 768px) {
   .team-grid {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: stretch;
+    flex-wrap: wrap;
+    max-width: 100%;
+    width: 100%;
+
     padding: 15px;
   }
 
