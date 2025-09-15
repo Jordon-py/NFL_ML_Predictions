@@ -1,4 +1,5 @@
-Searching workspace for "Nfl_data_sorted.csv"
+# "Nfl_data_sorted.csv"
+
 Completed with input: {
   "pattern": "Nfl_data_sorted.csv"
 }
@@ -17,7 +18,7 @@ Completed with input: {
 
 Here is the detailed analysis of the dataset `Nfl_data_sorted.csv`:
 
-### Descriptive Statistics
+## Descriptive Statistics
 
 1. **Season and Week**:
    - The dataset spans from 2014 to 2025 with an average season year of 2019.11.

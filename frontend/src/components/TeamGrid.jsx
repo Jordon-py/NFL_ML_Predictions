@@ -257,9 +257,9 @@ function TeamGrid({ onPrediction }) {
               {prediction && (
                 <div className="prediction-result">
                   <div className="predicted-scores">
-                    <span className="score home-score">{prediction.home_score.toFixed(1)}</span>
-                    <span className="score-separator">-</span>
                     <span className="score away-score">{prediction.away_score.toFixed(1)}</span>
+                    <span className="score-separator"> {'<->'} </span>
+                    <span className="score home-score">{prediction.home_score.toFixed(1)}</span>
                   </div>
                   <div className="point-diff">
                     Spread: {prediction.point_diff > 0 ? '+' : ''}{prediction.point_diff.toFixed(1)}

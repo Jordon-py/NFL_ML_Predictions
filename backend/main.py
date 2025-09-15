@@ -151,8 +151,23 @@ TEAM_ABBREVIATIONS = {
 }
 
 def get_team_abbreviation(team_name: str) -> str:
-    """Return an abbreviation for a given full team name; passthrough if unknown."""
-    return TEAM_ABBREVIATIONS.get(team_name, team_name)
+    """
+    Return an abbreviation for a team name. Handles both full names and abbreviations.
+    Maintains fail-fast behavior for truly unknown teams.
+    """
+    # If input is already a valid abbreviation, return as-is
+    valid_abbreviations = set(TEAM_ABBREVIATIONS.values())
+    if team_name in valid_abbreviations:
+        return team_name
+    
+    # If input is a full team name, convert to abbreviation
+    if team_name in TEAM_ABBREVIATIONS:
+        return TEAM_ABBREVIATIONS[team_name]
+    
+    # If neither full name nor valid abbreviation, fail fast
+    logger.error("Unknown team name: %s. Available full names: %s, Valid abbreviations: %s", 
+                team_name, list(TEAM_ABBREVIATIONS.keys()), sorted(valid_abbreviations))
+    raise ValueError(f"Unknown team name: {team_name}")
 
 
 # -----------------------------------------------------------------------------
@@ -268,23 +283,81 @@ def health():
     return HealthResponse(status="healthy", mode=model_objects.get("mode"))
 
 
+def get_current_nfl_context() -> Dict[str, Any]:
+    """
+    Determine current NFL season state and next prediction target.
+    Returns context about current week and what should be predicted next.
+    """
+    from datetime import datetime
+    
+    current_date = datetime.now()
+    current_season = current_date.year
+    
+    # NFL season spans Sept-Feb, adjust if in early months
+    if current_date.month <= 7:
+        current_season -= 1
+    
+    # Try to determine completed week from existing data
+    global dataset_df
+    if dataset_df is not None and not dataset_df.empty:
+        # Find the most recent completed game
+        completed_games = dataset_df[
+            dataset_df['home_points_for'].notna() & 
+            dataset_df['away_points_for'].notna()
+        ]
+        if not completed_games.empty:
+            latest_game = completed_games.loc[completed_games.index[-1]]
+            last_completed_season = int(latest_game['season'])
+            last_completed_week = int(latest_game['week'])
+            
+            # Determine next prediction target
+            next_week = last_completed_week + 1
+            next_season = last_completed_season
+            
+            # Handle season rollover (Week 18 -> Week 1 of next season)
+            if next_week > 18:
+                next_week = 1
+                next_season += 1
+                
+            return {
+                "current_season": current_season,
+                "last_completed_season": last_completed_season,
+                "last_completed_week": last_completed_week,
+                "next_prediction_season": next_season,
+                "next_prediction_week": next_week,
+                "status": "nfl_season_active" if next_season == current_season else "offseason"
+            }
+    
+    # Default fallback - Week 1 of current season
+    return {
+        "current_season": current_season,
+        "last_completed_season": current_season,
+        "last_completed_week": 0,
+        "next_prediction_season": current_season,
+        "next_prediction_week": 1,
+        "status": "preseason_or_early"
+    }
+
+
 @app.get("/")
 def root():
-    """API discovery endpoint."""
+    """API discovery endpoint with NFL season context."""
+    context = get_current_nfl_context()
+    
     return {
         "name": "NFL Game Prediction API",
         "version": "1.0.0",
+        "nfl_context": context,
         "endpoints": {
             "/health": "Health check",
-            "/predict": "Predict game outcome with team names and return scores",
+            "/predict": "Predict specific game outcome with team names and return scores",
+            "/predict/next-week": "Predict all games for the next NFL week",
             "/predict_raw": "Predict with full feature set (reserved)",
             "/schedule/next-week": "Get next week's NFL game schedule",
-            "/train": "Trigger model training process",
+            "/train": "Trigger model training process", 
             "/retrain": "Retrain models (legacy)",
             "/update_data": "Rebuild datasets and retrain",
         },
-        # NOTE: The comment about a "heuristic fallback" in older docs is outdated.
-        # See "Suggested Enhancements" for remediation steps.
     }
 
 
@@ -316,16 +389,16 @@ def get_next_week_schedule():
                 continue
             try:
                 game_dt = pd.to_datetime(gd).tz_localize("UTC", nonexistent="NaT", ambiguous="NaT")
-            except Exception:
-                # If tz_localize fails, fallback to naive then set UTC
-                game_dt = pd.to_datetime(gd)
-                game_dt = game_dt.tz_localize("UTC") if game_dt.tzinfo is None else game_dt
+            except Exception as e:
+                logger.error("Failed to parse game date '%s': %s", gd, e)
+                raise ValueError(f"Invalid game date format: {gd}") from e
             if game_dt >= now:
                 current_week = int(row["week"])
                 break
 
         if current_week is None:
-            current_week = int(df["week"].max())
+            logger.error("No future games found in schedule data")
+            raise HTTPException(status_code=404, detail="No future games found in schedule")
 
         week_games = df[df["week"] == current_week]
         games: List[ScheduleGame] = []
@@ -360,6 +433,75 @@ def get_next_week_schedule():
     except Exception as e:
         logger.error("Error loading schedule: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to load schedule: {e}")
+
+
+def build_future_game_features(df: pd.DataFrame, home_team: str, away_team: str, season: int, week: int) -> pd.Series:
+    """
+    Build rolling features for a future game by finding the most recent available data for each team.
+    
+    Args:
+        df: The historical dataset
+        home_team: Home team abbreviation
+        away_team: Away team abbreviation  
+        season: Game season
+        week: Game week
+        
+    Returns:
+        Series with rolling features for the matchup
+    """
+    
+    def get_latest_team_features(team: str, target_season: int, target_week: int) -> Dict[str, float]:
+        """Get the most recent rolling features for a team before the target game."""
+        # Find all games for this team before the target date
+        team_mask = ((df['home_team'] == team) | (df['away_team'] == team))
+        target_time_key = target_season * 100 + target_week
+        
+        # Get games before target week
+        df['time_key'] = df['season'] * 100 + df['week'] 
+        before_target = df[team_mask & (df['time_key'] < target_time_key)]
+        
+        if before_target.empty:
+            # No prior data - use league averages
+            return {
+                'prior_pa_avg_3': 22.0, 'prior_pa_avg_5': 22.0,
+                'prior_pf_avg_3': 22.0, 'prior_pf_avg_5': 22.0, 
+                'prior_win_pct_3': 0.5, 'prior_win_pct_5': 0.5
+            }
+        
+        # Get the most recent game features
+        latest_game = before_target.loc[before_target['time_key'].idxmax()]
+        
+        # Extract team's features based on home/away status
+        if latest_game['home_team'] == team:
+            return {
+                'prior_pa_avg_3': latest_game.get('home_prior_pa_avg_3', 22.0),
+                'prior_pa_avg_5': latest_game.get('home_prior_pa_avg_5', 22.0),
+                'prior_pf_avg_3': latest_game.get('home_prior_pf_avg_3', 22.0), 
+                'prior_pf_avg_5': latest_game.get('home_prior_pf_avg_5', 22.0),
+                'prior_win_pct_3': latest_game.get('home_prior_win_pct_3', 0.5),
+                'prior_win_pct_5': latest_game.get('home_prior_win_pct_5', 0.5)
+            }
+        else:
+            return {
+                'prior_pa_avg_3': latest_game.get('away_prior_pa_avg_3', 22.0),
+                'prior_pa_avg_5': latest_game.get('away_prior_pa_avg_5', 22.0),
+                'prior_pf_avg_3': latest_game.get('away_prior_pf_avg_3', 22.0),
+                'prior_pf_avg_5': latest_game.get('away_prior_pf_avg_5', 22.0), 
+                'prior_win_pct_3': latest_game.get('away_prior_win_pct_3', 0.5),
+                'prior_win_pct_5': latest_game.get('away_prior_win_pct_5', 0.5)
+            }
+    
+    # Get latest features for both teams
+    home_features = get_latest_team_features(home_team, season, week)
+    away_features = get_latest_team_features(away_team, season, week)
+    
+    # Build the feature row in the same format as historical data
+    feature_row = {}
+    for stat in ['prior_pa_avg_3', 'prior_pa_avg_5', 'prior_pf_avg_3', 'prior_pf_avg_5', 'prior_win_pct_3', 'prior_win_pct_5']:
+        feature_row[f'home_{stat}'] = home_features[stat]
+        feature_row[f'away_{stat}'] = away_features[stat]
+    
+    return pd.Series(feature_row)
 
 
 @app.post("/predict", response_model=PredictionResponse)
@@ -398,12 +540,13 @@ def predict_game(payload: PredictionRequest):
         home_abbr = get_team_abbreviation(home_team)
         away_abbr = get_team_abbreviation(away_team)
 
-        # Pull rolling priors from dataset for exact (season, week, home, away)
+        # Pull rolling priors from dataset - handle both historical and future games
         global dataset_df
         if dataset_df is None:
             logger.error("Dataset not loaded at startup; cannot build features")
             raise HTTPException(status_code=500, detail="Dataset not loaded")
 
+        # First try exact match for historical games
         mask = (
             (dataset_df.get("season") == season)
             & (dataset_df.get("week") == week)
@@ -411,13 +554,28 @@ def predict_game(payload: PredictionRequest):
             & (dataset_df.get("away_team") == away_abbr)
         )
         rows = dataset_df.loc[mask]
+        
         if rows.empty:
-            detail = f"No matching game in dataset for season={season}, week={week}, home={home_abbr}, away={away_abbr}"
-            logger.error(detail)
-            raise HTTPException(status_code=404, detail=detail)
-        if len(rows) > 1:
-            logger.warning("Multiple matches found for the same game; using the first row")
-        row = rows.iloc[0]
+            # Game not in dataset - likely a future game, build features from latest available data
+            logger.info("Future game prediction - building features from latest team data")
+            row = build_future_game_features(dataset_df, home_abbr, away_abbr, season, week)
+        else:
+            if len(rows) > 1:
+                logger.warning("Multiple matches found for the same game; using the first row")
+            row = rows.iloc[0]
+            
+            # CRITICAL: Check if game is already completed
+            if pd.notna(row.get('home_points_for')) and pd.notna(row.get('away_points_for')):
+                actual_home_score = int(row['home_points_for'])
+                actual_away_score = int(row['away_points_for'])
+                logger.warning(
+                    "Attempted prediction on completed game: %s %d - %s %d",
+                    away_abbr, actual_away_score, home_abbr, actual_home_score
+                )
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Game already completed: {away_abbr} {actual_away_score} - {home_abbr} {actual_home_score}. Cannot predict completed games."
+                )
 
         feature_cols = [
             "home_prior_pa_avg_3", "home_prior_pa_avg_5", "home_prior_pf_avg_3",
@@ -457,6 +615,98 @@ def predict_game(payload: PredictionRequest):
     except Exception as e:
         logger.error("Prediction error: %s", e, exc_info=True)
         raise HTTPException(status_code=400, detail=f"Prediction failed: {e}")
+
+
+@app.get("/predict/next-week")
+def predict_next_week():
+    """
+    Predict outcomes for all games in the next NFL week.
+    
+    Automatically determines the current NFL state and predicts upcoming games.
+    Returns predictions for the next week that should be played.
+    """
+    global model_objects, dataset_df
+    
+    if model_objects is None:
+        logger.error("Models not loaded - cannot make predictions")
+        raise HTTPException(status_code=500, detail="Models not loaded")
+    
+    try:
+        # Get current NFL context
+        context = get_current_nfl_context()
+        next_season = context["next_prediction_season"]
+        next_week = context["next_prediction_week"]
+        
+        logger.info("Predicting next week: %dW%d (last completed: %dW%d)", 
+                   next_season, next_week, 
+                   context["last_completed_season"], context["last_completed_week"])
+        
+        # Load schedule for the next week
+        schedule_path = BASE_DIR / "backend" / "data" / "Nfl_schedule_2025_2026.csv"
+        if not schedule_path.exists():
+            raise HTTPException(status_code=404, detail="Schedule data not found")
+            
+        schedule_df = pd.read_csv(schedule_path)
+        
+        # Filter to next week's games
+        next_week_games = schedule_df[
+            (schedule_df['season'] == next_season) & 
+            (schedule_df['week'] == next_week)
+        ]
+        
+        if next_week_games.empty:
+            return {
+                "context": context,
+                "games": [],
+                "message": f"No games scheduled for {next_season}W{next_week}"
+            }
+        
+        predictions = []
+        for _, game in next_week_games.iterrows():
+            try:
+                # Create prediction request
+                request = PredictionRequest(
+                    home_team=game['home_team'],
+                    away_team=game['away_team'], 
+                    season=int(game['season']),
+                    week=int(game['week'])
+                )
+                
+                # Get prediction (reuse existing logic)
+                prediction = predict_game(request)
+                
+                predictions.append({
+                    "game_id": str(game.get('game_id', f"{game['season']}W{game['week']}-{game['away_team']}@{game['home_team']}")),
+                    "season": int(game['season']),
+                    "week": int(game['week']),
+                    "home_team": game['home_team'],
+                    "away_team": game['away_team'],
+                    "kickoff": game.get('gameday', 'TBD'),
+                    "prediction": prediction.dict()
+                })
+                
+            except Exception as e:
+                logger.warning("Failed to predict game %s @ %s: %s", 
+                             game['away_team'], game['home_team'], e)
+                predictions.append({
+                    "game_id": str(game.get('game_id', 'unknown')),
+                    "season": int(game['season']),
+                    "week": int(game['week']),
+                    "home_team": game['home_team'],
+                    "away_team": game['away_team'],
+                    "error": str(e)
+                })
+        
+        return {
+            "context": context,
+            "games": predictions,
+            "total_games": len(predictions),
+            "successful_predictions": len([p for p in predictions if "prediction" in p])
+        }
+        
+    except Exception as e:
+        logger.error("Next week prediction error: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to predict next week: {e}")
 
 
 @app.post("/retrain")
