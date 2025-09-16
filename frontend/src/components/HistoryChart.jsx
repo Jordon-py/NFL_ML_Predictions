@@ -23,7 +23,7 @@ function HistoryChart({ history }) {
     const labels = history.map((item) => item.date.toLocaleTimeString());
     const dataPoints = history.map((item) => item.ensemble_proba * 100);
     chartInstanceRef.current = new Chart(ctx, {
-      type: 'line',
+      type: 'scatter',
       data: {
         labels: labels,
         datasets: [
