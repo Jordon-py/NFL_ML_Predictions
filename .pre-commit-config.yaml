@@ -1,0 +1,61 @@
+# Pre-commit configuration for NFL Prediction System
+# Ensures production-ready code quality standards
+repos:
+  # Python code formatting with black
+  - repo: https://github.com/psf/black
+    rev: 23.9.1
+    hooks:
+      - id: black
+        language_version: python3
+        args: [--line-length=100]
+        exclude: ^(backend/venv/|frontend/node_modules/)
+
+  # Import sorting with isort
+  - repo: https://github.com/pycqa/isort
+    rev: 5.12.0
+    hooks:
+      - id: isort
+        args: ["--profile", "black", "--line-length=100"]
+        exclude: ^(backend/venv/|frontend/node_modules/)
+
+  # Python linting with flake8
+  - repo: https://github.com/pycqa/flake8
+    rev: 6.1.0
+    hooks:
+      - id: flake8
+        args: [--max-line-length=100, --extend-ignore=E203]
+        exclude: ^(backend/venv/|frontend/node_modules/)
+
+  # Security checking with bandit (temporarily disabled - pbr dependency issue)
+  # - repo: https://github.com/PyCQA/bandit
+  #   rev: 1.7.5
+  #   hooks:
+  #     - id: bandit
+  #       args: [--skip, "B101"]  # Skip assert_used test
+  #       exclude: ^(backend/venv/|frontend/node_modules/|tests/)
+
+  # General file checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: ^(backend/venv/|frontend/node_modules/)
+      - id: end-of-file-fixer
+        exclude: ^(backend/venv/|frontend/node_modules/)
+      - id: check-yaml
+        exclude: ^(backend/venv/|frontend/node_modules/)
+      - id: check-json
+        exclude: ^(backend/venv/|frontend/node_modules/)
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        exclude: ^(backend/venv/|frontend/node_modules/)
+      - id: debug-statements
+        exclude: ^(backend/venv/|frontend/node_modules/)
+
+  # Type checking with mypy (optional, comment out if too strict)
+  # - repo: https://github.com/pre-commit/mirrors-mypy
+  #   rev: v1.5.1
+  #   hooks:
+  #     - id: mypy
+  #       additional_dependencies: [types-all]
+  #       exclude: ^tests/
