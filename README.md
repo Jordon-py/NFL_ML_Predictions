@@ -2,6 +2,8 @@
 
 Predict NFL win probability using curated team-game features. No scraping. Uses nflverse (`nfl-data-py`), builds expert CSVs, trains models, serves an API, and plugs into a minimal React widget.
 
+<img width="1909" height="1078" alt="Image" src="https://github.com/user-attachments/assets/826bfed3-ad7e-4c32-bfc7-e3b12cde826f" />
+
 ---
 
 ```bash
@@ -27,9 +29,6 @@ uvicorn main:app --reload --port 8000
 
 backend/data/             # CSV artifacts
   team_game_base.csv
-  team_game_iter1.csv
-  team_game_iter2.csv
-  team_game_iter3.csv
   team_game_iter3.schema.json
   team_game_iter3.schema.md
 
@@ -41,9 +40,7 @@ backend/models/           # Trained artifacts
 
 backend/scripts/
   build_csvs.py    # Builds the four CSVs and auto-writes schema files
-  make_schema.py   # Schema generator (JSON + Markdown)
-
-main.py            # FastAPI service: /health, /predict, /predict_raw, /retrain
-train_models.py    # Trains NN + GBM, writes artifacts + metadata
-README.md
+  main.py            # FastAPI service: /health, /predict, /predict_raw, /retrain
+  train_models.py    # Trains NN + GBM, writes artifacts + metadata
+  README.md
 
