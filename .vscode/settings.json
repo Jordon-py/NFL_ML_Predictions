@@ -3,5 +3,10 @@
     "editor.fontSize": 17,
     "editor.formatOnSave": true,
     "files.autoSave": "afterDelay",
-    "editor.defaultFormatter": "ms-python.vscode-pylance"
+    "editor.defaultFormatter": "ms-python.vscode-pylance",
+    "dataWrangler.enabledFileTypes": {
+        "jsonl": true
+    },
+    "peacock.affectPanelBorder": true,
+    "peacock.affectStatusAndTitleBorders": true
 }

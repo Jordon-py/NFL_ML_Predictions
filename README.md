@@ -2,14 +2,18 @@
 
 An advanced NFL game prediction system using machine learning models to predict game outcomes, scores, and win probabilities.
 
-## Features
 
-- **Data Pipeline**: Automated data collection and preprocessing from NFL APIs
+<img width="1909" height="1078" alt="Image" src="https://github.com/user-attachments/assets/826bfed3-ad7e-4c32-bfc7-e3b12cde826f" />
+
+---
+
+
+- **Data Pipeline**: Semi-Automated data collection and preprocessing from NFL APIs
 - **Machine Learning Models**: Neural Network and Gradient Boosting models for predictions
 - **REST API**: FastAPI-based web API for serving predictions
 - **Frontend Interface**: React-based web interface for user interactions
 - **Real-time Predictions**: Get predictions for upcoming NFL games
-- **Predictive Dataset Builder**: Advanced script to merge play-by-play and player tracking data
+
 
 ## Quick Start
 
@@ -70,11 +74,7 @@ npm start
 
 The application will be available at `http://localhost:3000`
 
-## Predictive Dataset Builder
-
-### Overview
-
-The `build_predictive_dataset.py` script creates a highly predictive NFL dataset by merging play-by-play data with player tracking data. This enhanced dataset includes engineered features that improve model performance.
+## Overview
 
 ### Data Acquisition
 
@@ -115,18 +115,6 @@ You can obtain this data from several sources:
 4. **ESPN API**: Real-time play-by-play data
 5. **nfl-data-py**: Python package for NFL data (already used in this project)
 
-### Running the Script
-
-```bash
-# Basic usage
-python build_predictive_dataset.py
-
-# Specify custom directories
-python build_predictive_dataset.py --data-dir /path/to/data --output-dir /path/to/output
-
-# The script will create sample data if the required files don't exist
-```
-
 ### Engineered Features
 
 The script creates several new predictive features:
@@ -140,7 +128,7 @@ The script creates several new predictive features:
 
 The script generates:
 
-1. **`predictive_nfl_dataset.csv`**: The main merged dataset
+1. **`nfl_games.csv`**: The main merged dataset
 2. **`dataset_summary.txt`**: Summary statistics and feature descriptions
 3. **`build_predictive_dataset.log`**: Detailed processing log
 
@@ -319,11 +307,23 @@ NFL_ML_Predictions/
 - `GET /schedule/next-week` - Get upcoming games
 - `POST /retrain` - Retrain models
 - `POST /update_data` - Update data and retrain
+=======
+backend/data/             # CSV artifacts
+  team_game_base.csv
+  team_game_iter3.schema.json
+  team_game_iter3.schema.md
+
 
 ## Contributing
-
 Please read our contributing guidelines before submitting pull requests.
 
 ## License
+=======
+backend/scripts/
+  build_csvs.py    # Builds the four CSVs and auto-writes schema files
+  main.py            # FastAPI service: /health, /predict, /predict_raw, /retrain
+  train_models.py    # Trains NN + GBM, writes artifacts + metadata
+  README.md
+
 
 This project is licensed under the MIT License - see the LICENSE file for details.
