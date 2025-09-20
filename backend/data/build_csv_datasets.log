@@ -1,0 +1,7 @@
+2025-09-13 18:23:12,201 INFO Logger initialized. Writing to backend\data\build_csv_datasets.log
+2025-09-13 18:23:12,228 INFO Production dataset build - Current NFL state: 2025W18
+2025-09-13 18:23:12,228 INFO Building dataset for seasons=[2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025] (include_future=True)
+2025-09-13 18:23:12,229 INFO Loading schedules for seasons=[2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025] (include_future=True)
+2025-09-13 18:23:13,166 INFO Loaded 3027 completed games + 255 future games
+2025-09-13 18:23:13,280 INFO Kept future games - dropped only rows missing feature data
+2025-09-13 18:23:13,429 INFO Production dataset ready: backend\data\Nfl_data_sorted.csv (3282 games)
