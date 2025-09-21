@@ -13,7 +13,8 @@ import logging.config
 import os
 import subprocess
 import sys
-import inspect
+import time
+import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
@@ -21,8 +22,10 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 import pandas as pd
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, Field
 from pandas import Timestamp, NaT
 
@@ -121,7 +124,36 @@ def get_team_abbreviation(team_name: str) -> str:
 # -----------------------------------------------------------------------------
 # Model loading
 # -----------------------------------------------------------------------------
+def load_model_by_type(model_path: Path, model_type: str, model_name: str) -> Any:
+    """Load a single model with proper error handling."""
+    if not model_path.exists():
+        logger.error("%s model file missing: %s", model_name, model_path)
+        raise FileNotFoundError(f"Missing {model_path}")
+    
+    if model_type == "neural_network":
+        try:
+            import tensorflow as tf
+            model = tf.keras.models.load_model(model_path)  # type: ignore
+            logger.info("Loaded TensorFlow %s model from %s", model_name, model_path)
+            return model
+        except ImportError as e:
+            logger.error("TensorFlow required for %s neural network but not available: %s", model_name, e)
+            raise RuntimeError(f"TensorFlow required for {model_name} neural network model but not installed") from e
+        except Exception as e:
+            logger.error("Failed to load TensorFlow %s model: %s", model_name, e)
+            raise RuntimeError(f"Failed to load neural network {model_name} model: {e}") from e
+    else:
+        try:
+            import joblib
+            model = joblib.load(model_path)
+            logger.info("Loaded joblib %s model from %s", model_name, model_path)
+            return model
+        except Exception as e:
+            logger.error("Failed to load joblib %s model: %s", model_name, e)
+            raise RuntimeError(f"Failed to load {model_name} model: {e}") from e
+
 def load_objects() -> Dict[str, Any]:
+    """Load all required models and preprocessor."""
     try:
         import joblib
     except ImportError as e:
@@ -141,76 +173,25 @@ def load_objects() -> Dict[str, Any]:
         logger.error("Failed to read metadata: %s", e)
         raise RuntimeError(f"Invalid metadata file {meta_path}: {e}") from e
 
+    # Load preprocessor
     preprocessor = joblib.load(MODELS_DIR / meta["preprocessor"])
     models_meta = meta.get("models", {})
     model_types = meta.get("model_types", {"home_model_type": "lgbm", "away_model_type": "lgbm"})
 
-    # Check if TensorFlow is needed and available
-    needs_tensorflow = (
-        model_types.get("home_model_type") == "neural_network" or 
-        model_types.get("away_model_type") == "neural_network"
-    )
-    
-    tensorflow_available = False
-    if needs_tensorflow:
-        try:
-            import tensorflow as tf
-            tensorflow_available = True
-            logger.info("TensorFlow loaded successfully, version: %s", tf.__version__)
-        except ImportError as e:
-            logger.error("TensorFlow required but not available: %s", e)
-            raise RuntimeError(
-                "TensorFlow is required for neural network models but is not installed. "
-                "Install with: pip install tensorflow"
-            ) from e
-
-    # Home model
+    # Load models using simplified helper
     home_model_path = MODELS_DIR / models_meta.get("home_model", "home_model.joblib")
-    if not home_model_path.exists():
-        logger.error("Home model file missing: %s", home_model_path)
-        raise FileNotFoundError(f"Missing {home_model_path}")
-    
-    if model_types.get("home_model_type") == "neural_network":
-        if not tensorflow_available:
-            raise RuntimeError("TensorFlow required for home neural network model but not available")
-        import tensorflow as tf
-        try:
-            home_model = tf.keras.models.load_model(home_model_path) # type: ignore
-            logger.info("Loaded TensorFlow home model from %s", home_model_path)
-        except Exception as e:
-            logger.error("Failed to load TensorFlow home model: %s", e)
-            raise RuntimeError(f"Failed to load neural network home model: {e}") from e
-    else:
-        try:
-            home_model = joblib.load(home_model_path)
-            logger.info("Loaded joblib home model from %s", home_model_path)
-        except Exception as e:
-            logger.error("Failed to load joblib home model: %s", e)
-            raise RuntimeError(f"Failed to load home model: {e}") from e
-
-    # Away model
     away_model_path = MODELS_DIR / models_meta.get("away_model", "away_model.joblib")
-    if not away_model_path.exists():
-        logger.error("Away model file missing: %s", away_model_path)
-        raise FileNotFoundError(f"Missing {away_model_path}")
     
-    if model_types.get("away_model_type") == "neural_network":
-        if not tensorflow_available:
-            raise RuntimeError("TensorFlow required for away neural network model but not available")
-        import tensorflow as tf
-        try:
-            away_model = tf.keras.models.load_model(away_model_path) # type: ignore
-            logger.info("Loaded TensorFlow away model from %s", away_model_path)
-        except Exception as e:
-            logger.error("Failed to load TensorFlow away model: %s", e)
-            raise RuntimeError(f"Failed to load neural network away model: {e}") from e
-    else:
-        try:
-            away_model = joblib.load(away_model_path)
-            logger.info("Loaded joblib away model from %s", away_model_path)
-        except Exception as e:
-            logger.error("Failed to load joblib away model: %s", e)
-            raise RuntimeError(f"Failed to load away model: {e}") from e
+    home_model = load_model_by_type(
+        home_model_path, 
+        model_types.get("home_model_type", "lgbm"), 
+        "home"
+    )
+    away_model = load_model_by_type(
+        away_model_path, 
+        model_types.get("away_model_type", "lgbm"), 
+        "away"
+    )
 
     logger.info("Successfully loaded all models - home: %s, away: %s", 
                 model_types.get("home_model_type", "lgbm"), 
@@ -249,11 +230,78 @@ async def lifespan(app: FastAPI):
     yield
     logger.info("Shutdown complete")
 
-app = FastAPI(title="NFL Game Prediction API", description="Predict home/away scores and win odds.", version="1.0.0", lifespan=lifespan)
+app = FastAPI(
+    title="NFL Game Prediction API", 
+    description="Predict home/away scores and win odds.", 
+    version="1.0.0", 
+    lifespan=lifespan
+)
 
 # CORS configuration - read from environment for flexibility
 allowed_origins = os.getenv("CORS_ORIGINS", "*").split(",")
-app.add_middleware(CORSMiddleware, allow_origins=allowed_origins, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(
+    CORSMiddleware, 
+    allow_origins=allowed_origins, 
+    allow_credentials=True, 
+    allow_methods=["*"], 
+    allow_headers=["*"]
+)
+
+# Error handling middleware
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Handle validation errors with structured response."""
+    logger.error("Validation error for %s: %s", request.url, exc.errors())
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": "Validation Error",
+            "detail": "Invalid request data",
+            "errors": exc.errors()
+        }
+    )
+
+@app.exception_handler(Exception)
+async def general_exception_handler(request: Request, exc: Exception):
+    """Handle unexpected errors with proper logging."""
+    logger.error("Unexpected error for %s: %s", request.url, exc, exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": "Internal Server Error", 
+            "detail": "An unexpected error occurred",
+            "path": str(request.url.path)
+        }
+    )
+
+# Request logging middleware
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    """Log all HTTP requests with correlation ID and timing."""
+    correlation_id = str(uuid.uuid4())[:8]
+    start_time = time.time()
+    
+    logger.info(
+        "Request started [%s]: %s %s from %s", 
+        correlation_id, 
+        request.method, 
+        request.url.path,
+        request.client.host if request.client else "unknown"
+    )
+    
+    response = await call_next(request)
+    
+    duration = time.time() - start_time
+    logger.info(
+        "Request completed [%s]: %s %s -> %d (%.3fs)",
+        correlation_id,
+        request.method,
+        request.url.path,
+        response.status_code,
+        duration
+    )
+    
+    return response
 
 # -----------------------------------------------------------------------------
 # Helpers
@@ -339,6 +387,20 @@ def build_future_game_features(df: pd.DataFrame, home_team: str, away_team: str,
         "away_prior_win_pct_3": away_roll["prior_win_pct_3"],
         "away_prior_win_pct_5": away_roll["prior_win_pct_5"],
     })
+
+def make_model_prediction(model: Any, model_type: str, X: Any) -> float:
+    """Make prediction with the appropriate model type."""
+    if model_type == "neural_network":
+        return float(model.predict(X, verbose=0)[0][0])
+    else:
+        return float(model.predict(X)[0])
+
+def calculate_win_probabilities(point_diff: float) -> tuple[float, float]:
+    """Calculate win probabilities from point differential."""
+    k = 0.22
+    home_win_prob = 1.0 / (1.0 + np.exp(-k * point_diff))
+    away_win_prob = 1.0 - home_win_prob
+    return home_win_prob, away_win_prob
 
 # -----------------------------------------------------------------------------
 # Routes
@@ -478,45 +540,47 @@ def predict_game(payload: PredictionRequest):
             if pd.notna(row.get("home_points_for")) and pd.notna(row.get("away_points_for")):
                 raise HTTPException(status_code=400, detail="Game already completed; no prediction produced.")
 
+        # Define feature columns used for prediction
         feature_cols = [
-            'home_prior_pf_avg_3','home_prior_pa_avg_3','home_prior_win_pct_3',
-            'home_prior_pf_avg_5','home_prior_pa_avg_5','home_prior_win_pct_5',
-            'away_prior_pf_avg_3','away_prior_pa_avg_3','away_prior_win_pct_3',
-            'away_prior_pf_avg_5','away_prior_pa_avg_5','away_prior_win_pct_5','home_minus_away_pf_avg_3','home_minus_away_pa_avg_3','home_minus_away_win_pct_3','home_minus_away_pf_avg_5','home_minus_away_pa_avg_5','home_minus_away_win_pct_5',
-            'home_minus_away_pf_avg_3','home_minus_away_pa_avg_3','home_minus_away_win_pct_3',
-            'home_minus_away_pf_avg_5','home_minus_away_pa_avg_5','home_minus_away_win_pct_5',
+            'home_prior_pf_avg_3', 'home_prior_pa_avg_3', 'home_prior_win_pct_3',
+            'home_prior_pf_avg_5', 'home_prior_pa_avg_5', 'home_prior_win_pct_5',
+            'away_prior_pf_avg_3', 'away_prior_pa_avg_3', 'away_prior_win_pct_3',
+            'away_prior_pf_avg_5', 'away_prior_pa_avg_5', 'away_prior_win_pct_5',
+            'home_minus_away_pf_avg_3', 'home_minus_away_pa_avg_3', 'home_minus_away_win_pct_3',
+            'home_minus_away_pf_avg_5', 'home_minus_away_pa_avg_5', 'home_minus_away_win_pct_5',
         ]
         missing = [c for c in feature_cols if c not in row.index]
         if missing:
             raise HTTPException(status_code=500, detail=f"Missing feature columns: {missing}")
         input_df = pd.DataFrame({c: [row[c]] for c in feature_cols})
 
+        # Transform features and make predictions
         X = model_objects["preprocessor"].transform(input_df)
         types = model_objects.get("model_types", {})
 
-        if types.get("home_model_type") == "neural_network":
-            home_pred = float(model_objects["home_model"].predict(X, verbose=0)[0][0])
-        else:
-            home_pred = float(model_objects["home_model"].predict(X)[0])
+        home_pred = make_model_prediction(
+            model_objects["home_model"], 
+            types.get("home_model_type", "lgbm"), 
+            X
+        )
+        away_pred = make_model_prediction(
+            model_objects["away_model"], 
+            types.get("away_model_type", "lgbm"), 
+            X
+        )
 
-        if types.get("away_model_type") == "neural_network":
-            away_pred = float(model_objects["away_model"].predict(X, verbose=0)[0][0])
-        else:
-            away_pred = float(model_objects["away_model"].predict(X)[0])
-
+        # Clamp scores to reasonable range and calculate metrics
         home_score = round(max(0.0, min(70.0, home_pred)), 1)
         away_score = round(max(0.0, min(70.0, away_pred)), 1)
         point_diff = round(home_score - away_score, 1)
-
-        k = 0.22
-        home_win_prob = 1.0 / (1.0 + np.exp(-k * point_diff))
-        away_win_prob = 1.0 / (1.0 + np.exp(k * point_diff))
+        
+        home_win_prob, away_win_prob = calculate_win_probabilities(point_diff)
 
         return PredictionResponse(
             home_score=home_score,
             away_score=away_score,
             home_win_probability=round(float(home_win_prob), 3),
-            away_win_probability=round(float(1 - home_win_prob), 3),
+            away_win_probability=round(float(away_win_prob), 3),
             point_diff=point_diff,
             mode="models",
         )
@@ -576,55 +640,70 @@ def predict_next_week():
         raise HTTPException(status_code=500, detail=f"Failed to predict next week: {e}")
 
 @app.post("/retrain")
-def retrain(new_data_path: Optional[str] = None):
+def retrain():
+    """Retrain models with existing data - production endpoint."""
     global model_objects
     try:
-        subprocess.run([sys.executable, str(BACKEND_DIR / "train_models.py")], check=True, capture_output=True, text=True)
+        logger.info("Starting model retraining")
+        result = subprocess.run(
+            [sys.executable, str(BACKEND_DIR / "train_models.py")], 
+            check=True, capture_output=True, text=True, timeout=1200
+        )
+        logger.info("Model retraining completed successfully")
+        
+        # Reload models after successful training
+        model_objects = load_objects()
+        return {"detail": "Models retrained successfully."}
+    except subprocess.TimeoutExpired as e:
+        logger.error("Retraining process timed out: %s", e)
+        raise HTTPException(status_code=500, detail=f"Retraining timed out: {e}")
     except subprocess.CalledProcessError as e:
+        logger.error("Retraining failed: %s", e.stderr)
         raise HTTPException(status_code=500, detail=f"Retraining failed: {e.stderr}")
-    model_objects = load_objects()
-    return {"detail": "Models retrained successfully."}
+    except Exception as e:
+        logger.error("Unexpected error during retraining: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Retraining failed: {e}")
 
 @app.post("/update_data")
 def update_data():
+    """Update datasets and retrain models - production endpoint."""
     try:
+        # Use the correct path for build_csv_datasets.py
+        build_script = BACKEND_DIR / "build_csv_datasets.py"
+        if not build_script.exists():
+            raise HTTPException(status_code=500, detail=f"Build script not found: {build_script}")
+            
+        logger.info("Starting data update with build script: %s", build_script)
         build = subprocess.run(
-            [sys.executable, str(BASE_DIR / "scripts" / "build_csvs.py"), "--start", "2014", "--end", "2024", "--out-dir", str(DATA_DIR)],
-            check=True, capture_output=True, text=True
+            [sys.executable, str(build_script), "--start", "2014", "--end", "2025", "--out-dir", str(DATA_DIR)],
+            check=True, capture_output=True, text=True, timeout=600
         )
-        logger.info("build_csvs stdout:\n%s", build.stdout)
-        train = subprocess.run([sys.executable, str(BACKEND_DIR / "train_models.py")], check=True, capture_output=True, text=True)
-        logger.info("train_models stdout:\n%s", train.stdout)
-        return {"detail": "Data updated and models retrained."}
+        logger.info("build_csv_datasets completed successfully")
+        
+        logger.info("Starting model training")
+        train = subprocess.run(
+            [sys.executable, str(BACKEND_DIR / "train_models.py")], 
+            check=True, capture_output=True, text=True, timeout=1200
+        )
+        logger.info("Model training completed successfully")
+        
+        # Reload models after successful training
+        global model_objects
+        model_objects = load_objects()
+        
+        return {"detail": "Data updated and models retrained successfully."}
+    except subprocess.TimeoutExpired as e:
+        logger.error("Update process timed out: %s", e)
+        raise HTTPException(status_code=500, detail=f"Update process timed out: {e}")
     except subprocess.CalledProcessError as e:
         logger.error("Update failed: %s", e.stderr)
-        return {"detail": "Update failed", "stderr": e.stderr}
+        raise HTTPException(status_code=500, detail=f"Update failed: {e.stderr}")
+    except Exception as e:
+        logger.error("Unexpected error during update: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Update failed: {e}")
 
-def your_function() -> Timestamp:
-    """Process timestamp data with strict validation.
-    
-    Returns:
-        Timestamp: Valid pandas timestamp
-        
-    Raises:
-        ValueError: If timestamp is NaT or invalid
-    """
-    # Create current timestamp for NFL context processing
-    dt = pd.Timestamp.now(tz='UTC')
-    
-    if pd.isna(dt) or dt is NaT:
-        # Safe line number detection with fallback
-        frame = inspect.currentframe()
-        line_no = frame.f_lineno if frame is not None else "unknown"
-        
-        logger.error(
-            "Timestamp validation failed: NaT detected in %s at line %s", 
-            __name__, 
-            line_no
-        )
-        raise ValueError(f"Invalid timestamp: Cannot process NaT value in {__name__}")
-    
-    # Type assertion: we've validated dt is not NaT, so it's definitely Timestamp
-    logger.debug("Timestamp validation passed: %s", dt)
-    return dt
-    return validated_dt
+if __name__ == "__main__":
+    # For development only - production uses gunicorn
+    import uvicorn
+    logger.info("Starting development server")
+    uvicorn.run(app, host="0.0.0.0", port=8000)

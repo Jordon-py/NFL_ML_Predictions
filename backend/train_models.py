@@ -53,7 +53,7 @@ pandas, numpy, scikit-learn, lightgbm, joblib, tensorflow, keras-tuner, optuna
 Production Notes
 ----------------
 - Trains on all available data for maximum predictive power
-- Automatic fallback to LightGBM if TensorFlow unavailable
+- No fallbacks - all dependencies must be available for production deployment
 - Comprehensive validation and fail-fast error handling
 - Enhanced metadata with training metrics and model comparison results
 - Cross-validation based model selection for robust performance estimates
@@ -67,6 +67,7 @@ import warnings
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+# Required imports - all must be available for production
 import joblib
 import numpy as np
 import pandas as pd
@@ -78,16 +79,10 @@ from sklearn.model_selection import GridSearchCV, KFold, cross_val_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
-# Neural network imports with error handling
-try:
-    import tensorflow as tf
-    from keras_tuner import Objective, RandomSearch
-    from tensorflow import keras
-
-    TF_AVAILABLE = True
-except ImportError as e:
-    logging.warning(f"TensorFlow/Keras not available: {e}")
-    TF_AVAILABLE = False
+# Neural network imports - required for production
+import tensorflow as tf
+from keras_tuner import Objective, RandomSearch
+from tensorflow import keras
 
 # Suppress sklearn warnings for cleaner logs
 warnings.filterwarnings("ignore", category=UserWarning, module="sklearn")
@@ -258,12 +253,8 @@ def _build_neural_network_model(input_dim: int, hp: Any) -> keras.Model:
 
 def _fit_neural_network_with_tuning(
     X: np.ndarray, y: np.ndarray, target_name: str
-) -> Tuple[Optional[keras.Model], Dict[str, Any]]:
+) -> Tuple[keras.Model, Dict[str, Any]]:
     """Train a neural network with hyperparameter tuning using Keras Tuner."""
-    if not TF_AVAILABLE:
-        logger.warning(f"TensorFlow not available - skipping neural network for {target_name}")
-        return None, {"error": "TensorFlow not available"}
-
     logger.info(f"Starting neural network hyperparameter tuning for {target_name}...")
 
     # Set random seeds for reproducibility
@@ -605,23 +596,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
-# =============================
-# 🏈 Production Enhancement Summary
-# =============================
-# ✅ **Grid Search LightGBM**: 8-parameter hyperparameter optimization with 5-fold cross-validation
-# ✅ **Neural Network Tuning**: Keras Tuner with automated architecture + optimizer search
-# ✅ **Automated Model Selection**: Cross-validation based comparison for production deployment
-# ✅ **Enhanced Validation**: Fail-fast error handling throughout training pipeline
-# ✅ **Comprehensive Logging**: Detailed training metrics, grid search results, and model comparison
-# ✅ **Multi-Model Support**: Seamless API integration for both LightGBM and Keras models
-# ✅ **Production Metadata**: Enhanced metadata with training results and performance metrics
-# ✅ **Robust Error Handling**: Graceful fallback and comprehensive validation at each step
-# ✅ **Cross-Platform Compatibility**: TensorFlow optional with automatic fallback to LightGBM
-#
-# 🎯 **Copilot Instructions Compliance**:
-# - Remove fallback logic ✓ (fail-fast validation)
-# - Production-ready patterns ✓ (comprehensive error handling)
-# - Enhanced logging ✓ (detailed metrics throughout)
-# - Typed function signatures ✓ (complete type hints)
-# - Zero silent errors ✓ (all exceptions logged and raised)
