@@ -212,7 +212,7 @@ function TeamGrid({ onPrediction }) {
         <p>Click any matchup to see predicted scores</p>
       </div>
 
-      <div className="matchups-grid">
+      <div className="team-grid-cards shimmmer-container shine-outline">
         {schedule.map((game, index) => {
           const gameKey = `${game.home_abbr}-${game.away_abbr}`;
           const prediction = predictions[gameKey];
@@ -221,7 +221,7 @@ function TeamGrid({ onPrediction }) {
           return (
             <div
               key={`${game.season}-${game.week}-${index}`}
-              className={`matchup-card ${prediction ? 'has-prediction' : ''} ${isLoading ? 'loading' : ''}`}
+              className={`matchup-card  inner-card ${prediction ? 'has-prediction' : ''} ${isLoading ? 'loading' : ''}`}
               onClick={() => handlePredict(game)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
@@ -233,17 +233,17 @@ function TeamGrid({ onPrediction }) {
               role="button"
               aria-label={`Predict ${game.away_abbr} at ${game.home_abbr}`}
             >
-              <div className="matchup-teams">
+              <div className="matchup-teams inner-card">
                 <div className="away-team">
                   {renderTeam(game.away_abbr, false)}
                 </div>
-                <div className="vs-indicator">@</div>
-                <div className="home-team">
+                <div className="vs-indicator inner-card">@</div>
+                <div className="home-team inner-card">
                   {renderTeam(game.home_abbr, true)}
                 </div>
               </div>
 
-              <div className="matchup-time">
+              <div className="matchup-time inner-card">
                 {formatKickoffTime(game.kickoff_iso)}
               </div>
 
@@ -255,11 +255,11 @@ function TeamGrid({ onPrediction }) {
               )}
 
               {prediction && (
-                <div className="prediction-result">
-                  <div className="predicted-scores">
-                    <span className="score away-score">{prediction.away_score.toFixed(1)}</span>
-                    <span className="score-separator"> {'<->'} </span>
-                    <span className="score home-score">{prediction.home_score.toFixed(1)}</span>
+                <div className="prediction-result inner-card">
+                  <div className="predicted-scores inner-card">
+                    <span className="score away-score inner-card">{prediction.away_score.toFixed(1)}</span>
+                    <span className="score-separator inner-card"> {'<->'} </span>
+                    <span className="score home-score inner-card">{prediction.home_score.toFixed(1)}</span>
                   </div>
                   <div className="point-diff">
                     Spread: {prediction.point_diff > 0 ? '+' : ''}{prediction.point_diff.toFixed(1)}

@@ -1,0 +1,58 @@
+{
+  "name": "NFL ML Predictions API",
+  "description": "NFL Game Prediction System using Machine Learning with FastAPI backend",
+  "repository": "https://github.com/Jordon-py/NFL_ML_Predictions",
+  "logo": "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/1f3c8.svg",
+  "keywords": ["nfl", "machine-learning", "predictions", "fastapi", "python"],
+  "stack": "heroku-22",
+  "buildpacks": [
+    {
+      "url": "heroku/python"
+    }
+  ],
+  "formation": {
+    "web": {
+      "quantity": 1,
+      "size": "eco"
+    }
+  },
+  "env": {
+    "LOG_LEVEL": {
+      "description": "Logging level for the application",
+      "value": "INFO",
+      "required": false
+    },
+    "PORT": {
+      "description": "Port for the web server",
+      "value": "8000",
+      "required": false
+    },
+    "HOST": {
+      "description": "Host address for the web server",
+      "value": "0.0.0.0",
+      "required": false
+    },
+    "DATASET_PATH": {
+      "description": "Path to NFL dataset CSV file",
+      "value": "backend/data/Nfl_data_sorted.csv",
+      "required": false
+    },
+    "SCHEDULE_PATH": {
+      "description": "Path to NFL schedule CSV file", 
+      "value": "backend/data/Nfl_schedule_2025_2026.csv",
+      "required": false
+    }
+  },
+  "addons": [],
+  "scripts": {
+    "postdeploy": "echo 'NFL Prediction API deployed successfully!'"
+  },
+  "environments": {
+    "test": {
+      "addons": [],
+      "scripts": {
+        "test": "pytest tests/ -v"
+      }
+    }
+  }
+}

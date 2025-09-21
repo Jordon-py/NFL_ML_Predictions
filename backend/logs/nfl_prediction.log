@@ -1,0 +1,958 @@
+2025-09-20 13:54:57,582 - nfl_prediction - INFO - lifespan:338 - Starting NFL Prediction API - loading models and dataset
+2025-09-20 13:55:25,525 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\nfl_prediction_system\backend\venv\Lib\site-packages\matplotlib\mpl-data
+2025-09-20 13:55:25,547 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-20 13:55:25,547 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-20 13:55:25,547 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-20 13:55:25,808 - nfl_prediction - INFO - load_objects:297 - Loaded home LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-20 13:55:25,826 - nfl_prediction - INFO - load_objects:315 - Loaded away LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-20 13:55:25,828 - nfl_prediction - INFO - lifespan:340 - Models loaded successfully.
+2025-09-20 13:55:25,828 - nfl_prediction - ERROR - lifespan:343 - Dataset not found at C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\Nfl_data_sorted.csv
+2025-09-20 14:56:24,311 - nfl_prediction - INFO - lifespan:339 - Starting NFL Prediction API - loading models and dataset
+2025-09-20 14:56:27,311 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\nfl_prediction_system\backend\venv\Lib\site-packages\matplotlib\mpl-data
+2025-09-20 14:56:27,313 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-20 14:56:27,313 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-20 14:56:27,313 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-20 14:56:27,406 - nfl_prediction - INFO - load_objects:298 - Loaded home LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-20 14:56:27,434 - nfl_prediction - INFO - load_objects:316 - Loaded away LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-20 14:56:27,434 - nfl_prediction - INFO - lifespan:341 - Models loaded successfully.
+2025-09-20 14:58:29,068 - nfl_prediction - INFO - lifespan:339 - Starting NFL Prediction API - loading models and dataset
+2025-09-20 14:58:31,987 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\nfl_prediction_system\backend\venv\Lib\site-packages\matplotlib\mpl-data
+2025-09-20 14:58:31,997 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-20 14:58:31,997 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-20 14:58:31,997 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-20 14:58:32,066 - nfl_prediction - INFO - load_objects:298 - Loaded home LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-20 14:58:32,084 - nfl_prediction - INFO - load_objects:316 - Loaded away LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-20 14:58:32,084 - nfl_prediction - INFO - lifespan:341 - Models loaded successfully.
+2025-09-20 14:58:36,767 - nfl_prediction - INFO - lifespan:339 - Starting NFL Prediction API - loading models and dataset
+2025-09-20 14:58:39,210 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\nfl_prediction_system\backend\venv\Lib\site-packages\matplotlib\mpl-data
+2025-09-20 14:58:39,212 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-20 14:58:39,221 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-20 14:58:39,221 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-20 14:58:39,299 - nfl_prediction - INFO - load_objects:298 - Loaded home LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-20 14:58:39,319 - nfl_prediction - INFO - load_objects:316 - Loaded away LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-20 14:58:39,319 - nfl_prediction - INFO - lifespan:341 - Models loaded successfully.
+2025-09-20 14:58:52,551 - nfl_prediction - INFO - lifespan:339 - Starting NFL Prediction API - loading models and dataset
+2025-09-20 14:58:57,756 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\nfl_prediction_system\backend\venv\Lib\site-packages\matplotlib\mpl-data
+2025-09-20 14:58:57,781 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-20 14:58:57,784 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-20 14:58:57,784 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-20 14:58:57,922 - nfl_prediction - INFO - load_objects:298 - Loaded home LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-20 14:58:57,964 - nfl_prediction - INFO - load_objects:316 - Loaded away LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-20 14:58:57,968 - nfl_prediction - INFO - lifespan:341 - Models loaded successfully.
+2025-09-20 14:59:03,184 - nfl_prediction - INFO - lifespan:339 - Starting NFL Prediction API - loading models and dataset
+2025-09-20 14:59:06,225 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\nfl_prediction_system\backend\venv\Lib\site-packages\matplotlib\mpl-data
+2025-09-20 14:59:06,236 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-20 14:59:06,236 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-20 14:59:06,240 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-20 14:59:06,333 - nfl_prediction - INFO - load_objects:298 - Loaded home LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-20 14:59:06,358 - nfl_prediction - INFO - load_objects:316 - Loaded away LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-20 14:59:06,359 - nfl_prediction - INFO - lifespan:341 - Models loaded successfully.
+2025-09-20 15:01:30,878 - nfl_prediction - INFO - lifespan:339 - Starting NFL Prediction API - loading models and dataset
+2025-09-20 15:01:36,385 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\nfl_prediction_system\backend\venv\Lib\site-packages\matplotlib\mpl-data
+2025-09-20 15:01:36,395 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-20 15:01:36,395 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-20 15:01:36,395 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-20 15:01:36,474 - nfl_prediction - INFO - load_objects:298 - Loaded home LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-20 15:01:36,506 - nfl_prediction - INFO - load_objects:316 - Loaded away LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-20 15:01:36,507 - nfl_prediction - INFO - lifespan:341 - Models loaded successfully.
+2025-09-20 15:01:42,063 - nfl_prediction - INFO - lifespan:339 - Starting NFL Prediction API - loading models and dataset
+2025-09-20 15:01:47,664 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\nfl_prediction_system\backend\venv\Lib\site-packages\matplotlib\mpl-data
+2025-09-20 15:01:47,680 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-20 15:01:47,686 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-20 15:01:47,687 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-20 15:01:47,830 - nfl_prediction - INFO - load_objects:298 - Loaded home LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-20 15:01:47,873 - nfl_prediction - INFO - load_objects:316 - Loaded away LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-20 15:01:47,876 - nfl_prediction - INFO - lifespan:341 - Models loaded successfully.
+2025-09-20 15:02:57,048 - nfl_prediction - INFO - lifespan:339 - Starting NFL Prediction API - loading models and dataset
+2025-09-20 15:03:00,398 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\nfl_prediction_system\backend\venv\Lib\site-packages\matplotlib\mpl-data
+2025-09-20 15:03:00,412 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-20 15:03:00,415 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-20 15:03:00,415 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-20 15:03:00,510 - nfl_prediction - INFO - load_objects:298 - Loaded home LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-20 15:03:00,542 - nfl_prediction - INFO - load_objects:316 - Loaded away LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-20 15:03:00,543 - nfl_prediction - INFO - lifespan:341 - Models loaded successfully.
+2025-09-20 15:03:03,621 - nfl_prediction - INFO - lifespan:339 - Starting NFL Prediction API - loading models and dataset
+2025-09-20 15:03:06,705 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\nfl_prediction_system\backend\venv\Lib\site-packages\matplotlib\mpl-data
+2025-09-20 15:03:06,723 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-20 15:03:06,726 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-20 15:03:06,726 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-20 15:03:06,859 - nfl_prediction - INFO - load_objects:298 - Loaded home LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-20 15:03:06,893 - nfl_prediction - INFO - load_objects:316 - Loaded away LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-20 15:03:06,894 - nfl_prediction - INFO - lifespan:341 - Models loaded successfully.
+2025-09-20 15:04:11,489 - nfl_prediction - INFO - lifespan:339 - Starting NFL Prediction API - loading models and dataset
+2025-09-20 15:04:15,846 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\nfl_prediction_system\backend\venv\Lib\site-packages\matplotlib\mpl-data
+2025-09-20 15:04:15,846 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-20 15:04:15,857 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-20 15:04:15,857 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-20 15:04:15,936 - nfl_prediction - INFO - load_objects:298 - Loaded home LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-20 15:04:15,959 - nfl_prediction - INFO - load_objects:316 - Loaded away LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-20 15:04:15,959 - nfl_prediction - INFO - lifespan:341 - Models loaded successfully.
+2025-09-20 15:04:19,343 - nfl_prediction - INFO - lifespan:339 - Starting NFL Prediction API - loading models and dataset
+2025-09-20 15:04:22,120 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\nfl_prediction_system\backend\venv\Lib\site-packages\matplotlib\mpl-data
+2025-09-20 15:04:22,133 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-20 15:04:22,136 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-20 15:04:22,136 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-20 15:04:22,236 - nfl_prediction - INFO - load_objects:298 - Loaded home LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-20 15:04:22,271 - nfl_prediction - INFO - load_objects:316 - Loaded away LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-20 15:04:22,274 - nfl_prediction - INFO - lifespan:341 - Models loaded successfully.
+2025-09-20 15:05:48,150 - nfl_prediction - INFO - lifespan:339 - Starting NFL Prediction API - loading models and dataset
+2025-09-20 15:05:49,879 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\nfl_prediction_system\backend\venv\Lib\site-packages\matplotlib\mpl-data
+2025-09-20 15:05:49,891 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-20 15:05:49,893 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-20 15:05:49,893 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-20 15:05:49,953 - nfl_prediction - INFO - load_objects:298 - Loaded home LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-20 15:05:49,975 - nfl_prediction - INFO - load_objects:316 - Loaded away LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-20 15:05:49,975 - nfl_prediction - INFO - lifespan:341 - Models loaded successfully.
+2025-09-20 15:07:02,091 - nfl_prediction - INFO - lifespan:339 - Starting NFL Prediction API - loading models and dataset
+2025-09-20 15:07:04,032 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\nfl_prediction_system\backend\venv\Lib\site-packages\matplotlib\mpl-data
+2025-09-20 15:07:04,032 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-20 15:07:04,047 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-20 15:07:04,047 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-20 15:07:04,113 - nfl_prediction - INFO - load_objects:298 - Loaded home LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-20 15:07:04,132 - nfl_prediction - INFO - load_objects:316 - Loaded away LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-20 15:07:04,133 - nfl_prediction - INFO - lifespan:341 - Models loaded successfully.
+2025-09-20 15:08:18,867 - nfl_prediction - INFO - lifespan:339 - Starting NFL Prediction API - loading models and dataset
+2025-09-20 15:08:27,697 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\nfl_prediction_system\backend\venv\Lib\site-packages\matplotlib\mpl-data
+2025-09-20 15:08:27,699 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-20 15:08:27,709 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-20 15:08:27,709 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-20 15:08:27,799 - nfl_prediction - INFO - load_objects:298 - Loaded home LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-20 15:08:27,822 - nfl_prediction - INFO - load_objects:316 - Loaded away LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-20 15:08:27,823 - nfl_prediction - INFO - lifespan:341 - Models loaded successfully.
+2025-09-20 15:08:31,685 - nfl_prediction - INFO - lifespan:339 - Starting NFL Prediction API - loading models and dataset
+2025-09-20 15:08:33,911 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\nfl_prediction_system\backend\venv\Lib\site-packages\matplotlib\mpl-data
+2025-09-20 15:08:33,918 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-20 15:08:33,918 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-20 15:08:33,918 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-20 15:08:33,989 - nfl_prediction - INFO - load_objects:298 - Loaded home LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-20 15:08:34,009 - nfl_prediction - INFO - load_objects:316 - Loaded away LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-20 15:08:34,010 - nfl_prediction - INFO - lifespan:341 - Models loaded successfully.
+2025-09-20 15:08:34,092 - nfl_prediction - ERROR - lifespan:356 - Failed to load dataset: [Errno 2] No such file or directory: 'C:\\Users\\iProg\\OneDrive\\Documents\\Football_predict\\nfl_prediction_system\\NFL_ML_Predictions\\Nfl_data_sorted.csv'
+Traceback (most recent call last):
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\main.py", line 349, in lifespan
+    df = pd.read_csv(DATASET_PATH)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\nfl_prediction_system\backend\venv\Lib\site-packages\pandas\util\_decorators.py", line 211, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\nfl_prediction_system\backend\venv\Lib\site-packages\pandas\util\_decorators.py", line 331, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\nfl_prediction_system\backend\venv\Lib\site-packages\pandas\io\parsers\readers.py", line 950, in read_csv
+    return _read(filepath_or_buffer, kwds)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\nfl_prediction_system\backend\venv\Lib\site-packages\pandas\io\parsers\readers.py", line 605, in _read
+    parser = TextFileReader(filepath_or_buffer, **kwds)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\nfl_prediction_system\backend\venv\Lib\site-packages\pandas\io\parsers\readers.py", line 1442, in __init__
+    self._engine = self._make_engine(f, self.engine)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\nfl_prediction_system\backend\venv\Lib\site-packages\pandas\io\parsers\readers.py", line 1735, in _make_engine
+    self.handles = get_handle(
+                   ^^^^^^^^^^^
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\nfl_prediction_system\backend\venv\Lib\site-packages\pandas\io\common.py", line 856, in get_handle
+    handle = open(
+             ^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: 'C:\\Users\\iProg\\OneDrive\\Documents\\Football_predict\\nfl_prediction_system\\NFL_ML_Predictions\\Nfl_data_sorted.csv'
+2025-09-20 15:09:15,734 - nfl_prediction - INFO - lifespan:339 - Starting NFL Prediction API - loading models and dataset
+2025-09-20 15:09:18,389 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\nfl_prediction_system\backend\venv\Lib\site-packages\matplotlib\mpl-data
+2025-09-20 15:09:18,396 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-20 15:09:18,400 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-20 15:09:18,400 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-20 15:09:18,480 - nfl_prediction - INFO - load_objects:298 - Loaded home LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-20 15:09:18,502 - nfl_prediction - INFO - load_objects:316 - Loaded away LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-20 15:09:18,503 - nfl_prediction - INFO - lifespan:341 - Models loaded successfully.
+2025-09-20 15:09:22,173 - nfl_prediction - INFO - lifespan:339 - Starting NFL Prediction API - loading models and dataset
+2025-09-20 15:09:24,627 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\nfl_prediction_system\backend\venv\Lib\site-packages\matplotlib\mpl-data
+2025-09-20 15:09:24,639 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-20 15:09:24,644 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-20 15:09:24,644 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-20 15:09:24,718 - nfl_prediction - INFO - load_objects:298 - Loaded home LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-20 15:09:24,742 - nfl_prediction - INFO - load_objects:316 - Loaded away LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-20 15:09:24,743 - nfl_prediction - INFO - lifespan:341 - Models loaded successfully.
+2025-09-20 15:09:40,325 - nfl_prediction - INFO - lifespan:339 - Starting NFL Prediction API - loading models and dataset
+2025-09-20 15:09:42,576 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\nfl_prediction_system\backend\venv\Lib\site-packages\matplotlib\mpl-data
+2025-09-20 15:09:42,585 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-20 15:09:42,587 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-20 15:09:42,587 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-20 15:09:42,658 - nfl_prediction - INFO - load_objects:298 - Loaded home LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-20 15:09:42,678 - nfl_prediction - INFO - load_objects:316 - Loaded away LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-20 15:09:42,679 - nfl_prediction - INFO - lifespan:341 - Models loaded successfully.
+2025-09-20 15:09:42,719 - nfl_prediction - ERROR - lifespan:356 - Failed to load dataset: 'str' object has no attribute 'name'
+Traceback (most recent call last):
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\main.py", line 353, in lifespan
+    "Loaded dataset for inference: %s (rows=%d)", DATASET_PATH.name, len(dataset_df)
+                                                  ^^^^^^^^^^^^^^^^^
+AttributeError: 'str' object has no attribute 'name'
+2025-09-20 15:10:19,063 - nfl_prediction - INFO - lifespan:339 - Starting NFL Prediction API - loading models and dataset
+2025-09-20 15:10:21,508 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\nfl_prediction_system\backend\venv\Lib\site-packages\matplotlib\mpl-data
+2025-09-20 15:10:21,519 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-20 15:10:21,521 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-20 15:10:21,522 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-20 15:10:21,600 - nfl_prediction - INFO - load_objects:298 - Loaded home LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-20 15:10:21,626 - nfl_prediction - INFO - load_objects:316 - Loaded away LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-20 15:10:21,626 - nfl_prediction - INFO - lifespan:341 - Models loaded successfully.
+2025-09-20 15:10:21,689 - nfl_prediction - INFO - lifespan:352 - Loaded dataset for inference: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\data\Nfl_data_sorted.csv (rows=3282)
+2025-09-20 15:10:21,690 - nfl_prediction - INFO - lifespan:358 - NFL Prediction API startup complete
+2025-09-20 15:12:20,011 - nfl_prediction - INFO - lifespan:360 - NFL Prediction API shutting down
+2025-09-20 15:12:21,513 - nfl_prediction - INFO - lifespan:339 - Starting NFL Prediction API - loading models and dataset
+2025-09-20 15:12:30,875 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\nfl_prediction_system\backend\venv\Lib\site-packages\matplotlib\mpl-data
+2025-09-20 15:12:30,907 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-20 15:12:30,916 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-20 15:12:30,917 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-20 15:12:31,326 - nfl_prediction - INFO - load_objects:298 - Loaded home LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-20 15:12:31,664 - nfl_prediction - INFO - load_objects:316 - Loaded away LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-20 15:12:31,797 - nfl_prediction - INFO - lifespan:341 - Models loaded successfully.
+2025-09-20 15:12:31,902 - nfl_prediction - INFO - lifespan:352 - Loaded dataset for inference: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\data\Nfl_data_sorted.csv (rows=3282)
+2025-09-20 15:12:31,905 - nfl_prediction - INFO - lifespan:358 - NFL Prediction API startup complete
+2025-09-20 15:12:44,259 - nfl_prediction - INFO - lifespan:339 - Starting NFL Prediction API - loading models and dataset
+2025-09-20 15:13:06,259 - nfl_prediction - INFO - lifespan:339 - Starting NFL Prediction API - loading models and dataset
+2025-09-20 15:13:14,627 - nfl_prediction - INFO - lifespan:339 - Starting NFL Prediction API - loading models and dataset
+2025-09-20 15:13:33,344 - nfl_prediction - INFO - lifespan:339 - Starting NFL Prediction API - loading models and dataset
+2025-09-20 15:13:54,554 - nfl_prediction - INFO - lifespan:339 - Starting NFL Prediction API - loading models and dataset
+2025-09-20 15:13:59,683 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\nfl_prediction_system\backend\venv\Lib\site-packages\matplotlib\mpl-data
+2025-09-20 15:13:59,708 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-20 15:13:59,714 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-20 15:13:59,716 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-20 15:13:59,858 - nfl_prediction - INFO - load_objects:298 - Loaded home LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-20 15:13:59,900 - nfl_prediction - INFO - load_objects:316 - Loaded away LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-20 15:13:59,901 - nfl_prediction - INFO - lifespan:341 - Models loaded successfully.
+2025-09-20 15:13:59,973 - nfl_prediction - INFO - lifespan:352 - Loaded dataset for inference: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\data\Nfl_data_sorted.csv (rows=3282)
+2025-09-20 15:13:59,976 - nfl_prediction - INFO - lifespan:358 - NFL Prediction API startup complete
+2025-09-20 15:16:28,590 - nfl_prediction - INFO - lifespan:360 - NFL Prediction API shutting down
+2025-09-20 15:16:39,293 - nfl_prediction - INFO - lifespan:339 - Starting NFL Prediction API - loading models and dataset
+2025-09-20 15:16:46,000 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\nfl_prediction_system\backend\venv\Lib\site-packages\matplotlib\mpl-data
+2025-09-20 15:16:46,005 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-20 15:16:46,016 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-20 15:16:46,016 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-20 15:16:46,120 - nfl_prediction - INFO - load_objects:298 - Loaded home LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-20 15:16:46,145 - nfl_prediction - INFO - load_objects:316 - Loaded away LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-20 15:16:46,146 - nfl_prediction - INFO - lifespan:341 - Models loaded successfully.
+2025-09-20 15:16:46,196 - nfl_prediction - INFO - lifespan:352 - Loaded dataset for inference: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\data\Nfl_data_sorted.csv (rows=3282)
+2025-09-20 15:16:46,196 - nfl_prediction - INFO - lifespan:358 - NFL Prediction API startup complete
+2025-09-20 15:16:50,330 - nfl_prediction - INFO - lifespan:339 - Starting NFL Prediction API - loading models and dataset
+2025-09-20 15:16:55,963 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\nfl_prediction_system\backend\venv\Lib\site-packages\matplotlib\mpl-data
+2025-09-20 15:16:55,980 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-20 15:16:55,983 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-20 15:16:55,983 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-20 15:16:56,119 - nfl_prediction - INFO - load_objects:298 - Loaded home LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-20 15:16:56,156 - nfl_prediction - INFO - load_objects:316 - Loaded away LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-20 15:16:56,157 - nfl_prediction - INFO - lifespan:341 - Models loaded successfully.
+2025-09-20 15:16:56,246 - nfl_prediction - INFO - lifespan:352 - Loaded dataset for inference: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\data\Nfl_data_sorted.csv (rows=3282)
+2025-09-20 15:16:56,248 - nfl_prediction - INFO - lifespan:358 - NFL Prediction API startup complete
+2025-09-20 15:17:42,237 - nfl_prediction - INFO - lifespan:360 - NFL Prediction API shutting down
+2025-09-20 15:17:50,518 - nfl_prediction - INFO - lifespan:339 - Starting NFL Prediction API - loading models and dataset
+2025-09-20 15:17:56,228 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\nfl_prediction_system\backend\venv\Lib\site-packages\matplotlib\mpl-data
+2025-09-20 15:17:56,264 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-20 15:17:56,271 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-20 15:17:56,271 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-20 15:17:56,516 - nfl_prediction - INFO - load_objects:298 - Loaded home LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-20 15:17:56,557 - nfl_prediction - INFO - load_objects:316 - Loaded away LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-20 15:17:56,559 - nfl_prediction - INFO - lifespan:341 - Models loaded successfully.
+2025-09-20 15:17:56,686 - nfl_prediction - INFO - lifespan:352 - Loaded dataset for inference: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\data\Nfl_data_sorted.csv (rows=3282)
+2025-09-20 15:17:56,687 - nfl_prediction - INFO - lifespan:358 - NFL Prediction API startup complete
+2025-09-20 15:19:35,175 - nfl_prediction - INFO - lifespan:360 - NFL Prediction API shutting down
+2025-09-20 15:19:53,283 - nfl_prediction - INFO - lifespan:339 - Starting NFL Prediction API - loading models and dataset
+2025-09-20 15:19:55,932 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\nfl_prediction_system\backend\venv\Lib\site-packages\matplotlib\mpl-data
+2025-09-20 15:19:55,943 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-20 15:19:55,945 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-20 15:19:55,945 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-20 15:19:56,013 - nfl_prediction - INFO - load_objects:298 - Loaded home LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-20 15:19:56,031 - nfl_prediction - INFO - load_objects:316 - Loaded away LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-20 15:19:56,033 - nfl_prediction - INFO - lifespan:341 - Models loaded successfully.
+2025-09-20 15:19:56,081 - nfl_prediction - INFO - lifespan:352 - Loaded dataset for inference: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\data\Nfl_data_sorted.csv (rows=3282)
+2025-09-20 15:19:56,081 - nfl_prediction - INFO - lifespan:358 - NFL Prediction API startup complete
+2025-09-20 15:20:35,418 - nfl_prediction - INFO - lifespan:360 - NFL Prediction API shutting down
+2025-09-20 15:20:42,075 - nfl_prediction - INFO - lifespan:340 - Starting NFL Prediction API - loading models and dataset
+2025-09-20 15:20:44,185 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\nfl_prediction_system\backend\venv\Lib\site-packages\matplotlib\mpl-data
+2025-09-20 15:20:44,195 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-20 15:20:44,197 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-20 15:20:44,197 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-20 15:20:44,300 - nfl_prediction - INFO - load_objects:298 - Loaded home LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-20 15:20:44,327 - nfl_prediction - INFO - load_objects:316 - Loaded away LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-20 15:20:44,328 - nfl_prediction - INFO - lifespan:342 - Models loaded successfully.
+2025-09-20 15:20:44,470 - nfl_prediction - INFO - lifespan:361 - Loaded dataset for inference: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\data\Nfl_data_sorted.csv (rows=3282)
+2025-09-20 15:20:44,493 - nfl_prediction - INFO - lifespan:366 - NFL Prediction API startup complete
+2025-09-20 15:21:54,222 - nfl_prediction - INFO - lifespan:368 - NFL Prediction API shutting down
+2025-09-20 15:22:01,203 - nfl_prediction - INFO - lifespan:340 - Starting NFL Prediction API - loading models and dataset
+2025-09-20 15:22:05,517 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\nfl_prediction_system\backend\venv\Lib\site-packages\matplotlib\mpl-data
+2025-09-20 15:22:05,528 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-20 15:22:05,530 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-20 15:22:05,530 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-20 15:22:05,614 - nfl_prediction - INFO - load_objects:298 - Loaded home LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-20 15:22:05,642 - nfl_prediction - INFO - load_objects:316 - Loaded away LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-20 15:22:05,642 - nfl_prediction - INFO - lifespan:342 - Models loaded successfully.
+2025-09-20 15:22:05,708 - nfl_prediction - INFO - lifespan:361 - Loaded dataset for inference: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\data\Nfl_data_sorted.csv (rows=3282)
+2025-09-20 15:22:05,709 - nfl_prediction - INFO - lifespan:366 - NFL Prediction API startup complete
+2025-09-20 15:22:37,019 - nfl_prediction - INFO - lifespan:368 - NFL Prediction API shutting down
+2025-09-20 15:22:44,214 - nfl_prediction - INFO - lifespan:340 - Starting NFL Prediction API - loading models and dataset
+2025-09-20 15:22:49,189 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\nfl_prediction_system\backend\venv\Lib\site-packages\matplotlib\mpl-data
+2025-09-20 15:22:49,202 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-20 15:22:49,203 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-20 15:22:49,203 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-20 15:22:49,304 - nfl_prediction - INFO - load_objects:298 - Loaded home LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-20 15:22:49,336 - nfl_prediction - INFO - load_objects:316 - Loaded away LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-20 15:22:49,337 - nfl_prediction - INFO - lifespan:342 - Models loaded successfully.
+2025-09-20 15:22:49,404 - nfl_prediction - INFO - lifespan:361 - Loaded dataset for inference: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\data\Nfl_data_sorted.csv (rows=3282)
+2025-09-20 15:22:49,406 - nfl_prediction - INFO - lifespan:366 - NFL Prediction API startup complete
+2025-09-20 15:22:54,664 - nfl_prediction - INFO - lifespan:340 - Starting NFL Prediction API - loading models and dataset
+2025-09-20 15:22:57,791 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\nfl_prediction_system\backend\venv\Lib\site-packages\matplotlib\mpl-data
+2025-09-20 15:22:57,802 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-20 15:22:57,802 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-20 15:22:57,802 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-20 15:22:57,885 - nfl_prediction - INFO - load_objects:298 - Loaded home LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-20 15:22:57,907 - nfl_prediction - INFO - load_objects:316 - Loaded away LightGBM model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-20 15:22:57,907 - nfl_prediction - INFO - lifespan:342 - Models loaded successfully.
+2025-09-20 15:22:57,985 - nfl_prediction - INFO - lifespan:361 - Loaded dataset for inference: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\data\Nfl_data_sorted.csv (rows=3282)
+2025-09-20 15:22:57,985 - nfl_prediction - INFO - lifespan:366 - NFL Prediction API startup complete
+2025-09-20 15:27:50,929 - nfl_prediction - INFO - lifespan:368 - NFL Prediction API shutting down
+2025-09-20 15:28:00,627 - nfl_prediction - INFO - lifespan:180 - Startup: loading models and dataset
+2025-09-20 15:28:04,374 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\nfl_prediction_system\backend\venv\Lib\site-packages\matplotlib\mpl-data
+2025-09-20 15:28:04,377 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-20 15:28:04,384 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-20 15:28:04,384 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-20 15:28:04,525 - nfl_prediction - INFO - lifespan:191 - Loaded dataset rows=3282
+2025-09-20 15:29:29,150 - nfl_prediction - INFO - lifespan:193 - Shutdown complete
+2025-09-20 15:29:45,229 - nfl_prediction - INFO - lifespan:181 - Startup: loading models and dataset
+2025-09-20 15:29:49,194 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\nfl_prediction_system\backend\venv\Lib\site-packages\matplotlib\mpl-data
+2025-09-20 15:29:49,207 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-20 15:29:49,210 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-20 15:29:49,210 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-20 15:29:49,408 - nfl_prediction - INFO - lifespan:192 - Loaded dataset rows=3282
+2025-09-20 15:29:54,364 - nfl_prediction - INFO - lifespan:181 - Startup: loading models and dataset
+2025-09-20 15:29:59,429 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\nfl_prediction_system\backend\venv\Lib\site-packages\matplotlib\mpl-data
+2025-09-20 15:29:59,438 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-20 15:29:59,445 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-20 15:29:59,445 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-20 15:29:59,706 - nfl_prediction - INFO - lifespan:192 - Loaded dataset rows=3282
+2025-09-20 15:30:21,053 - nfl_prediction - INFO - lifespan:194 - Shutdown complete
+2025-09-20 15:30:26,380 - nfl_prediction - INFO - lifespan:182 - Startup: loading models and dataset
+2025-09-20 15:30:28,235 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\nfl_prediction_system\backend\venv\Lib\site-packages\matplotlib\mpl-data
+2025-09-20 15:30:28,242 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-20 15:30:28,244 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-20 15:30:28,244 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-20 15:30:28,361 - nfl_prediction - INFO - lifespan:193 - Loaded dataset rows=3282
+2025-09-20 15:40:39,669 - nfl_prediction - INFO - lifespan:195 - Shutdown complete
+2025-09-20 15:40:41,073 - nfl_prediction - INFO - lifespan:182 - Startup: loading models and dataset
+2025-09-20 15:40:42,492 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\nfl_prediction_system\backend\venv\Lib\site-packages\matplotlib\mpl-data
+2025-09-20 15:40:42,496 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-20 15:40:42,497 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-20 15:40:42,497 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-20 15:40:42,560 - nfl_prediction - INFO - lifespan:193 - Loaded dataset rows=3282
+2025-09-20 15:41:21,200 - nfl_prediction - INFO - lifespan:195 - Shutdown complete
+2025-09-20 15:41:28,846 - nfl_prediction - INFO - lifespan:182 - Startup: loading models and dataset
+2025-09-20 15:41:32,501 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\nfl_prediction_system\backend\venv\Lib\site-packages\matplotlib\mpl-data
+2025-09-20 15:41:32,516 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-20 15:41:32,516 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-20 15:41:32,516 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-20 15:41:32,676 - nfl_prediction - INFO - lifespan:193 - Loaded dataset rows=3282
+2025-09-20 15:42:00,023 - nfl_prediction - INFO - lifespan:195 - Shutdown complete
+2025-09-20 15:42:08,356 - nfl_prediction - INFO - lifespan:182 - Startup: loading models and dataset
+2025-09-20 15:42:11,500 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\nfl_prediction_system\backend\venv\Lib\site-packages\matplotlib\mpl-data
+2025-09-20 15:42:11,518 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-20 15:42:11,520 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-20 15:42:11,520 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-20 15:42:11,665 - nfl_prediction - INFO - lifespan:193 - Loaded dataset rows=3282
+2025-09-20 15:44:10,909 - nfl_prediction - INFO - lifespan:195 - Shutdown complete
+2025-09-20 15:44:15,110 - nfl_prediction - INFO - lifespan:235 - Startup: loading models and dataset
+2025-09-20 15:44:15,190 - nfl_prediction - INFO - load_objects:137 - Loaded model metadata from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\metadata.json
+2025-09-20 15:44:16,844 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\nfl_prediction_system\backend\venv\Lib\site-packages\matplotlib\mpl-data
+2025-09-20 15:44:16,844 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-20 15:44:16,860 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-20 15:44:16,860 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-20 15:44:16,917 - nfl_prediction - INFO - load_objects:184 - Loaded joblib home model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-20 15:44:16,931 - nfl_prediction - INFO - load_objects:208 - Loaded joblib away model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-20 15:44:16,931 - nfl_prediction - INFO - load_objects:213 - Successfully loaded all models - home: lgbm, away: lgbm
+2025-09-20 15:44:16,973 - nfl_prediction - INFO - lifespan:246 - Loaded dataset rows=3282
+2025-09-20 15:44:40,699 - nfl_prediction - INFO - lifespan:248 - Shutdown complete
+2025-09-20 15:44:42,223 - nfl_prediction - INFO - lifespan:235 - Startup: loading models and dataset
+2025-09-20 15:44:42,317 - nfl_prediction - INFO - load_objects:137 - Loaded model metadata from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\metadata.json
+2025-09-20 15:44:45,427 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\nfl_prediction_system\backend\venv\Lib\site-packages\matplotlib\mpl-data
+2025-09-20 15:44:45,446 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-20 15:44:45,452 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-20 15:44:45,454 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-20 15:44:45,567 - nfl_prediction - INFO - load_objects:184 - Loaded joblib home model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-20 15:44:45,598 - nfl_prediction - INFO - load_objects:208 - Loaded joblib away model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-20 15:44:45,600 - nfl_prediction - INFO - load_objects:213 - Successfully loaded all models - home: lgbm, away: lgbm
+2025-09-20 15:44:45,672 - nfl_prediction - INFO - lifespan:246 - Loaded dataset rows=3282
+2025-09-20 15:47:48,833 - nfl_prediction - INFO - lifespan:248 - Shutdown complete
+2025-09-20 15:47:54,231 - nfl_prediction - INFO - lifespan:235 - Startup: loading models and dataset
+2025-09-20 15:47:54,324 - nfl_prediction - INFO - load_objects:137 - Loaded model metadata from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\metadata.json
+2025-09-20 15:47:56,273 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\nfl_prediction_system\backend\venv\Lib\site-packages\matplotlib\mpl-data
+2025-09-20 15:47:56,279 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-20 15:47:56,283 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-20 15:47:56,283 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-20 15:47:56,347 - nfl_prediction - INFO - load_objects:184 - Loaded joblib home model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-20 15:47:56,366 - nfl_prediction - INFO - load_objects:208 - Loaded joblib away model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-20 15:47:56,367 - nfl_prediction - INFO - load_objects:213 - Successfully loaded all models - home: lgbm, away: lgbm
+2025-09-20 15:47:56,406 - nfl_prediction - INFO - lifespan:246 - Loaded dataset rows=3282
+2025-09-20 15:53:09,623 - nfl_prediction - ERROR - get_team_abbreviation:116 - Unknown team: LA
+2025-09-20 15:53:09,625 - nfl_prediction - ERROR - get_next_week_schedule:442 - Schedule error: Unknown team name: LA
+Traceback (most recent call last):
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\main.py", line 433, in get_next_week_schedule
+    away_abbr=get_team_abbreviation(str(row["away_team"])),
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\main.py", line 117, in get_team_abbreviation
+    raise ValueError(f"Unknown team name: {team_name}")
+ValueError: Unknown team name: LA
+2025-09-20 15:53:09,972 - nfl_prediction - ERROR - get_team_abbreviation:116 - Unknown team: LA
+2025-09-20 15:53:09,973 - nfl_prediction - ERROR - get_next_week_schedule:442 - Schedule error: Unknown team name: LA
+Traceback (most recent call last):
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\main.py", line 433, in get_next_week_schedule
+    away_abbr=get_team_abbreviation(str(row["away_team"])),
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\main.py", line 117, in get_team_abbreviation
+    raise ValueError(f"Unknown team name: {team_name}")
+ValueError: Unknown team name: LA
+2025-09-20 15:53:11,599 - nfl_prediction - ERROR - get_team_abbreviation:116 - Unknown team: LA
+2025-09-20 15:53:11,607 - nfl_prediction - ERROR - get_next_week_schedule:442 - Schedule error: Unknown team name: LA
+Traceback (most recent call last):
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\main.py", line 433, in get_next_week_schedule
+    away_abbr=get_team_abbreviation(str(row["away_team"])),
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\main.py", line 117, in get_team_abbreviation
+    raise ValueError(f"Unknown team name: {team_name}")
+ValueError: Unknown team name: LA
+2025-09-20 15:53:11,781 - nfl_prediction - ERROR - get_team_abbreviation:116 - Unknown team: LA
+2025-09-20 15:53:11,784 - nfl_prediction - ERROR - get_next_week_schedule:442 - Schedule error: Unknown team name: LA
+Traceback (most recent call last):
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\main.py", line 433, in get_next_week_schedule
+    away_abbr=get_team_abbreviation(str(row["away_team"])),
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\main.py", line 117, in get_team_abbreviation
+    raise ValueError(f"Unknown team name: {team_name}")
+ValueError: Unknown team name: LA
+2025-09-20 15:55:22,446 - nfl_prediction - INFO - lifespan:248 - Shutdown complete
+2025-09-20 15:55:31,531 - nfl_prediction - INFO - lifespan:236 - Startup: loading models and dataset
+2025-09-20 15:55:32,101 - nfl_prediction - INFO - load_objects:138 - Loaded model metadata from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\metadata.json
+2025-09-20 15:55:40,978 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\nfl_prediction_system\backend\venv\Lib\site-packages\matplotlib\mpl-data
+2025-09-20 15:55:41,012 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-20 15:55:41,020 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-20 15:55:41,022 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-20 15:55:41,481 - nfl_prediction - INFO - load_objects:185 - Loaded joblib home model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-20 15:55:41,550 - nfl_prediction - INFO - load_objects:209 - Loaded joblib away model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-20 15:55:41,555 - nfl_prediction - INFO - load_objects:214 - Successfully loaded all models - home: lgbm, away: lgbm
+2025-09-20 15:55:41,689 - nfl_prediction - INFO - lifespan:247 - Loaded dataset rows=3282
+2025-09-20 15:55:49,617 - nfl_prediction - INFO - lifespan:236 - Startup: loading models and dataset
+2025-09-20 15:55:49,845 - nfl_prediction - INFO - load_objects:138 - Loaded model metadata from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\metadata.json
+2025-09-20 15:55:52,256 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\nfl_prediction_system\backend\venv\Lib\site-packages\matplotlib\mpl-data
+2025-09-20 15:55:52,266 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-20 15:55:52,266 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-20 15:55:52,266 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-20 15:55:52,358 - nfl_prediction - INFO - load_objects:185 - Loaded joblib home model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-20 15:55:52,383 - nfl_prediction - INFO - load_objects:209 - Loaded joblib away model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-20 15:55:52,384 - nfl_prediction - INFO - load_objects:214 - Successfully loaded all models - home: lgbm, away: lgbm
+2025-09-20 15:55:52,453 - nfl_prediction - INFO - lifespan:247 - Loaded dataset rows=3282
+2025-09-20 15:56:00,515 - nfl_prediction - INFO - lifespan:249 - Shutdown complete
+2025-09-20 15:56:06,628 - nfl_prediction - INFO - lifespan:236 - Startup: loading models and dataset
+2025-09-20 15:56:06,817 - nfl_prediction - INFO - load_objects:138 - Loaded model metadata from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\metadata.json
+2025-09-20 15:56:09,557 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\nfl_prediction_system\backend\venv\Lib\site-packages\matplotlib\mpl-data
+2025-09-20 15:56:09,567 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-20 15:56:09,567 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-20 15:56:09,567 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-20 15:56:09,658 - nfl_prediction - INFO - load_objects:185 - Loaded joblib home model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-20 15:56:09,683 - nfl_prediction - INFO - load_objects:209 - Loaded joblib away model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-20 15:56:09,683 - nfl_prediction - INFO - load_objects:214 - Successfully loaded all models - home: lgbm, away: lgbm
+2025-09-20 15:56:09,800 - nfl_prediction - INFO - lifespan:247 - Loaded dataset rows=3282
+2025-09-20 15:56:10,025 - nfl_prediction - ERROR - get_team_abbreviation:117 - Unknown team: LAC
+2025-09-20 15:56:10,026 - nfl_prediction - ERROR - get_next_week_schedule:443 - Schedule error: Unknown team name: LAC
+Traceback (most recent call last):
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\main.py", line 432, in get_next_week_schedule
+    home_abbr=get_team_abbreviation(str(row["home_team"])),
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\main.py", line 118, in get_team_abbreviation
+    raise ValueError(f"Unknown team name: {team_name}")
+ValueError: Unknown team name: LAC
+2025-09-20 15:56:10,113 - nfl_prediction - ERROR - get_team_abbreviation:117 - Unknown team: LAC
+2025-09-20 15:56:10,113 - nfl_prediction - ERROR - get_next_week_schedule:443 - Schedule error: Unknown team name: LAC
+Traceback (most recent call last):
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\main.py", line 432, in get_next_week_schedule
+    home_abbr=get_team_abbreviation(str(row["home_team"])),
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\main.py", line 118, in get_team_abbreviation
+    raise ValueError(f"Unknown team name: {team_name}")
+ValueError: Unknown team name: LAC
+2025-09-20 15:56:22,596 - nfl_prediction - INFO - lifespan:249 - Shutdown complete
+2025-09-20 15:56:30,510 - nfl_prediction - INFO - lifespan:236 - Startup: loading models and dataset
+2025-09-20 15:56:30,890 - nfl_prediction - INFO - load_objects:138 - Loaded model metadata from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\metadata.json
+2025-09-20 15:56:35,743 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\nfl_prediction_system\backend\venv\Lib\site-packages\matplotlib\mpl-data
+2025-09-20 15:56:35,760 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-20 15:56:35,762 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-20 15:56:35,762 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-20 15:56:35,849 - nfl_prediction - INFO - load_objects:185 - Loaded joblib home model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-20 15:56:35,878 - nfl_prediction - INFO - load_objects:209 - Loaded joblib away model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-20 15:56:35,879 - nfl_prediction - INFO - load_objects:214 - Successfully loaded all models - home: lgbm, away: lgbm
+2025-09-20 15:56:35,943 - nfl_prediction - INFO - lifespan:247 - Loaded dataset rows=3282
+2025-09-20 15:56:36,048 - nfl_prediction - ERROR - get_team_abbreviation:117 - Unknown team: LA
+2025-09-20 15:56:36,048 - nfl_prediction - ERROR - get_next_week_schedule:443 - Schedule error: Unknown team name: LA
+Traceback (most recent call last):
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\main.py", line 434, in get_next_week_schedule
+    away_abbr=get_team_abbreviation(str(row["away_team"])),
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\main.py", line 118, in get_team_abbreviation
+    raise ValueError(f"Unknown team name: {team_name}")
+ValueError: Unknown team name: LA
+2025-09-20 15:56:36,137 - nfl_prediction - ERROR - get_team_abbreviation:117 - Unknown team: LA
+2025-09-20 15:56:36,137 - nfl_prediction - ERROR - get_next_week_schedule:443 - Schedule error: Unknown team name: LA
+Traceback (most recent call last):
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\main.py", line 434, in get_next_week_schedule
+    away_abbr=get_team_abbreviation(str(row["away_team"])),
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\main.py", line 118, in get_team_abbreviation
+    raise ValueError(f"Unknown team name: {team_name}")
+ValueError: Unknown team name: LA
+2025-09-20 15:56:47,219 - nfl_prediction - INFO - lifespan:249 - Shutdown complete
+2025-09-20 15:56:54,490 - nfl_prediction - INFO - lifespan:236 - Startup: loading models and dataset
+2025-09-20 15:56:54,851 - nfl_prediction - INFO - load_objects:138 - Loaded model metadata from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\metadata.json
+2025-09-20 15:56:58,440 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\nfl_prediction_system\backend\venv\Lib\site-packages\matplotlib\mpl-data
+2025-09-20 15:56:58,448 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-20 15:56:58,450 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-20 15:56:58,450 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-20 15:56:58,525 - nfl_prediction - INFO - load_objects:185 - Loaded joblib home model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-20 15:56:58,547 - nfl_prediction - INFO - load_objects:209 - Loaded joblib away model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-20 15:56:58,548 - nfl_prediction - INFO - load_objects:214 - Successfully loaded all models - home: lgbm, away: lgbm
+2025-09-20 15:56:58,589 - nfl_prediction - INFO - lifespan:247 - Loaded dataset rows=3282
+2025-09-20 15:57:02,111 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-20 15:57:02,276 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-20 16:12:02,903 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-20 16:12:03,223 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-20 16:12:03,510 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-20 16:12:19,085 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-20 16:12:20,054 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-20 16:12:21,485 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-20 16:12:48,027 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-20 16:12:48,298 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-20 16:12:50,060 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-20 16:12:50,276 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-20 16:13:41,193 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-20 16:13:41,418 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-20 16:13:41,938 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-20 16:13:42,094 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-20 16:15:11,165 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-20 16:15:12,073 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-20 16:15:14,454 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-20 16:15:14,536 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-20 16:15:57,664 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-20 16:15:57,903 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-20 16:15:58,888 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-20 16:21:58,184 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-20 16:21:58,339 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-20 16:24:45,389 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-20 16:24:45,729 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-20 16:26:01,976 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-20 16:26:02,341 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-20 16:26:09,257 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-20 16:26:10,030 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-20 16:26:50,652 - nfl_prediction - ERROR - predict_game:519 - Prediction error: No historical rows for team 'LA' before 2025W3
+Traceback (most recent call last):
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\main.py", line 469, in predict_game
+    row = build_future_game_features(dataset_df, home_abbr, away_abbr, season, week)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\main.py", line 323, in build_future_game_features
+    away_roll = latest_team_rollups(away_team)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\main.py", line 302, in latest_team_rollups
+    raise ValueError(f"No historical rows for team '{team}' before {season}W{week}")
+ValueError: No historical rows for team 'LA' before 2025W3
+2025-09-20 16:26:53,022 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-20 16:26:53,294 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-20 16:28:22,678 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-20 16:28:22,885 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-20 16:28:38,107 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-20 16:28:38,404 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-20 16:36:12,290 - nfl_prediction - INFO - lifespan:249 - Shutdown complete
+2025-09-21 09:02:28,188 - nfl_prediction - INFO - lifespan:236 - Startup: loading models and dataset
+2025-09-21 09:02:28,267 - nfl_prediction - INFO - load_objects:138 - Loaded model metadata from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\metadata.json
+2025-09-21 09:02:29,967 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\matplotlib\mpl-data
+2025-09-21 09:02:30,027 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-21 09:02:30,027 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-21 09:02:30,027 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-21 09:02:30,094 - nfl_prediction - INFO - load_objects:185 - Loaded joblib home model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-21 09:02:30,113 - nfl_prediction - INFO - load_objects:209 - Loaded joblib away model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-21 09:02:30,114 - nfl_prediction - INFO - load_objects:214 - Successfully loaded all models - home: lgbm, away: lgbm
+2025-09-21 09:02:30,148 - nfl_prediction - INFO - lifespan:247 - Loaded dataset rows=3282
+2025-09-21 09:02:37,932 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:02:38,123 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:15:56,506 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:15:56,768 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:17:18,332 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:17:18,504 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:36:44,440 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:36:44,535 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:36:44,888 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:36:45,203 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:36:49,873 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:36:50,229 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:37:06,165 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:37:06,434 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:37:22,269 - nfl_prediction - ERROR - predict_game:519 - Prediction error: No historical rows for team 'LA' before 2025W3
+Traceback (most recent call last):
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\main.py", line 469, in predict_game
+    row = build_future_game_features(dataset_df, home_abbr, away_abbr, season, week)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\main.py", line 323, in build_future_game_features
+    away_roll = latest_team_rollups(away_team)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\main.py", line 302, in latest_team_rollups
+    raise ValueError(f"No historical rows for team '{team}' before {season}W{week}")
+ValueError: No historical rows for team 'LA' before 2025W3
+2025-09-21 09:37:29,395 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:37:29,487 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:41:54,675 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:41:56,921 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:41:57,471 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:41:57,811 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:41:57,898 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:41:57,988 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:42:05,774 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:42:05,914 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:42:11,511 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:42:11,696 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:42:23,213 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:42:23,377 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:42:52,685 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:42:52,852 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:42:56,261 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:42:56,616 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:43:27,163 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:43:29,451 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:43:29,838 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:43:30,170 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:43:44,451 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:43:44,637 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:45:14,662 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:45:14,824 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:45:50,298 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:45:50,492 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:45:51,506 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:45:51,557 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:45:53,543 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:45:53,838 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:46:02,968 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:46:03,054 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:46:05,372 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:46:05,702 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:46:07,863 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:46:08,170 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:46:59,363 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:46:59,588 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:47:01,499 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:47:01,785 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:47:18,381 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:47:18,513 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:47:38,460 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:47:38,732 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:47:48,824 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:47:49,160 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:47:49,821 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:47:50,591 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:48:32,247 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:48:32,585 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:48:40,841 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:48:41,226 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:48:48,639 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:48:49,693 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:48:58,670 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:48:58,982 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:49:03,000 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:49:03,895 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:49:24,349 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:49:25,063 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:49:29,971 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:49:30,263 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:49:30,672 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:49:31,221 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:49:49,288 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:49:54,430 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:49:55,373 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:49:55,659 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:49:59,861 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:50:00,087 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:50:08,038 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:50:08,362 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:50:46,409 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:50:47,194 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:50:48,556 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:50:49,561 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:50:54,199 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:50:54,478 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:50:54,718 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:50:55,092 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:54:53,984 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:54:54,274 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:54:55,570 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:54:55,862 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:54:58,094 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 09:54:58,399 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 10:01:20,728 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 10:01:21,004 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 10:01:36,752 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 10:01:36,931 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 10:03:37,001 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 10:03:37,338 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 10:10:30,072 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 10:10:30,334 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 10:11:43,498 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 10:11:44,302 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 10:12:18,467 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 10:12:18,672 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 10:16:08,324 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 10:16:08,573 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 10:18:47,401 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 10:18:48,298 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 10:22:11,245 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 10:22:11,577 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 10:23:04,834 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 10:23:05,211 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 10:23:16,305 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 10:23:16,654 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 10:23:47,851 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 10:23:48,645 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 10:29:22,053 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 10:29:22,218 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 10:39:22,956 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 10:39:23,162 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 10:48:21,226 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 10:48:21,374 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 10:52:47,376 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 10:52:47,571 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 11:00:51,751 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 11:00:52,016 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 11:04:28,276 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 11:04:28,706 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 11:06:23,623 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 11:06:23,901 - nfl_prediction - INFO - get_next_week_schedule:438 - Schedule week 3 games=16
+2025-09-21 11:14:55,570 - nfl_prediction - INFO - lifespan:249 - Shutdown complete
+2025-09-21 11:15:02,473 - nfl_prediction - INFO - lifespan:236 - Startup: loading models and dataset
+2025-09-21 11:15:02,630 - nfl_prediction - INFO - load_objects:138 - Loaded model metadata from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\metadata.json
+2025-09-21 11:15:05,111 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\matplotlib\mpl-data
+2025-09-21 11:15:05,178 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-21 11:15:05,178 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-21 11:15:05,178 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-21 11:15:05,264 - nfl_prediction - INFO - load_objects:185 - Loaded joblib home model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-21 11:15:05,287 - nfl_prediction - INFO - load_objects:209 - Loaded joblib away model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-21 11:15:05,287 - nfl_prediction - INFO - load_objects:214 - Successfully loaded all models - home: lgbm, away: lgbm
+2025-09-21 11:15:05,362 - nfl_prediction - INFO - lifespan:247 - Loaded dataset rows=3282
+2025-09-21 11:15:22,610 - nfl_prediction - INFO - lifespan:249 - Shutdown complete
+2025-09-21 11:15:33,925 - nfl_prediction - INFO - lifespan:236 - Startup: loading models and dataset
+2025-09-21 11:15:34,180 - nfl_prediction - INFO - load_objects:138 - Loaded model metadata from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\metadata.json
+2025-09-21 11:15:40,576 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\matplotlib\mpl-data
+2025-09-21 11:15:40,736 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-21 11:15:40,742 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-21 11:15:40,743 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-21 11:15:41,032 - nfl_prediction - INFO - load_objects:185 - Loaded joblib home model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-21 11:15:41,080 - nfl_prediction - INFO - load_objects:209 - Loaded joblib away model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-21 11:15:41,083 - nfl_prediction - INFO - load_objects:214 - Successfully loaded all models - home: lgbm, away: lgbm
+2025-09-21 11:15:41,156 - nfl_prediction - INFO - lifespan:247 - Loaded dataset rows=3282
+2025-09-21 11:15:54,110 - nfl_prediction - INFO - lifespan:236 - Startup: loading models and dataset
+2025-09-21 11:15:54,283 - nfl_prediction - INFO - load_objects:138 - Loaded model metadata from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\metadata.json
+2025-09-21 11:15:56,774 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\matplotlib\mpl-data
+2025-09-21 11:15:56,845 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-21 11:15:56,847 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-21 11:15:56,847 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-21 11:15:56,912 - nfl_prediction - INFO - load_objects:185 - Loaded joblib home model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-21 11:15:56,930 - nfl_prediction - INFO - load_objects:209 - Loaded joblib away model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-21 11:15:56,931 - nfl_prediction - INFO - load_objects:214 - Successfully loaded all models - home: lgbm, away: lgbm
+2025-09-21 11:15:56,976 - nfl_prediction - INFO - lifespan:247 - Loaded dataset rows=3282
+2025-09-21 11:17:12,249 - nfl_prediction - INFO - lifespan:249 - Shutdown complete
+2025-09-21 11:17:13,611 - nfl_prediction - INFO - lifespan:236 - Startup: loading models and dataset
+2025-09-21 11:17:13,655 - nfl_prediction - INFO - load_objects:138 - Loaded model metadata from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\metadata.json
+2025-09-21 11:17:15,572 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\matplotlib\mpl-data
+2025-09-21 11:17:15,717 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-21 11:17:15,719 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-21 11:17:15,724 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-21 11:17:15,873 - nfl_prediction - INFO - load_objects:185 - Loaded joblib home model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-21 11:17:15,913 - nfl_prediction - INFO - load_objects:209 - Loaded joblib away model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-21 11:17:15,914 - nfl_prediction - INFO - load_objects:214 - Successfully loaded all models - home: lgbm, away: lgbm
+2025-09-21 11:17:15,995 - nfl_prediction - INFO - lifespan:247 - Loaded dataset rows=3282
+2025-09-21 11:17:20,419 - nfl_prediction - INFO - lifespan:236 - Startup: loading models and dataset
+2025-09-21 11:17:20,545 - nfl_prediction - INFO - load_objects:138 - Loaded model metadata from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\metadata.json
+2025-09-21 11:17:23,060 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\matplotlib\mpl-data
+2025-09-21 11:17:23,145 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-21 11:17:23,148 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-21 11:17:23,148 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-21 11:17:23,256 - nfl_prediction - INFO - load_objects:185 - Loaded joblib home model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-21 11:17:23,290 - nfl_prediction - INFO - load_objects:209 - Loaded joblib away model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-21 11:17:23,291 - nfl_prediction - INFO - load_objects:214 - Successfully loaded all models - home: lgbm, away: lgbm
+2025-09-21 11:17:23,340 - nfl_prediction - INFO - lifespan:247 - Loaded dataset rows=3282
+2025-09-21 11:18:43,386 - nfl_prediction - INFO - lifespan:249 - Shutdown complete
+2025-09-21 11:18:52,711 - nfl_prediction - INFO - lifespan:236 - Startup: loading models and dataset
+2025-09-21 11:18:53,070 - nfl_prediction - INFO - load_objects:138 - Loaded model metadata from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\metadata.json
+2025-09-21 11:18:57,923 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\matplotlib\mpl-data
+2025-09-21 11:18:58,015 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-21 11:18:58,022 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-21 11:18:58,022 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-21 11:18:58,148 - nfl_prediction - INFO - load_objects:185 - Loaded joblib home model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-21 11:18:58,178 - nfl_prediction - INFO - load_objects:209 - Loaded joblib away model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-21 11:18:58,180 - nfl_prediction - INFO - load_objects:214 - Successfully loaded all models - home: lgbm, away: lgbm
+2025-09-21 11:18:58,251 - nfl_prediction - INFO - lifespan:247 - Loaded dataset rows=3282
+2025-09-21 11:19:01,747 - nfl_prediction - INFO - lifespan:236 - Startup: loading models and dataset
+2025-09-21 11:19:01,846 - nfl_prediction - INFO - load_objects:138 - Loaded model metadata from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\metadata.json
+2025-09-21 11:19:03,983 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\matplotlib\mpl-data
+2025-09-21 11:19:04,045 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-21 11:19:04,045 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-21 11:19:04,045 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-21 11:19:04,136 - nfl_prediction - INFO - load_objects:185 - Loaded joblib home model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-21 11:19:04,159 - nfl_prediction - INFO - load_objects:209 - Loaded joblib away model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-21 11:19:04,159 - nfl_prediction - INFO - load_objects:214 - Successfully loaded all models - home: lgbm, away: lgbm
+2025-09-21 11:19:04,198 - nfl_prediction - INFO - lifespan:247 - Loaded dataset rows=3282
+2025-09-21 11:20:50,123 - nfl_prediction - INFO - lifespan:249 - Shutdown complete
+2025-09-21 11:20:56,102 - nfl_prediction - INFO - lifespan:237 - Startup: loading models and dataset
+2025-09-21 11:20:56,195 - nfl_prediction - INFO - load_objects:139 - Loaded model metadata from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\metadata.json
+2025-09-21 11:20:58,081 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\matplotlib\mpl-data
+2025-09-21 11:20:58,141 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-21 11:20:58,141 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-21 11:20:58,141 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-21 11:20:58,221 - nfl_prediction - INFO - load_objects:186 - Loaded joblib home model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-21 11:20:58,240 - nfl_prediction - INFO - load_objects:210 - Loaded joblib away model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-21 11:20:58,242 - nfl_prediction - INFO - load_objects:215 - Successfully loaded all models - home: lgbm, away: lgbm
+2025-09-21 11:20:58,293 - nfl_prediction - INFO - lifespan:248 - Loaded dataset rows=3282
+2025-09-21 11:22:12,720 - nfl_prediction - INFO - get_next_week_schedule:439 - Schedule week 3 games=16
+2025-09-21 11:22:13,008 - nfl_prediction - INFO - get_next_week_schedule:439 - Schedule week 3 games=16
+2025-09-21 11:23:52,010 - nfl_prediction - INFO - get_next_week_schedule:439 - Schedule week 3 games=16
+2025-09-21 11:23:52,229 - nfl_prediction - INFO - get_next_week_schedule:439 - Schedule week 3 games=16
+2025-09-21 11:24:00,507 - nfl_prediction - INFO - get_next_week_schedule:439 - Schedule week 3 games=16
+2025-09-21 11:24:00,547 - nfl_prediction - INFO - get_next_week_schedule:439 - Schedule week 3 games=16
+2025-09-21 11:24:02,789 - nfl_prediction - INFO - get_next_week_schedule:439 - Schedule week 3 games=16
+2025-09-21 11:24:02,992 - nfl_prediction - INFO - get_next_week_schedule:439 - Schedule week 3 games=16
+2025-09-21 11:24:04,962 - nfl_prediction - INFO - get_next_week_schedule:439 - Schedule week 3 games=16
+2025-09-21 11:24:05,177 - nfl_prediction - INFO - get_next_week_schedule:439 - Schedule week 3 games=16
+2025-09-21 11:24:12,853 - nfl_prediction - INFO - get_next_week_schedule:439 - Schedule week 3 games=16
+2025-09-21 11:24:13,065 - nfl_prediction - INFO - get_next_week_schedule:439 - Schedule week 3 games=16
+2025-09-21 11:24:14,248 - nfl_prediction - INFO - get_next_week_schedule:439 - Schedule week 3 games=16
+2025-09-21 11:24:14,332 - nfl_prediction - INFO - get_next_week_schedule:439 - Schedule week 3 games=16
+2025-09-21 11:24:15,705 - nfl_prediction - INFO - get_next_week_schedule:439 - Schedule week 3 games=16
+2025-09-21 11:24:15,911 - nfl_prediction - INFO - get_next_week_schedule:439 - Schedule week 3 games=16
+2025-09-21 11:24:17,444 - nfl_prediction - INFO - get_next_week_schedule:439 - Schedule week 3 games=16
+2025-09-21 11:24:17,535 - nfl_prediction - INFO - get_next_week_schedule:439 - Schedule week 3 games=16
+2025-09-21 11:24:32,179 - nfl_prediction - INFO - get_next_week_schedule:439 - Schedule week 3 games=16
+2025-09-21 11:24:32,457 - nfl_prediction - INFO - get_next_week_schedule:439 - Schedule week 3 games=16
+2025-09-21 11:24:34,775 - nfl_prediction - INFO - get_next_week_schedule:439 - Schedule week 3 games=16
+2025-09-21 11:24:35,086 - nfl_prediction - INFO - get_next_week_schedule:439 - Schedule week 3 games=16
+2025-09-21 11:24:45,116 - nfl_prediction - INFO - get_next_week_schedule:439 - Schedule week 3 games=16
+2025-09-21 11:24:45,502 - nfl_prediction - INFO - get_next_week_schedule:439 - Schedule week 3 games=16
+2025-09-21 11:26:27,195 - nfl_prediction - INFO - get_next_week_schedule:439 - Schedule week 3 games=16
+2025-09-21 11:26:27,578 - nfl_prediction - INFO - get_next_week_schedule:439 - Schedule week 3 games=16
+2025-09-21 11:26:36,178 - nfl_prediction - INFO - get_next_week_schedule:439 - Schedule week 3 games=16
+2025-09-21 11:26:36,377 - nfl_prediction - INFO - get_next_week_schedule:439 - Schedule week 3 games=16
+2025-09-21 11:27:11,427 - nfl_prediction - INFO - get_next_week_schedule:439 - Schedule week 3 games=16
+2025-09-21 11:27:11,675 - nfl_prediction - INFO - get_next_week_schedule:439 - Schedule week 3 games=16
+2025-09-21 11:27:49,653 - nfl_prediction - INFO - get_next_week_schedule:439 - Schedule week 3 games=16
+2025-09-21 11:27:49,844 - nfl_prediction - INFO - get_next_week_schedule:439 - Schedule week 3 games=16
+2025-09-21 11:27:51,017 - nfl_prediction - INFO - get_next_week_schedule:439 - Schedule week 3 games=16
+2025-09-21 11:27:51,046 - nfl_prediction - INFO - get_next_week_schedule:439 - Schedule week 3 games=16
+2025-09-21 11:28:02,086 - nfl_prediction - INFO - get_next_week_schedule:439 - Schedule week 3 games=16
+2025-09-21 11:28:02,277 - nfl_prediction - INFO - get_next_week_schedule:439 - Schedule week 3 games=16
+2025-09-21 11:28:31,723 - nfl_prediction - INFO - get_next_week_schedule:439 - Schedule week 3 games=16
+2025-09-21 11:28:31,872 - nfl_prediction - INFO - get_next_week_schedule:439 - Schedule week 3 games=16
+2025-09-21 11:28:38,696 - nfl_prediction - INFO - get_next_week_schedule:439 - Schedule week 3 games=16
+2025-09-21 11:28:38,838 - nfl_prediction - INFO - get_next_week_schedule:439 - Schedule week 3 games=16
+2025-09-21 11:28:42,255 - nfl_prediction - INFO - get_next_week_schedule:439 - Schedule week 3 games=16
+2025-09-21 11:28:42,317 - nfl_prediction - INFO - get_next_week_schedule:439 - Schedule week 3 games=16
+2025-09-21 11:28:45,908 - nfl_prediction - INFO - get_next_week_schedule:439 - Schedule week 3 games=16
+2025-09-21 11:28:46,046 - nfl_prediction - INFO - get_next_week_schedule:439 - Schedule week 3 games=16
+2025-09-21 11:28:51,280 - nfl_prediction - INFO - get_next_week_schedule:439 - Schedule week 3 games=16
+2025-09-21 11:28:51,379 - nfl_prediction - INFO - get_next_week_schedule:439 - Schedule week 3 games=16
+2025-09-21 11:31:54,892 - nfl_prediction - INFO - get_next_week_schedule:439 - Schedule week 3 games=16
+2025-09-21 11:31:54,981 - nfl_prediction - INFO - get_next_week_schedule:439 - Schedule week 3 games=16
+2025-09-21 11:36:19,370 - nfl_prediction - INFO - get_next_week_schedule:439 - Schedule week 3 games=16
+2025-09-21 11:36:19,475 - nfl_prediction - INFO - get_next_week_schedule:439 - Schedule week 3 games=16
+2025-09-21 11:50:03,750 - nfl_prediction - INFO - get_next_week_schedule:439 - Schedule week 3 games=16
+2025-09-21 11:50:04,541 - nfl_prediction - INFO - get_next_week_schedule:439 - Schedule week 3 games=16
+2025-09-21 11:50:15,182 - nfl_prediction - INFO - lifespan:250 - Shutdown complete
+2025-09-21 11:50:23,714 - nfl_prediction - INFO - lifespan:237 - Startup: loading models and dataset
+2025-09-21 11:50:23,888 - nfl_prediction - INFO - load_objects:139 - Loaded model metadata from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\metadata.json
+2025-09-21 11:50:27,728 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\matplotlib\mpl-data
+2025-09-21 11:50:27,821 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-21 11:50:27,823 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-21 11:50:27,824 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-21 11:50:27,930 - nfl_prediction - INFO - load_objects:186 - Loaded joblib home model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-21 11:50:27,964 - nfl_prediction - INFO - load_objects:210 - Loaded joblib away model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-21 11:50:27,965 - nfl_prediction - INFO - load_objects:215 - Successfully loaded all models - home: lgbm, away: lgbm
+2025-09-21 11:50:28,027 - nfl_prediction - INFO - lifespan:248 - Loaded dataset rows=3282
+2025-09-21 12:34:11,487 - nfl_prediction - INFO - lifespan:250 - Shutdown complete
+2025-09-21 12:34:14,236 - nfl_prediction - INFO - lifespan:237 - Startup: loading models and dataset
+2025-09-21 12:34:14,366 - nfl_prediction - INFO - load_objects:139 - Loaded model metadata from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\metadata.json
+2025-09-21 12:34:17,421 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\matplotlib\mpl-data
+2025-09-21 12:34:17,498 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-21 12:34:17,501 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-21 12:34:17,502 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-21 12:34:17,611 - nfl_prediction - INFO - load_objects:186 - Loaded joblib home model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-21 12:34:17,640 - nfl_prediction - INFO - load_objects:210 - Loaded joblib away model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-21 12:34:17,641 - nfl_prediction - INFO - load_objects:215 - Successfully loaded all models - home: lgbm, away: lgbm
+2025-09-21 12:34:17,702 - nfl_prediction - INFO - lifespan:248 - Loaded dataset rows=3282
+2025-09-21 12:34:22,985 - nfl_prediction - INFO - lifespan:250 - Shutdown complete
+2025-09-21 12:34:28,095 - nfl_prediction - INFO - lifespan:237 - Startup: loading models and dataset
+2025-09-21 12:34:28,347 - nfl_prediction - INFO - load_objects:139 - Loaded model metadata from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\metadata.json
+2025-09-21 12:34:30,784 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\matplotlib\mpl-data
+2025-09-21 12:34:30,880 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-21 12:34:30,883 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-21 12:34:30,883 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-21 12:34:31,050 - nfl_prediction - INFO - load_objects:186 - Loaded joblib home model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-21 12:34:31,141 - nfl_prediction - INFO - load_objects:210 - Loaded joblib away model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-21 12:34:31,208 - nfl_prediction - INFO - load_objects:215 - Successfully loaded all models - home: lgbm, away: lgbm
+2025-09-21 12:34:31,310 - nfl_prediction - INFO - lifespan:248 - Loaded dataset rows=3282
+2025-09-21 12:34:36,826 - nfl_prediction - INFO - lifespan:237 - Startup: loading models and dataset
+2025-09-21 12:34:37,202 - nfl_prediction - INFO - load_objects:139 - Loaded model metadata from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\metadata.json
+2025-09-21 12:34:39,484 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\matplotlib\mpl-data
+2025-09-21 12:34:39,548 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-21 12:34:39,550 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-21 12:34:39,550 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-21 12:34:39,617 - nfl_prediction - INFO - load_objects:186 - Loaded joblib home model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-21 12:34:39,637 - nfl_prediction - INFO - load_objects:210 - Loaded joblib away model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-21 12:34:39,638 - nfl_prediction - INFO - load_objects:215 - Successfully loaded all models - home: lgbm, away: lgbm
+2025-09-21 12:34:39,673 - nfl_prediction - INFO - lifespan:248 - Loaded dataset rows=3282
+2025-09-21 12:34:45,004 - nfl_prediction - INFO - lifespan:237 - Startup: loading models and dataset
+2025-09-21 12:34:45,125 - nfl_prediction - INFO - load_objects:139 - Loaded model metadata from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\metadata.json
+2025-09-21 12:34:47,471 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\matplotlib\mpl-data
+2025-09-21 12:34:47,538 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-21 12:34:47,540 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-21 12:34:47,541 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-21 12:34:47,614 - nfl_prediction - INFO - load_objects:186 - Loaded joblib home model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-21 12:34:47,635 - nfl_prediction - INFO - load_objects:210 - Loaded joblib away model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-21 12:34:47,635 - nfl_prediction - INFO - load_objects:215 - Successfully loaded all models - home: lgbm, away: lgbm
+2025-09-21 12:34:47,672 - nfl_prediction - INFO - lifespan:248 - Loaded dataset rows=3282
+2025-09-21 12:39:03,315 - nfl_prediction - INFO - lifespan:250 - Shutdown complete
+2025-09-21 12:39:05,772 - nfl_prediction - INFO - lifespan:237 - Startup: loading models and dataset
+2025-09-21 12:39:05,826 - nfl_prediction - INFO - load_objects:139 - Loaded model metadata from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\metadata.json
+2025-09-21 12:39:07,243 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\matplotlib\mpl-data
+2025-09-21 12:39:07,295 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-21 12:39:07,296 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-21 12:39:07,297 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-21 12:39:07,338 - nfl_prediction - INFO - load_objects:186 - Loaded joblib home model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-21 12:39:07,351 - nfl_prediction - INFO - load_objects:210 - Loaded joblib away model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-21 12:39:07,351 - nfl_prediction - INFO - load_objects:215 - Successfully loaded all models - home: lgbm, away: lgbm
+2025-09-21 12:39:07,370 - nfl_prediction - INFO - lifespan:248 - Loaded dataset rows=3282
+2025-09-21 12:39:47,974 - nfl_prediction - INFO - lifespan:250 - Shutdown complete
+2025-09-21 12:39:49,429 - nfl_prediction - INFO - lifespan:237 - Startup: loading models and dataset
+2025-09-21 12:39:49,476 - nfl_prediction - INFO - load_objects:139 - Loaded model metadata from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\metadata.json
+2025-09-21 12:39:50,636 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\matplotlib\mpl-data
+2025-09-21 12:39:50,682 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-21 12:39:50,683 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-21 12:39:50,683 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-21 12:39:50,730 - nfl_prediction - INFO - load_objects:186 - Loaded joblib home model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-21 12:39:50,740 - nfl_prediction - INFO - load_objects:210 - Loaded joblib away model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-21 12:39:50,740 - nfl_prediction - INFO - load_objects:215 - Successfully loaded all models - home: lgbm, away: lgbm
+2025-09-21 12:39:50,759 - nfl_prediction - INFO - lifespan:248 - Loaded dataset rows=3282
+2025-09-21 12:43:52,231 - nfl_prediction - INFO - lifespan:250 - Shutdown complete
+2025-09-21 12:43:53,597 - nfl_prediction - INFO - lifespan:237 - Startup: loading models and dataset
+2025-09-21 12:43:53,648 - nfl_prediction - INFO - load_objects:139 - Loaded model metadata from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\metadata.json
+2025-09-21 12:43:54,733 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\matplotlib\mpl-data
+2025-09-21 12:43:54,780 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-21 12:43:54,781 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-21 12:43:54,781 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-21 12:43:54,830 - nfl_prediction - INFO - load_objects:186 - Loaded joblib home model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-21 12:43:54,841 - nfl_prediction - INFO - load_objects:210 - Loaded joblib away model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-21 12:43:54,841 - nfl_prediction - INFO - load_objects:215 - Successfully loaded all models - home: lgbm, away: lgbm
+2025-09-21 12:43:54,861 - nfl_prediction - INFO - lifespan:248 - Loaded dataset rows=3282
+2025-09-21 12:50:45,828 - nfl_prediction - INFO - lifespan:250 - Shutdown complete
+2025-09-21 12:50:47,032 - nfl_prediction - INFO - lifespan:237 - Startup: loading models and dataset
+2025-09-21 12:50:47,074 - nfl_prediction - INFO - load_objects:139 - Loaded model metadata from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\metadata.json
+2025-09-21 12:50:48,013 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\matplotlib\mpl-data
+2025-09-21 12:50:48,056 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-21 12:50:48,057 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-21 12:50:48,057 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-21 12:50:48,096 - nfl_prediction - INFO - load_objects:186 - Loaded joblib home model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-21 12:50:48,105 - nfl_prediction - INFO - load_objects:210 - Loaded joblib away model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-21 12:50:48,106 - nfl_prediction - INFO - load_objects:215 - Successfully loaded all models - home: lgbm, away: lgbm
+2025-09-21 12:50:48,122 - nfl_prediction - INFO - lifespan:248 - Loaded dataset rows=3282

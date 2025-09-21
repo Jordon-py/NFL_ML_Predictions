@@ -53,11 +53,10 @@
  */
 
 import React, { useState } from 'react';
-import PredictionForm from './components/PredictionForm.jsx';
 import PredictionResult from './components/PredictionResult.jsx';
 import HistoryChart from './components/HistoryChart.jsx';
 import TeamGrid from './components/TeamGrid.jsx';
-import { predictGame } from './api/client.js';
+import { predictGame, predictNextWeek } from './api/client.js';
 import './styles.css';
 
 
@@ -79,30 +78,6 @@ function App() {
    * @param {object} gameStats - Game statistics for prediction
    */
   
-  const handlePredict = async (gameStats) => {
-    try {
-      setError(null);
-      setLoading(true);
-      const response = await predictGame(gameStats);
-      const data = JSON.parse(response.body);
-
-      setResult(data);
-      console.log(data);
-      setCurrentPrediction(null); // Clear TeamGrid prediction when using form
-
-      // Archive this prediction in history
-      setHistory((prev) => [...prev, {
-        date: new Date(),
-        ...data,
-        source: 'form'
-      }]);
-
-    } catch (err) {
-      console.error('[App] Prediction failed:', err);
-      setError('Failed to get prediction. Please try again.');
-    }
-  };
-
   /**
    * Handler for predictions made through TeamGrid component
    * @param {object} game - Game object with home/away teams
@@ -110,20 +85,48 @@ function App() {
    */
   const handleTeamGridPrediction = (game, prediction) => {
     setResult(null); // Clear form prediction when using TeamGrid
-    setCurrentPrediction({
+
+    if (!prediction) {
+      console.error('handleTeamGridPrediction: missing prediction', { game });
+      return;
+    }
+
+    const now = new Date();
+    const predictionWithTimestamp = {
       game,
       prediction,
-      timestamp: new Date()
+      timestamp: now
+    };
+
+    setCurrentPrediction(predictionWithTimestamp);
+
+    // Extract prediction values from the argument (not state)
+    const {
+      home_score,
+      away_score,
+      point_diff,
+      home_win_probability,
+      away_win_probability
+    } = prediction;
+
+    setResult({
+      home_score,
+      away_score,
+      point_diff,
+      home_win_probability,
+      away_win_probability
     });
-    
 
     // Archive this prediction in history
-    setHistory((prev) => [...prev, {
-      date: new Date(),
-      ...prediction,
-      game,
-      source: 'teamgrid'
-    }]);
+    setHistory((prev) => [
+      ...prev,
+      {
+        date: now,
+        ...prediction,
+        game,
+        source: 'teamgrid'
+      }
+    ]);
   };
 
   /**
@@ -147,24 +150,26 @@ function App() {
         <section className="team-grid-section">
           <TeamGrid onPrediction={handleTeamGridPrediction} />
         </section>
-
-        {/* Manual prediction form */}
-        <section className="prediction-form-section">
-          <div className="section-header">
-            <h2>Manual Prediction</h2>
-            <p>Enter game statistics for custom predictions</p>
-          </div>
-          <PredictionForm onPredict={handlePredict} />
-        </section>
-
         {/* Current prediction display */}
         {(result || currentPrediction) && (
           <section className="current-prediction-section">
             <div className="section-header">
               <h2>Current Prediction</h2>
+              <div>{currentPrediction && currentPrediction.game && (
+                <>
+                  <span className="team away">{currentPrediction.game.away_abbr}</span>
+                  <span className="at-symbol">@</span>
+                  <span className="team home">{currentPrediction.game.home_abbr}</span>
+                </>
+              )}</div>
               <button
                 className="clear-button"
-                onClick={result ? (setHistory((history) => [...history, result]) & clearCurrentPrediction) : clearCurrentPrediction}
+                onClick={() => {
+                  if (result) {
+                    setHistory((history) => [...history, result]);
+                  }
+                  clearCurrentPrediction();
+                }}
                 aria-label="Clear current prediction"
               >
                 Clear
@@ -183,11 +188,13 @@ function App() {
                 <div className="prediction-details">
                   <div className="scores">
                     <span className="score home-score">
-                      {currentPrediction.prediction.home_score.toFixed(1)}
+                      {currentPrediction.prediction.home_score?.toFixed(1)}<br />
+                      {(currentPrediction.prediction.home_win_probability * 100).toFixed(1)}%
                     </span>
                     <span className="separator">-</span>
                     <span className="score away-score">
-                      {currentPrediction.prediction.away_score.toFixed(1)}
+                      {currentPrediction.prediction.away_score?.toFixed(1)}<br />
+                      {(currentPrediction.prediction.away_win_probability * 100).toFixed(1)}%
                     </span>
                   </div>
                   <div className="spread">
@@ -200,18 +207,7 @@ function App() {
           </section>
         )}
 
-        {/* Error display */}
-        {error && (
-          <section className="error-section">
-            <div className="error-message">
-              <h3>Error</h3>
-              <p>{error}</p>
-            </div>
-          </section>
-        )}
-
         {/* Prediction history */}
-        {}
         {history.length > 0 && (
           <section className="history-section">
             <div className="section-header">

@@ -56,16 +56,18 @@ export async function getNextWeekSchedule() {
  * @param {string} payload.away_team - Away team abbreviation
  * @param {number} payload.season - Season year
  * @param {number} payload.week - Week number
- * @returns {Promise<{home_score: number, away_score: number, point_diff: number}>}
+ * @returns {Promise<{home_score: number, away_score: number, point_diff: number, home_win_prob: number, away_win_prob: number}>}
  */
 export async function predictGame(payload) {
   /** Log API request details */
   console.log(`[API] POST /predict - Payload: ${JSON.stringify(payload)}`);
-  return apiRequest('/predict', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-}
+    return await apiRequest('/predict', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+   
 
 /**
  * Start model retraining process
