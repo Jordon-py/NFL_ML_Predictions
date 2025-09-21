@@ -250,7 +250,10 @@ async def lifespan(app: FastAPI):
     logger.info("Shutdown complete")
 
 app = FastAPI(title="NFL Game Prediction API", description="Predict home/away scores and win odds.", version="1.0.0", lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=["https://nfl-predict-ecf5a5bd34fe.herokuapp.com/"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+
+# CORS configuration - read from environment for flexibility
+allowed_origins = os.getenv("CORS_ORIGINS", "*").split(",")
+app.add_middleware(CORSMiddleware, allow_origins=allowed_origins, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
 # -----------------------------------------------------------------------------
 # Helpers
