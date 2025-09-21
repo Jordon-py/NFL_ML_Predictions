@@ -87,7 +87,13 @@ function App() {
       const data = JSON.parse(response.body);
 
       setResult(data);
-      console.log(data);
+      console.log('[NFL-PREDICTION] Prediction successful:', {
+        home_team: gameStats.home_team,
+        away_team: gameStats.away_team,
+        home_score: data.home_score,
+        away_score: data.away_score,
+        point_diff: data.point_diff
+      });
       setCurrentPrediction(null); // Clear TeamGrid prediction when using form
 
       // Archive this prediction in history
@@ -98,7 +104,12 @@ function App() {
       }]);
 
     } catch (err) {
-      console.error('[App] Prediction failed:', err);
+      console.error('[NFL-PREDICTION] Prediction failed:', {
+        error: err.message,
+        home_team: gameStats?.home_team,
+        away_team: gameStats?.away_team,
+        timestamp: new Date().toISOString()
+      });
       setError('Failed to get prediction. Please try again.');
     }
   };
