@@ -1042,3 +1042,16 @@ ValueError: No historical rows for team 'LA' before 2025W3
 2025-09-21 14:50:53,931 - nfl_prediction - INFO - load_objects:210 - Loaded joblib away model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
 2025-09-21 14:50:53,932 - nfl_prediction - INFO - load_objects:215 - Successfully loaded all models - home: lgbm, away: lgbm
 2025-09-21 14:50:54,014 - nfl_prediction - INFO - lifespan:248 - Loaded dataset rows=3282
+2025-09-21 19:17:13,022 - nfl_prediction - INFO - lifespan:237 - Startup: loading models and dataset
+2025-09-21 19:17:13,230 - nfl_prediction - INFO - load_objects:139 - Loaded model metadata from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\metadata.json
+2025-09-21 19:17:43,180 - matplotlib - DEBUG - wrapper:342 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\matplotlib\mpl-data
+2025-09-21 19:17:43,276 - matplotlib - DEBUG - wrapper:342 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-21 19:17:43,437 - matplotlib - DEBUG - <module>:1560 - interactive is False
+2025-09-21 19:17:43,438 - matplotlib - DEBUG - <module>:1561 - platform is win32
+2025-09-21 19:17:43,862 - nfl_prediction - INFO - load_objects:186 - Loaded joblib home model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\home_model.joblib
+2025-09-21 19:17:43,956 - nfl_prediction - INFO - load_objects:210 - Loaded joblib away model from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\away_model.joblib
+2025-09-21 19:17:43,957 - nfl_prediction - INFO - load_objects:215 - Successfully loaded all models - home: lgbm, away: lgbm
+2025-09-21 19:17:44,088 - nfl_prediction - INFO - lifespan:248 - Loaded dataset rows=3282
+2025-09-21 19:20:18,411 - nfl_prediction - INFO - get_next_week_schedule:442 - Schedule week 3 games=16
+2025-09-21 19:20:18,685 - nfl_prediction - INFO - get_next_week_schedule:442 - Schedule week 3 games=16
+2025-09-21 19:27:39,638 - nfl_prediction - INFO - lifespan:250 - Shutdown complete

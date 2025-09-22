@@ -1,12 +1,12 @@
 /* ==========================================================================
-   CustomCSS Optimizer — Final Output (3-pass result)
-   - PASS 1: Audit & fixes → syntax, specificity, invalid props, consistency
-   - PASS 2: Creative enhancements → motion, focus, grid, micro-interactions
-   - PASS 3: Refinement → simplified transforms, variables, reduced layout shift
+   CustomCSS Optimizer - Final Output (3-pass result)
+   - PASS 1: Audit & fixes -> syntax, specificity, invalid props, consistency
+   - PASS 2: Creative enhancements -> motion, focus, grid, micro-interactions
+   - PASS 3: Refinement -> simplified transforms, variables, reduced layout shift
    Notes:
-   • Pure vanilla CSS. No resets/frameworks.
-   • Uses CSS variables with safe fallbacks.
-   • If some classes are unused in your HTML, remove them or wire them up.
+   * Pure vanilla CSS. No resets frameworks.
+   * Uses CSS variables with safe fallbacks.
+   * If some classes are unused in your HTML, remove them or wire them up.
    ========================================================================== */
 
 /* ------------------------------
@@ -58,7 +58,7 @@
    ========================= */
 
 /* PASS 1: FIX invalid properties, remove useless 3D matrix, correct flex values.
-   - 'justify-content: stretch' is invalid → use 'flex-start'.
+   - 'justify-content: stretch' is invalid -> use 'flex-start'.
    - remove transform: matrix3d(...) no-op.
    - backdrop-filter uses lengths (px), not percent. */
 .team-grid {
@@ -133,13 +133,13 @@
   backdrop-filter: blur(var(--blur-strong));
   border-color: #2766ae;
   background: linear-gradient(135deg, #ffffffce 0%, #0084ff0f 45%, #0326481a 100%);
-  box-shadow: var(--shadow-2);
+  box-shadow: var(--shadow-5);
   
   z-index: 13;
   scale: 1.05; /* PASS 3: subtle scale for pop */
 }
 
-.matchup-card:focus { outline: shine-outline; }
+.matchup-card:focus { outline: none; }
 
 /* PASS 1: fix invalid box-shadow syntax. Add :focus-visible for keyboard users. */
 .matchup-card:focus-visible {
@@ -153,7 +153,7 @@
   opacity: 0.7;
 }
 
-.matchup-card.has-prediction {
+.matchup-card.has-prediction.shimmer-container.shine-outline {
   border-color: #2766ae;
   background: linear-gradient(135deg, #ffffff 0%, #003260d4 45%, var(--c-brand-2) 100%);
   transition: all;
@@ -269,7 +269,7 @@
 }
 
 /* =======================
-   PREDICTION STATES/BOXES
+   PREDICTION STATES BOXES
    ======================= */
 
 .prediction-loading {
@@ -339,7 +339,7 @@
 }
 
 /* =======================
-   GENERIC LOADING / ERROR
+   GENERIC LOADING ERROR
    ======================= */
 
 .team-grid-loading,
@@ -459,7 +459,7 @@
    Usage note:
    Wrap .matchup-card with .shimmer-container if you want the rotating
    conic gradient outline. Keep HTML like:
-     <div class="shimmer-container"><div class="matchup-card">…</div></div>
+     <div class="shimmer-container"><div class="matchup-card">...</div></div>
    If you are not using it, remove this block. */
 
 @keyframes shine-outline { to { transform: rotate(360deg); } }
@@ -476,7 +476,7 @@
   box-shadow: 0 0 4px 4px rgba(255,255,255,0.08);
 }
 
-/* The rotating conic gradient “spotlight” ring */
+/* The rotating conic gradient "spotlight" ring */
 .shimmer-container::before {
   content: '';
   position: absolute;
@@ -511,12 +511,12 @@
 }
 
 /* ==========================
-   DEV ANNOTATIONS / TODOs
+   DEV ANNOTATIONS TODOs
    ==========================
-   • Ensure your HTML uses:
-     - .team-grid → header (.team-grid-header h2, p) → .matchups-grid → .matchup-card
+   * Ensure your HTML uses:
+     - .team-grid -> header (.team-grid-header h2, p) -> .matchups-grid -> .matchup-card
      - Inside .matchup-card expected blocks: .matchup-teams, .matchup-time, .prediction-loading/.prediction-result
-   • If .has-prediction class is never applied, hook it from JS after a successful response.
-   • If logo URLs fail, use .team-logo-placeholder with team initials in HTML.
-   • Remove .shimmer-container/.inner-card if you do not wrap cards for the ring effect.
+   * If .has-prediction class is never applied, hook it from JS after a successful response.
+   * If logo URLs fail, use .team-logo-placeholder with team initials in HTML.
+   * Remove .shimmer-container/.inner-card if you do not wrap cards for the ring effect.
 */

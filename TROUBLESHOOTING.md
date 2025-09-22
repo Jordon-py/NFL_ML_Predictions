@@ -5,6 +5,7 @@
 ### Issue 1: Dependency Conflicts (numpy version errors)
 
 **Symptoms:**
+
 ```
 ERROR: Cannot install numpy==1.19.3 
 pip._vendor.pyproject_hooks._impl.BackendUnavailable: Cannot import 'setuptools.build_meta'
@@ -13,7 +14,9 @@ pip._vendor.pyproject_hooks._impl.BackendUnavailable: Cannot import 'setuptools.
 **Root Cause:** Version conflicts between TensorFlow, numpy, and Python version
 
 **Solutions:**
+
 1. **Use `requirements-lock.txt` (Recommended):**
+
    ```bash
    # Rename current requirements.txt and use locked versions
    mv requirements.txt requirements-flexible.txt
@@ -23,6 +26,7 @@ pip._vendor.pyproject_hooks._impl.BackendUnavailable: Cannot import 'setuptools.
    ```
 
 2. **Force tensorflow-cpu instead of tensorflow:**
+
    ```bash
    # In requirements.txt, change:
    # tensorflow>=2.13.0,<2.16.0
@@ -31,6 +35,7 @@ pip._vendor.pyproject_hooks._impl.BackendUnavailable: Cannot import 'setuptools.
    ```
 
 3. **Use Python 3.10 instead of 3.11:**
+
    ```bash
    # In runtime.txt:
    python-3.10.12
@@ -39,12 +44,15 @@ pip._vendor.pyproject_hooks._impl.BackendUnavailable: Cannot import 'setuptools.
 ### Issue 2: Build Timeout
 
 **Symptoms:**
+
 ```
 Build timed out (exceeded 15 minutes)
 ```
 
 **Solutions:**
+
 1. **Use precompiled packages only:**
+
    ```bash
    # Add to pip.conf:
    [install]
@@ -52,6 +60,7 @@ Build timed out (exceeded 15 minutes)
    ```
 
 2. **Reduce worker count in Procfile:**
+
    ```
    web: gunicorn backend.main:app -w 1 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 300
    ```
@@ -59,18 +68,22 @@ Build timed out (exceeded 15 minutes)
 ### Issue 3: Memory Issues
 
 **Symptoms:**
+
 ```
 Process exceeded memory quota
 R14 (Memory quota exceeded)
 ```
 
 **Solutions:**
+
 1. **Upgrade dyno type:**
+
    ```bash
    heroku ps:scale web=1:standard-1x
    ```
 
 2. **Optimize model loading:**
+
    ```python
    # In main.py, add memory optimization
    import gc
@@ -84,17 +97,21 @@ R14 (Memory quota exceeded)
 ### Issue 4: CORS Errors
 
 **Symptoms:**
+
 ```
 Access to fetch blocked by CORS policy
 ```
 
 **Solutions:**
+
 1. **Set CORS environment variable:**
+
    ```bash
    heroku config:set CORS_ORIGINS="https://your-frontend.herokuapp.com,http://localhost:3000"
    ```
 
 2. **For development, use wildcard:**
+
    ```bash
    heroku config:set CORS_ORIGINS="*"
    ```
@@ -158,6 +175,7 @@ heroku restart --app your-app-name
 ## 🆘 Last Resort Solutions
 
 1. **Use Docker deployment (heroku.yml):**
+
    ```bash
    heroku stack:set container
    ```
@@ -173,6 +191,7 @@ heroku restart --app your-app-name
 ## 📞 Getting Help
 
 If issues persist:
+
 1. Check [Heroku Dev Center](https://devcenter.heroku.com/)
 2. Review [Python buildpack docs](https://github.com/heroku/heroku-buildpack-python)
 3. Search [Stack Overflow](https://stackoverflow.com/questions/tagged/heroku) with error messages
