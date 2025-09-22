@@ -8,7 +8,7 @@ body {
 }
 
 .container {
-  max-width: 1560px;;
+  max-width: 1560px;
   padding: 2rem;
   margin: 0 auto;
 }
@@ -269,7 +269,7 @@ body {
   gap: 1.5rem;
 }
 
-Enhanced result card */
+/* Enhanced result card */
 .result-card {
   background: transparent;
   box-shadow: none;

@@ -4,14 +4,14 @@
 
 Your deployment failure was caused by **dependency version conflicts** between numpy, TensorFlow, and Python versions.
 
-## What I Fixed:
+## What I Fixed
 
 1. **📦 requirements.txt** - Updated with compatible version ranges
 2. **🐍 CORS Configuration** - Made flexible with environment variables  
 3. **⚙️ Procfile** - Optimized for better memory management
 4. **🔒 requirements-lock.txt** - Backup with tested exact versions
 
-## Deploy Now:
+## Deploy Now
 
 ```bash
 # Commit the fixes
@@ -28,9 +28,10 @@ heroku config:set CORS_ORIGINS="https://your-frontend.herokuapp.com"
 heroku logs --tail
 ```
 
-## If Still Failing:
+## If Still Failing
 
 Use the locked versions (guaranteed to work):
+
 ```bash
 mv requirements.txt requirements-flexible.txt
 mv requirements-lock.txt requirements.txt
@@ -38,7 +39,7 @@ git commit -am "Use locked versions"
 git push heroku main
 ```
 
-## Test Your API:
+## Test Your API
 
 ```bash
 # Once deployed, test these endpoints:
@@ -46,7 +47,7 @@ curl https://your-app.herokuapp.com/health
 curl https://your-app.herokuapp.com/
 ```
 
-## 📋 Key Changes Made:
+## 📋 Key Changes Made
 
 - ✅ Pinned setuptools, wheel, pip versions
 - ✅ Used tensorflow-cpu instead of tensorflow  

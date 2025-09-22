@@ -3,6 +3,7 @@
 ## 🚀 Quick Deployment to Heroku
 
 ### Prerequisites
+
 - [Heroku CLI](https://devcenter.heroku.com/articles/heroku-cli) installed
 - Git repository initialized
 - Heroku account
@@ -50,7 +51,8 @@ git push heroku main
 ### Core Files (Method 1)
 
 - **`Procfile`**: Tells Heroku how to run your app
-  ```
+
+  ```javascript
   web: gunicorn backend.main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 120
   ```
 
@@ -82,18 +84,21 @@ heroku config:set CORS_ORIGINS=https://your-frontend.herokuapp.com
 ## 🔧 Post-Deployment
 
 1. **Check app status:**
+
    ```bash
    heroku ps:scale web=1
    heroku open
    ```
 
 2. **Test endpoints:**
+
    ```bash
    curl https://your-app.herokuapp.com/health
    curl https://your-app.herokuapp.com/
    ```
 
 3. **Monitor logs:**
+
    ```bash
    heroku logs --tail --app your-app
    ```
@@ -101,6 +106,7 @@ heroku config:set CORS_ORIGINS=https://your-frontend.herokuapp.com
 ## 📊 Performance Tuning
 
 ### Scaling
+
 ```bash
 # Scale up workers
 heroku ps:scale web=2
@@ -110,6 +116,7 @@ heroku ps:resize web=standard-1x
 ```
 
 ### Add-ons (Optional)
+
 ```bash
 # PostgreSQL (if needed later)
 heroku addons:create heroku-postgresql:essential-0
@@ -128,6 +135,7 @@ heroku addons:create heroku-redis:mini
 4. **Memory issues**: Upgrade to performance dynos
 
 ### Debug Commands
+
 ```bash
 # Check dyno status
 heroku ps
