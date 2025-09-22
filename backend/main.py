@@ -12,6 +12,7 @@ import logging
 import logging.config
 import os
 import subprocess
+import sys
 import inspect
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -174,7 +175,7 @@ def load_objects() -> Dict[str, Any]:
             raise RuntimeError("TensorFlow required for home neural network model but not available")
         import tensorflow as tf
         try:
-            home_model = tf.keras.models.load_model(home_model_path)
+            home_model = tf.keras.models.load_model(home_model_path) # type: ignore
             logger.info("Loaded TensorFlow home model from %s", home_model_path)
         except Exception as e:
             logger.error("Failed to load TensorFlow home model: %s", e)
@@ -198,7 +199,7 @@ def load_objects() -> Dict[str, Any]:
             raise RuntimeError("TensorFlow required for away neural network model but not available")
         import tensorflow as tf
         try:
-            away_model = tf.keras.models.load_model(away_model_path)
+            away_model = tf.keras.models.load_model(away_model_path) # type: ignore
             logger.info("Loaded TensorFlow away model from %s", away_model_path)
         except Exception as e:
             logger.error("Failed to load TensorFlow away model: %s", e)
@@ -249,7 +250,10 @@ async def lifespan(app: FastAPI):
     logger.info("Shutdown complete")
 
 app = FastAPI(title="NFL Game Prediction API", description="Predict home/away scores and win odds.", version="1.0.0", lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+
+# CORS configuration - read from environment for flexibility
+allowed_origins = os.getenv("CORS_ORIGINS", "https://nfl-predict-ecf5a5bd34fe.herokuapp.com/").split(",")
+app.add_middleware(CORSMiddleware, allow_origins=allowed_origins, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
 # -----------------------------------------------------------------------------
 # Helpers
@@ -415,7 +419,7 @@ def get_next_week_schedule():
         def to_kickoff_utc(row) -> pd.Timestamp:
             ts = f"{row.get('gameday','')} {row.get('gametime')}" if pd.notna(row.get("gametime")) else str(row.get("gameday",""))
             dt = pd.to_datetime(ts, errors="coerce", utc=True)
-            return dt
+            return dt # type: ignore
 
         df["kickoff_ts_utc"] = df.apply(to_kickoff_utc, axis=1)
         now = pd.Timestamp.now(tz="UTC")
@@ -475,10 +479,12 @@ def predict_game(payload: PredictionRequest):
                 raise HTTPException(status_code=400, detail="Game already completed; no prediction produced.")
 
         feature_cols = [
-            "home_prior_pa_avg_3","home_prior_pa_avg_5","home_prior_pf_avg_3","home_prior_pf_avg_5",
-            "home_prior_win_pct_3","home_prior_win_pct_5",
-            "away_prior_pa_avg_3","away_prior_pa_avg_5","away_prior_pf_avg_3","away_prior_pf_avg_5",
-            "away_prior_win_pct_3","away_prior_win_pct_5",
+            'home_prior_pf_avg_3','home_prior_pa_avg_3','home_prior_win_pct_3',
+            'home_prior_pf_avg_5','home_prior_pa_avg_5','home_prior_win_pct_5',
+            'away_prior_pf_avg_3','away_prior_pa_avg_3','away_prior_win_pct_3',
+            'away_prior_pf_avg_5','away_prior_pa_avg_5','away_prior_win_pct_5','home_minus_away_pf_avg_3','home_minus_away_pa_avg_3','home_minus_away_win_pct_3','home_minus_away_pf_avg_5','home_minus_away_pa_avg_5','home_minus_away_win_pct_5',
+            'home_minus_away_pf_avg_3','home_minus_away_pa_avg_3','home_minus_away_win_pct_3',
+            'home_minus_away_pf_avg_5','home_minus_away_pa_avg_5','home_minus_away_win_pct_5',
         ]
         missing = [c for c in feature_cols if c not in row.index]
         if missing:
@@ -504,6 +510,7 @@ def predict_game(payload: PredictionRequest):
 
         k = 0.22
         home_win_prob = 1.0 / (1.0 + np.exp(-k * point_diff))
+        away_win_prob = 1.0 / (1.0 + np.exp(k * point_diff))
 
         return PredictionResponse(
             home_score=home_score,
@@ -552,7 +559,7 @@ def predict_next_week():
                     "home_team": str(g["home_team"]),
                     "away_team": str(g["away_team"]),
                     "kickoff": str(g.get("gameday", "TBD")),
-                    "prediction": pr.dict(),
+                    "prediction": pr.model_dump_json(),
                 })
             except Exception as e:
                 preds.append({
@@ -572,7 +579,7 @@ def predict_next_week():
 def retrain(new_data_path: Optional[str] = None):
     global model_objects
     try:
-        subprocess.run([os.sys.executable, str(BACKEND_DIR / "train_models.py")], check=True, capture_output=True, text=True)
+        subprocess.run([sys.executable, str(BACKEND_DIR / "train_models.py")], check=True, capture_output=True, text=True)
     except subprocess.CalledProcessError as e:
         raise HTTPException(status_code=500, detail=f"Retraining failed: {e.stderr}")
     model_objects = load_objects()
@@ -582,11 +589,11 @@ def retrain(new_data_path: Optional[str] = None):
 def update_data():
     try:
         build = subprocess.run(
-            [os.sys.executable, str(BASE_DIR / "scripts" / "build_csvs.py"), "--start", "2014", "--end", "2024", "--out-dir", str(DATA_DIR)],
+            [sys.executable, str(BASE_DIR / "scripts" / "build_csvs.py"), "--start", "2014", "--end", "2024", "--out-dir", str(DATA_DIR)],
             check=True, capture_output=True, text=True
         )
         logger.info("build_csvs stdout:\n%s", build.stdout)
-        train = subprocess.run([os.sys.executable, str(BACKEND_DIR / "train_models.py")], check=True, capture_output=True, text=True)
+        train = subprocess.run([sys.executable, str(BACKEND_DIR / "train_models.py")], check=True, capture_output=True, text=True)
         logger.info("train_models stdout:\n%s", train.stdout)
         return {"detail": "Data updated and models retrained."}
     except subprocess.CalledProcessError as e:
@@ -618,6 +625,6 @@ def your_function() -> Timestamp:
         raise ValueError(f"Invalid timestamp: Cannot process NaT value in {__name__}")
     
     # Type assertion: we've validated dt is not NaT, so it's definitely Timestamp
-    validated_dt: Timestamp = dt
-    logger.debug("Timestamp validation passed: %s", validated_dt)
+    logger.debug("Timestamp validation passed: %s", dt)
+    return dt
     return validated_dt

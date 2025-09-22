@@ -3,21 +3,16 @@ body {
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   margin: 0;
   padding: 0;
-  background-color: #172439;
-  color: #d1d1d1;
+  background-color: #071f45;
+  color: #000000;
 }
 
 .container {
-  max-width: 960px;
-  margin: 0 auto;
+  max-width: 1560px;
   padding: 2rem;
+  margin: 0 auto;
 }
 
-h1 {
-  text-align: center;
-  margin-bottom: 4rem;
-  color: #003366;
-}
 
 /* Updated layout styles for enhanced NFL prediction system */
 
@@ -41,12 +36,6 @@ h1 {
   margin: 0;
 }
 
-.app-main {
-  display: flex;
-  flex-direction: column;
-  gap: 2rem;
-}
-
 .section-header {
   display: flex;
   justify-content: space-between;
@@ -64,7 +53,7 @@ h1 {
 }
 
 .section-header p {
-  color: #666;
+  color: #000000;
   margin: 0;
   font-size: 0.9rem;
 }
@@ -84,58 +73,6 @@ h1 {
   background: #c0392b;
 }
 
-/* Form styling */
-.prediction-form {
-  background-color: #fff;
-  padding: 1.5rem;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  margin-bottom: 2rem;
-}
-
-.prediction-form h2 {
-  margin-top: 0;
-  margin-bottom: 1rem;
-}
-
-.prediction-form .grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 1rem;
-}
-
-.prediction-form .form-group {
-  display: flex;
-  flex-direction: column;
-}
-
-.prediction-form label {
-  font-weight: 600;
-  margin-bottom: 0.4rem;
-}
-
-.prediction-form input {
-  padding: 0.5rem;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  font-size: 1rem;
-}
-
-.prediction-form button {
-  margin-top: 1rem;
-  padding: 0.6rem 1.2rem;
-  background-color: #003366;
-  color: #fff;
-  border: none;
-  border-radius: 4px;
-  font-size: 1rem;
-  cursor: pointer;
-  transition: background-color 0.2s ease;
-}
-
-.prediction-form button:hover {
-  background-color: #00509e;
-}
 
 /* Result card */
 .result-card {
@@ -182,6 +119,9 @@ h1 {
 
 /* Current prediction section */
 .current-prediction-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
   background: white;
   padding: 2rem;
   border-radius: 12px;
@@ -329,55 +269,6 @@ h1 {
   gap: 1.5rem;
 }
 
-.prediction-form .form-group {
-  display: flex;
-  flex-direction: column;
-}
-
-.prediction-form label {
-  font-weight: 600;
-  margin-bottom: 0.5rem;
-  color: #333;
-  font-size: 0.9rem;
-}
-
-.prediction-form input {
-  padding: 0.75rem;
-  border: 2px solid #e1e8ed;
-  border-radius: 6px;
-  font-size: 1rem;
-  transition: border-color 0.2s ease;
-}
-
-.prediction-form input:focus {
-  outline: none;
-  border-color: #003366;
-  box-shadow: 0 0 0 3px rgba(0, 51, 102, 0.1);
-}
-
-.prediction-form button {
-  margin-top: 1.5rem;
-  padding: 0.75rem 1.5rem;
-  background: linear-gradient(135deg, #003366 0%, #00509e 100%);
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.prediction-form button:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-}
-
-.prediction-form button:active {
-  transform: translateY(0);
-}
-
 /* Enhanced result card */
 .result-card {
   background: transparent;
@@ -420,22 +311,13 @@ h1 {
     gap: 1.5rem;
   }
 
-  .section-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.5rem;
-  }
-
-  .section-header h2 {
-    font-size: 1.5rem;
-  }
 
   .team-grid-section,
   .prediction-form-section,
   .current-prediction-section,
   .error-section,
   .history-section {
-    padding: 1.5rem;
+    padding: 2.5rem;
   }
 
   .prediction-form .grid {
