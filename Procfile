@@ -1,1 +1,1 @@
-web: gunicorn backend.main:app -w 2 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 300 --max-requests 1000 --max-requests-jitter 100 --preloadweb: gunicorn backend.main:app --workers 2 --threads 8 --timeout 120
+web: python backend/startup.py && gunicorn backend.main:app -w 2 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 300 --max-requests 1000 --max-requests-jitter 100 --preload
