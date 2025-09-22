@@ -339,7 +339,7 @@
     text-align: left;
   }
 
-  .team-info {
+  .team-info { 
     align-items: flex-start;
   }
 
@@ -385,3 +385,4 @@
     padding: 4px 8px;
   }
 }
+ 
