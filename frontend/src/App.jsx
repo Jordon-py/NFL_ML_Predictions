@@ -82,16 +82,17 @@ function App() {
   const handlePredict = async (gameStats) => {
     try {
       setError(null);
-      setLoading(true);
-      const response = await predictGame(gameStats);
-      const data = JSON.parse(response.body);
 
+      setLoading(true);
+      const data = await predictGame(gameStats);
+      setLoading(false);
+      
       setResult(data);
       console.log(data);
+      
       setCurrentPrediction(null); // Clear TeamGrid prediction when using form
-
-      // Archive this prediction in history
-      setHistory((prev) => [...prev, {
+      setCurrentPrediction(data); // Store the current prediction
+      setHistory((prev) => [...prev, {                        // Archive this prediction in history
         date: new Date(),
         ...data,
         source: 'form'

@@ -57,6 +57,9 @@ import pytz
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from fastapi.staticfiles import StaticFiles
+from starlette.responses import FileResponse
+
 
 # -----------------------------------------------------------------------------
 # App-level configuration
@@ -139,7 +142,7 @@ TEAM_ABBREVIATIONS = {
     "Kansas City Chiefs": "KC",
     "Las Vegas Raiders": "LV",
     "Los Angeles Chargers": "LAC",
-    "Los Angeles Rams": "LAR",  # NOTE: consider standardizing to "LAR" (see enhancements)
+    "Los Angeles Rams": "LA",  # NOTE: consider standardizing to "LAR" (see enhancements)
     "Miami Dolphins": "MIA",
     "Minnesota Vikings": "MIN",
     "New England Patriots": "NE",
@@ -204,8 +207,9 @@ def load_objects() -> Dict[str, Any]:
     # Lazy import: keeps API importable even if heavy libs are not installed.
     try:
         import joblib
-
-        # Removed unused import
+        # Import tensorflow early to catch any issues
+        import tensorflow.keras as keras
+        logger.info("TensorFlow/Keras available for neural network models")
     except ImportError as e:
         raise RuntimeError(
             "Heavy dependencies not installed. "
@@ -231,12 +235,11 @@ def load_objects() -> Dict[str, Any]:
 
     if model_types.get("home_model_type") == "neural_network":
         try:
-            import tensorflow as tf
-
-            home_model = tf.keras.models.load_model(home_model_path)
+            home_model = keras.models.load_model(home_model_path)
             logger.info("Loaded home neural network model from %s", home_model_path)
-        except ImportError:
-            raise RuntimeError("TensorFlow required for neural network models but not available")
+        except Exception as e:
+            logger.error("Failed to load home neural network model: %s", e, exc_info=True)
+            raise RuntimeError(f"Failed to load home neural network model: {e}") from e
     else:
         home_model = joblib.load(home_model_path)
         logger.info("Loaded home LightGBM model from %s", home_model_path)
@@ -249,15 +252,15 @@ def load_objects() -> Dict[str, Any]:
 
     if model_types.get("away_model_type") == "neural_network":
         try:
-            import tensorflow as tf
-
-            away_model = tf.keras.models.load_model(away_model_path)
+            away_model = keras.models.load_model(away_model_path)
             logger.info("Loaded away neural network model from %s", away_model_path)
-        except ImportError:
-            raise RuntimeError("TensorFlow required for neural network models but not available")
+        except Exception as e:
+            logger.error("Failed to load away neural network model: %s", e, exc_info=True)
+            raise RuntimeError(f"Failed to load away neural network model: {e}") from e
     else:
         away_model = joblib.load(away_model_path)
         logger.info("Loaded away LightGBM model from %s", away_model_path)
+
     return {
         "mode": "models",
         "preprocessor": preprocessor,
@@ -310,7 +313,7 @@ app = FastAPI(
 # CORS: wide-open for now (frontends can call from anywhere)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # tighten in production
+    allow_origins=["https://nfl-predict-ecf5a5bd34fe.herokuapp.com"],  # tighten in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -327,8 +330,8 @@ def health():
     """Return service health and model mode."""
     global model_objects
     if model_objects is None:
-        return HealthResponse(status="unhealthy", reason="models not loaded")
-    return HealthResponse(status="healthy", mode=model_objects.get("mode"))
+        return HealthResponse(status="unhealthy", mode="none", reason="models not loaded")
+    return HealthResponse(status="healthy", mode=model_objects.get("mode"), reason="models loaded successfully")
 
 
 def get_current_nfl_context() -> Dict[str, Any]:
@@ -481,7 +484,14 @@ def get_next_week_schedule():
         logger.error("Error loading schedule: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to load schedule: {e}")
 
+# serve the built Vite app (mounted last so API routes take precedence)
+app.mount("/", StaticFiles(directory="frontend/dist", html=True), name="app")
 
+
+
+# -----------------------------------------------------------------------------
+# Prediction logic
+# -----------------------------------------------------------------------------
 def build_future_game_features(
     df: pd.DataFrame, home_team: str, away_team: str, season: int, week: int
 ) -> pd.Series:
@@ -502,7 +512,7 @@ def build_future_game_features(
 
     def get_latest_team_features(
         team: str, target_season: int, target_week: int
-    ) -> Dict[str, float]:
+    ) -> Dict[str, Any]:
         """Get the most recent rolling features for a team before the target game."""
         # Find all games for this team before the target date
         team_mask = (df["home_team"] == team) | (df["away_team"] == team)
@@ -513,37 +523,38 @@ def build_future_game_features(
         before_target = df[team_mask & (df["time_key"] < target_time_key)]
 
         if before_target.empty:
-            # No prior data - use league averages
-            return {
-                "prior_pa_avg_3": 22.0,
-                "prior_pa_avg_5": 22.0,
-                "prior_pf_avg_3": 22.0,
-                "prior_pf_avg_5": 22.0,
-                "prior_win_pct_3": 0.5,
-                "prior_win_pct_5": 0.5,
-            }
+            # No prior data - fail fast as per instructions
+            logger.error(
+                "No prior data available for team %s before season %d, week %d",
+                team, target_season, target_week
+            )
+            raise ValueError(
+                f"No prior data available for {team} in season {target_season}, week {target_week}. "
+                f"Cannot build features for prediction."
+            )
 
         # Get the most recent game features
-        latest_game = before_target.loc[before_target["time_key"].idxmax()]
+        latest_idx = before_target["time_key"].idxmax()
+        latest_game = before_target.loc[latest_idx]
 
         # Extract team's features based on home/away status
-        if latest_game["home_team"] == team:
+        if str(latest_game["home_team"]) == team:
             return {
-                "prior_pa_avg_3": latest_game.get("home_prior_pa_avg_3", 22.0),
-                "prior_pa_avg_5": latest_game.get("home_prior_pa_avg_5", 22.0),
-                "prior_pf_avg_3": latest_game.get("home_prior_pf_avg_3", 22.0),
-                "prior_pf_avg_5": latest_game.get("home_prior_pf_avg_5", 22.0),
-                "prior_win_pct_3": latest_game.get("home_prior_win_pct_3", 0.5),
-                "prior_win_pct_5": latest_game.get("home_prior_win_pct_5", 0.5),
+                "home_prior_pa_avg_3": (latest_game.get("home_prior_pa_avg_3")),
+                "home_prior_pa_avg_5": (latest_game.get("home_prior_pa_avg_5")),
+                "home_prior_pf_avg_3": (latest_game.get("home_prior_pf_avg_3")),
+                "home_prior_pf_avg_5": (latest_game.get("home_prior_pf_avg_5")),
+                "home_prior_win_pct_3": (latest_game.get("home_prior_win_pct_3")),
+                "home_prior_win_pct_5": (latest_game.get("home_prior_win_pct_5")),
             }
         else:
             return {
-                "prior_pa_avg_3": latest_game.get("away_prior_pa_avg_3", 22.0),
-                "prior_pa_avg_5": latest_game.get("away_prior_pa_avg_5", 22.0),
-                "prior_pf_avg_3": latest_game.get("away_prior_pf_avg_3", 22.0),
-                "prior_pf_avg_5": latest_game.get("away_prior_pf_avg_5", 22.0),
-                "prior_win_pct_3": latest_game.get("away_prior_win_pct_3", 0.5),
-                "prior_win_pct_5": latest_game.get("away_prior_win_pct_5", 0.5),
+                "away_prior_pa_avg_3": (latest_game.get("away_prior_pa_avg_3")),
+                "away_prior_pa_avg_5": (latest_game.get("away_prior_pa_avg_5")),
+                "away_prior_pf_avg_3": (latest_game.get("away_prior_pf_avg_3")),
+                "away_prior_pf_avg_5": (latest_game.get("away_prior_pf_avg_5")),
+                "away_prior_win_pct_3": (latest_game.get("away_prior_win_pct_3")),
+                "away_prior_win_pct_5": (latest_game.get("away_prior_win_pct_5")),
             }
 
     # Get latest features for both teams
@@ -669,15 +680,15 @@ def predict_game(payload: PredictionRequest):
 
         # Home score prediction
         if model_types.get("home_model_type") == "neural_network":
-            home_score = float(model_objects["home_model"].predict(X, verbose=0)[0][0])
+            home_score = (model_objects["home_model"].predict(X, verbose=0)[0][0])
         else:
-            home_score = float(model_objects["home_model"].predict(X)[0])
+            home_score = (model_objects["home_model"].predict(X)[0])
 
         # Away score prediction
         if model_types.get("away_model_type") == "neural_network":
-            away_score = float(model_objects["away_model"].predict(X, verbose=0)[0][0])
+            away_score = (model_objects["away_model"].predict(X, verbose=0)[0][0])
         else:
-            away_score = float(model_objects["away_model"].predict(X)[0])
+            away_score = (model_objects["away_model"].predict(X)[0])
         # Clamp to a reasonable NFL score range
         home_score = round(max(0.0, min(70.0, home_score)), 1)
         away_score = round(max(0.0, min(70.0, away_score)), 1)
@@ -691,8 +702,8 @@ def predict_game(payload: PredictionRequest):
         return PredictionResponse(
             home_score=home_score,
             away_score=away_score,
-            home_win_probability=round(float(home_win_prob), 3),
-            away_win_probability=round(float(1 - home_win_prob), 3),
+            home_win_probability=round((home_win_prob), 3),
+            away_win_probability=round((1 - home_win_prob), 3),
             point_diff=point_diff,
             mode="models",
         )
