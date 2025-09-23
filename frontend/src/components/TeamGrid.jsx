@@ -74,7 +74,7 @@ function TeamGrid({ onPrediction }) {
         const scheduleData = await getNextWeekSchedule();
         setSchedule(scheduleData);
       } catch (err) {
-        console.error('[TeamGrid] Failed to load schedule:', err);
+        console.error('[TeamGrid] Failed to load schedule: err', err);
         setError('Failed to load schedule');
       }
     };

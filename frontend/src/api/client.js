@@ -34,7 +34,7 @@ async function apiRequest(endpoint, options = {}) {
 
     return await response.json();
   } catch (error) {
-    console.error(`[API] ${options.method || 'GET'} ${endpoint} failed:`, error);
+    console.error(`[API] ${options.method || 'GET'} ${endpoint} failed: error`, error);
     throw error;
   }
 }

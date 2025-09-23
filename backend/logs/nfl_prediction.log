@@ -1055,3 +1055,494 @@ ValueError: No historical rows for team 'LA' before 2025W3
 2025-09-21 19:20:18,411 - nfl_prediction - INFO - get_next_week_schedule:442 - Schedule week 3 games=16
 2025-09-21 19:20:18,685 - nfl_prediction - INFO - get_next_week_schedule:442 - Schedule week 3 games=16
 2025-09-21 19:27:39,638 - nfl_prediction - INFO - lifespan:250 - Shutdown complete
+2025-09-23 01:27:02,809 - nfl_prediction - INFO - lifespan:238 - Startup: loading models and dataset
+2025-09-23 01:27:05,287 - nfl_prediction - INFO - load_objects:177 - Loaded model metadata from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\metadata.json
+2025-09-23 01:27:46,171 - tensorflow - DEBUG - <module>:34 - Falling back to TensorFlow client; we recommended you install the Cloud TPU client directly with pip install cloud-tpu-client.
+2025-09-23 01:27:52,508 - h5py._conv - DEBUG - <module>:47 - Creating converter from 7 to 5
+2025-09-23 01:27:52,508 - h5py._conv - DEBUG - <module>:47 - Creating converter from 5 to 7
+2025-09-23 01:27:52,508 - h5py._conv - DEBUG - <module>:47 - Creating converter from 7 to 5
+2025-09-23 01:27:52,510 - h5py._conv - DEBUG - <module>:47 - Creating converter from 5 to 7
+2025-09-23 01:28:08,212 - tensorflow - WARNING - _tfmw_add_deprecation_warning:149 - From C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\keras\src\losses.py:2976: The name tf.losses.sparse_softmax_cross_entropy is deprecated. Please use tf.compat.v1.losses.sparse_softmax_cross_entropy instead.
+
+2025-09-23 01:28:14,666 - nfl_prediction - INFO - load_objects:193 - TensorFlow version: 2.15.1
+2025-09-23 01:30:50,746 - nfl_prediction - INFO - lifespan:238 - Startup: loading models and dataset
+2025-09-23 01:30:50,872 - nfl_prediction - INFO - load_objects:177 - Loaded model metadata from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\metadata.json
+2025-09-23 01:30:56,109 - tensorflow - DEBUG - <module>:34 - Falling back to TensorFlow client; we recommended you install the Cloud TPU client directly with pip install cloud-tpu-client.
+2025-09-23 01:30:56,781 - h5py._conv - DEBUG - <module>:47 - Creating converter from 7 to 5
+2025-09-23 01:30:56,781 - h5py._conv - DEBUG - <module>:47 - Creating converter from 5 to 7
+2025-09-23 01:30:56,781 - h5py._conv - DEBUG - <module>:47 - Creating converter from 7 to 5
+2025-09-23 01:30:56,781 - h5py._conv - DEBUG - <module>:47 - Creating converter from 5 to 7
+2025-09-23 01:31:07,024 - tensorflow - WARNING - _tfmw_add_deprecation_warning:149 - From C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\keras\src\losses.py:2976: The name tf.losses.sparse_softmax_cross_entropy is deprecated. Please use tf.compat.v1.losses.sparse_softmax_cross_entropy instead.
+
+2025-09-23 01:31:07,742 - nfl_prediction - INFO - load_objects:193 - TensorFlow version: 2.15.1
+2025-09-23 01:31:09,919 - matplotlib - DEBUG - wrapper:350 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\matplotlib\mpl-data
+2025-09-23 01:31:09,964 - matplotlib - DEBUG - wrapper:350 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-23 01:31:09,967 - matplotlib - DEBUG - <module>:1511 - interactive is False
+2025-09-23 01:31:09,968 - matplotlib - DEBUG - <module>:1512 - platform is win32
+2025-09-23 01:31:10,814 - nfl_prediction - INFO - lifespan:249 - Loaded dataset rows=3282 cols=28
+2025-09-23 01:31:16,232 - nfl_prediction - INFO - lifespan:238 - Startup: loading models and dataset
+2025-09-23 01:31:16,340 - nfl_prediction - INFO - load_objects:177 - Loaded model metadata from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\metadata.json
+2025-09-23 01:31:21,619 - tensorflow - DEBUG - <module>:34 - Falling back to TensorFlow client; we recommended you install the Cloud TPU client directly with pip install cloud-tpu-client.
+2025-09-23 01:31:22,331 - h5py._conv - DEBUG - <module>:47 - Creating converter from 7 to 5
+2025-09-23 01:31:22,331 - h5py._conv - DEBUG - <module>:47 - Creating converter from 5 to 7
+2025-09-23 01:31:22,331 - h5py._conv - DEBUG - <module>:47 - Creating converter from 7 to 5
+2025-09-23 01:31:22,331 - h5py._conv - DEBUG - <module>:47 - Creating converter from 5 to 7
+2025-09-23 01:31:26,852 - tensorflow - WARNING - _tfmw_add_deprecation_warning:149 - From C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\keras\src\losses.py:2976: The name tf.losses.sparse_softmax_cross_entropy is deprecated. Please use tf.compat.v1.losses.sparse_softmax_cross_entropy instead.
+
+2025-09-23 01:31:27,480 - nfl_prediction - INFO - load_objects:193 - TensorFlow version: 2.15.1
+2025-09-23 01:31:27,622 - matplotlib - DEBUG - wrapper:350 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\matplotlib\mpl-data
+2025-09-23 01:31:27,631 - matplotlib - DEBUG - wrapper:350 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-23 01:31:27,634 - matplotlib - DEBUG - <module>:1511 - interactive is False
+2025-09-23 01:31:27,634 - matplotlib - DEBUG - <module>:1512 - platform is win32
+2025-09-23 01:31:27,741 - nfl_prediction - INFO - lifespan:249 - Loaded dataset rows=3282 cols=28
+2025-09-23 11:05:41,018 - nfl_prediction - ERROR - get_team_abbreviation:161 - Unknown team: LA
+2025-09-23 11:05:41,019 - nfl_prediction - ERROR - get_next_week_schedule:512 - Schedule error: Unknown team name: LA
+Traceback (most recent call last):
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\main.py", line 494, in get_next_week_schedule
+    home_abbr=get_team_abbreviation(str(row["home_team"])),
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\main.py", line 162, in get_team_abbreviation
+    raise ValueError(f"Unknown team name: {team_name}")
+ValueError: Unknown team name: LA
+2025-09-23 11:05:57,583 - nfl_prediction - ERROR - get_team_abbreviation:161 - Unknown team: LA
+2025-09-23 11:05:57,585 - nfl_prediction - ERROR - get_next_week_schedule:512 - Schedule error: Unknown team name: LA
+Traceback (most recent call last):
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\main.py", line 494, in get_next_week_schedule
+    home_abbr=get_team_abbreviation(str(row["home_team"])),
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\main.py", line 162, in get_team_abbreviation
+    raise ValueError(f"Unknown team name: {team_name}")
+ValueError: Unknown team name: LA
+2025-09-23 11:05:57,699 - nfl_prediction - ERROR - get_team_abbreviation:161 - Unknown team: LA
+2025-09-23 11:05:57,705 - nfl_prediction - ERROR - get_next_week_schedule:512 - Schedule error: Unknown team name: LA
+Traceback (most recent call last):
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\main.py", line 494, in get_next_week_schedule
+    home_abbr=get_team_abbreviation(str(row["home_team"])),
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\main.py", line 162, in get_team_abbreviation
+    raise ValueError(f"Unknown team name: {team_name}")
+ValueError: Unknown team name: LA
+2025-09-23 11:07:02,450 - nfl_prediction - ERROR - get_team_abbreviation:161 - Unknown team: LA
+2025-09-23 11:07:02,460 - nfl_prediction - ERROR - get_next_week_schedule:512 - Schedule error: Unknown team name: LA
+Traceback (most recent call last):
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\main.py", line 494, in get_next_week_schedule
+    home_abbr=get_team_abbreviation(str(row["home_team"])),
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\main.py", line 162, in get_team_abbreviation
+    raise ValueError(f"Unknown team name: {team_name}")
+ValueError: Unknown team name: LA
+2025-09-23 11:07:02,718 - nfl_prediction - INFO - lifespan:251 - Shutdown complete
+2025-09-23 11:07:15,376 - nfl_prediction - INFO - lifespan:238 - Startup: loading models and dataset
+2025-09-23 11:07:15,702 - nfl_prediction - INFO - load_objects:177 - Loaded model metadata from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\metadata.json
+2025-09-23 11:07:51,166 - tensorflow - DEBUG - <module>:34 - Falling back to TensorFlow client; we recommended you install the Cloud TPU client directly with pip install cloud-tpu-client.
+2025-09-23 11:07:54,700 - h5py._conv - DEBUG - <module>:47 - Creating converter from 7 to 5
+2025-09-23 11:07:54,700 - h5py._conv - DEBUG - <module>:47 - Creating converter from 5 to 7
+2025-09-23 11:07:54,700 - h5py._conv - DEBUG - <module>:47 - Creating converter from 7 to 5
+2025-09-23 11:07:54,700 - h5py._conv - DEBUG - <module>:47 - Creating converter from 5 to 7
+2025-09-23 11:08:07,857 - tensorflow - WARNING - _tfmw_add_deprecation_warning:149 - From C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\keras\src\losses.py:2976: The name tf.losses.sparse_softmax_cross_entropy is deprecated. Please use tf.compat.v1.losses.sparse_softmax_cross_entropy instead.
+
+2025-09-23 11:08:08,838 - nfl_prediction - INFO - load_objects:193 - TensorFlow version: 2.15.1
+2025-09-23 11:08:09,594 - matplotlib - DEBUG - wrapper:350 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\matplotlib\mpl-data
+2025-09-23 11:08:09,630 - matplotlib - DEBUG - wrapper:350 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-23 11:08:09,635 - matplotlib - DEBUG - <module>:1511 - interactive is False
+2025-09-23 11:08:09,635 - matplotlib - DEBUG - <module>:1512 - platform is win32
+2025-09-23 11:08:09,894 - nfl_prediction - INFO - lifespan:249 - Loaded dataset rows=3282 cols=28
+2025-09-23 11:08:09,976 - nfl_prediction - INFO - get_next_week_schedule:506 - Schedule week 4 games=16
+2025-09-23 11:08:10,008 - nfl_prediction - INFO - get_next_week_schedule:506 - Schedule week 4 games=16
+2025-09-23 11:08:10,019 - nfl_prediction - INFO - get_next_week_schedule:506 - Schedule week 4 games=16
+2025-09-23 11:08:27,176 - nfl_prediction - ERROR - predict_game:595 - Prediction error: X has 12 features, but ColumnTransformer is expecting 25 features as input.
+Traceback (most recent call last):
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\main.py", line 569, in predict_game
+    home_score = float(model_objects["home_model"].predict(X)[0])
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\sklearn\pipeline.py", line 788, in predict
+    Xt = transform.transform(Xt)
+         ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\sklearn\utils\_set_output.py", line 316, in wrapped
+    data_to_wrap = f(self, X, *args, **kwargs)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\sklearn\compose\_column_transformer.py", line 1089, in transform
+    _check_n_features(self, X, reset=False)
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\sklearn\utils\validation.py", line 2839, in _check_n_features
+    raise ValueError(
+ValueError: X has 12 features, but ColumnTransformer is expecting 25 features as input.
+2025-09-23 11:12:05,402 - nfl_prediction - INFO - lifespan:251 - Shutdown complete
+2025-09-23 11:12:22,728 - nfl_prediction - INFO - lifespan:238 - Startup: loading models and dataset
+2025-09-23 11:12:22,926 - nfl_prediction - INFO - load_objects:177 - Loaded model metadata from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\metadata.json
+2025-09-23 11:12:29,312 - tensorflow - DEBUG - <module>:34 - Falling back to TensorFlow client; we recommended you install the Cloud TPU client directly with pip install cloud-tpu-client.
+2025-09-23 11:12:30,785 - h5py._conv - DEBUG - <module>:47 - Creating converter from 7 to 5
+2025-09-23 11:12:30,785 - h5py._conv - DEBUG - <module>:47 - Creating converter from 5 to 7
+2025-09-23 11:12:30,787 - h5py._conv - DEBUG - <module>:47 - Creating converter from 7 to 5
+2025-09-23 11:12:30,788 - h5py._conv - DEBUG - <module>:47 - Creating converter from 5 to 7
+2025-09-23 11:12:36,177 - tensorflow - WARNING - _tfmw_add_deprecation_warning:149 - From C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\keras\src\losses.py:2976: The name tf.losses.sparse_softmax_cross_entropy is deprecated. Please use tf.compat.v1.losses.sparse_softmax_cross_entropy instead.
+
+2025-09-23 11:12:36,600 - nfl_prediction - INFO - load_objects:193 - TensorFlow version: 2.15.1
+2025-09-23 11:12:36,715 - matplotlib - DEBUG - wrapper:350 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\matplotlib\mpl-data
+2025-09-23 11:12:36,722 - matplotlib - DEBUG - wrapper:350 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-23 11:12:36,723 - matplotlib - DEBUG - <module>:1511 - interactive is False
+2025-09-23 11:12:36,723 - matplotlib - DEBUG - <module>:1512 - platform is win32
+2025-09-23 11:12:36,818 - nfl_prediction - INFO - lifespan:249 - Loaded dataset rows=3282 cols=28
+2025-09-23 11:17:15,546 - nfl_prediction - INFO - lifespan:251 - Shutdown complete
+2025-09-23 11:17:36,708 - nfl_prediction - INFO - lifespan:238 - Startup: loading models and dataset
+2025-09-23 11:17:36,853 - nfl_prediction - INFO - load_objects:177 - Loaded model metadata from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\metadata.json
+2025-09-23 11:17:41,387 - tensorflow - DEBUG - <module>:34 - Falling back to TensorFlow client; we recommended you install the Cloud TPU client directly with pip install cloud-tpu-client.
+2025-09-23 11:17:42,046 - h5py._conv - DEBUG - <module>:47 - Creating converter from 7 to 5
+2025-09-23 11:17:42,046 - h5py._conv - DEBUG - <module>:47 - Creating converter from 5 to 7
+2025-09-23 11:17:42,046 - h5py._conv - DEBUG - <module>:47 - Creating converter from 7 to 5
+2025-09-23 11:17:42,046 - h5py._conv - DEBUG - <module>:47 - Creating converter from 5 to 7
+2025-09-23 11:17:48,581 - tensorflow - WARNING - _tfmw_add_deprecation_warning:149 - From C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\keras\src\losses.py:2976: The name tf.losses.sparse_softmax_cross_entropy is deprecated. Please use tf.compat.v1.losses.sparse_softmax_cross_entropy instead.
+
+2025-09-23 11:17:49,807 - nfl_prediction - INFO - load_objects:193 - TensorFlow version: 2.15.1
+2025-09-23 11:17:50,096 - matplotlib - DEBUG - wrapper:350 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\matplotlib\mpl-data
+2025-09-23 11:17:50,109 - matplotlib - DEBUG - wrapper:350 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-23 11:17:50,112 - matplotlib - DEBUG - <module>:1511 - interactive is False
+2025-09-23 11:17:50,112 - matplotlib - DEBUG - <module>:1512 - platform is win32
+2025-09-23 11:17:50,288 - nfl_prediction - INFO - lifespan:249 - Loaded dataset rows=3282 cols=28
+2025-09-23 11:18:33,497 - nfl_prediction - INFO - lifespan:251 - Shutdown complete
+2025-09-23 11:18:39,412 - nfl_prediction - INFO - lifespan:238 - Startup: loading models and dataset
+2025-09-23 11:18:39,535 - nfl_prediction - INFO - load_objects:177 - Loaded model metadata from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\metadata.json
+2025-09-23 11:18:43,524 - tensorflow - DEBUG - <module>:34 - Falling back to TensorFlow client; we recommended you install the Cloud TPU client directly with pip install cloud-tpu-client.
+2025-09-23 11:18:44,191 - h5py._conv - DEBUG - <module>:47 - Creating converter from 7 to 5
+2025-09-23 11:18:44,191 - h5py._conv - DEBUG - <module>:47 - Creating converter from 5 to 7
+2025-09-23 11:18:44,191 - h5py._conv - DEBUG - <module>:47 - Creating converter from 7 to 5
+2025-09-23 11:18:44,191 - h5py._conv - DEBUG - <module>:47 - Creating converter from 5 to 7
+2025-09-23 11:18:51,299 - tensorflow - WARNING - _tfmw_add_deprecation_warning:149 - From C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\keras\src\losses.py:2976: The name tf.losses.sparse_softmax_cross_entropy is deprecated. Please use tf.compat.v1.losses.sparse_softmax_cross_entropy instead.
+
+2025-09-23 11:18:52,730 - nfl_prediction - INFO - load_objects:193 - TensorFlow version: 2.15.1
+2025-09-23 11:18:53,024 - matplotlib - DEBUG - wrapper:350 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\matplotlib\mpl-data
+2025-09-23 11:18:53,049 - matplotlib - DEBUG - wrapper:350 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-23 11:18:53,056 - matplotlib - DEBUG - <module>:1511 - interactive is False
+2025-09-23 11:18:53,056 - matplotlib - DEBUG - <module>:1512 - platform is win32
+2025-09-23 11:18:53,201 - nfl_prediction - INFO - lifespan:249 - Loaded dataset rows=3282 cols=28
+2025-09-23 11:18:53,259 - nfl_prediction - INFO - get_next_week_schedule:506 - Schedule week 4 games=16
+2025-09-23 11:18:53,323 - nfl_prediction - INFO - get_next_week_schedule:506 - Schedule week 4 games=16
+2025-09-23 11:18:57,108 - nfl_prediction - INFO - predict_game:538 - Filtered rows:       season  week          game_id home_game_date  ... home_minus_away_win_pct_3 home_minus_away_pf_avg_5  home_minus_away_pa_avg_5  home_minus_away_win_pct_5
+3058    2025     4  2025_04_SEA_ARI     2025-09-25  ...                       1.0                      9.0                  1.666667                        0.0
+
+[1 rows x 28 columns]
+2025-09-23 11:18:57,238 - nfl_prediction - ERROR - predict_game:595 - Prediction error: X has 12 features, but ColumnTransformer is expecting 25 features as input.
+Traceback (most recent call last):
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\main.py", line 569, in predict_game
+    home_score = float(model_objects["home_model"].predict(X)[0])
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\sklearn\pipeline.py", line 788, in predict
+    Xt = transform.transform(Xt)
+         ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\sklearn\utils\_set_output.py", line 316, in wrapped
+    data_to_wrap = f(self, X, *args, **kwargs)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\sklearn\compose\_column_transformer.py", line 1089, in transform
+    _check_n_features(self, X, reset=False)
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\sklearn\utils\validation.py", line 2839, in _check_n_features
+    raise ValueError(
+ValueError: X has 12 features, but ColumnTransformer is expecting 25 features as input.
+2025-09-23 11:22:28,081 - nfl_prediction - INFO - get_next_week_schedule:506 - Schedule week 4 games=16
+2025-09-23 11:22:28,298 - nfl_prediction - INFO - get_next_week_schedule:506 - Schedule week 4 games=16
+2025-09-23 11:22:35,261 - nfl_prediction - INFO - predict_game:538 - Filtered rows:       season  week          game_id home_game_date  ... home_minus_away_win_pct_3 home_minus_away_pf_avg_5  home_minus_away_pa_avg_5  home_minus_away_win_pct_5
+3058    2025     4  2025_04_SEA_ARI     2025-09-25  ...                       1.0                      9.0                  1.666667                        0.0
+
+[1 rows x 28 columns]
+2025-09-23 11:22:35,323 - nfl_prediction - ERROR - predict_game:595 - Prediction error: X has 12 features, but ColumnTransformer is expecting 25 features as input.
+Traceback (most recent call last):
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\main.py", line 569, in predict_game
+    home_score = float(model_objects["home_model"].predict(X)[0])
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\sklearn\pipeline.py", line 788, in predict
+    Xt = transform.transform(Xt)
+         ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\sklearn\utils\_set_output.py", line 316, in wrapped
+    data_to_wrap = f(self, X, *args, **kwargs)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\sklearn\compose\_column_transformer.py", line 1089, in transform
+    _check_n_features(self, X, reset=False)
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\sklearn\utils\validation.py", line 2839, in _check_n_features
+    raise ValueError(
+ValueError: X has 12 features, but ColumnTransformer is expecting 25 features as input.
+2025-09-23 11:27:31,403 - nfl_prediction - INFO - get_next_week_schedule:506 - Schedule week 4 games=16
+2025-09-23 11:27:31,595 - nfl_prediction - INFO - lifespan:251 - Shutdown complete
+2025-09-23 11:27:37,586 - nfl_prediction - INFO - lifespan:238 - Startup: loading models and dataset
+2025-09-23 11:27:37,814 - nfl_prediction - INFO - load_objects:177 - Loaded model metadata from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\metadata.json
+2025-09-23 11:27:44,545 - tensorflow - DEBUG - <module>:34 - Falling back to TensorFlow client; we recommended you install the Cloud TPU client directly with pip install cloud-tpu-client.
+2025-09-23 11:27:45,754 - h5py._conv - DEBUG - <module>:47 - Creating converter from 7 to 5
+2025-09-23 11:27:45,754 - h5py._conv - DEBUG - <module>:47 - Creating converter from 5 to 7
+2025-09-23 11:27:45,754 - h5py._conv - DEBUG - <module>:47 - Creating converter from 7 to 5
+2025-09-23 11:27:45,756 - h5py._conv - DEBUG - <module>:47 - Creating converter from 5 to 7
+2025-09-23 11:27:55,692 - tensorflow - WARNING - _tfmw_add_deprecation_warning:149 - From C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\keras\src\losses.py:2976: The name tf.losses.sparse_softmax_cross_entropy is deprecated. Please use tf.compat.v1.losses.sparse_softmax_cross_entropy instead.
+
+2025-09-23 11:27:57,326 - nfl_prediction - INFO - load_objects:193 - TensorFlow version: 2.15.1
+2025-09-23 11:27:57,744 - matplotlib - DEBUG - wrapper:350 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\matplotlib\mpl-data
+2025-09-23 11:27:57,759 - matplotlib - DEBUG - wrapper:350 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-23 11:27:57,763 - matplotlib - DEBUG - <module>:1511 - interactive is False
+2025-09-23 11:27:57,763 - matplotlib - DEBUG - <module>:1512 - platform is win32
+2025-09-23 11:27:57,923 - nfl_prediction - INFO - lifespan:249 - Loaded dataset rows=3282 cols=28
+2025-09-23 11:27:58,013 - nfl_prediction - INFO - get_next_week_schedule:506 - Schedule week 4 games=16
+2025-09-23 11:28:58,618 - nfl_prediction - INFO - predict_game:538 - Filtered rows:       season  week          game_id home_game_date  ... home_minus_away_win_pct_3 home_minus_away_pf_avg_5  home_minus_away_pa_avg_5  home_minus_away_win_pct_5
+3058    2025     4  2025_04_SEA_ARI     2025-09-25  ...                       1.0                      9.0                  1.666667                        0.0
+
+[1 rows x 28 columns]
+2025-09-23 11:28:58,904 - nfl_prediction - INFO - predict_game:550 - Using feature columns: ['num__home_prior_pa_avg_3' 'num__home_prior_pa_avg_5'
+ 'num__home_prior_pf_avg_3' 'num__home_prior_pf_avg_5'
+ 'num__home_prior_win_pct_3' 'num__home_prior_win_pct_5'
+ 'num__away_prior_pa_avg_3' 'num__away_prior_pa_avg_5'
+ 'num__away_prior_pf_avg_3' 'num__away_prior_pf_avg_5'
+ 'num__away_prior_win_pct_3' 'num__away_prior_win_pct_5']
+2025-09-23 11:28:58,906 - nfl_prediction - ERROR - predict_game:586 - Prediction error: X does not contain any features, but ColumnTransformer is expecting 12 features
+Traceback (most recent call last):
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\sklearn\utils\validation.py", line 2816, in _check_n_features
+    n_features = _num_features(X)
+                 ^^^^^^^^^^^^^^^^
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\sklearn\utils\validation.py", line 362, in _num_features
+    raise TypeError(message)
+TypeError: Unable to find the number of features from X of type numpy.ndarray with shape (12,)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\main.py", line 553, in predict_game
+    X = model_objects["preprocessor"].transform(feature_cols)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\sklearn\utils\_set_output.py", line 316, in wrapped
+    data_to_wrap = f(self, X, *args, **kwargs)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\sklearn\compose\_column_transformer.py", line 1089, in transform
+    _check_n_features(self, X, reset=False)
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\sklearn\utils\validation.py", line 2819, in _check_n_features
+    raise ValueError(
+ValueError: X does not contain any features, but ColumnTransformer is expecting 12 features
+2025-09-23 11:31:09,246 - nfl_prediction - INFO - get_next_week_schedule:506 - Schedule week 4 games=16
+2025-09-23 11:31:09,453 - nfl_prediction - INFO - lifespan:251 - Shutdown complete
+2025-09-23 11:31:18,713 - nfl_prediction - INFO - lifespan:238 - Startup: loading models and dataset
+2025-09-23 11:31:19,078 - nfl_prediction - INFO - load_objects:177 - Loaded model metadata from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\metadata.json
+2025-09-23 11:31:35,212 - tensorflow - DEBUG - <module>:34 - Falling back to TensorFlow client; we recommended you install the Cloud TPU client directly with pip install cloud-tpu-client.
+2025-09-23 11:31:37,507 - h5py._conv - DEBUG - <module>:47 - Creating converter from 7 to 5
+2025-09-23 11:31:37,507 - h5py._conv - DEBUG - <module>:47 - Creating converter from 5 to 7
+2025-09-23 11:31:37,507 - h5py._conv - DEBUG - <module>:47 - Creating converter from 7 to 5
+2025-09-23 11:31:37,509 - h5py._conv - DEBUG - <module>:47 - Creating converter from 5 to 7
+2025-09-23 11:31:53,173 - tensorflow - WARNING - _tfmw_add_deprecation_warning:149 - From C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\keras\src\losses.py:2976: The name tf.losses.sparse_softmax_cross_entropy is deprecated. Please use tf.compat.v1.losses.sparse_softmax_cross_entropy instead.
+
+2025-09-23 11:31:54,694 - nfl_prediction - INFO - load_objects:193 - TensorFlow version: 2.15.1
+2025-09-23 11:31:55,051 - matplotlib - DEBUG - wrapper:350 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\matplotlib\mpl-data
+2025-09-23 11:31:55,076 - matplotlib - DEBUG - wrapper:350 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-23 11:31:55,082 - matplotlib - DEBUG - <module>:1511 - interactive is False
+2025-09-23 11:31:55,084 - matplotlib - DEBUG - <module>:1512 - platform is win32
+2025-09-23 11:31:55,321 - nfl_prediction - INFO - lifespan:249 - Loaded dataset rows=3282 cols=28
+2025-09-23 11:31:55,359 - nfl_prediction - INFO - predict_game:538 - Filtered rows:       season  week          game_id home_game_date  ... home_minus_away_win_pct_3 home_minus_away_pf_avg_5  home_minus_away_pa_avg_5  home_minus_away_win_pct_5
+3058    2025     4  2025_04_SEA_ARI     2025-09-25  ...                       1.0                      9.0                  1.666667                        0.0
+
+[1 rows x 28 columns]
+2025-09-23 11:31:55,604 - nfl_prediction - INFO - predict_game:550 - Using feature columns: ['num__home_prior_pa_avg_3' 'num__home_prior_pa_avg_5'
+ 'num__home_prior_pf_avg_3' 'num__home_prior_pf_avg_5'
+ 'num__home_prior_win_pct_3' 'num__home_prior_win_pct_5'
+ 'num__away_prior_pa_avg_3' 'num__away_prior_pa_avg_5'
+ 'num__away_prior_pf_avg_3' 'num__away_prior_pf_avg_5'
+ 'num__away_prior_win_pct_3' 'num__away_prior_win_pct_5']
+2025-09-23 11:31:55,609 - nfl_prediction - ERROR - predict_game:586 - Prediction error: "None of [Index(['num__home_prior_pa_avg_3', 'num__home_prior_pa_avg_5',\n       'num__home_prior_pf_avg_3', 'num__home_prior_pf_avg_5',\n       'num__home_prior_win_pct_3', 'num__home_prior_win_pct_5',\n       'num__away_prior_pa_avg_3', 'num__away_prior_pa_avg_5',\n       'num__away_prior_pf_avg_3', 'num__away_prior_pf_avg_5',\n       'num__away_prior_win_pct_3', 'num__away_prior_win_pct_5'],\n      dtype='object')] are in the [index]"
+Traceback (most recent call last):
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\main.py", line 553, in predict_game
+    X = model_objects["preprocessor"].transform(row[feature_cols])
+                                                ~~~^^^^^^^^^^^^^^
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\pandas\core\series.py", line 1007, in __getitem__
+    return self._get_with(key)
+           ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\pandas\core\series.py", line 1047, in _get_with
+    return self.loc[key]
+           ~~~~~~~~^^^^^
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\pandas\core\indexing.py", line 1073, in __getitem__
+    return self._getitem_axis(maybe_callable, axis=axis)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\pandas\core\indexing.py", line 1301, in _getitem_axis
+    return self._getitem_iterable(key, axis=axis)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\pandas\core\indexing.py", line 1239, in _getitem_iterable
+    keyarr, indexer = self._get_listlike_indexer(key, axis)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\pandas\core\indexing.py", line 1432, in _get_listlike_indexer
+    keyarr, indexer = ax._get_indexer_strict(key, axis_name)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\pandas\core\indexes\base.py", line 6070, in _get_indexer_strict
+    self._raise_if_missing(keyarr, indexer, axis_name)
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\pandas\core\indexes\base.py", line 6130, in _raise_if_missing
+    raise KeyError(f"None of [{key}] are in the [{axis_name}]")
+KeyError: "None of [Index(['num__home_prior_pa_avg_3', 'num__home_prior_pa_avg_5',\n       'num__home_prior_pf_avg_3', 'num__home_prior_pf_avg_5',\n       'num__home_prior_win_pct_3', 'num__home_prior_win_pct_5',\n       'num__away_prior_pa_avg_3', 'num__away_prior_pa_avg_5',\n       'num__away_prior_pf_avg_3', 'num__away_prior_pf_avg_5',\n       'num__away_prior_win_pct_3', 'num__away_prior_win_pct_5'],\n      dtype='object')] are in the [index]"
+2025-09-23 11:38:43,828 - nfl_prediction - INFO - get_next_week_schedule:506 - Schedule week 4 games=16
+2025-09-23 11:38:43,927 - nfl_prediction - INFO - get_next_week_schedule:506 - Schedule week 4 games=16
+2025-09-23 11:38:44,041 - nfl_prediction - INFO - lifespan:251 - Shutdown complete
+2025-09-23 11:38:56,291 - nfl_prediction - INFO - lifespan:238 - Startup: loading models and dataset
+2025-09-23 11:38:56,658 - nfl_prediction - INFO - load_objects:177 - Loaded model metadata from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\metadata.json
+2025-09-23 11:39:13,896 - tensorflow - DEBUG - <module>:34 - Falling back to TensorFlow client; we recommended you install the Cloud TPU client directly with pip install cloud-tpu-client.
+2025-09-23 11:39:19,480 - h5py._conv - DEBUG - <module>:47 - Creating converter from 7 to 5
+2025-09-23 11:39:19,481 - h5py._conv - DEBUG - <module>:47 - Creating converter from 5 to 7
+2025-09-23 11:39:19,481 - h5py._conv - DEBUG - <module>:47 - Creating converter from 7 to 5
+2025-09-23 11:39:19,483 - h5py._conv - DEBUG - <module>:47 - Creating converter from 5 to 7
+2025-09-23 11:39:51,303 - tensorflow - WARNING - _tfmw_add_deprecation_warning:149 - From C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\keras\src\losses.py:2976: The name tf.losses.sparse_softmax_cross_entropy is deprecated. Please use tf.compat.v1.losses.sparse_softmax_cross_entropy instead.
+
+2025-09-23 11:39:54,081 - nfl_prediction - INFO - load_objects:193 - TensorFlow version: 2.15.1
+2025-09-23 11:39:54,539 - matplotlib - DEBUG - wrapper:350 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\matplotlib\mpl-data
+2025-09-23 11:39:54,564 - matplotlib - DEBUG - wrapper:350 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-23 11:39:54,572 - matplotlib - DEBUG - <module>:1511 - interactive is False
+2025-09-23 11:39:54,572 - matplotlib - DEBUG - <module>:1512 - platform is win32
+2025-09-23 11:39:54,857 - nfl_prediction - INFO - lifespan:249 - Loaded dataset rows=3282 cols=28
+2025-09-23 11:39:54,920 - nfl_prediction - INFO - predict_game:538 - Filtered rows:       season  week          game_id home_game_date  ... home_minus_away_win_pct_3 home_minus_away_pf_avg_5  home_minus_away_pa_avg_5  home_minus_away_win_pct_5
+3058    2025     4  2025_04_SEA_ARI     2025-09-25  ...                       1.0                      9.0                  1.666667                        0.0
+
+[1 rows x 28 columns]
+2025-09-23 11:39:55,193 - nfl_prediction - INFO - predict_game:544 - Using feature columns: ['home_prior_pa_avg_3', 'home_prior_pa_avg_5', 'home_prior_pf_avg_3', 'home_prior_pf_avg_5', 'home_prior_win_pct_3', 'home_prior_win_pct_5', 'away_prior_pa_avg_3', 'away_prior_pa_avg_5', 'away_prior_pf_avg_3', 'away_prior_pf_avg_5', 'away_prior_win_pct_3', 'away_prior_win_pct_5']
+2025-09-23 11:40:06,912 - nfl_prediction - INFO - get_next_week_schedule:506 - Schedule week 4 games=16
+2025-09-23 11:40:09,763 - nfl_prediction - INFO - predict_game:538 - Filtered rows:       season  week          game_id home_game_date  ... home_minus_away_win_pct_3 home_minus_away_pf_avg_5  home_minus_away_pa_avg_5  home_minus_away_win_pct_5
+3063    2025     4  2025_04_MIN_PIT     2025-09-28  ...                       0.0                 6.666667                      -1.0                        0.0
+
+[1 rows x 28 columns]
+2025-09-23 11:40:09,814 - nfl_prediction - INFO - predict_game:544 - Using feature columns: ['home_prior_pa_avg_3', 'home_prior_pa_avg_5', 'home_prior_pf_avg_3', 'home_prior_pf_avg_5', 'home_prior_win_pct_3', 'home_prior_win_pct_5', 'away_prior_pa_avg_3', 'away_prior_pa_avg_5', 'away_prior_pf_avg_3', 'away_prior_pf_avg_5', 'away_prior_win_pct_3', 'away_prior_win_pct_5']
+2025-09-23 11:41:07,106 - nfl_prediction - INFO - lifespan:251 - Shutdown complete
+2025-09-23 11:41:15,040 - nfl_prediction - INFO - lifespan:238 - Startup: loading models and dataset
+2025-09-23 11:41:15,184 - nfl_prediction - INFO - load_objects:177 - Loaded model metadata from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\metadata.json
+2025-09-23 11:41:20,900 - tensorflow - DEBUG - <module>:34 - Falling back to TensorFlow client; we recommended you install the Cloud TPU client directly with pip install cloud-tpu-client.
+2025-09-23 11:41:22,153 - h5py._conv - DEBUG - <module>:47 - Creating converter from 7 to 5
+2025-09-23 11:41:22,153 - h5py._conv - DEBUG - <module>:47 - Creating converter from 5 to 7
+2025-09-23 11:41:22,154 - h5py._conv - DEBUG - <module>:47 - Creating converter from 7 to 5
+2025-09-23 11:41:22,154 - h5py._conv - DEBUG - <module>:47 - Creating converter from 5 to 7
+2025-09-23 11:41:34,150 - tensorflow - WARNING - _tfmw_add_deprecation_warning:149 - From C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\keras\src\losses.py:2976: The name tf.losses.sparse_softmax_cross_entropy is deprecated. Please use tf.compat.v1.losses.sparse_softmax_cross_entropy instead.
+
+2025-09-23 11:41:34,972 - nfl_prediction - INFO - load_objects:193 - TensorFlow version: 2.15.1
+2025-09-23 11:41:35,157 - matplotlib - DEBUG - wrapper:350 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\matplotlib\mpl-data
+2025-09-23 11:41:35,166 - matplotlib - DEBUG - wrapper:350 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-23 11:41:35,166 - matplotlib - DEBUG - <module>:1511 - interactive is False
+2025-09-23 11:41:35,167 - matplotlib - DEBUG - <module>:1512 - platform is win32
+2025-09-23 11:41:35,255 - nfl_prediction - INFO - lifespan:249 - Loaded dataset rows=3282 cols=28
+2025-09-23 12:09:03,271 - nfl_prediction - INFO - lifespan:251 - Shutdown complete
+2025-09-23 12:09:06,139 - nfl_prediction - INFO - <module>:610 - Serving frontend from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\frontend\build
+2025-09-23 12:09:06,141 - nfl_prediction - INFO - lifespan:191 - Startup: loading models and dataset
+2025-09-23 12:09:07,685 - matplotlib - DEBUG - wrapper:350 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\matplotlib\mpl-data
+2025-09-23 12:09:07,690 - matplotlib - DEBUG - wrapper:350 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-23 12:09:07,690 - matplotlib - DEBUG - <module>:1511 - interactive is False
+2025-09-23 12:09:07,691 - matplotlib - DEBUG - <module>:1512 - platform is win32
+2025-09-23 12:09:07,758 - nfl_prediction - INFO - lifespan:202 - Loaded dataset rows=3282 cols=28
+2025-09-23 12:19:04,680 - nfl_prediction - INFO - lifespan:204 - Shutdown complete
+2025-09-23 12:19:06,004 - nfl_prediction - INFO - <module>:610 - Serving frontend from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\frontend\build
+2025-09-23 12:19:06,007 - nfl_prediction - INFO - lifespan:191 - Startup: loading models and dataset
+2025-09-23 12:19:07,138 - matplotlib - DEBUG - wrapper:350 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\matplotlib\mpl-data
+2025-09-23 12:19:07,143 - matplotlib - DEBUG - wrapper:350 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-23 12:19:07,143 - matplotlib - DEBUG - <module>:1511 - interactive is False
+2025-09-23 12:19:07,143 - matplotlib - DEBUG - <module>:1512 - platform is win32
+2025-09-23 12:19:07,209 - nfl_prediction - INFO - lifespan:202 - Loaded dataset rows=3282 cols=28
+2025-09-23 12:19:08,522 - nfl_prediction - INFO - <module>:610 - Serving frontend from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\frontend\build
+2025-09-23 12:19:08,524 - nfl_prediction - INFO - lifespan:191 - Startup: loading models and dataset
+2025-09-23 12:19:10,197 - matplotlib - DEBUG - wrapper:350 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\matplotlib\mpl-data
+2025-09-23 12:19:10,206 - matplotlib - DEBUG - wrapper:350 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-23 12:19:10,207 - matplotlib - DEBUG - <module>:1511 - interactive is False
+2025-09-23 12:19:10,207 - matplotlib - DEBUG - <module>:1512 - platform is win32
+2025-09-23 12:19:10,317 - nfl_prediction - INFO - lifespan:202 - Loaded dataset rows=3282 cols=28
+2025-09-23 13:09:29,225 - nfl_prediction - ERROR - get_next_week_schedule:435 - Schedule error: 'NoneType' object has no attribute 'fillna'
+Traceback (most recent call last):
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\main.py", line 398, in get_next_week_schedule
+AttributeError: 'NoneType' object has no attribute 'fillna'
+2025-09-23 13:09:29,415 - nfl_prediction - INFO - lifespan:204 - Shutdown complete
+2025-09-23 13:09:42,683 - nfl_prediction - INFO - <module>:612 - Serving frontend from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\frontend\build
+2025-09-23 13:09:42,693 - nfl_prediction - INFO - lifespan:191 - Startup: loading models and dataset
+2025-09-23 13:09:48,947 - matplotlib - DEBUG - wrapper:350 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\matplotlib\mpl-data
+2025-09-23 13:09:48,983 - matplotlib - DEBUG - wrapper:350 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-23 13:09:48,991 - matplotlib - DEBUG - <module>:1511 - interactive is False
+2025-09-23 13:09:48,993 - matplotlib - DEBUG - <module>:1512 - platform is win32
+2025-09-23 13:09:49,236 - nfl_prediction - INFO - lifespan:202 - Loaded dataset rows=3282 cols=28
+2025-09-23 13:09:55,569 - nfl_prediction - INFO - <module>:612 - Serving frontend from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\frontend\build
+2025-09-23 13:09:55,689 - nfl_prediction - INFO - lifespan:191 - Startup: loading models and dataset
+2025-09-23 13:10:05,731 - matplotlib - DEBUG - wrapper:350 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\matplotlib\mpl-data
+2025-09-23 13:10:05,765 - matplotlib - DEBUG - wrapper:350 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-23 13:10:05,772 - matplotlib - DEBUG - <module>:1511 - interactive is False
+2025-09-23 13:10:05,773 - matplotlib - DEBUG - <module>:1512 - platform is win32
+2025-09-23 13:10:06,085 - nfl_prediction - INFO - lifespan:202 - Loaded dataset rows=3282 cols=28
+2025-09-23 13:10:06,185 - nfl_prediction - ERROR - get_next_week_schedule:437 - Schedule error: 'NoneType' object has no attribute 'fillna'
+Traceback (most recent call last):
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\main.py", line 400, in get_next_week_schedule
+    gameday = df.get("game_date").fillna(df.get("gameday")).astype(str)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'NoneType' object has no attribute 'fillna'
+2025-09-23 13:10:06,189 - nfl_prediction - ERROR - get_next_week_schedule:437 - Schedule error: 'NoneType' object has no attribute 'fillna'
+Traceback (most recent call last):
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\main.py", line 400, in get_next_week_schedule
+    gameday = df.get("game_date").fillna(df.get("gameday")).astype(str)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'NoneType' object has no attribute 'fillna'
+2025-09-23 13:14:31,194 - nfl_prediction - INFO - lifespan:204 - Shutdown complete
+2025-09-23 13:14:56,821 - nfl_prediction - INFO - <module>:612 - Serving frontend from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\frontend\build
+2025-09-23 13:14:56,848 - nfl_prediction - INFO - lifespan:191 - Startup: loading models and dataset
+2025-09-23 13:15:10,792 - matplotlib - DEBUG - wrapper:350 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\matplotlib\mpl-data
+2025-09-23 13:15:10,809 - matplotlib - DEBUG - wrapper:350 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-23 13:15:10,813 - matplotlib - DEBUG - <module>:1511 - interactive is False
+2025-09-23 13:15:10,813 - matplotlib - DEBUG - <module>:1512 - platform is win32
+2025-09-23 13:15:11,084 - nfl_prediction - INFO - lifespan:202 - Loaded dataset rows=3282 cols=28
+2025-09-23 13:15:26,454 - nfl_prediction - INFO - <module>:612 - Serving frontend from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\frontend\build
+2025-09-23 13:15:26,464 - nfl_prediction - INFO - lifespan:191 - Startup: loading models and dataset
+2025-09-23 13:15:34,496 - matplotlib - DEBUG - wrapper:350 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\matplotlib\mpl-data
+2025-09-23 13:15:34,527 - matplotlib - DEBUG - wrapper:350 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-23 13:15:34,536 - matplotlib - DEBUG - <module>:1511 - interactive is False
+2025-09-23 13:15:34,537 - matplotlib - DEBUG - <module>:1512 - platform is win32
+2025-09-23 13:15:34,828 - nfl_prediction - INFO - lifespan:202 - Loaded dataset rows=3282 cols=28
+2025-09-23 13:15:47,356 - nfl_prediction - INFO - <module>:612 - Serving frontend from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\frontend\build
+2025-09-23 13:15:47,361 - nfl_prediction - INFO - lifespan:191 - Startup: loading models and dataset
+2025-09-23 13:15:50,106 - matplotlib - DEBUG - wrapper:350 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\matplotlib\mpl-data
+2025-09-23 13:15:50,119 - matplotlib - DEBUG - wrapper:350 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-23 13:15:50,120 - matplotlib - DEBUG - <module>:1511 - interactive is False
+2025-09-23 13:15:50,120 - matplotlib - DEBUG - <module>:1512 - platform is win32
+2025-09-23 13:15:50,284 - nfl_prediction - INFO - lifespan:202 - Loaded dataset rows=3282 cols=28
+2025-09-23 13:17:58,577 - nfl_prediction - ERROR - get_next_week_schedule:437 - Schedule error: 'game_time'
+Traceback (most recent call last):
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\pandas\core\indexes\base.py", line 3802, in get_loc
+    return self._engine.get_loc(casted_key)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "pandas\_libs\index.pyx", line 138, in pandas._libs.index.IndexEngine.get_loc
+  File "pandas\_libs\index.pyx", line 165, in pandas._libs.index.IndexEngine.get_loc
+  File "pandas\_libs\hashtable_class_helper.pxi", line 5745, in pandas._libs.hashtable.PyObjectHashTable.get_item
+  File "pandas\_libs\hashtable_class_helper.pxi", line 5753, in pandas._libs.hashtable.PyObjectHashTable.get_item
+KeyError: 'game_time'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\main.py", line 401, in get_next_week_schedule
+    gametime = df["gametime"].astype(str).fillna("").str.strip()
+               ^^^^^^^^^^^^^^^
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\pandas\core\frame.py", line 3807, in __getitem__
+    indexer = self.columns.get_loc(key)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\pandas\core\indexes\base.py", line 3804, in get_loc
+    raise KeyError(key) from err
+KeyError: 'game_time'
+2025-09-23 13:17:58,836 - nfl_prediction - INFO - lifespan:204 - Shutdown complete
+2025-09-23 13:18:03,206 - nfl_prediction - INFO - <module>:612 - Serving frontend from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\frontend\build
+2025-09-23 13:18:03,208 - nfl_prediction - INFO - lifespan:191 - Startup: loading models and dataset
+2025-09-23 13:18:06,091 - matplotlib - DEBUG - wrapper:350 - matplotlib data path: C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\.venv-3.11\Lib\site-packages\matplotlib\mpl-data
+2025-09-23 13:18:06,102 - matplotlib - DEBUG - wrapper:350 - CONFIGDIR=C:\Users\iProg\.matplotlib
+2025-09-23 13:18:06,105 - matplotlib - DEBUG - <module>:1511 - interactive is False
+2025-09-23 13:18:06,105 - matplotlib - DEBUG - <module>:1512 - platform is win32
+2025-09-23 13:18:06,242 - nfl_prediction - INFO - lifespan:202 - Loaded dataset rows=3282 cols=28
+2025-09-23 13:18:06,329 - nfl_prediction - INFO - get_next_week_schedule:432 - Schedule week 4 games=16
+2025-09-23 13:18:10,971 - nfl_prediction - INFO - get_next_week_schedule:432 - Schedule week 4 games=16
+2025-09-23 13:18:11,207 - nfl_prediction - INFO - get_next_week_schedule:432 - Schedule week 4 games=16
+2025-09-23 13:18:14,939 - nfl_prediction - INFO - predict_game:461 - Filtered rows:       season  week          game_id home_game_date  ... home_minus_away_win_pct_3 home_minus_away_pf_avg_5  home_minus_away_pa_avg_5  home_minus_away_win_pct_5
+3058    2025     4  2025_04_SEA_ARI     2025-09-25  ...                       1.0                      9.0                  1.666667                        0.0
+
+[1 rows x 28 columns]
+2025-09-23 13:18:15,108 - nfl_prediction - INFO - predict_game:480 - Using feature columns: ['home_prior_pa_avg_3', 'home_prior_pa_avg_5', 'home_prior_pf_avg_3', 'home_prior_pf_avg_5', 'home_prior_win_pct_3', 'home_prior_win_pct_5', 'away_prior_pa_avg_3', 'away_prior_pa_avg_5', 'away_prior_pf_avg_3', 'away_prior_pf_avg_5', 'away_prior_win_pct_3', 'away_prior_win_pct_5']
+2025-09-23 13:18:46,799 - nfl_prediction - INFO - predict_game:461 - Filtered rows:       season  week          game_id home_game_date  ... home_minus_away_win_pct_3 home_minus_away_pf_avg_5  home_minus_away_pa_avg_5  home_minus_away_win_pct_5
+3063    2025     4  2025_04_MIN_PIT     2025-09-28  ...                       0.0                 6.666667                      -1.0                        0.0
+
+[1 rows x 28 columns]
+2025-09-23 13:18:46,863 - nfl_prediction - INFO - predict_game:480 - Using feature columns: ['home_prior_pa_avg_3', 'home_prior_pa_avg_5', 'home_prior_pf_avg_3', 'home_prior_pf_avg_5', 'home_prior_win_pct_3', 'home_prior_win_pct_5', 'away_prior_pa_avg_3', 'away_prior_pa_avg_5', 'away_prior_pf_avg_3', 'away_prior_pf_avg_5', 'away_prior_win_pct_3', 'away_prior_win_pct_5']
+2025-09-23 13:25:56,597 - nfl_prediction - INFO - predict_game:461 - Filtered rows:       season  week          game_id home_game_date  ... home_minus_away_win_pct_3 home_minus_away_pf_avg_5  home_minus_away_pa_avg_5  home_minus_away_win_pct_5
+3059    2025     4  2025_04_WAS_ATL     2025-09-28  ...                      -0.5                 0.583333                  2.583333                       -0.5
+
+[1 rows x 28 columns]
+2025-09-23 13:25:56,704 - nfl_prediction - INFO - predict_game:480 - Using feature columns: ['home_prior_pa_avg_3', 'home_prior_pa_avg_5', 'home_prior_pf_avg_3', 'home_prior_pf_avg_5', 'home_prior_win_pct_3', 'home_prior_win_pct_5', 'away_prior_pa_avg_3', 'away_prior_pa_avg_5', 'away_prior_pf_avg_3', 'away_prior_pf_avg_5', 'away_prior_win_pct_3', 'away_prior_win_pct_5']
+2025-09-23 13:27:04,796 - nfl_prediction - INFO - predict_game:461 - Filtered rows:       season  week         game_id home_game_date home_team  ... home_minus_away_pa_avg_3  home_minus_away_win_pct_3  home_minus_away_pf_avg_5  home_minus_away_pa_avg_5 home_minus_away_win_pct_5
+3062    2025     4  2025_04_NO_BUF     2025-09-28       BUF  ...                     20.0                        1.0                 18.333333                  8.333333                  0.666667
+
+[1 rows x 28 columns]
+2025-09-23 13:27:04,894 - nfl_prediction - INFO - predict_game:480 - Using feature columns: ['home_prior_pa_avg_3', 'home_prior_pa_avg_5', 'home_prior_pf_avg_3', 'home_prior_pf_avg_5', 'home_prior_win_pct_3', 'home_prior_win_pct_5', 'away_prior_pa_avg_3', 'away_prior_pa_avg_5', 'away_prior_pf_avg_3', 'away_prior_pf_avg_5', 'away_prior_win_pct_3', 'away_prior_win_pct_5']
+2025-09-23 13:27:22,139 - nfl_prediction - INFO - predict_game:461 - Filtered rows:       season  week          game_id home_game_date  ... home_minus_away_win_pct_3 home_minus_away_pf_avg_5  home_minus_away_pa_avg_5  home_minus_away_win_pct_5
+3067    2025     4  2025_04_CLE_DET     2025-09-28  ...                       0.0                15.333333                       3.0                   0.333333
+
+[1 rows x 28 columns]
+2025-09-23 13:27:22,233 - nfl_prediction - INFO - predict_game:480 - Using feature columns: ['home_prior_pa_avg_3', 'home_prior_pa_avg_5', 'home_prior_pf_avg_3', 'home_prior_pf_avg_5', 'home_prior_win_pct_3', 'home_prior_win_pct_5', 'away_prior_pa_avg_3', 'away_prior_pa_avg_5', 'away_prior_pf_avg_3', 'away_prior_pf_avg_5', 'away_prior_win_pct_3', 'away_prior_win_pct_5']
+2025-09-23 13:31:12,701 - nfl_prediction - INFO - get_next_week_schedule:432 - Schedule week 4 games=16
+2025-09-23 13:31:33,947 - nfl_prediction - INFO - lifespan:204 - Shutdown complete
