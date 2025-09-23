@@ -115,12 +115,17 @@ function App() {
       console.error('handleTeamGridPrediction: missing prediction', { game });
       return;
     }
-
-    const now = new Date();
-    const predictionWithTimestamp = {
-      game,
-      prediction,
-      timestamp: now
+    else if (!game) {
+      console.error('handleTeamGridPrediction: missing game', { prediction });
+      return;
+    }
+    else if (game && prediction) {
+      console.log('handleTeamGridPrediction:', { game, prediction });
+      const now = new Date();
+      const predictionWithTimestamp = {
+        game,
+        prediction,
+        timestamp: now
     };
 
     setCurrentPrediction(predictionWithTimestamp);
@@ -152,8 +157,9 @@ function App() {
         source: 'teamgrid'
       }
     ]);
-  };
+  };}
 
+    
   /**
    * Clear current prediction and error states
    */
