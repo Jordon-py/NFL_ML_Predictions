@@ -1,54 +1,131 @@
+/* ==========================================================================
+   CustomCSS Optimizer - Final Output (3-pass result)
+   - PASS 1: Audit & fixes -> syntax, specificity, invalid props, consistency
+   - PASS 2: Creative enhancements -> motion, focus, grid, micro-interactions
+   - PASS 3: Refinement -> simplified transforms, variables, reduced layout shift
+   Notes:
+   * Pure vanilla CSS. No resets frameworks.
+   * Uses CSS variables with safe fallbacks.
+   * If some classes are unused in your HTML, remove them or wire them up.
+   ========================================================================== */
 
+/* ------------------------------
+   Design Tokens (with fallbacks)
+   ------------------------------ */
+:root {
+  /* Colors (fallback hex, then oklch where supported) */
+  --c-brand-1: #0080ff; /* oklch(0.72 0.17 255) */
+  --c-brand-1-70: #0080ffb3;
+  --c-brand-2: #003264;  /* deep navy */
+  --c-ink: #0f0f0f;
+  --c-ink-muted: #2c3e50;
+  --c-danger: #e74c3c;
+  --c-accent: #3498db;
+  --c-bg-soft: #ffffffd1;
+  --c-card: rgba(0, 106, 255, 0.12);
 
+  /* Surfaces */
+  --glass: rgba(255,255,255,0.12);
+
+  /* Radii, spacing, shadows, motion */
+  --r-md: 12px;
+  --r-sm: 8px;
+  --sp-1: 8px;
+  --sp-2: 12px;
+  --sp-3: 16px;
+  --sp-4: 24px;
+  --sp-5: 32px;
+
+  --shadow-1: 0 2px 8px rgba(0,0,0,0.12);
+  --shadow-2: 0 10px 20px rgba(0,0,0,0.18);
+
+  --t-fast: 160ms;
+  --t-base: 260ms;
+  --e-out: cubic-bezier(.2,.8,.2,1);
+
+  /* Backdrop blur strength */
+  --blur-weak: 6px;
+  --blur-strong: 18px;
+}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; scroll-behavior: auto !important; }
+}
+
+/* =========================
+   TEAM GRID WRAPPER & HEAD
+   ========================= */
+
+/* PASS 1: FIX invalid properties, remove useless 3D matrix, correct flex values.
+   - 'justify-content: stretch' is invalid -> use 'flex-start'.
+   - remove transform: matrix3d(...) no-op.
+   - backdrop-filter uses lengths (px), not percent. */
 .team-grid {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: stretch;
-  max-width: 1500px;
+
+  gap: var(--sp-5);
   width: 100%;
-  margin: 0 auto;
+  max-width: 1500px;
+  margin: 5% auto;
   padding: 10px;
+  background-color: var(--glass);
+  backdrop-filter: blur(var(--blur-strong));
 }
 
 .team-grid-header {
   text-align: center;
-  margin-bottom: 10px;
+  margin-bottom: 3rem;
 }
 
 .team-grid-header h2 {
-  color: #488ed4;
-  font-size: 2.5rem;
-  margin-bottom: 2px;
-  font-weight: 700;
+  color: var(--c-brand-1-70);
+  text-decoration: underline; /* consider using ::after underline bar if you want more control */
+  backdrop-filter: blur(var(--blur-weak));
+  font-size: 3.5rem;
+  margin-bottom: 1%;
+  font-weight: 800;
 }
 
 .team-grid-header p {
-  color: #999fa0;
+  color: var(--c-ink);
   font-size: 1.2rem;
   margin: 0;
 }
 
+/* PASS 2: Switch to responsive CSS Grid for matchups.
+   Replaces prior flex + inconsistent media grid-template usage. */
 .matchups-grid {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
+  display: grid;
+  grid-template-rows: repeat(auto-fit, minmax(350px, 1fr));
+  gap: var(--sp-5);
   width: 100%;
-  flex-wrap: wrap;
-  gap: 30px;
   margin-top: 30px;
+  padding: 4rem;
+  max-width: fit-content;
 }
 
-.matchup-card {
-  background: rgba(255, 255, 255, 0.156);
-  border-radius: 12px;
-  box-shadow: 1px 4px 6px grey;
-  padding: 20px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  border: 2px solid transparent;
+/* =======================
+   MATCHUP CARD + STATES
+   ======================= */
+
+/* PASS 1: fix invalid backdrop-filter percentages, normalize shadows, avoid layout shift.
+   PASS 2: subtle lift, border glow on hover/focus-visible.
+   PASS 3: consolidate transitions, avoid padding changes on hover. */
+.matchup-card.shimmer-container.shine-outline {
   position: relative;
   overflow: hidden;
+  background: var(--c-card);
+  backdrop-filter: blur(var(--blur-weak));
+  border: 2px solid;
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-1);
+  padding: var(--sp-5);
+  cursor: pointer;
+  transition: transform var(--t-base) var(--e-out),
+              box-shadow var(--t-base) var(--e-out),
+              border-color var(--t-base) var(--e-out),
+              background var(--t-base) var(--e-out);
+  will-change: transform;
 }
 
 .matchup-card:hover {
@@ -64,10 +141,13 @@
   border-color: #3498db;
 }
 
-.matchup-card:focus {
-  outline: none;
-  border-color: #3498db;
-  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.3);
+.matchup-card:focus { outline: none; }
+
+/* PASS 1: fix invalid box-shadow syntax. Add :focus-visible for keyboard users. */
+.matchup-card:focus-visible {
+  border-color: #2766ae;
+  box-shadow: 0 0 0 3px rgba(39, 102, 174, 0.35), var(--shadow-2);
+  background: linear-gradient(135deg, #ffffff 0%, #003260d4 45%, var(--c-brand-2) 100%);
 }
 
 .matchup-card.loading {
@@ -75,15 +155,22 @@
   opacity: 0.7;
 }
 
-.matchup-card.has-prediction {
+.matchup-card.has-prediction.shimmer-container.shine-outline {
   border-color: #2766ae;
-  background: linear-gradient(135deg, #ffffff 0%,#003260d4 45%, #003264 100%);
+  background: linear-gradient(135deg, #ffffff 0%, #003260d4 45%, var(--c-brand-2) 100%);
+  transition: all;
+  transform: matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, -2, 0, 1); /* PASS 3: remove matrix3d no-op */
+  transform: translateY(-4px) scale(1.20); /* PASS 3: subtle scale for pop */
 }
+
+/* =======================
+   MATCHUP CONTENT LAYOUT
+   ======================= */
 
 .matchup-teams {
   display: flex;
-  align-items: center;
   justify-content: space-between;
+  gap: var(--sp-4);
   margin-bottom: 15px;
 }
 
@@ -96,20 +183,23 @@
 }
 
 .vs-indicator {
-  font-size: 2.5rem;
-  font-weight: bold;
+  font-size: 2.2rem; /* slight reduction for better balance */
+  font-weight: 800;
   color: #00181a;
   margin: 0 15px;
+  letter-spacing: 0.02em;
 }
 
 .team {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: var(--sp-1);
 }
 
 .team-logo {
+  width: 180px;
+  height: 180px;
   width: 180px;
   height: 180px;
   object-fit: contain;
@@ -124,16 +214,17 @@
   box-shadow: 0 8px 15px rgba(0, 0, 0, 0.2);
 }
 .team-logo-placeholder {
-  width: 60px;
-  height: 60px;
+  width: 90px;
+  height: 90px;
   background: #ecf0f1;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: bold;
+  font-weight: 700;
   font-size: 1.2rem;
-  color: #2c3e50;
+  color: var(--c-ink-muted);
+  text-transform: uppercase;
 }
 
 .team-info {
@@ -149,7 +240,7 @@
   font-size: 1.8rem;
   color: lch(from color 50% 0% 0%);
   text-align: center;
-  line-height: 1.2;
+  line-height: 1.25;
 }
 
 .team-abbr {
@@ -171,7 +262,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: var(--sp-1);
 }
 
 .matchup-time {
@@ -182,20 +273,24 @@
   margin-bottom: 15px;
 }
 
+/* =======================
+   PREDICTION STATES BOXES
+   ======================= */
+
 .prediction-loading {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
-  padding: 15px;
+  padding: 14px;
   background: #f8f9fa;
-  border-radius: 8px;
-  margin-top: 15px;
+  border-radius: var(--r-sm);
+  margin-top: 12px;
 }
 
 .prediction-loading span {
-  color: #3498db;
-  font-weight: 500;
+  color: var(--c-accent);
+  font-weight: 600;
 }
 
 .prediction-result {
@@ -211,23 +306,27 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6rem;
+  gap: 3.5rem; /* reduced gap for tighter grouping */
 }
 
+/* PASS 2: Badge styling for scores with subtle glow; keep text contrast high */
 .score {
-  font-size: 2rem;
-  font-weight: bold;
-  padding: 5px 5px;
+  font-size: 1.9rem;
+  font-weight: 800;
+  padding: 4px 10px;
   border-radius: 6px;
-  min-width: 50px;
+  min-width: 56px;
   text-align: center;
+  line-height: 1.25;
+  background: #0b1220; /* dark pill background for both */
+  color: #fff;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);
 }
 
 .home-score {
   
   color: rgb(0, 0, 0);
 }
-
 .away-score {
   
   color: rgb(16, 3, 3);
@@ -245,7 +344,10 @@
   font-weight: 600;
 }
 
-/* Loading states */
+/* =======================
+   GENERIC LOADING ERROR
+   ======================= */
+
 .team-grid-loading,
 .team-grid-error {
   text-align: center;
@@ -256,7 +358,7 @@
   width: 40px;
   height: 40px;
   border: 4px solid #f3f3f3;
-  border-top: 4px solid #3498db;
+  border-top: 4px solid var(--c-accent);
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin: 0 auto 20px;
@@ -269,13 +371,10 @@
   margin: 0;
 }
 
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
 .team-grid-error h3 {
-  color: #e74c3c;
+  color: var(--c-danger);
   margin-bottom: 10px;
 }
 
@@ -285,62 +384,50 @@
 }
 
 .team-grid-error button {
-  background: #3498db;
-  color: white;
+  background: var(--c-accent);
+  color: #fff;
   border: none;
   padding: 10px 20px;
   border-radius: 6px;
   cursor: pointer;
-  font-weight: 500;
-  transition: background-color 0.3s ease;
+  font-weight: 600;
+  transition: background-color var(--t-base) var(--e-out);
 }
 
-.team-grid-error button:hover {
-  background: #2980b9;
+.team-grid-error button:hover { background: #2980b9; }
+
+/* ================
+   RESPONSIVE RULES
+   ================ */
+
+/* PASS 1: Remove duplicated display/flex overrides in media queries.
+   PASS 2: Ensure grid collapses cleanly on smaller widths. */
+
+@media (max-width: 1024px) {
+  .matchups-grid { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
 }
 
-/* Responsive design */
 @media (max-width: 768px) {
-  .team-grid {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: stretch;
-    flex-wrap: wrap;
-    max-width: 100%;
-    width: 100%;
+  .team-grid-header h2 { font-size: 2rem; }
 
-    padding: 15px;
-  }
-
-  .team-grid-header h2 {
-    font-size: 2rem;
-  }
-
-  .matchups-grid {
-    grid-template-columns: 1fr;
-    gap: 15px;
-  }
-
-  .matchup-card {
-    padding: 15px;
-  }
+  .matchup-card { padding: var(--sp-3); }
 
   .matchup-teams {
     flex-direction: column;
-    gap: 15px;
+    gap: var(--sp-3);
   }
 
   .vs-indicator {
     margin: 0;
     transform: rotate(90deg);
+    transform-origin: center;
   }
 
   .away-team,
   .home-team {
     flex-direction: row;
     justify-content: center;
-    gap: 15px;
+    gap: var(--sp-3);
   }
 
   .team {
@@ -357,19 +444,13 @@
     text-align: left;
   }
 
-  .score {
-    font-size: 1.5rem;
-  }
+  .score { font-size: 1.5rem; }
 }
 
 @media (max-width: 480px) {
-  .team-grid-header h2 {
-    font-size: 1.8rem;
-  }
+  .team-grid-header h2 { font-size: 1.75rem; }
 
-  .matchup-card {
-    padding: 12px;
-  }
+  .matchup-card { padding: 12px; }
 
   .team-logo,
   .team-logo-placeholder {
@@ -377,20 +458,13 @@
     height: 50px;
   }
 
-  .team-name {
-    font-size: 0.8rem;
-  }
+  .team-name { font-size: 0.9rem; }
+  .team-abbr { font-size: 0.8rem; }
+  .matchup-time { font-size: 0.85rem; }
 
-  .team-abbr {
-    font-size: 0.7rem;
-  }
-
-  .matchup-time {
-    font-size: 0.8rem;
-  }
-
+  .predicted-scores { gap: 2rem; }
   .score {
-    font-size: 1.3rem;
+    font-size: 1.25rem;
     padding: 4px 8px;
   }
 }

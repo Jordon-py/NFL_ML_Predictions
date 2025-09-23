@@ -1,22 +1,32 @@
-fastapi
-uvicorn[standard]
-numpy
-scipy
-pandas
-scikit-learn
-lightgbm
-joblib
-pydantic
-matplotlib
-seaborn
-nfl-data-py
-tensorflow>=2.13.0
-keras-tuner>=1.4.0
-optuna>=3.0.0
+# Production dependencies - optimized for Heroku deployment
+# Build tools (must be first to avoid conflicts)
+setuptools>=68.0.0,<70.0.0
+wheel>=0.41.0,<0.43.0
+pip>=23.2.0,<24.0.0
 
-# Development dependencies for production code quality
-pre-commit>=3.0.0
-black>=23.0.0
-isort>=5.12.0
-flake8>=6.0.0
-bandit>=1.7.0
+# Core web framework
+fastapi>=0.104.0,<0.110.0
+uvicorn[standard]>=0.23.0,<0.25.0
+gunicorn>=21.2.0,<22.0.0
+
+# Data science stack (carefully version-coordinated)
+numpy>=1.21.0,<1.25.0
+scipy>=1.9.0,<1.12.0
+pandas>=1.5.0,<2.2.0
+scikit-learn>=1.2.0,<1.4.0
+joblib>=1.2.0,<1.4.0
+
+# ML/AI libraries  
+tensorflow-cpu>=2.15.0,<2.16.0
+lightgbm>=4.0.0,<4.2.0
+optuna>=3.3.0,<3.5.0
+
+# Visualization
+matplotlib>=3.6.0,<3.9.0
+seaborn>=0.11.0,<0.14.0
+
+# API and data validation
+pydantic>=2.4.0,<2.6.0
+
+# NFL data (may need specific version for compatibility)
+nfl-data-py>=0.3.0,<0.4.0
