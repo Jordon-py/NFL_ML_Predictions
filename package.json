@@ -1,0 +1,7 @@
+{
+  "name": "nfl-ml-monorepo",
+  "private": true,
+  "scripts": {
+    "heroku-postbuild": "npm ci --prefix frontend && npm run build --prefix frontend"
+  }
+}

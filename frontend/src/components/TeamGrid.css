@@ -52,12 +52,14 @@
 }
 
 .matchup-card:hover {
-  transform: translateY(-4px);
-  background: rgba(219, 241, 255, 0.25);
+  transform: translateY(-14px);
+  z-index: 1;
+  scale: 1.2;
+  background: rgba(219, 241, 255, 0.197);
     padding: 20px;
     box-shadow:
       0 10px 6px 1px white,
-      0.3em 0.3em 2rem -2px rgba(69, 1, 1, 0.6);
+      0.3em 0.7em 2rem -2px rgba(69, 1, 1, 0.6);
 
   border-color: #3498db;
 }
@@ -108,12 +110,19 @@
 }
 
 .team-logo {
-  width: 80px;
-  height: 80px;
+  width: 180px;
+  height: 180px;
   object-fit: contain;
   border-radius: 8px;
+  transition-property: all;
+
 }
 
+  
+.team-logo:hover {
+  transform: scale(1.05);
+  box-shadow: 0 8px 15px rgba(0, 0, 0, 0.2);
+}
 .team-logo-placeholder {
   width: 60px;
   height: 60px;
@@ -137,25 +146,25 @@
 
 .team-name {
   font-weight: 600;
-  font-size: 1.5rem;
-  color: #000000;
+  font-size: 1.8rem;
+  color: lch(from color 50% 0% 0%);
   text-align: center;
   line-height: 1.2;
 }
 
 .team-abbr {
-  font-size: 1rem;
-  color: #000000;
+  font-size: 1.4rem;
+  color:lch(from color 50% 0% 0%);
   font-weight: 500;
 }
 
 .home-indicator {
   display: flex;
-  flex-direction: column-reverse;
-  font-size: 0.9rem;
-  color: #ff6969;
+  flex-direction: rows;
+  font-size: 1.3rem;
+  color: #59be7b;
   font-weight: bold;
-  margin-top: 2px;
+  margin-top: 0px;
 }
 
 .team-placeholder {
@@ -167,7 +176,7 @@
 
 .matchup-time {
   text-align: center;
-  color: #ff6262;
+  color: #ffffff;
   font-size: 1.1rem;
   font-weight: 500;
   margin-bottom: 15px;
@@ -190,8 +199,8 @@
 }
 
 .prediction-result {
-  background: #ffffffd1;
-  border: 1px solid #ffffff;
+  background: #88b0ff63;
+  border: 1px solid #000000;
   border-radius: 8px;
   padding: 3%;
   margin-top: 1rem;
@@ -216,22 +225,22 @@
 
 .home-score {
   
-  color: white;
+  color: rgb(0, 0, 0);
 }
 
 .away-score {
   
-  color: white;
+  color: rgb(16, 3, 3);
 }
 
 .score-separator {
   font-size: 1.5rem;
-  font-weight: bold;
+  font-weight: lighter;
   color: #2c3e50;
 }
 
 .point-diff {
-  font-size: 1rem;
+  font-size: 1.5rem;
   color: #000000;
   font-weight: 600;
 }
