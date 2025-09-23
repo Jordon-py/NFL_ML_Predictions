@@ -1,0 +1,4 @@
+# Root requirements shim for Heroku Python buildpack
+# Heroku installs from requirements.txt at the repo root by default.
+# Delegate to the backend requirements to keep a single source of truth.
+-r backend/requirements.txt

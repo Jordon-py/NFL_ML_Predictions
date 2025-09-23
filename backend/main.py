@@ -272,7 +272,8 @@ def build_future_game_features(
         if before.empty:
             raise ValueError(f"No prior data available for {team} before {season}-W{week}")
         row = before.loc[before["time_key"].idxmax()]
-        if (row["home_team"] == team).any():
+        # row is a Series for a single game; compare directly without .any()
+        if str(row["home_team"]) == team:
             return {
                 "prior_pa_avg_3": row.get("home_prior_pa_avg_3"),
                 "prior_pa_avg_5": row.get("home_prior_pa_avg_5"),
@@ -586,11 +587,12 @@ def retrain():
 @app.post("/update_data")
 def update_data():
     try:
+        # Build leak-free rolling features using the canonical script
         build = subprocess.run(
             [
                 sys.executable,
-                str(BASE_DIR / "scripts" / "build_csvs.py"),
-                "--start","2014","--end","2024","--out-dir",str(DATA_DIR),
+                str(BACKEND_DIR / "build_csv_datasets.py"),
+                "--start","2010","--end","2025","--out-dir",str(DATA_DIR),
             ],
             check=True, capture_output=True, text=True,
         )
