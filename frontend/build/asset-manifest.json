@@ -1,13 +1,13 @@
 {
   "files": {
-    "main.css": "/static/css/main.78f6f586.css",
-    "main.js": "/static/js/main.670c4f66.js",
-    "index.html": "/index.html",
-    "main.78f6f586.css.map": "/static/css/main.78f6f586.css.map",
-    "main.670c4f66.js.map": "/static/js/main.670c4f66.js.map"
+    "main.css": "https://nfl-predict-ecf5a5bd34fe.herokuapp.com/static/css/main.f3708da5.css",
+    "main.js": "https://nfl-predict-ecf5a5bd34fe.herokuapp.com/static/js/main.31effc33.js",
+    "index.html": "https://nfl-predict-ecf5a5bd34fe.herokuapp.com/index.html",
+    "main.f3708da5.css.map": "https://nfl-predict-ecf5a5bd34fe.herokuapp.com/static/css/main.f3708da5.css.map",
+    "main.31effc33.js.map": "https://nfl-predict-ecf5a5bd34fe.herokuapp.com/static/js/main.31effc33.js.map"
   },
   "entrypoints": [
-    "static/css/main.78f6f586.css",
-    "static/js/main.670c4f66.js"
+    "static/css/main.f3708da5.css",
+    "static/js/main.31effc33.js"
   ]
 }
