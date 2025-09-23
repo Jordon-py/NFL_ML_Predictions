@@ -8,7 +8,6 @@
     "bet",
     "predictions"
   ],
-  
   "bugs": {
     "url": "https://github.com/Jordon-py/NFL_ML_Predictions/issues"
   },
@@ -736,6 +735,7 @@
     "static-eval": "^2.0.2",
     "statuses": "^2.0.1",
     "stop-iteration-iterator": "^1.1.0",
+    "string_decoder": "^1.3.0",
     "string-length": "^4.0.2",
     "string-natural-compare": "^3.0.1",
     "string-width": "^4.2.3",
@@ -747,7 +747,6 @@
     "string.prototype.trimend": "^1.0.9",
     "string.prototype.trimstart": "^1.0.8",
     "stringify-object": "^3.3.0",
-    "string_decoder": "^1.3.0",
     "strip-ansi": "^6.0.1",
     "strip-ansi-cjs": "^6.0.1",
     "strip-bom": "^4.0.0",

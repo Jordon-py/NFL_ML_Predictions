@@ -1,1 +1,1 @@
-web: gunicorn -k uvicorn_worker.UvicornWorker -w 3 backend.main:app
+web: gunicorn -k uvicorn.workers.UvicornWorker -w 3 --bind 0.0.0.0:$PORT backend.main:app
