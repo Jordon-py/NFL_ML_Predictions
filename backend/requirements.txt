@@ -3,7 +3,7 @@
 # Core web framework
 fastapi>=0.104.0,<0.110.0
 uvicorn[standard]>=0.23.0,<0.25.0
-gunicorn>=21.2.0,<22.0.0
+gunicorn>=21.2.0,<24.0.0
 
 # Data science stack (carefully version-coordinated)
 numpy>=1.21.0,<1.25.0
