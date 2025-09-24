@@ -27,7 +27,7 @@ Usage Notes
 - Team codes are minimally normalized to limit join mismatches (LA→LAR, STL→LAR, ...).
 
 **IMPORTANT** TO RUN:
-python backend/build_csv_datasets.py --start 2010 --end 2025 --out-dir backend/data
+python backend/build_csv_datasets.py --start 2016 --end 2026 --out-dir backend/data
 
 """
 from __future__ import annotations
@@ -323,14 +323,6 @@ def build_regression_pipeline(
 
 
 
-def make_time_key(df: pd.DataFrame) -> pd.Series:
-    """
-    Combine season and week into a sortable integer: YYYYWW.
-    Example: season=2022, week=9 -> 202209
-    """
-    # Defensive: ensure numeric types
-    return (df["season"].astype(int) * 100) + df["week"].astype(int)
-
 def ts_split_by_season_week(
     df: pd.DataFrame,
     features: List[str],
@@ -352,17 +344,19 @@ def ts_split_by_season_week(
     # Always sort time so cuts behave as expected
     data["time_key"] = make_time_key(data)
     data = data.sort_values(["time_key"]).reset_index(drop=True)
-    # Boolean masks read like English
-    is_train = data
+    
+    # Boolean masks read like English - create proper train mask
+    train_end_season, train_end_week = train_end
+    is_train = (
+        (data["season"] < train_end_season) |
+        ((data["season"] == train_end_season) & (data["week"] <= train_end_week))
+    )
    
     # Split sets
     train_df = data.loc[is_train]
    
-    
-
     # Final matrices
     X_train, y_train = train_df[features], train_df[target]
-  
  
     # Clean up helper column before returning
     return (X_train, y_train), df, data

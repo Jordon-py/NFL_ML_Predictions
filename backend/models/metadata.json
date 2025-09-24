@@ -1,58 +1,45 @@
 {
-  "training_timestamp": "2025-09-13T18:23:34.750977",
-  "dataset_hash": "5ee82bdc",
-  "dataset_path": "C:\\Users\\iProg\\OneDrive\\Documents\\Football_predict\\nfl_prediction_system\\nfl_prediction_system\\Nfl_data_sorted.csv",
-  "training_samples": 3027,
-  "season_range": [
-    2014,
-    2025
-  ],
-  "week_range": [
-    1,
-    22
-  ],
-  "model_scores": {
-    "home_r2": 0.8081129756827008,
-    "away_r2": 0.8048282559486348
-  },
+  "training_timestamp": "2025-09-24T14:39:01.061082",
+  "dataset_hash": "5959783b47",
+  "training_samples": 2524,
   "raw_feature_columns": {
     "numeric": [
-      "home_prior_pa_avg_3",
-      "home_prior_pa_avg_5",
       "home_prior_pf_avg_3",
       "home_prior_pf_avg_5",
+      "home_prior_pa_avg_3",
+      "home_prior_pa_avg_5",
       "home_prior_win_pct_3",
       "home_prior_win_pct_5",
-      "away_prior_pa_avg_3",
-      "away_prior_pa_avg_5",
       "away_prior_pf_avg_3",
       "away_prior_pf_avg_5",
+      "away_prior_pa_avg_3",
+      "away_prior_pa_avg_5",
       "away_prior_win_pct_3",
-      "away_prior_win_pct_5"
+      "away_prior_win_pct_5",
+      "home_minus_away_pf_avg_3",
+      "home_minus_away_pf_avg_5",
+      "home_minus_away_pa_avg_3",
+      "home_minus_away_pa_avg_5",
+      "home_minus_away_win_pct_3",
+      "home_minus_away_win_pct_5"
     ],
     "categorical": []
   },
-  "transformed_feature_names": [
-    "num__home_prior_pa_avg_3",
-    "num__home_prior_pa_avg_5",
-    "num__home_prior_pf_avg_3",
-    "num__home_prior_pf_avg_5",
-    "num__home_prior_win_pct_3",
-    "num__home_prior_win_pct_5",
-    "num__away_prior_pa_avg_3",
-    "num__away_prior_pa_avg_5",
-    "num__away_prior_pf_avg_3",
-    "num__away_prior_pf_avg_5",
-    "num__away_prior_win_pct_3",
-    "num__away_prior_win_pct_5"
-  ],
   "models": {
     "home_model": "home_model.joblib",
-    "away_model": "away_model.joblib"
+    "away_model": "away_model.joblib",
+    "win_model": "win_clf_calibrated.joblib"
   },
   "preprocessor": "preprocessor.joblib",
-  "target_names": [
+  "targets": [
     "home_points_for",
-    "away_points_for"
-  ]
+    "away_points_for",
+    "home_win"
+  ],
+  "model_scores": {
+    "home_r2_cv": 9.852669605330263,
+    "away_r2_cv": 9.925357908133037,
+    "win_auc_cv": 0.6364571814831376
+  },
+  "production_ready_win_model": false
 }
