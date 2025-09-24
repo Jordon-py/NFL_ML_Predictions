@@ -1,6 +1,6 @@
 # Locked requirements for Heroku - tested compatible versions
 # Use this if requirements.txt still has conflicts
-setuptools==69.5.1
+setuptools==78.1.1
 wheel==0.42.0  
 pip==23.3.1
 
