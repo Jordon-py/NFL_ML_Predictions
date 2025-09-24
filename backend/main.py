@@ -145,7 +145,7 @@ async def lifespan(app: FastAPI):
     log.info("Shutdown complete")
 
 app = FastAPI(title="NFL Game Prediction API", version="2.0.0", lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(CORSMiddleware, allow_origins=["https://nfl-predict-ecf5a5bd34fe.herokuapp.com/"| CORS_ORIGINS], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
 # ---------- Helpers ----------
 def get_current_nfl_context() -> Dict[str, Any]:
@@ -359,9 +359,10 @@ def report_errors(limit: int = 50):
     return {"rows": df.to_dict(orient="records"), "limit": int(limit)}
 
 # Serve built frontend
-_front = FRONTEND_DIST if FRONTEND_DIST.exists() else (FRONTEND_BUILD if FRONTEND_BUILD.exists() else None)
+_front = FRONTEND_DIST if FRONTEND_DIST.exists() else (FRONTEND_BUILD if FRONTEND_BUILD.exists() else "frontend/build")
+    # comment: if (FRONTEND_BUILD if FRONTEND_BUILD.exists() else "frontend/build")
 if _front:
-    app.mount("/", StaticFiles(directory=str(_front), html=True), name="app")
+    app.mount("/", StaticFiles(directory=str(_front), html=True), name="nfl-predict")
     log.info("Serving frontend from %s", _front)
 else:
     log.warning("No frontend build found; not serving static files")
