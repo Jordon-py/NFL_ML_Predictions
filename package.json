@@ -2,9 +2,9 @@
   "name": "nfl_ml_predictions",
   "version": "1.0.0",
   "description": "An advanced NFL game prediction system using machine learning models to predict game outcomes, scores, and win probabilities.",
-  "main": "index.js",
+  "main": "src/index.jsx",
   "scripts": {
-    "heroku-postbuild": "node -e \"require('fs').writeFileSync('frontend/src/index.js','import \\'./index.jsx\\';')\" && npm install --prefix frontend && npm run build --prefix frontend"
+    "heroku-postbuild": "npm install --prefix frontend && npm run build --prefix frontend"
   },
   "dependencies": {
     "react": "^18.2.0",

@@ -2,7 +2,7 @@
   "name": "nfl-ml-predictions",
   "version": "1.0.2",
   "description": "",
-  "main": "src/index.js",
+  "main": "src/index.jsx",
   "type": "commonjs",
   "scripts": {
     "start": "react-scripts start",
