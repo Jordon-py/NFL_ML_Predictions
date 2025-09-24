@@ -1,0 +1,20 @@
+# frontend sources and deps, keep only built assets you serve
+frontend/node_modules/
+frontend/src/
+frontend/public/
+frontend/.cache/
+**/*.map
+
+# local data and artifacts
+backend/data/
+data/
+datasets/
+*.csv
+*.parquet
+*.feather
+notebooks/
+tmp/
+logs/
+__pycache__/
+.vscode/
+.github/
