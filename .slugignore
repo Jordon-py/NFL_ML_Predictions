@@ -1,21 +1,15 @@
-# frontend sources and deps, keep only built assets you serve
+# Safe minimal slugignore
+
+## Node modules (largest space saver)
 
 frontend/node_modules/
-frontend/src/
-frontend/.cache/
+
+## Development artifacts
+
 **/*.map
-
-## local data and artifacts
-
-backend/data/
-data/
-datasets/
-*.csv
-*.parquet
-*.feather
-notebooks/
+.cache/
 tmp/
 logs/
 __pycache__/
 .vscode/
-.github/frontend/build/
+.github/
