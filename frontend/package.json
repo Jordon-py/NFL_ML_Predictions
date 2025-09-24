@@ -1,0 +1,21 @@
+{
+  "name": "nfl-predict",
+  "version": "1.0.2",
+  "description": "",
+  "homepage": "https://github.com/Jordon-py/NFL_ML_Predictions#readme",
+  "bugs": {
+    "url": "https://github.com/Jordon-py/NFL_ML_Predictions/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Jordon-py/NFL_ML_Predictions.git"
+  },
+  "license": "ISC",
+  "author": "Christopher Jordon",
+  "type": "commonjs",
+  "main": "src/index.jsx",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "devDependencies": {}
+}
