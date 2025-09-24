@@ -18,4 +18,4 @@ tmp/
 logs/
 __pycache__/
 .vscode/
-.github/
+.github/frontend/build/
