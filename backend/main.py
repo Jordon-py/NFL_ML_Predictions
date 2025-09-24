@@ -326,29 +326,12 @@ def health():
         return HealthResponse(status="unhealthy", mode="none", reason="models not loaded")
     return HealthResponse(status="healthy", mode=model_objects.get("mode"), reason="models loaded successfully")
 
-@app.get("/")
-def root():
-    context = get_current_nfl_context()
-    return {
-        "name": "NFL Game Prediction API",
-        "version": "1.0.0",
-        "nfl_context": context,
-        "endpoints": {
-            "/health": "Health check",
-            "/debug": "System debug info",
-            "/predict": "Predict one game",
-            "/predict/next-week": "Predict next week's slate",
-            "/schedule/next-week": "Next week's schedule",
-            "/retrain": "Retrain models",
-            "/update_data": "Rebuild datasets + retrain",
-        },
-    }
 
 @app.get("/debug")
 def debug_info():
     global model_objects, dataset_df
     debug_data: Dict[str, Any] = {
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "timestamp": datetime.now().isoformat() + "Z",
         "models_loaded": model_objects is not None,
         "dataset_loaded": dataset_df is not None,
     }
@@ -389,6 +372,7 @@ def debug_info():
 
 @app.get("/schedule/next-week", response_model=List[ScheduleGame])
 def get_next_week_schedule():
+    context = get_current_nfl_context()
     try:
         schedule_path = Path(os.getenv("SCHEDULE_PATH", str(DEFAULT_SCHEDULE)))
         if not schedule_path.exists():
