@@ -4,7 +4,7 @@
  * Uses relative URLs since the backend is proxied through the development server
  */
 
-const API_BASE = '';
+const API = import.meta.env.VITE_API_URL;
 
 /**
  * Generic fetch wrapper with JSON handling and error management
@@ -14,7 +14,7 @@ const API_BASE = '';
  * @throws {Error} If request fails or returns non-2xx status
  */
 async function apiRequest(endpoint, options = {}) {
-  const url = `${API_BASE}${endpoint}`;
+  const url = `${API}${endpoint}`;
 
   try {
     const response = await fetch(url, {
