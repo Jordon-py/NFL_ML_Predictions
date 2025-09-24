@@ -1,8 +1,4 @@
 # Production dependencies - optimized for Heroku deployment
-# Build tools (must be first to avoid conflicts)
-setuptools>=68.0.0,<70.0.0
-wheel>=0.41.0,<0.43.0
-pip>=23.2.0,<24.0.0
 
 # Core web framework
 fastapi>=0.104.0,<0.110.0
@@ -11,7 +7,6 @@ gunicorn>=21.2.0,<22.0.0
 
 # Data science stack (carefully version-coordinated)
 numpy>=1.21.0,<1.25.0
-scipy>=1.9.0,<1.12.0
 pandas>=1.5.0,<2.2.0
 scikit-learn>=1.2.0,<1.4.0
 joblib>=1.2.0,<1.4.0
