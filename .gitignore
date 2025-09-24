@@ -62,4 +62,4 @@ yarn-error.log*
 
 # Build outputs
 frontend/build/
-frontend/dist/
+frontend/dist/node_modules
