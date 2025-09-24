@@ -113,10 +113,10 @@ def load_objects() -> Dict[str, Any]:
     meta = json.loads(meta_path.read_text())
 
     pre = joblib.load(MODELS_DIR / meta["preprocessor"])
-    mdl = meta.get("models", {})
-    home_p = MODELS_DIR / mdl.get("home_model","home_model.joblib")
-    away_p = MODELS_DIR / mdl.get("away_model","away_model.joblib")
-    win_p  = MODELS_DIR / mdl.get("win_model","win_clf_calibrated.joblib")
+    mdl = meta.get("models", {"training_report":"training_report.json"})
+    home_p = joblib.load(MODELS_DIR / mdl.get("home_model","home_model.joblib"))
+    away_p = joblib.load(MODELS_DIR / mdl.get("away_model","away_model.joblib"))
+    win_p  = joblib.load(MODELS_DIR / mdl.get("win_model","win_clf_calibrated.joblib"))
     for p in [home_p, away_p, win_p]:
         if not p.exists(): raise FileNotFoundError(f"Missing {p}")
 
