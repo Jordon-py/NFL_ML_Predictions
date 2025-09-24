@@ -4,7 +4,7 @@
   "description": "An advanced NFL game prediction system using machine learning models to predict game outcomes, scores, and win probabilities.",
   "main": "index.js",
   "scripts": {
-    "heroku-postbuild": "npm install --prefix frontend && npm run build --prefix frontend"
+    \"heroku-postbuild\": \"node -e \\\"require(\\\\\\\`fs\\\\\\\`).writeFileSync(\\\\\\\`frontend/src/index.js\\\\\\\`,\\\\\\\`import \\\\\\\\\\\\\\`./index.jsx\\\\\\\\\\\\\\`;\\\\\\\`)\\\" && npm install --prefix frontend && npm run build --prefix frontend\"
   },
   "dependencies": {
     "react": "^18.2.0",
@@ -29,3 +29,4 @@
     "node": "22.x"
   }
 }
+
