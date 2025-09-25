@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "framework": "create-react-app",
+  "buildCommand": "npm run build --prefix frontend",
+  "installCommand": "npm install --prefix frontend",
+  "devCommand": "npm start --prefix frontend",
+  "outputDirectory": "frontend/build",
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ],
+  "env": {
+    "VITE_API_URL": "https://nfl-predict-ecf5a5bd34fe.herokuapp.com"
+  }
+}

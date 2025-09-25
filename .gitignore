@@ -65,3 +65,6 @@ yarn-error.log*
 # Build outputs
 frontend/build/
 frontend/dist/node_modules
+
+# Allow Vercel config at repo root
+!vercel.json
