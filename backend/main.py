@@ -11,6 +11,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+# Load environment variables
+from dotenv import load_dotenv
+load_dotenv()
+
 import numpy as np
 import pandas as pd
 from fastapi import FastAPI, HTTPException
@@ -144,8 +148,20 @@ async def lifespan(app: FastAPI):
     yield
     log.info("Shutdown complete")
 
+# Get CORS origins from environment variable
+CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000,https://localhost:3000").split(",")
+CORS_ORIGINS = [origin.strip() for origin in CORS_ORIGINS if origin.strip()]
+
+log.info(f"CORS Origins configured: {CORS_ORIGINS}")
+
 app = FastAPI(title="NFL Game Prediction API", version="2.0.0", lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=["https://nfl-predict-ecf5a5bd34fe.herokuapp.com/"| CORS_ORIGINS], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(
+    CORSMiddleware, 
+    allow_origins=CORS_ORIGINS,
+    allow_credentials=True, 
+    allow_methods=["*"], 
+    allow_headers=["*"]
+)
 
 # ---------- Helpers ----------
 def get_current_nfl_context() -> Dict[str, Any]:
@@ -213,6 +229,15 @@ def health():
     if model_objects is None:
         return HealthResponse(status="unhealthy", mode="none", reason="models not loaded")
     return HealthResponse(status="healthy", mode=model_objects.get("mode"), reason="models loaded")
+
+@app.get("/cors-debug")
+def cors_debug():
+    """Debug endpoint to check CORS configuration"""
+    return {
+        "cors_origins": CORS_ORIGINS,
+        "env_cors_origins": os.getenv("CORS_ORIGINS", "not set"),
+        "status": "active"
+    }
 
 @app.get("/debug")
 def debug_info():
