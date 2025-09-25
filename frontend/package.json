@@ -2,7 +2,7 @@
   "name": "nfl-ml-predictions",
   "version": "1.0.2",
   "description": "",
-  "main": "build/index.html",
+  "main": "src/index.jsx",
   "type": "module",
   "scripts": {
     "start": "react-scripts start",
@@ -10,7 +10,7 @@
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },
-  "proxy": "http://127.0.0.1:8000",
+  "proxy": "https://nfl-predict-ecf5a5bd34fe.herokuapp.com/",
   "dependencies": {
     "@csstools/normalize.css": "^12.1.1",
     "sanitize.css": "^13.0.0",
