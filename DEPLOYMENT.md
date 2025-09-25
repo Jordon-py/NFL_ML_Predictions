@@ -46,7 +46,7 @@ heroku logs --tail --app nfl-predict-ecf5a5bd34fe
    - `VITE_API_URL` = `https://nfl-predict-ecf5a5bd34fe.herokuapp.com`
 7. Deploy!
 
-**Option B: Vercel CLI**
+### **Option B: Vercel CLI**
 
 ```bash
 # Install Vercel CLI
