@@ -4,14 +4,34 @@
  * Uses relative URLs since the backend is proxied through the development server
  */
 
-// Prefer Vite env (Vercel) and fall back to CRA env for compatibility
-const API = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL)
-  || (typeof process !== 'undefined' && process.env && process.env.REACT_APP_API_URL)
-  || '';
+const DEFAULT_PROD_API = 'https://nfl-predict-ecf5a5bd34fe.herokuapp.com';
 
-// Basic environment detection
-const NODE_ENV = (typeof process !== 'undefined' && process.env && process.env.NODE_ENV) || 'development';
-const isProd = NODE_ENV === 'production';
+function resolveApiBase() {
+  if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+  if (typeof process !== 'undefined' && process.env && process.env.REACT_APP_API_URL) {
+    return process.env.REACT_APP_API_URL;
+  }
+  if (typeof window !== 'undefined' && window.__API_BASE_URL__) {
+    return window.__API_BASE_URL__;
+  }
+  const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
+  const isProdHost = hostname && hostname !== 'localhost' && hostname !== '127.0.0.1';
+  if (isProdHost) {
+    console.warn('[API] No env variable detected in production; defaulting base URL to Heroku backend.');
+    return DEFAULT_PROD_API;
+  }
+  return '';
+}
+
+// Prefer Vite env (Vercel) and fall back to CRA env for compatibility
+const API = resolveApiBase();
+
+// Basic environment detection (window hostname is more reliable in browser bundle)
+const isProd = typeof window !== 'undefined'
+  ? !['localhost', '127.0.0.1'].includes(window.location.hostname)
+  : (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'production');
 
 if (!API) {
   // eslint-disable-next-line no-console
