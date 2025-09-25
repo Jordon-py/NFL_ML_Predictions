@@ -9,9 +9,19 @@ const API = (typeof import.meta !== 'undefined' && import.meta.env && import.met
   || (typeof process !== 'undefined' && process.env && process.env.REACT_APP_API_URL)
   || '';
 
+// Basic environment detection
+const NODE_ENV = (typeof process !== 'undefined' && process.env && process.env.NODE_ENV) || 'development';
+const isProd = NODE_ENV === 'production';
+
 if (!API) {
   // eslint-disable-next-line no-console
   console.warn('[API] Base URL is not set. Set VITE_API_URL (Vite/Vercel) or REACT_APP_API_URL (CRA) to your Heroku backend URL.');
+}
+
+function buildUrl(endpoint) {
+  const ep = String(endpoint || '');
+  const normalized = ep.startsWith('/') ? ep : `/${ep}`;
+  return `${API}${normalized}`;
 }
 
 /**
@@ -22,7 +32,11 @@ if (!API) {
  * @throws {Error} If request fails or returns non-2xx status
  */
 async function apiRequest(endpoint, options = {}) {
-  const url = `${API}${endpoint}`;
+  if (!API && isProd) {
+    throw new Error('[API] Base URL is empty in production. Set VITE_API_URL (Vercel) or REACT_APP_API_URL (CRA) to your Heroku API, e.g. https://<your-app>.herokuapp.com');
+  }
+
+  const url = buildUrl(endpoint);
 
   try {
     const response = await fetch(url, {
@@ -35,9 +49,24 @@ async function apiRequest(endpoint, options = {}) {
     /** Log API request details */
     console.log(`[API] ${options.method || 'GET'} ${endpoint} - Status: ${response.status}`);
 
+    const contentType = response.headers.get('content-type') || '';
+    const isJson = contentType.includes('application/json');
+
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(`API Error: ${response.status} - ${errorData.detail || response.statusText}`);
+      if (isJson) {
+        const errorData = await response.json().catch(() => ({}));
+        const detail = (errorData && (errorData.detail || errorData.message)) || response.statusText;
+        throw new Error(`API Error: ${response.status} - ${detail}`);
+      }
+      const text = await response.text();
+      const preview = text ? text.slice(0, 200).replace(/\s+/g, ' ').trim() : '(empty response)';
+      throw new Error(`API Error: ${response.status} (non-JSON: ${contentType || 'unknown'}) - Preview: ${preview}`);
+    }
+
+    if (!isJson) {
+      const text = await response.text();
+      const preview = text ? text.slice(0, 200).replace(/\s+/g, ' ').trim() : '(empty response)';
+      throw new Error(`API Response not JSON (got ${contentType || 'unknown'}). Preview: ${preview}`);
     }
 
     return await response.json();
