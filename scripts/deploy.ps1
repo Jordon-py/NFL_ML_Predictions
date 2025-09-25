@@ -77,10 +77,10 @@ Write-Host "[8/8] Deploying frontend to Vercel..." -ForegroundColor Cyan
 $env:VITE_API_URL = $ApiBaseUrl
 vercel --prod --yes | Tee-Object -Variable vercelOut | Out-Host
 
-# Try to parse the production URL line
-$prodLine = ($vercelOut | Select-String -Pattern 'Production:\s+(https?://\S+)').Matches.Value
-if ($prodLine) {
-  $frontendUrl = ($prodLine -split '\s+')[-1]
+# Try to parse the production URL from the captured output
+$vercelText = ($vercelOut | Out-String)
+if ($vercelText -match 'Production:\s+(https?://\S+)') {
+  $frontendUrl = $matches[1]
 } else {
   $frontendUrl = "$VercelProject (see Vercel dashboard)"
 }
