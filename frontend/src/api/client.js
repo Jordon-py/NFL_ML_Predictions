@@ -4,7 +4,15 @@
  * Uses relative URLs since the backend is proxied through the development server
  */
 
-const API = import.meta.env.VITE_API_URL;
+// Prefer Vite env (Vercel) and fall back to CRA env for compatibility
+const API = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL)
+  || (typeof process !== 'undefined' && process.env && process.env.REACT_APP_API_URL)
+  || '';
+
+if (!API) {
+  // eslint-disable-next-line no-console
+  console.warn('[API] Base URL is not set. Set VITE_API_URL (Vite/Vercel) or REACT_APP_API_URL (CRA) to your Heroku backend URL.');
+}
 
 /**
  * Generic fetch wrapper with JSON handling and error management
