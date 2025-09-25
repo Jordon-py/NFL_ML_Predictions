@@ -79,25 +79,56 @@ vercel --prod --yes | Tee-Object -Variable vercelOut | Out-Host
 
 # Try to parse the production URL from the captured output
 $vercelText = ($vercelOut | Out-String)
-if ($vercelText -match 'Production:\s+(https?://\S+)') {
+# Primary match: line that starts with "Production: <url>"
+if ($vercelText -match 'Production:\s+(https?://[^\s\[]+)') {
   $frontendUrl = $matches[1]
 } else {
-  $frontendUrl = "$VercelProject (see Vercel dashboard)"
+  # Fallback: find any vercel.app URL in the output
+  $maybeLine = $vercelOut | Where-Object { $_ -match 'https?://[^\s\"]+vercel\.app' } | Select-Object -First 1
+  if ($maybeLine) {
+    $m = [regex]::Match([string]$maybeLine, 'https?://[^\s\"]+vercel\.app')
+    if ($m.Success) { $frontendUrl = $m.Value }
+  }
 }
 
-Write-Host "\n=== Verification ===" -ForegroundColor Green
+# If we resolved a concrete frontend URL, ensure Heroku CORS includes its origin
+if ($frontendUrl -and $frontendUrl.StartsWith('http')) {
+  try {
+    $uri = [Uri]::new($frontendUrl)
+    $vercelOrigin = "$($uri.Scheme)://$($uri.Host)"
+    # Build updated origins list (dedupe)
+    $baseOrigins = @(
+      'http://localhost:3000',
+      'https://localhost:3000',
+      'https://nfl-predict-frontend.vercel.app',
+      $VercelProdDomain
+    )
+    if (-not ($baseOrigins -contains $vercelOrigin)) { $baseOrigins += $vercelOrigin }
+    $originsUpdated = ($baseOrigins | Sort-Object -Unique) -join ','
+    Write-Host "Updating Heroku CORS_ORIGINS with deployed Vercel origin: $vercelOrigin" -ForegroundColor DarkCyan
+    heroku config:set CORS_ORIGINS="$originsUpdated" -a $HerokuApp | Out-Host
+  } catch {
+    Write-Host "Warning: failed to update CORS with deployed origin. $_" -ForegroundColor Yellow
+  }
+}
+
+Write-Host "`n=== Verification ===" -ForegroundColor Green
 Write-Host "Backend health: " -NoNewline
 try {
-  $health = (curl -sS "$ApiBaseUrl/health").Content
+  $health = (Invoke-WebRequest -Uri "$ApiBaseUrl/health" -UseBasicParsing).Content
   Write-Host $health
 } catch { Write-Host "failed" -ForegroundColor Red }
 
 Write-Host "CORS debug: " -NoNewline
 try {
-  $cors = (curl -sS "$ApiBaseUrl/cors-debug").Content
+  $cors = (Invoke-WebRequest -Uri "$ApiBaseUrl/cors-debug" -UseBasicParsing).Content
   Write-Host $cors
 } catch { Write-Host "failed" -ForegroundColor Red }
 
-Write-Host "Frontend URL: $frontendUrl" -ForegroundColor Yellow
+if ($frontendUrl) {
+  Write-Host "Frontend URL: $frontendUrl" -ForegroundColor Yellow
+} else {
+  Write-Host "Frontend URL: $VercelProject (see Vercel dashboard)" -ForegroundColor Yellow
+}
 
-Write-Host "\nDeploy complete." -ForegroundColor Green
+Write-Host "`nDeploy complete." -ForegroundColor Green
