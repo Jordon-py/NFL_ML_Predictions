@@ -118,18 +118,18 @@ def load_objects() -> Dict[str, Any]:
 
     pre = joblib.load(MODELS_DIR / meta["preprocessor"])
     mdl = meta.get("models", {"training_report":"training_report.json"})
-    home_p = joblib.load(MODELS_DIR / mdl.get("home_model","home_model.joblib"))
-    away_p = joblib.load(MODELS_DIR / mdl.get("away_model","away_model.joblib"))
-    win_p  = joblib.load(MODELS_DIR / mdl.get("win_model","win_clf_calibrated.joblib"))
-    for p in [home_p, away_p, win_p]:
-        if not p.exists(): raise FileNotFoundError(f"Missing {p}")
+    home_p_path = MODELS_DIR / "home_model.joblib"
+    away_p_path = MODELS_DIR / "away_model.joblib"
+    win_p_path  = MODELS_DIR / "win_clf_calibrated.joblib"
+    for p in [home_p_path, away_p_path, win_p_path]:
+        if not p.exists(): raise FileNotFoundError(f"Missing model file: {p}")
 
     return {
-        "mode": "models",
+        "mode": "production",
         "preprocessor": pre,
-        "home_model": joblib.load(home_p),
-        "away_model": joblib.load(away_p),
-        "win_model": joblib.load(win_p),
+        "home_model": joblib.load(home_p_path),
+        "away_model": joblib.load(away_p_path),
+        "win_model": joblib.load(win_p_path),
         "raw_feature_columns": meta.get("raw_feature_columns", {}),
     }
 
