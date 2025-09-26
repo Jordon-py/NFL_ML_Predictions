@@ -8,7 +8,29 @@
    * Uses CSS variables with safe fallbacks.
    * If some classes are unused in your HTML, remove them or wire them up.
    ========================================================================== */
-
+   /* Base styles */
+   body {
+     font-family: Geneva, Verdana, sans-serif;
+     margin: 0 auto;
+     padding: 0;
+     background-color: #071f45;
+     color: lch(from color 5% 20 220);
+     line-height: 1.6;
+     box-sizing: border-box;
+     overflow-x: hidden;
+     max-height: 100vh;
+     max-width: 100vw;
+     width: 100%;
+   }
+   
+   .container {
+     max-width: 100vw;
+     width: 100%;
+     margin: 0 auto;
+     padding: 1.5rem;
+   }
+   
+   
 /* ------------------------------
    Design Tokens (with fallbacks)
    ------------------------------ */
@@ -37,7 +59,7 @@
   --sp-5: 32px;
 
   --shadow-1: 0 2px 8px rgba(0,0,0,0.12);
-  --shadow-2: 0 10px 20px rgba(0,0,0,0.18);
+  --shadow-2: 0 10px 20px lch(5.24% 22.39 286.16 / 0.271);
 
   --t-fast: 160ms;
   --t-base: 260ms;
@@ -46,6 +68,17 @@
   /* Backdrop blur strength */
   --blur-weak: 6px;
   --blur-strong: 18px;
+}
+
+/* Keyframes for animations */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 /* Respect reduced motion */
@@ -64,12 +97,15 @@
 .team-grid {
 
   gap: var(--sp-5);
-  width: 100%;
-  max-width: 1500px;
-  margin: 5% auto;
+  max-height: 100vh;
+  height: inherit;
+  width: inherit;
+  max-width: 100vw;
+  margin: 0 auto;
   padding: 10px;
   background-color: var(--glass);
   backdrop-filter: blur(var(--blur-strong));
+  box-shadow: var(--shadow-2);
 }
 
 .team-grid-header {
@@ -92,9 +128,8 @@
   margin: 0;
 }
 
-/* PASS 2: Switch to responsive CSS Grid for matchups.
-   Replaces prior flex + inconsistent media grid-template usage. */
-.matchups-grid {
+/* PASS 2: Switch to responsive CSS Grid for matchups.*/
+.team-grid.matchups-grid {
   display: grid;
   grid-template-rows: repeat(auto-fit, minmax(350px, 1fr));
   gap: var(--sp-5);
@@ -126,6 +161,7 @@
               border-color var(--t-base) var(--e-out),
               background var(--t-base) var(--e-out);
   will-change: transform;
+  animation: fadeIn var(--t-base) var(--e-out);
 }
 
 .matchup-card:hover {
@@ -152,7 +188,7 @@
 
 .matchup-card.loading {
   pointer-events: none;
-  opacity: 0.7;
+  animation: pulse 1.5s ease-in-out infinite;
 }
 
 .matchup-card.has-prediction.shimmer-container.shine-outline {
@@ -391,10 +427,14 @@
   border-radius: 6px;
   cursor: pointer;
   font-weight: 600;
-  transition: background-color var(--t-base) var(--e-out);
+  transition: background-color var(--t-base) var(--e-out), transform var(--t-base) var(--e-out), box-shadow var(--t-base) var(--e-out);
 }
 
-.team-grid-error button:hover { background: #2980b9; }
+.team-grid-error button:hover { 
+  background: #2980b9; 
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
 
 /* ================
    RESPONSIVE RULES
@@ -447,6 +487,25 @@
   .score { font-size: 1.5rem; }
 }
 
+@media (max-width: 600px) {
+  .team-grid-header h2 { font-size: 1.9rem; }
+
+  .matchup-card { padding: var(--sp-4); }
+
+  .matchup-teams {
+    gap: var(--sp-2);
+  }
+
+  .away-team,
+  .home-team {
+    gap: var(--sp-2);
+  }
+
+  .team {
+    gap: var(--sp-1);
+  }
+}
+
 @media (max-width: 480px) {
   .team-grid-header h2 { font-size: 1.75rem; }
 
@@ -468,4 +527,3 @@
     padding: 4px 8px;
   }
 }
- 
