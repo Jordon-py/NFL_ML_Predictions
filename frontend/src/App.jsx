@@ -57,7 +57,6 @@ import PredictionResult from './components/PredictionResult.jsx';
 import HistoryChart from './components/HistoryChart.jsx';
 import TeamGrid from './components/TeamGrid.jsx';
 import { predictGame, predictNextWeek } from './api/client.js';
-import './styles.css';
 
 
 
