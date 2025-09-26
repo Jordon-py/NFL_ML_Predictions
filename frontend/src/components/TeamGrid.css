@@ -227,8 +227,10 @@ main .app-main {
   font-size: 2.2rem; /* slight reduction for better balance */
   font-weight: 800;
   color: #00181a;
-  margin: 0 15px;
+  margin: 0 auto;
   letter-spacing: 0.02em;
+  transition: all fadeIn;
+  animation: fadeIn 0.9s ease-in-out;
 }
 
 .team {
