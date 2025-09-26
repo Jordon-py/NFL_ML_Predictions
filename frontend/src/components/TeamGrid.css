@@ -18,13 +18,15 @@
      line-height: 1.6;
      box-sizing: border-box;
      overflow-x: hidden;
-     max-height: 100vh;
-     max-width: 100vw;
+      max-height: 100vh;
+      /* Use 99vw to avoid accidental horizontal scrollbars on small viewports */
+      max-width: 99vw;
      width: 100%;
    }
    
    .container {
-     max-width: 100vw;
+    /* keep container within viewport without forcing scrollbars */
+    max-width: 99vw;
      width: 100%;
      margin: 0 auto;
      padding: 1.5rem;
@@ -98,9 +100,10 @@
 
   gap: var(--sp-5);
   max-height: 100vh;
+  /* ensure grid fits in viewport height and width and stretches to available width */
   height: inherit;
-  width: inherit;
-  max-width: 100vw;
+  width: 100%;
+  max-width: 99vw;
   margin: 0 auto;
   padding: 10px;
   background-color: var(--glass);
@@ -136,7 +139,8 @@
   width: 100%;
   margin-top: 30px;
   padding: 4rem;
-  max-width: fit-content;
+  /* avoid fit-content which can push contents outside viewport; constrain to viewport minus tiny margin */
+  max-width: 99vw;
 }
 
 /* =======================
@@ -234,10 +238,10 @@
 }
 
 .team-logo {
-  width: 180px;
-  height: 180px;
-  width: 180px;
-  height: 180px;
+  /* make team logos responsive: cap size but allow shrink on small screens */
+  max-width: 180px;
+  width: 100%;
+  height: auto;
   object-fit: contain;
   border-radius: 8px;
   transition-property: all;
@@ -250,8 +254,11 @@
   box-shadow: 0 8px 15px rgba(0, 0, 0, 0.2);
 }
 .team-logo-placeholder {
-  width: 90px;
-  height: 90px;
+  /* responsive square placeholder */
+  max-width: 90px;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  height: auto;
   background: #ecf0f1;
   border-radius: var(--r-sm);
   display: flex;
