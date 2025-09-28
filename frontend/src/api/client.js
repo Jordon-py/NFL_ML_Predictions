@@ -40,10 +40,10 @@ async function api(path, opts = {}) {
 }
 
 export async function getNextWeekSchedule() {
-  return api('/schedule/next-week');
+  return api('schedule/next-week');
 }
 
 export async function predictGame(body) {
-  return api('/predict', { method: 'POST', body: JSON.stringify(body) });
+  return api('predict', { method: 'POST', body: JSON.stringify(body) });
 }
 
