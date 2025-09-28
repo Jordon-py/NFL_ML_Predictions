@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import PropTypes from 'prop-types';
 import { getNextWeekSchedule, predictGame } from '../api/client.js';
 import './TeamGrid.css';
 
@@ -206,13 +205,8 @@ function TeamGrid({ onPrediction }) {
   }
 
   return (
-    <div className="team-grid">
-      <div className="team-grid-header">
-        <h2>Next Week's NFL Matchups</h2>
-        <p>Click any matchup to see predicted scores</p>
-      </div>
-
-      <div className="team-grid-cards shimmmer-container shine-outline">
+    <div className="team-grid-section">
+      <div className="team-grid-cards">
         {schedule.map((game, index) => {
           const gameKey = `${game.home_abbr}-${game.away_abbr}`;
           const prediction = predictions[gameKey];
@@ -273,8 +267,8 @@ function TeamGrid({ onPrediction }) {
   );
 }
 
-TeamGrid.propTypes = {
-  onPrediction: PropTypes.func,
+TeamGrid.defaultProps = {
+  onPrediction: undefined,
 };
 
 export default TeamGrid;
