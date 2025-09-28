@@ -16,8 +16,19 @@ const BASE_URL =
   process.env.REACT_APP_API_URL || process.env.VITE_API_URL ||
   'https://nfl-predict-ecf5a5bd34fe.herokuapp.com';
 
+function buildUrl(path) {
+  // Prefer the standard URL constructor which normalizes slashes.
+  try {
+    return new URL(path, BASE_URL).toString();
+  } catch (err) {
+    // Fallback: trim trailing/leading slashes and join
+    return `${BASE_URL.replace(/\/+$|$/,'').replace(/\/+$|^$/,'')}`.replace(/\/+$/, '') + '/' + String(path).replace(/^\/+/, '');
+  }
+}
+
 async function api(path, opts = {}) {
-  const res = await fetch(`${BASE_URL}${path}`, {
+  const url = buildUrl(path);
+  const res = await fetch(url, {
     headers: { 'Content-Type': 'application/json' },
     ...opts,
   });
