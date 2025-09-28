@@ -11,5 +11,9 @@
   "env": {
     "VITE_API_URL": "https://nfl-predict-ecf5a5bd34fe.herokuapp.com",
     "REACT_APP_API_URL": "https://nfl-predict-ecf5a5bd34fe.herokuapp.com"
+    ,
+    "PUPPETEER_SKIP_CHROMIUM_DOWNLOAD": "true",
+    "PUPPETEER_SKIP_DOWNLOAD": "true",
+    "PUPPETEER_PRODUCT": "firefox"
   }
 }
