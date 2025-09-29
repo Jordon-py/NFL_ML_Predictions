@@ -13,7 +13,7 @@
   "proxy": "https://nfl-predict-ecf5a5bd34fe.herokuapp.com/",
   "dependencies": {
     "@csstools/normalize.css": "^12.1.1",
-    "@vercel/speed-insights": "^1.2.0",
+    
     "chart.js": "^4.4.3",
     "normalize.css": "^8.0.1",
     "react": "^18.2.0",

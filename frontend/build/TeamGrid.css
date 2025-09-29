@@ -13,12 +13,12 @@ body {
   font-family: Geneva, Verdana, sans-serif;
   margin: 0 auto;
   background-color: #071f45;
-  color: lch(0% 0 0);
-  line-height: 1.1;
+  color: lch(5.6% 8.51 237.49);
+  line-height: 1.6;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-image: url('https://lh3.googleusercontent.com/gg-dl/AJfQ9KRHF4L1FNK3e1NjOF7RZysdQnHgtSI3sOC7HDkgdcu4Zeqx6yUstsbvgUeCPto9SyEmuI8bHAUM9KD1jhx8sjlvdaGDqZoyz5ZywXs4FaOwCFjTCl7DZigLkicqPwQVmUnxPg92qyeyTzjB-mEY46EvlJXWb-Ces8JRuOI4l2Ow1WS8=s1024');
+  background-image: image('https://lh3.googleusercontent.com/gg-dl/AJfQ9KRHF4L1FNK3e1NjOF7RZysdQnHgtSI3sOC7HDkgdcu4Zeqx6yUstsbvgUeCPto9SyEmuI8bHAUM9KD1jhx8sjlvdaGDqZoyz5ZywXs4FaOwCFjTCl7DZigLkicqPwQVmUnxPg92qyeyTzjB-mEY46EvlJXWb-Ces8JRuOI4l2Ow1WS8=s1024');
 
   box-sizing: border-box;
   overflow-x: hidden;
@@ -155,26 +155,44 @@ main.app-main {
   font-size: 1.5rem;
 }
 
-
+.matchup-card {
+  display: flex;
+  overflow: hidden;
+  flex-direction: row;
+  align-items: space-between;
+  background: var(--c-card);
+  backdrop-filter: blur(var(--blur-weak));
+  border: 2px solid ;
+  gap: 30px;
+  max-height: 300px;
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-1);
+  padding: 1rem;
+  margin-bottom: 2rem;
+  cursor: pointer;
+  transition: transform var(--t-base) var(--e-out),
+      box-shadow var(--t-base) var(--e-out),
+      border-color var(--outlineGlow);
+  will-change: transform;
+  animation: fadeIn 0.9s ease-in-out;
+}
 /* PASS 2: Switch to responsive CSS Grid for matchups.*/
 .matchup-card.inner-card.has-prediction {
   display: flex;
-  flex-wrap: nowrap;
-  overflow: hidden;
   flex-direction: row;
   align-items: center;
-  flex-shrink: inherit;
-  transform: translateY(-10px);
-  transition: all 1.2s ease-in-out;
-  z-index: 100;
+  transform: translateY(-22px);
+  transition: all 0.9s ease-in-out;
+  z-index: 15;
+  scale: 2.5rem;
   background: rgba(0, 67, 109, 0.391);
-  padding: 15px;
-  margin-top: 2rem;
+  padding: 10px;
+  margin-top: 4rem;
   box-shadow:
-   0 8px 16px 0px rgba(255, 255, 255, 0.924),
-   0.3em 1.7rem 20rem 8px rgba(255, 255, 255, 0.487);
+   0 8px 16px 0px white,
+   0.3em 0.7em 20rem 1px rgba(255, 255, 255, 0.487);
 
-  border-color: #8dd1ffbf;
+  border-color: #7dcbffbf;
 }
 /* =======================
    MATCHUP CARD + STATES
@@ -185,14 +203,13 @@ main.app-main {
    PASS 3: consolidate transitions, avoid padding changes on hover. */
 .matchup-card.inner-card {
   display: flex;
-  flex-wrap: wrap;
   flex-direction: column;
   align-items: space-between;
   background: var(--c-card);
   backdrop-filter: blur(var(--blur-weak));
   border: 2px solid;
   gap: 30px;
-  max-height: 250px;
+  max-height: 300px;
   border-radius: var(--r-md);
   box-shadow: var(--shadow-1);
   padding: 1rem;
@@ -469,100 +486,55 @@ main.app-main {
 /* PASS 1: Remove duplicated display/flex overrides in media queries.
    PASS 2: Ensure grid collapses cleanly on smaller widths. */
 
-   @media (max-width: 480px) {
-    .team-grid-header h2 { font-size: clamp(1.25rem, 6vw, 1.75rem); }
+@media (max-width: 430px) {
+  .team-grid-header h2 { font-size: 2rem; }
 
-    .team-grid-section {
-      grid-template-columns: 1fr; /* single column on small screens */
-      width: 85%;
-      margin: 2rem auto;
-    }
-  
-    .matchup-card.inner-card { 
-      box-sizing: border-box;
-      width: 100%;
-      max-width: 440px;
-      height: auto;
-      max-height: none;
-      padding: var(--sp-4);
-      display: flex;
-      flex-direction: column;
-      align-items: stretch;
-      gap: var(--sp-3);
-    }
-  
-
-    .matchup-card.inner-card.has-prediction {
-      width: 100%;
-      max-width: 460px;
-      height: auto;
-      max-height: none;
-      padding: var(--sp-4);
-      display: flex;
-      flex-direction: column;
-      align-items:stretch;
-      gap: 1rem;
-    }
-
-    .matchup-teams.inner-card {
-      width: 100%;
-      display: flex;
-      flex-direction: column;
-      gap: var(--sp-2);
-      max-height: 60%;
-    }
-  
-    .vs-indicator {
-      margin: 0 auto;
-      transform-origin: center;
-      animation: spin 106s linear infinite;
-      height: auto;
-      font-size: 25px;
-    }
-  
-    @keyframes spin { to { transform: rotate(360deg); } }
-  
-    .away-team,
-    .home-team {
-      display: flex;
-      flex-direction: column;
-      align-items:stretch;
-
-      gap: var(--sp-2);
-    }
-  
-    .team {
-      display: flex;
-      flex-direction: row;
-      align-items: center;
-      gap: var(--sp-2);
-      text-align: left;
-      flex-wrap: nowrap;
-    }
-  
-    .team-info { 
-      display: flex;
-      flex-direction: column;
-      align-items: flex-start;
-      min-width: 0;            /* allows text to shrink */
-    }
-  
-    .team-name,
-    .team-abbr {
-      text-align: left;
-      font-size: 1.3rem;
-      line-height: 1.2;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-  
-    .score.inner-card { font-size: 20px; }
-  
-    /* Optional if you have logos */
-    .team-logo { width: 5rem; height: 5rem; }
+  .matchup-card { 
+    max-height: 400px;
+    max-width: 400px;
+    height: 380px;
+    width: 400px;
+    padding: var(--sp-5);
+    display: flex;
+    flex-direction: row;
+    align-items: center;
   }
-  
+
+  .matchup-teams {
+    flex-direction: column;
+    gap: var(--sp-3);
+  }
+
+  .vs-indicator {
+    margin: 0 auto;
+    transform-origin: center;
+    transform: rotate(420deg);
+    transform-origin: 20px 80px;
+  }
+
+  .away-team,
+  .home-team {
+    flex-direction: column;
+    justify-content: center;
+    gap: var(--sp-3);
+  }
+
+  .team {
+    flex-direction: row;
+    text-align: left;
+  }
+
+  .team-info { 
+    align-items: flex-start;
+  }
+
+  .team-name,
+  .team-abbr {
+    text-align: left;
+  }
+
+  .score { font-size: 1.5rem; }
+}
 
 @media (max-width: 600px) {
   .team-grid-header h2 { font-size: 1.9rem; }
