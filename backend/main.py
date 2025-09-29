@@ -149,7 +149,7 @@ async def lifespan(app: FastAPI):
     log.info("Shutdown complete")
 
 # Get CORS origins from environment variable
-CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000,https://localhost:3000").split(",")
+CORS_ORIGINS = os.getenv("CORS_ORIGINS", "{*}localhost:3000").split(",")
 CORS_ORIGINS = [origin.strip() for origin in CORS_ORIGINS if origin.strip()]
 
 log.info(f"CORS Origins configured: {CORS_ORIGINS}")
@@ -186,7 +186,8 @@ def _build_future_row(df: pd.DataFrame, home: str, away: str, season: int, week:
     def latest(team: str) -> Dict[str, Any]:
         mask = (df["home_team"]==team) | (df["away_team"]==team)
         before = df[mask & (df["time_key"] < season*100 + week)]
-        if before.empty: raise ValueError(f"No prior data for {team} before {season}-W{week}")
+        if before.empty:
+            raise ValueError(f"No prior data for {team} before {season}-W{week}")
         row = before.loc[before["time_key"].idxmax()]
         if str(row["home_team"]) == team:
             return {k: row.get(k) for k in [
@@ -200,28 +201,32 @@ def _build_future_row(df: pd.DataFrame, home: str, away: str, season: int, week:
                 "home_prior_pf_avg_3": row.get("away_prior_pf_avg_3"),
                 "home_prior_pf_avg_5": row.get("away_prior_pf_avg_5"),
                 "home_prior_win_pct_3": row.get("away_prior_win_pct_3"),
-                "home_prior_win_pct_5": row.get("away_prior_win_pct_5")
+                "home_prior_win_pct_5": row.get("away_prior_win_pct_5"),
             }
     
-    h = latest(home); a_full = latest(away)
-    # rename away side
-    a = {
-        "away_prior_pa_avg_3": a_full["home_prior_pa_avg_3"],
-        "away_prior_pa_avg_5": a_full["home_prior_pa_avg_5"],
-        "away_prior_pf_avg_3": a_full["home_prior_pf_avg_3"],
-        "away_prior_pf_avg_5": a_full["home_prior_pf_avg_5"],
-        "away_prior_win_pct_3": a_full["home_prior_win_pct_3"],
-        "away_prior_win_pct_5": a_full["home_prior_win_pct_5"],
-    }
-    feature_row = {}
-    feature_row.update(h); feature_row.update(a)
-    for base in ("pf_avg","pa_avg","win_pct"):
-        for wnd in ("3","5"):
-            H = feature_row.get(f"home_prior_{base}_{wnd}")
-            A = feature_row.get(f"away_prior_{base}_{wnd}")
-            if H is not None and A is not None:
-                feature_row[f"home_minus_away_{base}_{wnd}"] = H - A
-    return pd.Series(feature_row)
+    try:
+        h = latest(home); a_full = latest(away)
+        # rename away side
+        a = {
+            "away_prior_pa_avg_3": a_full["home_prior_pa_avg_3"],
+            "away_prior_pa_avg_5": a_full["home_prior_pa_avg_5"],
+            "away_prior_pf_avg_3": a_full["home_prior_pf_avg_3"],
+            "away_prior_pf_avg_5": a_full["home_prior_pf_avg_5"],
+            "away_prior_win_pct_3": a_full["home_prior_win_pct_3"],
+            "away_prior_win_pct_5": a_full["home_prior_win_pct_5"],
+        }
+        feature_row = {}
+        feature_row.update(h); feature_row.update(a)
+        for base in ("pf_avg","pa_avg","win_pct"):
+            for wnd in ("3","5"):
+                H = feature_row.get(f"home_prior_{base}_{wnd}")
+                A = feature_row.get(f"away_prior_{base}_{wnd}")
+                if H is not None and A is not None:
+                    feature_row[f"home_minus_away_{base}_{wnd}"] = H - A
+        return pd.Series(feature_row)
+    except Exception as e:
+        # Always raise an exception if unable to build the row, never return None
+        raise RuntimeError(f"Failed to build future row for {home} vs {away} ({season} W{week}): {e}")
 
 # ---------- Routes ----------
 @app.get("/health", response_model=HealthResponse)
