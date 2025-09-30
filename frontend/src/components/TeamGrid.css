@@ -564,72 +564,195 @@ main.app-main {
   }
   
 
-@media (max-width: 600px) {
-  .team-grid-header h2 { font-size: 1.9rem; }
+@media (max-width: 1000px) {
 
-  .matchup-card { padding: var(--sp-4); }
+   .team-grid-header h2 { font-size: clamp(1.25rem, 6vw, 1.75rem); }
 
-  .matchup-teams {
-    gap: var(--sp-2);
-  }
+   .team-grid-section {
+     grid-template-columns: 1fr; /* single column on small screens */
+     width: 85%;
+     margin: 2rem auto;
+   }
+ 
+   .matchup-card.inner-card { 
+     box-sizing: border-box;
+     width: 100%;
+     max-width: 840px;
+     height: auto;
+     max-height: none;
+     padding: var(--sp-4);
+     display: flex;
+     flex-direction: column;
+     align-items: stretch;
+     gap: var(--sp-3);
+   }
+ 
 
-  .away-team,
-  .home-team {
-    gap: var(--sp-2);
-  }
+   .matchup-card.inner-card.has-prediction {
+     width: auto;
+     max-width: 860px;
+     height: auto;
+     max-height: none;
+     padding: var(--sp-4);
+     display: flex;
+     flex-direction: column;
+     align-items:stretch;
+     gap: 1rem;
+   }
 
-  .team {
-    gap: var(--sp-1);
-  }
-}
+   .matchup-teams.inner-card {
+     width: 100%;
+     display: flex;
+     flex-direction: column;
+     gap: var(--sp-2);
+     max-height: 60%;
+   }
+ 
+   .vs-indicator {
+     margin: 0 auto;
+     transform-origin: center;
+     animation: spin 106s linear infinite;
+     height: auto;
+     font-size: auto;
+   }
+ 
+   @keyframes spin { to { transform: rotate(360deg); } }
+ 
+   .away-team,
+   .home-team {
+     display: flex;
+     flex-direction: column;
+     align-items:stretch;
+
+     gap: var(--sp-2);
+   }
+ 
+   .team {
+     display: flex;
+     flex-direction: row;
+     align-items: center;
+     gap: var(--sp-2);
+     text-align: left;
+     flex-wrap: nowrap;
+   }
+ 
+   .team-info { 
+     display: flex;
+     flex-direction: column;
+     align-items: flex-start;
+     min-width: 0;            /* allows text to shrink */
+   }
+ 
+   .team-name,
+   .team-abbr {
+     text-align: left;
+     font-size: 1.3rem;
+     line-height: 1.2;
+     overflow: hidden;
+     text-overflow: ellipsis;
+     white-space: nowrap;
+   }
+ 
+   .score.inner-card { font-size: 20px; }
+ 
+   /* Optional if you have logos */
+   .team-logo { width: 5rem; height: 5rem; }
+ }
 
 @media (max-width: 430px) {
-  .team-grid-section {
-    grid-template-columns: 1fr; /* single column on small screens */
-    width: 95%;
-    margin: 3rem auto;
-    padding: 1rem;
-  }
-  .team-grid-header h2 { font-size: 1.75rem; }
+  
+   .team-grid-header h2 { font-size: clamp(1.25rem, 6vw, 1.75rem); }
 
-  .matchup-card.inner-card { padding: 12px;
-    max-height: 250px;
-    max-width: 90vw;
-    height: 350px;
-    width: 350px;
-    margin: 0 auto;
-  }
-  .matchup-card.inner-card {
-    display: contents;
-  }
-  .team-logo,
-  .team-logo-placeholder {
-    width: 50px;
-    height: 50px;
-  }
+   .team-grid-section {
+     grid-template-columns: 1fr; /* single column on small screens */
+     width: 85%;
+     margin: 2rem auto;
+   }
+ 
+   .matchup-card.inner-card { 
+     box-sizing: border-box;
+     width: 100%;
+     max-width: 440px;
+     height: auto;
+     max-height: none;
+     padding: var(--sp-4);
+     display: flex;
+     flex-direction: column;
+     align-items: stretch;
+     gap: var(--sp-3);
+   }
+ 
 
-  .team-name { font-size: 0.9rem; }
-  .team-abbr { font-size: 0.8rem; }
-  .matchup-time { font-size: 0.85rem; }
+   .matchup-card.inner-card.has-prediction {
+     width: 100%;
+     max-width: 460px;
+     height: auto;
+     max-height: none;
+     padding: var(--sp-4);
+     display: flex;
+     flex-direction: column;
+     align-items:stretch;
+     gap: 1rem;
+   }
 
-  .matchup-card.inner-card.has-prediction { 
-    overflow: visible;
-    display: flex;
-    max-height: 240px;
+   .matchup-teams.inner-card {
+     width: 100%;
+     display: flex;
+     flex-direction: column;
+     gap: var(--sp-2);
+     max-height: 60%;
+   }
+ 
+   .vs-indicator {
+     margin: 0 auto;
+     transform-origin: center;
+     animation: spin 106s linear infinite;
+     height: auto;
+     font-size: 25px;
+   }
+ 
+   @keyframes spin { to { transform: rotate(360deg); } }
+ 
+   .away-team,
+   .home-team {
+     display: flex;
+     flex-direction: column;
+     align-items:stretch;
 
-  }
-  .predicted-scores {
-    display: flex;
-    flex-direction: column;
-    align-items:flex-start;
-    justify-content: center;
-    font-size: 1rem;
-    padding: 4px 4px;
-    transform: scale(.70);
-    transition: all 0.9s ease-in-out;
-    max-height: 155px;
-  }
-}
+     gap: var(--sp-2);
+   }
+ 
+   .team {
+     display: flex;
+     flex-direction: row;
+     align-items: center;
+     gap: var(--sp-2);
+     text-align: left;
+     flex-wrap: nowrap;
+   }
+ 
+   .team-info { 
+     display: flex;
+     flex-direction: column;
+     align-items: flex-start;
+     min-width: 0;            /* allows text to shrink */
+   }
+ 
+   .team-name,
+   .team-abbr {
+     text-align: left;
+     font-size: 1.3rem;
+     line-height: 1.2;
+     overflow: hidden;
+     text-overflow: ellipsis;
+     white-space: nowrap;
+   }
+ 
+   .score.inner-card { font-size: 20px; }
+ 
+   /* Optional if you have logos */
+   .team-logo { width: 5rem; height: 5rem; }
+ }
 
 /* ================
    VERY SMALL SCREENS - mirror 480px rules for <= 360px
@@ -641,12 +764,12 @@ main.app-main {
   .team-grid-section {
     grid-template-columns: 1fr; /* single column on small screens */
     width: 85%;
-    margin: 2rem auto;
+    margin: 0 auto;
   }
 
   .matchup-card.inner-card { 
     box-sizing: border-box;
-    width: 100%;
+    width: auto;
     max-width: 440px;
     height: auto;
     max-height: none;
