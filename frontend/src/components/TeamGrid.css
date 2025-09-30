@@ -630,3 +630,101 @@ main.app-main {
     max-height: 155px;
   }
 }
+
+/* ================
+   VERY SMALL SCREENS - mirror 480px rules for <= 360px
+   Keeps the same values for ultra-small devices per request.
+   ================ */
+@media (max-width: 360px) {
+  .team-grid-header h2 { font-size: clamp(1.25rem, 6vw, 1.75rem); }
+
+  .team-grid-section {
+    grid-template-columns: 1fr; /* single column on small screens */
+    width: 85%;
+    margin: 2rem auto;
+  }
+
+  .matchup-card.inner-card { 
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 440px;
+    height: auto;
+    max-height: none;
+    padding: var(--sp-4);
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--sp-3);
+  }
+
+
+  .matchup-card.inner-card.has-prediction {
+    width: 100%;
+    max-width: 460px;
+    height: auto;
+    max-height: none;
+    padding: var(--sp-4);
+    display: flex;
+    flex-direction: column;
+    align-items:stretch;
+    gap: 1rem;
+  }
+
+  .matchup-teams.inner-card {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-2);
+    max-height: 60%;
+  }
+
+  .vs-indicator {
+    margin: 0 auto;
+    transform-origin: center;
+    animation: spin 106s linear infinite;
+    height: auto;
+    font-size: 25px;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .away-team,
+  .home-team {
+    display: flex;
+    flex-direction: column;
+    align-items:stretch;
+
+    gap: var(--sp-2);
+  }
+
+  .team {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--sp-2);
+    text-align: left;
+    flex-wrap: nowrap;
+  }
+
+  .team-info { 
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    min-width: 0;            /* allows text to shrink */
+  }
+
+  .team-name,
+  .team-abbr {
+    text-align: left;
+    font-size: 1.3rem;
+    line-height: 1.2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .score.inner-card { font-size: 20px; }
+
+  /* Optional if you have logos */
+  .team-logo { width: 5rem; height: 5rem; }
+}
