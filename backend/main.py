@@ -13,7 +13,8 @@ from typing import Any, Dict, List, Optional
 
 # Load environment variables
 from dotenv import load_dotenv
-load_dotenv()
+# Explicitly load .env from the root directory
+load_dotenv(dotenv_path=Path(__file__).parent.parent / ".env")
 
 import numpy as np
 import pandas as pd

@@ -27,8 +27,8 @@
   },
   "homepage": "https://github.com/Jordon-py/NFL_ML_Predictions#readme",
   "engines": {
-    "npm": "10.x",
-    "node": "22.x"
+    "npm": ">=10.x",
+    "node": ">=22.x"
   }
 }
 

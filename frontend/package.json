@@ -27,8 +27,8 @@
     "puppeteer": "^24.22.3"
   },
   "engines": {
-    "node": "22.x",
-    "npm": "10.x"
+    "node": ">=22.x",
+    "npm": ">=10.x"
   },
   "browserslist": {
     "production": [

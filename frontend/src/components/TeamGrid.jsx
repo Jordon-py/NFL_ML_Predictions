@@ -18,7 +18,7 @@ import './TeamGrid.css';
  * @param {Function} props.onPrediction - Callback when prediction is made
  * @returns {JSX.Element} TeamGrid component
  */
-function TeamGrid({ onPrediction }) {
+function TeamGrid({ onPrediction = undefined }) {
   const [teams, setTeams] = useState({});
   const [schedule, setSchedule] = useState([]);
   const [predictions, setPredictions] = useState({});
@@ -266,9 +266,5 @@ function TeamGrid({ onPrediction }) {
     </div>
   );
 }
-
-TeamGrid.defaultProps = {
-  onPrediction: undefined,
-};
 
 export default TeamGrid;
