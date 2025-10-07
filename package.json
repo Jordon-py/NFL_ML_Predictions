@@ -8,12 +8,7 @@
     "build": "npm run build --prefix frontend",
     "start": "npm start --prefix frontend"
   },
-  "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-scripts": "5.0.1",
-    "web-vitals": "^2.1.4"
-  },
+  "dependencies": {},
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Jordon-py/NFL_ML_Predictions.git"
@@ -29,6 +24,6 @@
   "engines": {
     "npm": ">=10.x",
     "node": ">=22.x"
-  }
+  },
+  "devDependencies": {}
 }
-

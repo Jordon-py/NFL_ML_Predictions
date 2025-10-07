@@ -112,6 +112,7 @@ def load_schedules(seasons: List[int], include_future: bool = False) -> pd.DataF
     """
     logging.info("Loading schedules for seasons=%s (include_future=%s)", seasons, include_future)
     sch = nfl.import_schedules(seasons)
+    logging.info("Raw schedules loaded: %d games", (sch))
 
     needed = [
         "season", "week", "game_id", "gameday",  # nflverse uses 'gameday'

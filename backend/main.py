@@ -13,12 +13,12 @@ from typing import Any, Dict, List, Optional
 
 # Load environment variables
 from dotenv import load_dotenv
-# Explicitly load .env from the root directory
-load_dotenv(dotenv_path=Path(__file__).parent.parent / ".env")
+# Load from backend/.env explicitly to ensure it's found
+load_dotenv(Path(__file__).parent / ".env")
 
 import numpy as np
 import pandas as pd
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, logger
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -86,13 +86,14 @@ TEAM_ABBREVIATIONS = {
     "Carolina Panthers":"CAR","Chicago Bears":"CHI","Cincinnati Bengals":"CIN","Cleveland Browns":"CLE",
     "Dallas Cowboys":"DAL","Denver Broncos":"DEN","Detroit Lions":"DET","Green Bay Packers":"GB",
     "Houston Texans":"HOU","Indianapolis Colts":"IND","Jacksonville Jaguars":"JAX","Kansas City Chiefs":"KC",
-    "Las Vegas Raiders":"LV","Los Angeles Chargers":"LAC","Los Angeles Rams":"LA","Miami Dolphins":"MIA",
+    "Las Vegas Raiders":"LV","Los Angeles Chargers":"LAC","Los Angeles Rams":"LAR","Miami Dolphins":"MIA",
     "Minnesota Vikings":"MIN","New England Patriots":"NE","New Orleans Saints":"NO","New York Giants":"NYG",
     "New York Jets":"NYJ","Philadelphia Eagles":"PHI","Pittsburgh Steelers":"PIT","San Francisco 49ers":"SF",
     "Seattle Seahawks":"SEA","Tampa Bay Buccaneers":"TB","Tennessee Titans":"TEN","Washington Commanders":"WAS"
 }
 VALID_ABBRS = set(TEAM_ABBREVIATIONS.values())
 def get_abbr(name: str) -> str:
+    if name == 'LA': return name.replace('LA','LAR')  # Los Angeles Rams
     if name in VALID_ABBRS: return name
     if name in TEAM_ABBREVIATIONS: return TEAM_ABBREVIATIONS[name]
     raise ValueError(f"Unknown team: {name}")
@@ -167,6 +168,7 @@ app.add_middleware(
 # ---------- Helpers ----------
 def get_current_nfl_context() -> Dict[str, Any]:
     now = datetime.now()
+    log.info("Current time: %s", now.isoformat(),'now-->', now)
     cur_season = now.year if now.month >= 8 else now.year - 1
     if dataset_df is not None and {"season","week","home_points_for","away_points_for"}.issubset(dataset_df.columns):
         done = dataset_df[dataset_df["home_points_for"].notna() & dataset_df["away_points_for"].notna()]
@@ -197,12 +199,12 @@ def _build_future_row(df: pd.DataFrame, home: str, away: str, season: int, week:
             ]}
         else:
             return { 
-                "home_prior_pa_avg_3": row.get("away_prior_pa_avg_3"),
-                "home_prior_pa_avg_5": row.get("away_prior_pa_avg_5"),
-                "home_prior_pf_avg_3": row.get("away_prior_pf_avg_3"),
-                "home_prior_pf_avg_5": row.get("away_prior_pf_avg_5"),
-                "home_prior_win_pct_3": row.get("away_prior_win_pct_3"),
-                "home_prior_win_pct_5": row.get("away_prior_win_pct_5"),
+                "home_prior_pa_avg_3": row.get("away_prior_pa_avg_3),
+                "home_prior_pa_avg_5": row.get("away_prior_pa_avg_5),
+                "home_prior_pf_avg_3": row.get("away_prior_pf_avg_3),
+                "home_prior_pf_avg_5": row.get("away_prior_pf_avg_5),
+                "home_prior_win_pct_3": row.get("away_prior_win_pct_3),
+                "home_prior_win_pct_5": row.get("away_prior_win_pct_5),
             }
     
     try:
@@ -257,37 +259,66 @@ def debug_info():
         debug["error"] = str(e)
     return debug
 
-@app.get("/schedule/next-week", response_model=List[ScheduleGame])
+@app.get("/schedule/next-week")
 def get_next_week_schedule():
-    ctx = get_current_nfl_context()
+    """Get the schedule for the next upcoming NFL week.
+    - Normalizes legacy codes (e.g., LA→LAR) for home/away.
+    - Builds kickoff ISO timestamp from gameday+gametime.
+    """
     try:
-        path = Path(os.getenv("SCHEDULE_PATH", str(DEFAULT_SCHEDULE)))
-        if not path.exists(): raise HTTPException(404, f"Schedule not found: {path}")
-        df = pd.read_csv(path)
+        schedule_path = BASE_DIR / 'backend' / 'data' / 'Nfl_schedule_2025_2026.csv'
+        if not schedule_path.exists():
+            raise HTTPException(status_code=404, detail=f"Schedule data not found: {schedule_path}")
+
+        df = pd.read_csv(schedule_path)
+
+        # Normalize team codes: legacy → modern
+        code_fix = {"LA": "LAR", "STL": "LAR", "SD": "LAC", "OAK": "LV", "WSH": "WAS"}
+        for col in ("home_team", "away_team"):
+            if col in df.columns:
+                df[col] = df[col].astype(str).str.strip().replace(code_fix)
+
+        # Compose kickoff timestamp (UTC) from date + time; tolerate TBD times
         df["kickoff_ts_utc"] = pd.to_datetime(
-            (df["gameday"].astype(str).str.strip()+" "+df["gametime"].astype(str).str.strip()).str.strip(),
+            (df["gameday"].astype(str).str.strip() + " " + df["gametime"].astype(str).str.strip()).str.strip(),
             errors="coerce", utc=True
         )
+        # Fallback to date-only if time missing/unparseable
+        date_only = pd.to_datetime(df["gameday"], errors="coerce", utc=True)
+        df["kickoff_ts_utc"] = df["kickoff_ts_utc"].where(df["kickoff_ts_utc"].notna(), date_only)
+
+        # Choose next week from now; if no future games, last available week
         now = pd.Timestamp.now(tz="UTC")
         future = df[df["kickoff_ts_utc"].notna() & (df["kickoff_ts_utc"] >= now)]
-        cur_wk = int(future["week"].min()) if not future.empty else int(df["week"].max())
-        week_df = df[df["week"] == cur_wk]
-        out: List[ScheduleGame] = []
-        for _, r in week_df.iterrows():
-            out.append(ScheduleGame(
-                season=int(r["season"]), week=int(r["week"]),
-                home_team=str(r["home_team"]), home_abbr=get_abbr(str(r["home_team"])),
-                away_team=str(r["away_team"]), away_abbr=get_abbr(str(r["away_team"])),
-                kickoff_iso=(r["kickoff_ts_utc"].isoformat() if pd.notna(r["kickoff_ts_utc"]) else "TBD"),
-                game_id=str(r.get("game_id", f"{r['season']}W{r['week']}-{r['away_team']}@{r['home_team']}")),
-            ))
-        log.info("Schedule week %s games=%d", cur_wk, len(out))
-        return out
+        current_week = int(future["week"].min()) if not future.empty else int(df["week"].max())
+
+        week_games = df[df["week"] == current_week].copy()
+
+        games = []
+        for _, row in week_games.iterrows():
+            kickoff_iso = row["kickoff_ts_utc"].isoformat() if pd.notna(row["kickoff_ts_utc"]) else "TBD"
+            home = str(row["home_team"]).strip()
+            away = str(row["away_team"]).strip()
+            games.append({
+                'season': int(row['season']),
+                'week': int(row['week']),
+                'home_team': home,
+                'home_abbr': TEAM_ABBREVIATIONS.get(home, home),
+                'away_team': away,
+                'away_abbr': TEAM_ABBREVIATIONS.get(away, away),
+                'kickoff_iso': kickoff_iso,
+                'game_id': str(row.get('game_id', f"{row['season']}W{row['week']}-{away}@{home}"))
+            })
+
+        log.info("Schedule week %s games=%d", current_week, len(games))
+        return games
+
     except HTTPException:
         raise
     except Exception as e:
         log.error("Schedule error: %s", e, exc_info=True)
-        raise HTTPException(500, f"Failed to load schedule: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to load schedule: {e}")
+
 
 @app.post("/predict", response_model=PredictionResponse)
 def predict_game(payload: PredictionRequest):
@@ -344,8 +375,10 @@ def predict_next_week():
         for _, g in games.iterrows():
             try:
                 pr = predict_game(PredictionRequest(
-                    home_team=str(g["home_team"]), away_team=str(g["away_team"]),
-                    season=int(g["season"]), week=int(g["week"])
+                    home_team=str(g["home_team"]),
+                    away_team=str(g["away_team"]),
+                    season=int(g["season"]),
+                    week=int(g["week"])
                 ))
                 out.append({"game_id": str(g.get("game_id", f"{g['season']}W{g['week']}-{g['away_team']}@{g['home_team']}")),
                             "season": int(g["season"]), "week": int(g["week"]),

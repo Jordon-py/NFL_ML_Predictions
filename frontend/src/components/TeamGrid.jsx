@@ -15,7 +15,7 @@ import './TeamGrid.css';
  *
  * @component
  * @param {object} props - Component props
- * @param {Function} props.onPrediction - Callback when prediction is made
+ * @param {Function} props.onPrediction - Callback when prediction is made (optional)
  * @returns {JSX.Element} TeamGrid component
  */
 function TeamGrid({ onPrediction = undefined }) {
@@ -215,50 +215,59 @@ function TeamGrid({ onPrediction = undefined }) {
           return (
             <div
               key={`${game.season}-${game.week}-${index}`}
-              className={`matchup-card  inner-card ${prediction ? 'has-prediction' : ''} ${isLoading ? 'loading' : ''}`}
-              onClick={() => handlePredict(game)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  handlePredict(game);
-                }
-              }}
-              tabIndex={0} role="button"
-              aria-label={`Predict ${game.away_abbr} at ${game.home_abbr}`}
+              className="sb3"
+              style={{borderRadius: '12px'}}
             >
-              <div className="matchup-teams inner-card">
-                <div className="away-team">
-                  {renderTeam(game.away_abbr, false)}
-                </div>
-                <div className="vs-indicator inner-card">@</div>
-                <div className="home-team inner-card">
-                  {renderTeam(game.home_abbr, true)}
-                </div>
-              </div>
-
-              <div className="matchup-time inner-card">
-                {formatKickoffTime(game.kickoff_iso)}
-              </div>
-
-              {isLoading && (
-                <div className="prediction-loading">
-                  <div className="loading-spinner small"></div>
-                  <span>Predicting...</span>
-                </div>
-              )}
-
-              {prediction && (
-                <div className="prediction-result inner-card">
-                  <div className="predicted-scores inner-card">
-                    <span className="score away-score inner-card">{prediction.away_score.toFixed(1)}</span>
-                    <span className="score-separator inner-card"> {'<->'} </span>
-                    <span className="score home-score inner-card">{prediction.home_score.toFixed(1)}</span>
+              <div
+                className={`matchup-card inner-card sb3__content ${prediction ? 'has-prediction' : ''} ${isLoading ? 'loading' : ''}`}
+                onClick={() => handlePredict(game)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    handlePredict(game);
+                  }
+                }}
+                tabIndex={0} role="button"
+                aria-label={`Predict ${game.away_abbr} at ${game.home_abbr}`}
+              >
+                <div className="matchup-teams inner-card">
+                  <div className="away-team">
+                    {renderTeam(game.away_abbr, false)}
                   </div>
-                  <div className="point-diff">
-                    Spread: {prediction.point_diff > 0 ? '+' : ''}{prediction.point_diff.toFixed(1)}
+                  <div className="vs-indicator inner-card">@</div>
+                  <div className="home-team inner-card">
+                    {renderTeam(game.home_abbr, true)}
                   </div>
                 </div>
-              )}
+
+                <div className="matchup-time inner-card">
+                  {formatKickoffTime(game.kickoff_iso)}
+                </div>
+
+                {isLoading && (
+                  <div className="prediction-loading">
+                    <div className="loading-spinner small"></div>
+                    <span>Predicting...</span>
+                  </div>
+                )}
+
+                {prediction && (
+                  <div className="prediction-result inner-card">
+                    <div className="predicted-scores inner-card">
+                      <span className="score away-score inner-card">{prediction.away_score.toFixed(1)}</span>
+                      <span className="score-separator inner-card"> {'<->'} </span>
+                      <span className="score home-score inner-card">{prediction.home_score.toFixed(1)}</span>
+                    </div>
+                    <div className="point-diff">
+                      Spread: {prediction.point_diff > 0 ? '+' : ''}{prediction.point_diff.toFixed(1)}
+                    </div>
+                  </div>
+                )}
+              </div>
+              <svg className="sb3__svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+                <rect className="sb3__rect" x="1.5" y="1.5" width="97" height="97" rx="12" ry="12" pathLength="1000"/>
+                <rect className="sb3__rect sb3__rect--car" x="1.5" y="1.5" width="97" height="97" rx="12" ry="12" pathLength="1000"/>
+              </svg>
             </div>
           );
         })}

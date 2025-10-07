@@ -5,26 +5,27 @@
   "main": "src/index.jsx",
   "type": "module",
   "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "dev": "vite",
+    "start": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest"
   },
   "proxy": "https://nfl-predict-ecf5a5bd34fe.herokuapp.com/",
   "dependencies": {
     "@csstools/normalize.css": "^12.1.1",
-    
     "chart.js": "^4.4.3",
     "normalize.css": "^8.0.1",
     "react": "^18.2.0",
     "react-chartjs-2": "^5.2.0",
     "react-dom": "^18.2.0",
-    "react-scripts": "^5.0.1",
     "sanitize.css": "^13.0.0",
     "web-vitals": "^2.1.4"
   },
   "devDependencies": {
-    "puppeteer": "^24.22.3"
+    "@vitejs/plugin-react": "^5.0.4",
+    "puppeteer": "^24.22.3",
+    "vite": "^7.1.9"
   },
   "engines": {
     "node": ">=22.x",

@@ -1,0 +1,35 @@
+[data-scroll-watcher] {
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 1px;
+    width: 100%;
+    pointer-events: none;
+    z-index: -1;
+}
+
+.navBar {
+    display: flex;
+    background-color: #000925;
+    color: white;
+    padding: 1rem;
+    position: sticky;
+    top: 0;
+    left: 0;
+    width: 100%;
+    z-index: 1000;
+    transition: background-color 0.7s;
+}
+
+.navBar.sticking {
+    background-color: #001224cc;
+    box-shadow: 0 2px 4px lch(2.9% 38.73 300.74 / 0.4);
+    z-index: 1000;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    transition: background-color 0.9s, box-shadow 0.93s;
+}
+.navBar h1 {
+    margin: 0;
+    font-size: 1.5rem;
+}
