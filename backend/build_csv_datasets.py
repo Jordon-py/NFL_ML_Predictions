@@ -21,8 +21,8 @@ pandas, numpy, nfl_data_py
 
 Usage Notes
 -----------
-- Output: main CSV at ``<out_dir>/Nfl_data.csv`` plus a chronologically
-  sorted convenience CSV ``Nfl_data_sorted.csv`` in the CWD.
+- Output: single chronologically sorted CSV ``Nfl_data_sorted.csv`` written to
+    the specified ``out_dir`` (no duplicate root-level copy).
 - Rolling stats use ``groupby().rolling(...)`` to prevent future leakage.
 - Team codes are minimally normalized to limit join mismatches (LA→LAR, STL→LAR, ...).
 
@@ -369,31 +369,55 @@ def ts_split_by_season_week(
 def get_current_nfl_week() -> tuple[int, int]:
     """
     Determine current NFL season and week based on current date and available data.
-    Returns (season, week) tuple for the most recently completed week.
+
+    Returns
+    -------
+    Tuple[int, int]
+        Most recently completed (season, week) if historical data is available;
+        otherwise defaults to Week 1 of the inferred season.
     """
     from datetime import datetime
-    
+
     current_date = datetime.now()
     current_season = current_date.year
-    
+
     # NFL season spans Sept-Feb, adjust if in early months
     if current_date.month <= 7:
         current_season -= 1
-    
+
     try:
-        # Load existing data to determine last completed week
-        import pandas as pd
-        df = pd.read_csv("Nfl_data_sorted.csv")
-        if not df.empty:
-            latest_row = df.loc[df.index[-1]]
-            return int(latest_row['season']), int(latest_row['week'])
-    except (FileNotFoundError, KeyError, ImportError):
-        pass
-    
-    # Default to Week 1 if no data available  
+        import pandas as pd  # deferred import to keep CLI snappy
+    except ImportError:
+        pd = None
+
+    if pd is not None:
+        candidates = [
+            Path("backend/data/Nfl_data_sorted.csv"),
+            Path("../backend/data/Nfl_data_sorted.csv").resolve(),
+            Path("Nfl_data_sorted.csv"),
+        ]
+        for candidate in candidates:
+            if candidate.exists():
+                try:
+                    df = pd.read_csv(candidate)
+                except Exception:
+                    continue
+                if not df.empty:
+                    latest_row = df.iloc[-1]
+                    return int(latest_row["season"]), int(latest_row["week"])
+                break
+
+    # Default to Week 1 if no data available
     return current_season, 1
 
-def build_dataset(start: int, end: int, out_dir: Path, production_mode: bool = True, include_future: bool = True):
+def build_dataset(
+    start: int,
+    end: int,
+    out_dir: Path,
+    production_mode: bool = True,
+    include_future: bool = True,
+    legacy_root_copy: bool = False,
+):
     """
     Build production-ready NFL dataset with completed games + future scheduled games for prediction.
     
@@ -403,6 +427,8 @@ def build_dataset(start: int, end: int, out_dir: Path, production_mode: bool = T
         out_dir: Output directory path
         production_mode: If True, outputs only essential files and uses current NFL timing
         include_future: If True, includes future scheduled games for prediction
+        legacy_root_copy: If True, also writes ``Nfl_data_sorted.csv`` to the
+            repository root for legacy workflows (defaults to False).
     """
     seasons = list(range(int(start), int(end) + 1))
     
@@ -455,10 +481,11 @@ def build_dataset(start: int, end: int, out_dir: Path, production_mode: bool = T
     out_dir.mkdir(parents=True, exist_ok=True)
     main_output = out_dir / "Nfl_data_sorted.csv"
     final_df.to_csv(main_output, index=False)
-    
-    # Root copy for backwards compatibility
-    final_df.to_csv("Nfl_data_sorted.csv", index=False)
-    
+
+    if legacy_root_copy:
+        final_df.to_csv("Nfl_data_sorted.csv", index=False)
+        logging.info("Legacy root-level copy created for compatibility across scripts.")
+
     logging.info("Production dataset ready: %s (%d games)", main_output, len(final_df))
     
     # Export team mapping for API consistency
@@ -475,6 +502,11 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--start", type=int, default=2014, help="Start season (inclusive).")
     p.add_argument("--end", type=int, default=2025, help="End season (inclusive).")
     p.add_argument("--out-dir", type=str, default="backend/data", help="Output directory.")
+    p.add_argument(
+        "--legacy-root-copy",
+        action="store_true",
+        help="Also write Nfl_data_sorted.csv to the repository root for backwards compatibility.",
+    )
     return p.parse_args()
 
 
@@ -483,7 +515,12 @@ def main() -> None:
     args = parse_args()
     out_dir = Path(args.out_dir)
     setup_logger(out_dir)
-    build_dataset(args.start, args.end, out_dir)
+    build_dataset(
+        args.start,
+        args.end,
+        out_dir,
+        legacy_root_copy=args.legacy_root_copy,
+    )
     
 
 
