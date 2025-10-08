@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 """
 NFL Game Prediction API (FastAPI)
 Run: uvicorn backend.main:app --reload --port 8000
@@ -18,7 +17,7 @@ load_dotenv(Path(__file__).parent / ".env")
 
 import numpy as np
 import pandas as pd
-from fastapi import FastAPI, HTTPException, logger
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -47,7 +46,7 @@ logging.config.dictConfig({
 log = logging.getLogger("api")
 
 # ---------- Constants ----------
-DEFAULT_DATASET = DATA_DIR / "Nfl_data_sorted.csv"
+DEFAULT_DATASET = DATA_DIR / "merged_game_features.csv"
 DEFAULT_SCHEDULE = DATA_DIR / "Nfl_schedule_2025_2026.csv"
 
 # ---------- Schemas ----------
@@ -184,52 +183,65 @@ def get_current_nfl_context() -> Dict[str, Any]:
             "next_prediction_season": cur_season,"next_prediction_week": 1,"status": "preseason_or_early"}
 
 def _build_future_row(df: pd.DataFrame, home: str, away: str, season: int, week: int) -> pd.Series:
-    time_key = df["season"].astype(int)*100 + df["week"].astype(int)
-    df = df.assign(time_key=time_key)
-    def latest(team: str) -> Dict[str, Any]:
-        mask = (df["home_team"]==team) | (df["away_team"]==team)
-        before = df[mask & (df["time_key"] < season*100 + week)]
-        if before.empty:
+    """Derive feature priors for a matchup not yet present in the dataset."""
+
+    df = df.copy()
+    df["time_key"] = df["season"].astype(int) * 100 + df["week"].astype(int)
+    cutoff = season * 100 + week
+
+    def latest_team_features(team: str, prefix: str) -> Dict[str, Any]:
+        mask = (df["home_team"] == team) | (df["away_team"] == team)
+        history = df[mask & (df["time_key"] < cutoff)]
+        if history.empty:
             raise ValueError(f"No prior data for {team} before {season}-W{week}")
-        row = before.loc[before["time_key"].idxmax()]
-        if str(row["home_team"]) == team:
-            return {k: row.get(k) for k in [
-                "home_prior_pa_avg_3","home_prior_pa_avg_5","home_prior_pf_avg_3","home_prior_pf_avg_5",
-                "home_prior_win_pct_3","home_prior_win_pct_5"
-            ]}
-        else:
-            return { 
-                "home_prior_pa_avg_3": row.get("away_prior_pa_avg_3),
-                "home_prior_pa_avg_5": row.get("away_prior_pa_avg_5),
-                "home_prior_pf_avg_3": row.get("away_prior_pf_avg_3),
-                "home_prior_pf_avg_5": row.get("away_prior_pf_avg_5),
-                "home_prior_win_pct_3": row.get("away_prior_win_pct_3),
-                "home_prior_win_pct_5": row.get("away_prior_win_pct_5),
-            }
-    
+        last = history.sort_values("time_key").iloc[-1]
+        was_home = str(last["home_team"]) == team
+        source_prefix = "home_" if was_home else "away_"
+        features: Dict[str, Any] = {}
+        for col in df.columns:
+            if not col.startswith(("home_prior_", "away_prior_")):
+                continue
+            if col.startswith(source_prefix):
+                suffix = col[len(source_prefix) :]
+                features[f"{prefix}{suffix}"] = last.get(col)
+        return features
+
     try:
-        h = latest(home); a_full = latest(away)
-        # rename away side
-        a = {
-            "away_prior_pa_avg_3": a_full["home_prior_pa_avg_3"],
-            "away_prior_pa_avg_5": a_full["home_prior_pa_avg_5"],
-            "away_prior_pf_avg_3": a_full["home_prior_pf_avg_3"],
-            "away_prior_pf_avg_5": a_full["home_prior_pf_avg_5"],
-            "away_prior_win_pct_3": a_full["home_prior_win_pct_3"],
-            "away_prior_win_pct_5": a_full["home_prior_win_pct_5"],
+        home_features = latest_team_features(home, "home_")
+        away_features = latest_team_features(away, "away_")
+        feature_row: Dict[str, Any] = {**home_features, **away_features}
+
+        prior_suffixes = {
+            key[len("home_prior_") :]
+            for key in home_features
+            if key.startswith("home_prior_")
         }
-        feature_row = {}
-        feature_row.update(h); feature_row.update(a)
-        for base in ("pf_avg","pa_avg","win_pct"):
-            for wnd in ("3","5"):
-                H = feature_row.get(f"home_prior_{base}_{wnd}")
-                A = feature_row.get(f"away_prior_{base}_{wnd}")
-                if H is not None and A is not None:
-                    feature_row[f"home_minus_away_{base}_{wnd}"] = H - A
+        for suffix in prior_suffixes:
+            away_key = f"away_prior_{suffix}"
+            if away_key in feature_row:
+                h_val = feature_row.get(f"home_prior_{suffix}")
+                a_val = feature_row.get(away_key)
+                if h_val is not None and a_val is not None:
+                    feature_row[f"home_minus_away_{suffix}"] = h_val - a_val
+
+        # Betting / rest context unavailable without schedule row; fill with NaN placeholders
+        for static_col in (
+            "home_moneyline_prob",
+            "away_moneyline_prob",
+            "moneyline_prob_diff",
+            "spread_line",
+            "total_line",
+            "home_rest",
+            "away_rest",
+            "rest_diff",
+        ):
+            feature_row.setdefault(static_col, np.nan)
+
         return pd.Series(feature_row)
-    except Exception as e:
-        # Always raise an exception if unable to build the row, never return None
-        raise RuntimeError(f"Failed to build future row for {home} vs {away} ({season} W{week}): {e}")
+    except Exception as exc:
+        raise RuntimeError(
+            f"Failed to build future row for {home} vs {away} ({season} W{week}): {exc}"
+        )
 
 # ---------- Routes ----------
 @app.get("/health", response_model=HealthResponse)
@@ -238,26 +250,39 @@ def health():
         return HealthResponse(status="unhealthy", mode="none", reason="models not loaded")
     return HealthResponse(status="healthy", mode=model_objects.get("mode"), reason="models loaded")
 
-@app.get("/cors-debug")
-def cors_debug():
-    """Debug endpoint to check CORS configuration"""
-    return {
-        "cors_origins": CORS_ORIGINS,
-        "env_cors_origins": os.getenv("CORS_ORIGINS", "not set"),
-        "status": "active"
-    }
+from datetime import datetime, timezone
+import json, os
 
 @app.get("/debug")
 def debug_info():
-    debug = {"timestamp": datetime.now().isoformat()+"Z"}
+    debug = {
+        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "status": "active",
+        "cors_origins": CORS_ORIGINS,
+        "env_cors_origins": os.getenv("CORS_ORIGINS", "not set"),
+    }
     try:
         mpath = MODELS_DIR / "metadata.json"
-        if mpath.exists(): debug["metadata"] = json.loads(mpath.read_text())
+        if mpath.is_file():
+            try:
+                debug["metadata"] = json.loads(mpath.read_text(encoding="utf-8"))
+            except json.JSONDecodeError as e:
+                debug["metadata_error"] = f"Invalid JSON in metadata.json: {e}"
+
         tr = MODELS_DIR / "training_report.json"
-        if tr.exists(): debug["training_report_present"] = "true"
+        debug["training_report_present"] = tr.is_file()
+        # If you prefer to load it when present, uncomment below:
+        if tr.is_file():
+            try:
+                debug["training_report"] = json.loads(tr.read_text(encoding="utf-8"))
+            except json.JSONDecodeError as e:
+                debug["training_report_error"] = f"Invalid JSON in training_report.json: {e}"
+
     except Exception as e:
-        debug["error"] = str(e)
+        debug["error"] = f"{type(e).__name__}: {e}"
+
     return debug
+
 
 @app.get("/schedule/next-week")
 def get_next_week_schedule():
@@ -338,10 +363,10 @@ def predict_game(payload: PredictionRequest):
                 raise HTTPException(400, "Game completed; no prediction.")
         raw_cols = model_objects.get("raw_feature_columns", {})
         features = _normalize_feature_cols(raw_cols)
-        missing = [c for c in features if c not in row.index]
-        if missing:
-            raise HTTPException(500, f"Missing feature columns: {missing}")
-        X = model_objects["preprocessor"].transform(pd.DataFrame({c:[row[c]] for c in features}))
+        data = {c: [row[c]] if c in row.index else [np.nan] for c in features}
+        if missing := [c for c in features if c not in row.index]:
+            log.warning("Prediction using fallback fill for missing features: %s", missing)
+        X = model_objects["preprocessor"].transform(pd.DataFrame(data))
         # Score regressors
         home_score = float(np.clip(model_objects["home_model"].predict(X)[0], 0.0, 70.0))
         away_score = float(np.clip(model_objects["away_model"].predict(X)[0], 0.0, 70.0))

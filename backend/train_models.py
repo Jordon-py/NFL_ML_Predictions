@@ -10,42 +10,45 @@ from __future__ import annotations
 
 import json, logging, time, warnings, hashlib, os
 from pathlib import Path
-from typing import Any, Dict, List, Tuple, cast
+from typing import Any, Dict, List, Tuple, cast, Optional
 
 import joblib
 import numpy as np
 import pandas as pd
 from lightgbm import LGBMRegressor, LGBMClassifier
-from sklearn.base import BaseEstimator, RegressorMixin
+from sklearn.base import BaseEstimator
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.metrics import (roc_auc_score, accuracy_score, precision_score, recall_score,
                              f1_score, brier_score_loss, mean_absolute_error, r2_score,
                              confusion_matrix)
-from sklearn.model_selection import GridSearchCV, KFold, StratifiedKFold
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.calibration import CalibratedClassifierCV
+from sklearn.model_selection import RandomizedSearchCV, TimeSeriesSplit
+    
+
 
 warnings.filterwarnings("ignore", category=UserWarning, module="sklearn")
 force_col_wise = True
 # Paths
 BACKEND_DIR = Path(__file__).resolve().parent
-DATA_CANDIDATES = [BACKEND_DIR / "data" / "Nfl_data_sorted.csv"]
 
 
-def _resolve_data_path() -> Path:
-    env_override = os.getenv("NFL_DATASET_PATH") or os.getenv("DATASET_PATH")
-    candidates: List[Path] = []
-    if env_override:
-        candidates.append(Path(env_override))
-    candidates.extend(DATA_CANDIDATES)
-    for candidate in candidates:
-        if candidate.exists():
-            return candidate
-    raise FileNotFoundError(
-        "Nfl_data_sorted.csv not found. Re-run scripts/build_csv_datasets.py or set NFL_DATASET_PATH."
-    )
+def _resolve_train_test_paths() -> Tuple[Path, Path]:
+    env_train = os.getenv("NFL_TRAIN_PATH")
+    env_test = os.getenv("NFL_TEST_PATH")
+    default_train = BACKEND_DIR / "data" / "train.csv"
+    default_test = BACKEND_DIR / "data" / "test.csv"
+    train_path = Path(env_train) if env_train else default_train
+    test_path = Path(env_test) if env_test else default_test
+    missing = [str(p) for p in (train_path, test_path) if not p.exists()]
+    if missing:
+        raise FileNotFoundError(
+            "Missing dataset files: " + ", ".join(missing) + ". "
+            "Expected train/test CSVs in backend/data or via NFL_TRAIN_PATH/NFL_TEST_PATH."
+        )
+    return train_path, test_path
 
 MODELS_DIR = BACKEND_DIR / "models"
 MODELS_DIR.mkdir(parents=True, exist_ok=True)
@@ -55,34 +58,94 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 log = logging.getLogger("train")
 
 # Feature spec
-BASE_FEATURES = [
-    # Home priors
-    "home_prior_pf_avg_3","home_prior_pf_avg_5",
-    "home_prior_pa_avg_3","home_prior_pa_avg_5",
-    "home_prior_win_pct_3","home_prior_win_pct_5",
-    # Away priors
-    "away_prior_pf_avg_3","away_prior_pf_avg_5",
-    "away_prior_pa_avg_3","away_prior_pa_avg_5",
-    "away_prior_win_pct_3","away_prior_win_pct_5",
-    # Relative form
-    "home_minus_away_pf_avg_3","home_minus_away_pf_avg_5",
-    "home_minus_away_pa_avg_3","home_minus_away_pa_avg_5",
-    "home_minus_away_win_pct_3","home_minus_away_win_pct_5",
+WINDOWS = (3, 5)
+PRIOR_METRICS = [
+    "pf_avg",
+    "pa_avg",
+    "win_pct",
+    "off_epa_per_play",
+    "off_success_rate",
+    "off_explosive_rate",
+    "off_third_down_pct",
+    "off_pass_over_expected",
+    "off_turnover_rate",
+    "def_epa_per_play",
+    "def_success_rate_allowed",
+    "def_explosive_rate_allowed",
+    "def_takeaway_rate",
 ]
 
-def _load_dataset() -> pd.DataFrame:
-    path = _resolve_data_path()
-    df = pd.read_csv(path)
-    df.columns = [c.strip() for c in df.columns]
-    if len(df) < 500:
-        raise ValueError(f"Insufficient training data: {len(df)}")
-    # Completed games only for training
-    df = df[df["home_points_for"].notna() & df["away_points_for"].notna()].copy()
-    df["home_win"] = (df["home_points_for"] > df["away_points_for"]).astype(int)
-    missing = [c for c in BASE_FEATURES if c not in df.columns]
+def _side_prior_features(side: str) -> List[str]:
+    return [f"{side}_prior_{metric}_{w}" for metric in PRIOR_METRICS for w in WINDOWS]
+
+SIDE_FEATURES = _side_prior_features("home") + _side_prior_features("away")
+DIFF_FEATURES = [
+    f"home_minus_away_{metric}_{w}"
+    for metric in PRIOR_METRICS
+    for w in WINDOWS
+]
+
+BETTING_CONTEXT_FEATURES = [
+    "home_moneyline_prob",
+    "away_moneyline_prob",
+    "moneyline_prob_diff",
+    "spread_line",
+    "total_line",
+    "home_rest",
+    "away_rest",
+    "rest_diff",
+]
+
+BASE_FEATURES = list(dict.fromkeys(SIDE_FEATURES + DIFF_FEATURES + BETTING_CONTEXT_FEATURES))
+
+def _load_dataset() -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """Load pre-split train/test datasets from CSV files."""
+    train_path, test_path = _resolve_train_test_paths()
+    train_df = pd.read_csv(train_path)
+    test_df = pd.read_csv(test_path)
+
+    train_raw_len = len(train_df)
+    test_raw_len = len(test_df)
+    train_df = train_df[train_df["home_points_for"].notna() & train_df["away_points_for"].notna()].copy()
+    test_df = test_df[test_df["home_points_for"].notna() & test_df["away_points_for"].notna()].copy()
+    if len(train_df) < train_raw_len:
+        log.warning(
+            "Dropped %d train rows without final scores", train_raw_len - len(train_df)
+        )
+    if len(test_df) < test_raw_len:
+        log.warning(
+            "Dropped %d test rows without final scores", test_raw_len - len(test_df)
+        )
+
+    for split_name, split_df, split_path in (("train", train_df, train_path), ("test", test_df, test_path)):
+        split_df.columns = [c.strip() for c in split_df.columns]
+        if split_df.empty:
+            raise ValueError(f"{split_name.capitalize()} dataset is empty at {split_path}")
+
+    for frame in (train_df, test_df):
+        frame["home_win"] = (frame["home_points_for"] > frame["away_points_for"]).astype(int)
+
+    log.info("Loaded %d train games from %s", len(train_df), train_path)
+    log.info("Loaded %d test games from %s", len(test_df), test_path)
+
+    missing = [c for c in BASE_FEATURES if c not in train_df.columns]
     if missing:
-        raise ValueError(f"Missing required features: {missing}")
-    return df
+        raise ValueError(f"Missing required features in train dataset: {missing}")
+
+    return train_df.reset_index(drop=True), test_df.reset_index(drop=True)
+
+
+def _compute_recency_weights(df: pd.DataFrame) -> np.ndarray:
+    """Boost recent games so the model tracks league drift."""
+    if "season" not in df.columns or "week" not in df.columns:
+        raise ValueError("Recency weighting requires 'season' and 'week' columns.")
+    seasons = df["season"].to_numpy(dtype=float)
+    weeks = df["week"].to_numpy(dtype=float)
+    season_span = max(seasons.max() - seasons.min(), 1.0)
+    season_norm = (seasons - seasons.min()) / season_span
+    week_norm = weeks / max(weeks.max(), 1.0)
+    weights = 0.4 + 0.4 * season_norm + 0.2 * week_norm
+    return weights / weights.mean()
 
 def _preprocessor(features: List[str]) -> ColumnTransformer:
     return ColumnTransformer(
@@ -93,128 +156,169 @@ def _preprocessor(features: List[str]) -> ColumnTransformer:
 
 def _grid_lgbm_reg() -> Dict[str, List[Any]]:
     return {
-        "n_estimators": [100, 150],
-        "learning_rate": [0.05, 0.1],
-        "max_depth": [6, 8],
-        "num_leaves": [20, 31],
-        "subsample": [0.8, 0.9],
-        "colsample_bytree": [0.8, 0.9],
-        "reg_alpha": [0.0, 0.1],
-        "reg_lambda": [0.0, 0.1],
+        "n_estimators": [75, 150, 175],
+        "learning_rate": [0.05, 0.1, .02],
+        "max_depth": [4, 10],
+        "num_leaves": [15, 25],
+        "subsample": [0.4, 0.9],
+        "colsample_bytree": [0.4, 0.9],
+        "reg_alpha": [0.2, 0.1],
+        "reg_lambda": [0.2, 0.1],
+        "min_child_samples": [20, 35],
     }
 
 def _grid_lgbm_clf() -> Dict[str, List[Any]]:
     return {
-        "n_estimators": [100, 150],
-        "learning_rate": [0.05, 0.1],
-        "max_depth": [6, 8],
-        "num_leaves": [20, 31],
-        "subsample": [0.8, 0.9],
-        "colsample_bytree": [0.8, 0.9],
-        "reg_alpha": [0.0, 0.1],
-        "reg_lambda": [0.0, 0.1],
+        "n_estimators": [75, 150, 175],
+        "learning_rate": [0.05, 0.1, .02],
+        "max_depth": [4, 10],
+        "num_leaves": [15, 25],
+        "subsample": [0.4, 0.9],
+        "colsample_bytree": [0.4, 0.9],
+        "reg_alpha": [0.2, 0.1],
+        "reg_lambda": [0.2, 0.1],
+        "min_child_samples": [20, 35],
+        "class_weight": [None, "balanced"],
     }
 
-# In the _fit_regressor function
-from sklearn.model_selection import TimeSeriesSplit
+from sklearn.model_selection import TimeSeriesSplit, RandomizedSearchCV
 
-def _fit_regressor(X, y, name: str) -> Tuple[LGBMRegressor, Dict[str, Any]]:
-    lgbm = LGBMRegressor(objective="regression", random_state=4, n_jobs=-1, verbose=4)
-    cv = TimeSeriesSplit(n_splits=5) # <-- With this line
+def _fit_regressor(
+    X_train,
+    y_train,
+    X_test,
+    y_test,
+    name: str,
+    sample_weight: Optional[np.ndarray] = None,
+) -> Tuple[LGBMRegressor, Dict[str, Any]]:
+    """Fit regressor on train set, validate on test set."""
+    lgbm = LGBMRegressor(objective="regression", random_state=4, n_jobs=-1, verbose=1)
     
-    from sklearn.model_selection import RandomizedSearchCV
+    # Use 3-fold TimeSeriesSplit on training data for hyperparameter tuning
+    cv = TimeSeriesSplit(n_splits=3)
 
     # Cast the estimator to satisfy type checker
     rs = RandomizedSearchCV(
         estimator=cast(BaseEstimator, lgbm),
         param_distributions=_grid_lgbm_reg(),
-                n_iter=10,   # Try 10 combinations for faster classifier training
+        n_iter=15,
         cv=cv,
         scoring="neg_root_mean_squared_error",
         n_jobs=-1,
-        verbose=2,
+        verbose=0,
         return_train_score=True,
         refit=True,
         random_state=4
     )
     t0 = time.time()
-    gfit = rs.fit(X, y)
-    best = cast(LGBMRegressor, gfit.best_estimator_)
-    yhat = gfit.predict(X)
+    fit_kwargs = {"sample_weight": sample_weight} if sample_weight is not None else {}
+    rs.fit(X_train, y_train, **fit_kwargs)
+    best = cast(LGBMRegressor, rs.best_estimator_)
+    
+    # Evaluate on training set
+    yhat_train = np.asarray(best.predict(X_train)).ravel()
+    
+    # Evaluate on holdout test set
+    yhat_test = np.asarray(best.predict(X_test)).ravel()
+    
     res = {
-        "best_params": gfit.best_params_,
-        "cv_rmse": gfit.best_score_,
-        "train_r2": r2_score(y, yhat),
-        "train_mae": mean_absolute_error(y, yhat),
+        "best_params": rs.best_params_,
+        "cv_rmse": float(rs.best_score_),
+        "train_r2": float(r2_score(y_train, yhat_train)),
+        "train_mae": float(mean_absolute_error(y_train, yhat_train)),
+        "test_r2": float(r2_score(y_test, yhat_test)),
+        "test_mae": float(mean_absolute_error(y_test, yhat_test)),
         "search_time_s": time.time() - t0,
         "n_candidates": len(rs.cv_results_["params"]),
     }
-    if res["train_r2"] < -0.2:  # More lenient threshold for sports prediction
+    if res["train_r2"] < -0.2:
         raise ValueError(f"{name} regressor underfit: R²={res['train_r2']:.3f}")
     return best, res
 
-def _fit_classifier_optimized(X, y) -> Tuple[BaseEstimator, Dict[str, Any], pd.DataFrame]:
+def _fit_classifier_optimized(
+    X_train,
+    y_train,
+    X_test,
+    y_test,
+    sample_weight: Optional[np.ndarray] = None,
+) -> Tuple[BaseEstimator, Dict[str, Any], pd.DataFrame]:
     """
-    Optimizes the classifier training process for speed and efficiency.
-    
-    This function replaces GridSearchCV with a more efficient search method, 
-    streamlines the calibration process, and avoids redundant computations.
+    Fit classifier on train set, validate on holdout test set.
+    Returns calibrated classifier, metrics, and test set predictions.
     """
-    from sklearn.model_selection import RandomizedSearchCV, TimeSeriesSplit
-    from sklearn.calibration import CalibratedClassifierCV
-    import time
-    import pandas as pd
-    from sklearn.base import BaseEstimator
-    from typing import Tuple, Dict, Any
-    
-    # Use RandomizedSearchCV for faster hyperparameter tuning
-    base = LGBMClassifier(objective="binary", random_state=4, n_jobs=-1, verbose=2)
-    
 
-    cv_splitter = TimeSeriesSplit(n_splits=5)
+    # Use RandomizedSearchCV for faster hyperparameter tuning
+    base = LGBMClassifier(objective="binary",
+                          random_state=4,
+                          n_jobs=-1,
+                          verbose=0,
+                          learning_rate=0.1
+                          )
+
+    # Use 4-fold TimeSeriesSplit on training data
+    cv_splitter = TimeSeriesSplit(n_splits=4)
     
-    # Use RandomizedSearchCV with a limited number of iterations (e.g., n_iter=20)
+    # Use RandomizedSearchCV with a limited number of iterations
     rs = RandomizedSearchCV(
         estimator=cast(BaseEstimator, base),
         param_distributions=_grid_lgbm_clf(), 
-        n_iter=20, 
+        n_iter=30, 
         cv=cv_splitter, 
         scoring="roc_auc",
         n_jobs=-1, 
-        verbose=2, 
+        verbose=0, 
+        return_train_score=True,
+        refit=True,
         random_state=4
     )
     
     t0 = time.time()
-    rs.fit(X, y)
+    fit_kwargs = {"sample_weight": sample_weight} if sample_weight is not None else {}
+    rs.fit(X_train, y_train, **fit_kwargs)
     best_uncalibrated = rs.best_estimator_
     
-    # Streamline calibration
-    # Calibrate the best uncalibrated model once
+    # Calibrate the best model on training data
     calib = CalibratedClassifierCV(best_uncalibrated, cv=cv_splitter, method="isotonic")
-    calib.fit(X, y)
+    calib.fit(X_train, y_train, sample_weight=sample_weight)
     
-    # Generate cross-validated predictions once using the calibrated model
-    fold_preds = []
-    for i, (tr, te) in enumerate(cv_splitter.split(X, y)):
-        p = calib.predict_proba(X[te])[:, 1]  # Use numpy array indexing instead of pandas .iloc
-        fold_preds.append(pd.DataFrame({"idx": te, "fold": i, "prob_home_win": p}))
+    # Generate predictions on holdout test set
+    prob_confidence = calib.predict_proba(X_test)[:, 1]
+    prob_home_win_pct = np.round(prob_confidence * 100, 1)
+    
+    # Determine high confidence predictions: check if >=75% of games are outside 40-65% range
+    is_high_confidence_batch = np.mean((prob_confidence >= 0.65) | (prob_confidence <= 0.40)) >= 0.75
+    is_high_confidence_per_game = (prob_confidence >= 0.65) | (prob_confidence <= 0.40)
+    
+    pred_test = (prob_confidence >= 0.50).astype(int)
 
-    preds_df = pd.concat(fold_preds).sort_values("idx")
+    # Create test predictions DataFrame
+    preds_df = pd.DataFrame({
+        "idx": np.arange(len(X_test)),
+        "fold": -1,  # -1 indicates holdout test set
+        "prob_home_win": prob_confidence,
+        "prob_home_win_pct": prob_home_win_pct,
+        "is_high_confidence": is_high_confidence_per_game
+    })
     
-    # Evaluate the calibrated model
-    prob = calib.predict_proba(X)[:, 1]
-    pred = (prob >= 0.5).astype(int)
+    # Evaluate on training set for comparison
+    prob_train = calib.predict_proba(X_train)[:, 1]
+    pred_train = (prob_train >= 0.5).astype(int)
     
     metrics = {
         "best_params": rs.best_params_,
         "cv_auc": float(rs.best_score_),
-        "train_auc": float(roc_auc_score(y, prob)),
-        "train_accuracy": float(accuracy_score(y, pred)),
-        "train_precision": float(precision_score(y, pred)),
-        "train_recall": float(recall_score(y, pred)),
-        "train_f1": float(f1_score(y, pred)),
-        "train_brier": float(brier_score_loss(y, prob)),
+        "train_auc": float(roc_auc_score(y_train, prob_train)),
+        "train_accuracy": float(accuracy_score(y_train, pred_train)),
+        "train_precision": float(precision_score(y_train, pred_train)),
+        "train_recall": float(recall_score(y_train, pred_train)),
+        "train_f1": float(f1_score(y_train, pred_train)),
+        "train_brier": float(brier_score_loss(y_train, prob_train)),
+        "test_auc": float(roc_auc_score(y_test, prob_confidence)),
+        "test_accuracy": float(accuracy_score(y_test, pred_test)),
+        "test_precision": float(precision_score(y_test, pred_test)),
+        "test_recall": float(recall_score(y_test, pred_test)),
+        "test_f1": float(f1_score(y_test, pred_test)),
+        "test_brier": float(brier_score_loss(y_test, prob_confidence)),
         "search_time_s": time.time() - t0,
         "n_candidates": len(rs.cv_results_["params"]),
     }
@@ -223,60 +327,104 @@ def _fit_classifier_optimized(X, y) -> Tuple[BaseEstimator, Dict[str, Any], pd.D
 
 
 def main() -> None:
-    df = _load_dataset()
-    X_raw = df[BASE_FEATURES]
-    y_home = df["home_points_for"].astype(float).values
-    y_away = df["away_points_for"].astype(float).values
-    y_win  = df["home_win"].astype(int).values
+    # Load data with train/test split
+    train_df, test_df = _load_dataset()
+    
+    # Prepare training data
+    X_train_raw = train_df[BASE_FEATURES]
+    y_train_home = train_df["home_points_for"].astype(float).values
+    y_train_away = train_df["away_points_for"].astype(float).values
+    y_train_win = train_df["home_win"].astype(int).values
+    train_weights = _compute_recency_weights(train_df)
+    
+    # Prepare test data
+    X_test_raw = test_df[BASE_FEATURES]
+    y_test_home = test_df["home_points_for"].astype(float).values
+    y_test_away = test_df["away_points_for"].astype(float).values
+    y_test_win = test_df["home_win"].astype(int).values
 
+    # Fit preprocessor on training data only
     pre = _preprocessor(BASE_FEATURES)
-    X_proc = pre.fit_transform(X_raw)
+    X_train_proc = pre.fit_transform(X_train_raw)
+    X_test_proc = pre.transform(X_test_raw)
 
-    log.info("Fitted preprocessor on %d samples, %d features", X_proc.shape[0], X_proc.shape[1])
+    log.info("Fitted preprocessor on %d train samples, %d test samples", 
+             X_train_proc.shape[0], X_test_proc.shape[0])
+    log.info("Features: %d", X_train_proc.shape[1])
+    log.info(
+        "Recency weighting applied: mean=%.3f, max=%.3f, min=%.3f",
+        float(train_weights.mean()),
+        float(train_weights.max()),
+        float(train_weights.min()),
+    )
 
     # Regressors
     log.info("Training LightGBM regressors (home, away)...")
-    home_reg, home_res = _fit_regressor(X_proc, y_home, "home")
-    away_reg, away_res = _fit_regressor(X_proc, y_away, "away")
-    log.debug("Home regressor results: %s", home_res)
-    log.debug("Away regressor results: %s", away_res)
+    home_reg, home_res = _fit_regressor(
+        X_train_proc, y_train_home, X_test_proc, y_test_home, "home", sample_weight=train_weights
+    )
+    away_reg, away_res = _fit_regressor(
+        X_train_proc, y_train_away, X_test_proc, y_test_away, "away", sample_weight=train_weights
+    )
+    log.info("Home regressor - Train R²: %.3f, Test R²: %.3f", home_res["train_r2"], home_res["test_r2"])
+    log.info("Away regressor - Train R²: %.3f, Test R²: %.3f", away_res["train_r2"], away_res["test_r2"])
 
     # Classifier
     log.info("Training LightGBM classifier for win probability...")
-    win_clf, win_res, cv_preds = _fit_classifier_optimized(X_proc, y_win)
-    log.debug("Win classifier results: %s", win_res)
+    win_clf, win_res, test_preds = _fit_classifier_optimized(
+        X_train_proc, y_train_win, X_test_proc, y_test_win, sample_weight=train_weights
+    )
+    log.info("Win classifier - Train AUC: %.3f, Test AUC: %.3f", win_res["train_auc"], win_res["test_auc"])
 
-    # Persist models
+    # Persist models (trained on full training set)
     joblib.dump(pre, MODELS_DIR / "preprocessor.joblib")
     joblib.dump(home_reg, MODELS_DIR / "home_model.joblib")
     joblib.dump(away_reg, MODELS_DIR / "away_model.joblib")
     joblib.dump(win_clf, MODELS_DIR / "win_clf_calibrated.joblib")
 
-    # Error analysis file: join index back to ID columns if present
-    cv_preds = cv_preds.merge(df.reset_index().rename(columns={"index":"idx"})[
+    # Save test set predictions with metadata
+    test_preds = test_preds.merge(test_df.reset_index().rename(columns={"index":"idx"})[
         ["idx","season","week","home_team","away_team","home_win"]
     ], on="idx", how="left")
-    cv_preds["abs_error"] = (cv_preds["prob_home_win"] - cv_preds["home_win"]).abs()
-    cv_preds.to_csv(MODELS_DIR / "validation_errors.csv", index=False)
+    test_preds["abs_error"] = (test_preds["prob_home_win"] - test_preds["home_win"]).abs()
+    test_preds.to_csv(MODELS_DIR / "test_predictions.csv", index=False)
+    log.info("Saved test set predictions to test_predictions.csv")
 
     # Reports
-    hash_values = pd.util.hash_pandas_object(df, index=False).values
+    combined_df = pd.concat([train_df, test_df], ignore_index=True)
+    hash_values = pd.util.hash_pandas_object(combined_df, index=False).values
     hash_bytes = np.asarray(hash_values).tobytes()
     dataset_hash = hashlib.md5(hash_bytes).hexdigest()[:10]
+    
     training_report = {
-        "dataset": {"rows": int(len(df)), "hash": dataset_hash},
+        "dataset": {
+            "total_rows": int(len(combined_df)),
+            "train_rows": int(len(train_df)),
+            "test_rows": int(len(test_df)),
+            "hash": dataset_hash
+        },
         "features_used": BASE_FEATURES,
+        "sample_weighting": {
+            "strategy": "recency_linear",
+            "formula": "0.4 base + 0.4*season_norm + 0.2*week_norm",
+            "mean": float(train_weights.mean()),
+            "max": float(train_weights.max()),
+            "min": float(train_weights.min()),
+        },
         "regression": {"home": home_res, "away": away_res},
         "classification": win_res,
         "thresholds": {"win_auc_min": 0.65},
-        "production_ready_win_model": bool(win_res["cv_auc"] >= 0.60),
+        "production_ready_win_model": bool(win_res["test_auc"] >= 0.60),
     }
     (MODELS_DIR / "training_report.json").write_text(json.dumps(training_report, indent=2))
 
     metadata = {
         "training_timestamp": pd.Timestamp.now().isoformat(),
         "dataset_hash": dataset_hash,
-        "training_samples": int(len(df)),
+        "training_samples": int(len(train_df)),
+        "test_samples": int(len(test_df)),
+        "train_cutoff": "2025 Week 3",
+        "test_period": "2025 Week 4+",
         "raw_feature_columns": {"numeric": BASE_FEATURES, "categorical": []},
         "models": {
             "home_model": "home_model.joblib",
@@ -285,18 +433,29 @@ def main() -> None:
         },
         "preprocessor": "preprocessor.joblib",
         "targets": ["home_points_for","away_points_for","home_win"],
-        "model_scores": {
-            "home_r2_cv": float(home_res["cv_rmse"]) if "cv_rmse" in home_res else None,
-            "away_r2_cv": float(away_res["cv_rmse"]) if "cv_rmse" in away_res else None,
-            "win_auc_cv": float(win_res["cv_auc"]),
+        "sample_weighting": {
+            "strategy": "recency_linear",
+            "formula": "0.4 base + 0.4*season_norm + 0.2*week_norm",
+            "mean": float(train_weights.mean()),
+            "max": float(train_weights.max()),
+            "min": float(train_weights.min()),
         },
-        "production_ready_win_model": bool(win_res["cv_auc"] >= 0.65),
+        "model_scores": {
+            "home_train_r2": float(home_res["train_r2"]),
+            "home_test_r2": float(home_res["test_r2"]),
+            "away_train_r2": float(away_res["train_r2"]),
+            "away_test_r2": float(away_res["test_r2"]),
+            "win_cv_auc": float(win_res["cv_auc"]),
+            "win_train_auc": float(win_res["train_auc"]),
+            "win_test_auc": float(win_res["test_auc"]),
+        },
+        "production_ready_win_model": bool(win_res["test_auc"] >= 0.65),
     }
     (MODELS_DIR / "metadata.json").write_text(json.dumps(metadata, indent=2))
 
     log.info("Saved models and reports to %s", MODELS_DIR)
     if not metadata["production_ready_win_model"]:
-        log.warning("Win model below AUC threshold (%.3f < 0.75). Not production-ready.", win_res["cv_auc"])
+        log.warning("Win model below AUC threshold (%.3f < 0.65). Not production-ready.", win_res["test_auc"])
 
 if __name__ == "__main__":
     main()

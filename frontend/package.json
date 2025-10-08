@@ -28,8 +28,8 @@
     "vite": "^7.1.9"
   },
   "engines": {
-    "node": ">=22.x",
-    "npm": ">=10.x"
+    "node": "20.x",
+    "npm": "10.x"
   },
   "browserslist": {
     "production": [

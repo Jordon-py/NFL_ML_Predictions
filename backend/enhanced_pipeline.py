@@ -23,7 +23,6 @@ the provided `enhanced_dataset.csv` (covering seasons 2014–2023).  In
 production, replace the data ingestion step with a call to an API
 such as `nflreadr` to extend the dataset to the current season.
 """
-
 from __future__ import annotations
 
 import itertools
@@ -31,7 +30,7 @@ import sys
 from dataclasses import dataclass
 from inspect import signature
 from pathlib import Path
-from typing import List, Tuple, Dict, Callable, Any, Optional
+from typing import List, Tuple, Dict, Callable, Any, Optional, cast
 
 import numpy as np
 import pandas as pd
@@ -61,9 +60,25 @@ from backend.build_csv_datasets import make_time_key
 
 
 FEATURE_METADATA_PATH = Path(__file__).resolve().parent / "models" / "feature_metadata.json"
-CALIBRATOR_ESTIMATOR_PARAM = "estimator" if "estimator" in signature(CalibratedClassifierCV).parameters else "base_estimator"
+# Determine the correct parameter name for CalibratedClassifierCV based on its signature
+sig = signature(CalibratedClassifierCV.__init__)
+CALIBRATOR_ESTIMATOR_PARAM = "estimator" if "estimator" in sig.parameters else "base_estimator"
 PROBABILITY_EPS = 1e-6
 CLASS_LABELS = [0, 1]
+
+
+def compute_recency_weights(df: pd.DataFrame) -> np.ndarray:
+    """Create normalized weights favouring recent games."""
+    if {"season", "week"}.issubset(df.columns):
+        seasons = df["season"].to_numpy(dtype=float)
+        weeks = df["week"].to_numpy(dtype=float)
+        season_span = max(seasons.max() - seasons.min(), 1.0)
+        season_norm = (seasons - seasons.min()) / season_span
+        week_norm = weeks / max(weeks.max(), 1.0)
+        weights = 0.4 + 0.4 * season_norm + 0.2 * week_norm
+    else:
+        weights = np.ones(len(df), dtype=float)
+    return weights / weights.mean()
 
 
 def summarize_features(features: pd.DataFrame) -> pd.DataFrame:
@@ -78,6 +93,23 @@ def export_feature_metadata(summary: pd.DataFrame, output_path: Path) -> None:
     """Persist feature metadata to JSON for downstream inspection."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
     summary.to_json(output_path, orient="records", indent=2)
+
+
+def _fit_with_optional_weights(estimator: BaseEstimator, X: pd.DataFrame, y: pd.Series, sample_weight: Optional[np.ndarray] = None) -> BaseEstimator:
+    """Fit estimator or pipeline with optional sample weights."""
+    est = cast(Any, estimator)
+    if sample_weight is None:
+        est.fit(X, y)
+        return estimator
+
+    fit_params: Dict[str, Any] = {}
+    if isinstance(estimator, Pipeline):
+        final_step = estimator.steps[-1][0]
+        fit_params[f"{final_step}__sample_weight"] = sample_weight
+    else:
+        fit_params["sample_weight"] = sample_weight
+    est.fit(X, y, **fit_params)
+    return estimator
 
 
 class PurgedGroupTimeSeriesSplit(BaseCrossValidator):
@@ -185,7 +217,7 @@ def baseline_prediction(y_train: pd.Series, grouping: Optional[pd.Series] = None
         return lambda df: np.full(len(df), rate)
 
 
-def build_dataset(data_path: str) -> Tuple[pd.DataFrame, pd.Series, pd.Series, pd.DataFrame]:
+def build_dataset(data_path: str, expected_columns: Optional[List[str]] = None) -> Tuple[pd.DataFrame, pd.Series, pd.Series, pd.DataFrame]:
     """Load dataset, engineer features and return feature matrix and targets.
 
     Parameters
@@ -250,6 +282,14 @@ def build_dataset(data_path: str) -> Tuple[pd.DataFrame, pd.Series, pd.Series, p
         X = df[feature_cols].copy()
     # Replace missing values with column means (simple imputation)
     X = X.fillna(X.mean())
+    if expected_columns is not None:
+        missing_cols = [c for c in expected_columns if c not in X.columns]
+        for col in missing_cols:
+            X[col] = 0.0
+        extra_cols = [c for c in X.columns if c not in expected_columns]
+        if extra_cols:
+            X = X.drop(columns=extra_cols)
+        X = X[expected_columns]
     # Engineering additional interactions capturing form asymmetry
     # Choose a few representative diff features to create delta and product interactions
     # We use net_epa_sum and off_turnovers as analogues to form strength and risk
@@ -268,6 +308,14 @@ def build_dataset(data_path: str) -> Tuple[pd.DataFrame, pd.Series, pd.Series, p
     groups = df["group_idx"].astype(int)
     # Always return only 4 items as annotated
     return X, y, groups, df
+
+
+def load_train_test_splits(train_path: str, test_path: str) -> Tuple[pd.DataFrame, pd.Series, pd.Series, pd.DataFrame, pd.DataFrame, pd.Series, pd.Series, pd.DataFrame]:
+    """Prepare explicit train/test splits using the same feature schema."""
+    X_train, y_train, groups_train, df_train = build_dataset(train_path)
+    X_test, y_test, groups_test, df_test = build_dataset(test_path, expected_columns=list(X_train.columns))
+    X_test = X_test.reindex(columns=X_train.columns, fill_value=0.0)
+    return X_train, y_train, groups_train, df_train, X_test, y_test, groups_test, df_test
 
 
 @dataclass
@@ -299,6 +347,7 @@ def evaluate_model(
     cv: BaseCrossValidator,
     calibrate: bool = False,
     baseline_rate: Optional[float] = None,
+    sample_weight: Optional[np.ndarray] = None,
 ) -> ModelResult:
     """Cross‑validate a model with the provided splitter, optionally calibrating.
 
@@ -312,6 +361,7 @@ def evaluate_model(
     for tr_idx, va_idx in cv.split(X, y, groups):
         X_train, X_val = X.iloc[tr_idx], X.iloc[va_idx]
         y_train, y_val = y.iloc[tr_idx], y.iloc[va_idx]
+        fold_weights = sample_weight[tr_idx] if sample_weight is not None else None
         # If the training fold lacks class diversity, fall back to baseline rate
         if y_train.nunique() < 2:
             baseline_fold_rate = float(y_train.mean()) if len(y_train) else baseline_rate or float(y.mean())
@@ -322,14 +372,14 @@ def evaluate_model(
             if calibrate:
                 # Fit base estimator first on training to produce probabilities
                 base = clone(estimator)
-                base.fit(X_train, y_train)
+                _fit_with_optional_weights(base, X_train, y_train, fold_weights)
                 calibrator = CalibratedClassifierCV(
                     **{CALIBRATOR_ESTIMATOR_PARAM: base}, method="isotonic", cv="prefit"
                 )
                 calibrator.fit(X_train, y_train)
                 prob_val = calibrator.predict_proba(X_val)[:, 1]
             else:
-                est.fit(X_train, y_train)
+                _fit_with_optional_weights(est, X_train, y_train, fold_weights)
                 prob_val = est.predict_proba(X_val)[:, 1]
         prob_val = np.clip(prob_val, PROBABILITY_EPS, 1 - PROBABILITY_EPS)
         prob_oof[va_idx] = prob_val
@@ -397,6 +447,7 @@ def evaluate_on_test(
     y_test: pd.Series,
     calibrate: bool = False,
     baseline_rate: Optional[float] = None,
+    sample_weight: Optional[np.ndarray] = None,
 ) -> Tuple[float, float, float, float, float, Dict[str, float]]:
     """Train estimator on training data and evaluate on held‑out test set.
 
@@ -409,14 +460,14 @@ def evaluate_on_test(
     else:
         if calibrate:
             base = clone(estimator)
-            base.fit(X_train, y_train)
+            _fit_with_optional_weights(base, X_train, y_train, sample_weight)
             calibrator = CalibratedClassifierCV(
                 **{CALIBRATOR_ESTIMATOR_PARAM: base}, method="isotonic", cv="prefit"
             )
             calibrator.fit(X_train, y_train)
             prob_test = calibrator.predict_proba(X_test)[:, 1]
         else:
-            est.fit(X_train, y_train)
+            _fit_with_optional_weights(est, X_train, y_train, sample_weight)
             prob_test = est.predict_proba(X_test)[:, 1]
     prob_test = np.clip(prob_test, PROBABILITY_EPS, 1 - PROBABILITY_EPS)
     y_test_array = y_test.to_numpy(dtype=float)
@@ -466,16 +517,25 @@ def convex_blend(
     return float(best_w), float(best_ll)
 
 
-def run_experiment(data_path: str, holdout_season: Optional[int] = None) -> Tuple[List[ModelResult], pd.DataFrame]:
-    """Execute the enhanced NFLEX pipeline on the supplied dataset.
+def run_experiment(
+    data_path: Optional[str] = None,
+    *,
+    train_path: Optional[str] = None,
+    test_path: Optional[str] = None,
+    holdout_season: Optional[int] = None,
+) -> Tuple[List[ModelResult], pd.DataFrame]:
+    """Execute the enhanced NFLEX pipeline on the supplied dataset or explicit splits.
 
     Parameters
     ----------
-    data_path : str
-        Path to the enhanced game‑level CSV file.
+    data_path : str, optional
+        Path to a combined CSV to be split by season.
+    train_path : str, optional
+        Path to a pre-split training CSV.
+    test_path : str, optional
+        Path to a pre-split testing CSV.
     holdout_season : int, optional
-        Season to reserve for final testing.  If None, uses the
-        latest season present in the data.
+        Season to reserve for final testing.  If None, infers from data.
 
     Returns
     -------
@@ -484,17 +544,49 @@ def run_experiment(data_path: str, holdout_season: Optional[int] = None) -> Tupl
     pd.DataFrame
         DataFrame summarising hold‑out predictions for ensemble blending.
     """
-    # Load and engineer data
-    X, y, groups, df = build_dataset(data_path)
-    # Identify hold‑out season if not provided
-    if holdout_season is None:
-        holdout_season = int(df["season"].max())
-    # Split into training and test sets
-    train_mask = df["season"] < holdout_season
-    test_mask = df["season"] == holdout_season
-    X_train, X_test = X.loc[train_mask], X.loc[test_mask]
-    y_train, y_test = y.loc[train_mask], y.loc[test_mask]
-    groups_train = groups.loc[train_mask]
+    if train_path and test_path:
+        (
+            X_train,
+            y_train,
+            groups_train,
+            df_train,
+            X_test,
+            y_test,
+            _groups_test,
+            df_test,
+        ) = load_train_test_splits(train_path, test_path)
+        if holdout_season is None:
+            if "season" in df_test.columns:
+                holdout_season = int(df_test["season"].max())
+            elif "season_home" in df_test.columns:
+                holdout_season = int(df_test["season_home"].max())
+            else:
+                holdout_season = int(df_train["season"].max()) + 1
+    elif data_path:
+        X, y, groups, df = build_dataset(data_path)
+        if holdout_season is None:
+            holdout_season = int(df["season"].max())
+        train_mask = df["season"] < holdout_season
+        test_mask = df["season"] == holdout_season
+        X_train, X_test = X.loc[train_mask], X.loc[test_mask]
+        y_train, y_test = y.loc[train_mask], y.loc[test_mask]
+        groups_train = groups.loc[train_mask]
+        df_train = df.loc[train_mask].copy()
+        df_test = df.loc[test_mask].copy()
+    else:
+        raise ValueError("Provide either `data_path` or both `train_path` and `test_path`.")
+    # Persist feature metadata for documentation
+    feature_summary = summarize_features(X_train)
+    export_feature_metadata(feature_summary, FEATURE_METADATA_PATH)
+    # Recency-aware weights
+    sample_weight_train = compute_recency_weights(df_train)
+    # Baseline rate for BSS (weighted if possible)
+    if len(sample_weight_train):
+        baseline_rate_train = float(np.average(y_train, weights=sample_weight_train))
+    else:
+        baseline_rate_train = float(y_train.mean())
+    # Define cross‑validator
+    cv = PurgedGroupTimeSeriesSplit(n_splits=5, embargo_groups=1)
     # Persist feature metadata for documentation
     feature_summary = summarize_features(X_train)
     export_feature_metadata(feature_summary, FEATURE_METADATA_PATH)
@@ -536,20 +628,40 @@ def run_experiment(data_path: str, holdout_season: Optional[int] = None) -> Tupl
         rf = RandomForestClassifier(n_estimators=300, max_depth=6, min_samples_leaf=10, random_state=42)
         models.append(("RandomForest", rf, False))
     results: List[ModelResult] = []
+    sample_weight_train = np.asarray(sample_weight_train, dtype=float)
     # For storing training and test predictions by model for ensemble blending
     ensemble_train = pd.DataFrame(index=X_train.index)
     ensemble_test = pd.DataFrame(index=X_test.index)
     for name, est, calibrate in models:
-        res = evaluate_model(name, est, X_train, y_train, groups_train, cv, calibrate=calibrate, baseline_rate=baseline_rate_train)
+        res = evaluate_model(
+            name,
+            est,
+            X_train,
+            y_train,
+            groups_train,
+            cv,
+            calibrate=calibrate,
+            baseline_rate=baseline_rate_train,
+            sample_weight=sample_weight_train,
+        )
         # Evaluate on test
-        test_metrics = evaluate_on_test(est, X_train, y_train, X_test, y_test, calibrate=calibrate, baseline_rate=baseline_rate_train)
+        test_metrics = evaluate_on_test(
+            est,
+            X_train,
+            y_train,
+            X_test,
+            y_test,
+            calibrate=calibrate,
+            baseline_rate=baseline_rate_train,
+            sample_weight=sample_weight_train,
+        )
         res.test_brier, res.test_logloss, res.test_roc_auc, res.test_pr_auc, res.test_brier_skill, res.test_brier_decomp = test_metrics
         results.append(res)
         # Fit on full training and record probability predictions for blending on training set
         est_full = clone(est)
         if calibrate:
             base_full = clone(est)
-            base_full.fit(X_train, y_train)
+            _fit_with_optional_weights(base_full, X_train, y_train, sample_weight_train)
             calibrator_full = CalibratedClassifierCV(
                 **{CALIBRATOR_ESTIMATOR_PARAM: base_full}, method="isotonic", cv="prefit"
             )
@@ -557,7 +669,7 @@ def run_experiment(data_path: str, holdout_season: Optional[int] = None) -> Tupl
             ensemble_train[f"{name}"] = calibrator_full.predict_proba(X_train)[:, 1]
             ensemble_test[f"{name}"] = calibrator_full.predict_proba(X_test)[:, 1]
         else:
-            est_full.fit(X_train, y_train)
+            _fit_with_optional_weights(est_full, X_train, y_train, sample_weight_train)
             ensemble_train[f"{name}"] = est_full.predict_proba(X_train)[:, 1]
             ensemble_test[f"{name}"] = est_full.predict_proba(X_test)[:, 1]
     # Build convex blend using two best models (logistic and gradient boosting by default)
@@ -630,7 +742,7 @@ def generate_markdown_report(results: List[ModelResult], output_path: str, holdo
             f"| {res.name} | {res.mean_brier:.4f} | [{res.brier_ci[0]:.4f}, {res.brier_ci[1]:.4f}] | {res.mean_logloss:.4f} | [{res.logloss_ci[0]:.4f}, {res.logloss_ci[1]:.4f}] | {res.mean_roc_auc:.4f} | {res.mean_pr_auc:.4f} | {res.brier_skill:.3f} |"
         )
     lines.append("")
-    lines.append("## Hold‑out season results (\"never‑seen\" season)")
+    lines.append("## Hold‑out season results (\"never_seen\" season)")
     lines.append("")
     header = ["Model", "Brier", "Log‑loss", "ROC AUC", "PR AUC", "Brier Skill"]
     lines.append("| " + " | ".join(header) + " |")
@@ -660,7 +772,7 @@ def generate_markdown_report(results: List[ModelResult], output_path: str, holdo
     # Write report
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w", encoding="utf-8") as f:
-        f.write("\n".join(lines))
+        f.write("/n".join(lines))
 
 
 if __name__ == "__main__":
