@@ -18,6 +18,7 @@ import React from 'react';
 import DashBoard from './components/DashBoard.jsx'; // FIX: default import, not named
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 import { PredictionProvider } from './PredictionContext.js';
+import NavBar from './components/NavBar/NavBar.jsx';
 
 /**
  * App
@@ -31,6 +32,7 @@ export default function App() {
    // Keep App focused on composition. All prediction state lives in Context.
   return (
     <ErrorBoundary>
+      <NavBar />
       <PredictionProvider>
         <DashBoard />
       </PredictionProvider>

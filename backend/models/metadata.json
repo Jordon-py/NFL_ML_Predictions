@@ -1,7 +1,7 @@
 {
-  "training_timestamp": "2025-09-24T14:39:01.061082",
-  "dataset_hash": "5959783b47",
-  "training_samples": 2524,
+  "training_timestamp": "2025-10-06T23:04:05.465587",
+  "dataset_hash": "bdab8756aa",
+  "training_samples": 4156,
   "raw_feature_columns": {
     "numeric": [
       "home_prior_pf_avg_3",
@@ -37,9 +37,9 @@
     "home_win"
   ],
   "model_scores": {
-    "home_r2_cv": 9.852669605330263,
-    "away_r2_cv": 9.925357908133037,
-    "win_auc_cv": 0.6364571814831376
+    "home_r2_cv": -9.983717714998097,
+    "away_r2_cv": -9.712892742317061,
+    "win_auc_cv": 0.6297113015772093
   },
   "production_ready_win_model": false
 }

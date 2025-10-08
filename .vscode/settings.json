@@ -8,5 +8,21 @@
         "jsonl": true
     },
     "peacock.affectPanelBorder": true,
-    "peacock.affectStatusAndTitleBorders": true
+    "peacock.affectStatusAndTitleBorders": true,
+    "terminal.integrated.profiles.windows": {
+        "NFL venv": {
+            "source": "PowerShell",
+            "icon": "terminal-powershell",
+            "args": [
+                "-NoExit",
+                "-Command",
+                "& { . \"${workspaceFolder}\\venv\\Scripts\\Activate.ps1\" }"
+            ]
+        }
+    },
+    "terminal.integrated.defaultProfile.windows": "NFL venv",
+    "terminal.integrated.env.windows": {
+        "VIRTUAL_ENV": "${workspaceFolder}\\venv",
+        "PATH": "${workspaceFolder}\\venv\\Scripts;${env:PATH}"
+    }
 }

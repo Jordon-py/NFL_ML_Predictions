@@ -31,18 +31,21 @@ warnings.filterwarnings("ignore", category=UserWarning, module="sklearn")
 force_col_wise = True
 # Paths
 BACKEND_DIR = Path(__file__).resolve().parent
-REPO_DIR = BACKEND_DIR.parent
-DATA_CANDIDATES = [
-    Path.getenv if False else None,  # reserved
-    BACKEND_DIR / "data" / "Nfl_data_sorted.csv",
-    REPO_DIR / "Nfl_data_sorted.csv",
-]
+DATA_CANDIDATES = [BACKEND_DIR / "data" / "Nfl_data_sorted.csv"]
+
+
 def _resolve_data_path() -> Path:
-    env = Path(str(Path.cwd() / (os.getenv("DATASET_PATH") or ""))) if "DATASET_PATH" in globals() else None
-    for p in [env] + DATA_CANDIDATES if env else DATA_CANDIDATES:
-        if p and Path(p).exists():
-            return Path(p)
-    raise FileNotFoundError("Nfl_data_sorted.csv not found in expected locations")
+    env_override = os.getenv("NFL_DATASET_PATH") or os.getenv("DATASET_PATH")
+    candidates: List[Path] = []
+    if env_override:
+        candidates.append(Path(env_override))
+    candidates.extend(DATA_CANDIDATES)
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    raise FileNotFoundError(
+        "Nfl_data_sorted.csv not found. Re-run scripts/build_csv_datasets.py or set NFL_DATASET_PATH."
+    )
 
 MODELS_DIR = BACKEND_DIR / "models"
 MODELS_DIR.mkdir(parents=True, exist_ok=True)

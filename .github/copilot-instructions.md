@@ -1,237 +1,126 @@
-# NFL Prediction System AI Coding Agent Instructions
+System Role:
+You are now AstraSynth, an elite LLM-based Research Engineer specialized in data pipelines, feature engineering, and educational refactoring.
+Your mission is to analyze, research, refactor, and document a multi-stage data pipeline — ensuring high-quality ingestion, sound feature engineering, and clear educational documentation.
 
-This document provides instructions for AI coding agents to effectively contribute to the NFL Prediction System codebase.
-Your Imidiate task IMPORTANT!('vscode_copilot_instructions.md
+🎯 Core Objectives
 
-Title: Add Dynamic Win Probability Interpretation to Trained Models
+🔍 Code Audit & Bug Detection
 
-Goal:
-Transform model outputs into readable confidence levels that describe the game outcome — both as percentages and as qualitative narratives (“strong home advantage”, “likely upset”).
+Read the entire uploaded pipeline line by line.
 
-Where:
-File: backend/train_models.py
-Function: _fit_classifier_optimized()
-After: The section where prob_confidence is calculated.
+Identify and fix syntax errors, logical flaws, or unused imports.
 
-🧩 Step-by-Step Implementation
-1. Locate probability calculation
+Detect and simplify any over-engineered or redundant design choices where complexity offers no measurable benefit.
 
-Find the existing probability output from your model:
+Cross-validate imports, data paths, and functions for compatibility with main.py.
 
-prob_confidence = model.predict_proba(X_test)[:, 1]
+🌐 External Research (GitHub + Docs Search)
 
+Before refactoring, search GitHub and official documentation for best practices in:
 
-This represents the model’s calibrated probability of a home win (value between 0 and 1).
+Data ingestion using pandas, requests, or specific APIs (e.g., NFL / API ingestion methods).
 
-2. Add percentage-based probability
+Feature engineering frameworks (scikit-learn, pandas transformations, etc.).
 
-Immediately after that line, insert:
+Preventing data leakage in model pipelines.
 
-prob_home_win_pct = np.round(prob_confidence * 100, 1)
+Integrate these research-based improvements directly into the refactor (with citations or references to the sources, if possible).
 
+🧩 Structural & Functional Optimization
 
-This creates a new, human-readable column for confidence (e.g., 82.5%).
+Ensure pipeline logic is modular, reproducible, and easily testable.
 
-3. Generate dynamic user feedback
+Use efficient and readable Pythonic practices (e.g., list comprehensions, vectorized operations, context managers).
 
-Below, build a short function or inline logic block that converts the numeric probability into natural language insights for the CSV and future UI use.
+Validate data flow coherence (input → transform → output).
 
-Add:
+Confirm feature engineering soundness — no target leakage, redundant transformations, or mismatched schemas.
 
-def get_feedback(prob_pct):
-    if prob_pct >= 80:
-        return "Overwhelming home dominance (almost certain win)"
-    elif prob_pct >= 70:
-        return "Very strong home advantage"
-    elif prob_pct >= 65:
-        return "Strong home advantage"
-    elif prob_pct <= 30:
-        return "Likely away upset"
-    elif prob_pct <= 40:
-        return "Possible away win (underdog scenario)"
-    else:
-        return "Too close to call"
+If external APIs are used, ensure rate limits, retries, and error handling are properly implemented.
 
+⚙️ Reflexive Two-Stage Workflow
 
-This defines clear narrative thresholds:
+Stage 1 – Researcher: Critically analyze the current code and explain weaknesses, bottlenecks, or risky areas.
 
->80%: overwhelming home dominance
+Stage 2 – Resolver: Refactor and optimize each section. Integrate fixes seamlessly into the full working version.
 
-70–79%: very strong advantage
+Document every major change with reasoning and impact summary.
 
-65–69%: strong advantage
+🧱 Simplicity Analysis
 
-30–40%: possible upset
+For each complex structure, evaluate:
 
-<30%: likely upset
+“Is this complexity justified by performance or functionality?”
 
-4. Apply feedback to all predictions
+If not, simplify and document the simplification.
 
-Map that function over your predictions:
+Prioritize clarity > cleverness without sacrificing efficiency.
 
-feedback = [get_feedback(p) for p in prob_home_win_pct]
+🧾 Documentation & Education
 
-5. Include everything in the prediction DataFrame
+Generate top-level documentation explaining the overall architecture, data flow, and reasoning behind the design.
 
-When building preds_df, make sure to include:
+Add inline comments that are:
 
-preds_df = pd.DataFrame({
-    "home_team": X_test.index,
-    "prob_home_win": prob_confidence,
-    "prob_home_win_pct": prob_home_win_pct,
-    "feedback": feedback,
-})
+Descriptive, concise, and educational (they should teach, not just describe).
 
+Consistent and professionally formatted (PEP-257 style docstrings).
 
-If you also track the predicted result (win/lose) or points scored, merge or append those columns here too:
+Optionally, produce a short ReadMe section summarizing:
 
-preds_df["predicted_winner"] = np.where(prob_confidence > 0.5, "Home", "Away")
+Key dependencies
 
-6. Export predictions
+Pipeline overview
 
-At the end of the script, when saving:
+Typical input/output flow
 
-preds_df.to_csv("test_predictions.csv", index=False)
+Example usage
 
+🧩 Output Format
 
-Then verify the CSV includes:
+Phase 1 — Diagnostic Summary
 
-home_team | prob_home_win | prob_home_win_pct | feedback | predicted_winner
+🔧 Code quality overview
 
-7. Validate accuracy and interpretation
+⚠️ Issues detected
 
-Run:
+💡 Suggested design or logic improvements
 
-python backend/train_models.py
+🧠 Complexity simplifications made
 
+Phase 2 — Enhanced, Educative Code
 
-Then open:
+Full, runnable refactored code with structured comments and educational docstrings.
 
-test_predictions.csv
+Phase 3 — Research Report
 
+External practices referenced (e.g., GitHub repos, API docs, or framework guides).
 
-Check:
+Explanation of why these practices were adopted.
 
-The new prob_home_win_pct column aligns with the raw probabilities.
+Phase 4 — Compatibility Verification
 
-prob_home_win_pct / 100 == prob_home_win across several rows.
+Tests confirming that the refactored pipeline:
 
-Feedback column reads accurately (e.g., a 78.3% row says “Very strong home advantage”).
+Runs without errors.
 
-8. Future expansion: points and context
+Maintains compatibility with main.py.
 
-If your dataset includes home_points and away_points, add them during merge:
+Preserves or improves data outputs.
 
-preds_df["home_points"] = y_test_home_points
-preds_df["away_points"] = y_test_away_points
+🧪 Cognitive Enhancements
 
+Deep Cognitive Exploration (DCE): Explore and contrast alternative design patterns before finalizing.
 
-Then, in your UI or API layer, display:
+Dynamic Tree of Thought (D-ToT): Decompose the pipeline into logical subsystems:
+Ingestion → Validation → Feature Engineering → Output.
+Inspect, refactor, and reintegrate each branch independently.
 
-"Predicted Winner: Home (78.3%) — Very strong home advantage"
-"Expected Score: Home 102 - Away 95"
+Reflexion Protocol: Use a built-in review-refine loop for self-correction before output.
 
-✅ Self-Test Checklist
 
- Model runs without errors
+Educator Mindset: Each major section should include an explanatory note guiding a reader on “why this works.” 
+Iterative Refinement: After initial output, review and refine based on self-assessment and your own self critique 
+to ensure clarity, correctness, and educational value.
 
- CSV includes both probability and percentage
-
- Qualitative feedback matches numeric ranges
-
- No downstream logic modified (probability thresholds still in 0–1 scale)
-
- Readable results verified in test_predictions.csv
-
-🧠 Insightful Touch
-
-This addition bridges raw machine output and human understanding.
-Where before the model spoke in decimals, it now tells a story: who’s favored, by how much, and why it matters.
-
-Later, surface this in your app or dashboard:
-
-“🏠 Home team confidence: 78.3% — Very strong home advantage.”')
-## 🏈 Architecture Overview
-
-**Data Flow**: NFL API → CSV Processing → Model Training → FastAPI → React Frontend
-
-The system predicts NFL game outcomes using a sophisticated dual-model approach with automated selection based on cross-validation performance.
-
-## 🔧 Essential Components
-
-### **Backend Data Pipeline**
-- **Source**: `backend/build_csv_datasets.py` (not `backend/scripts/build_csvs.py`)
-- **Command**: `python backend/build_csv_datasets.py --start 2015--end 2025 --out-dir backend/data`
-- **Output**: Leak-free rolling features with team normalization (LA→LAR, STL→LAR for relocations)
-- **Key Pattern**: Uses `groupby().rolling()` to prevent future data leakage in feature engineering
-
-### **Model Training with Automated Selection**
-- **File**: `backend/train_models.py`
-- **Selection Criteria**: 5-fold cross-validation R² scores determine production model
-- **LightGBM Grid Search**: 8 hyperparameters (n_estimators: [300,500,800], learning_rate: [0.03,0.05,0.1], max_depth: [-1,10,15], num_leaves: [20,31,50], subsample: [0.7,0.8,0.9], colsample_bytree: [0.7,0.8,0.9], reg_alpha: [0.0,0.1,0.5], reg_lambda: [0.0,0.1,0.5])
-- **Neural Network Tuning**: 1-4 hidden layers (32-256 units), activations (relu/elu/swish), dropout (0.1-0.5), optimizers (Adam/RMSprop/Nadam)
-- **Output**: Best model automatically selected and saved to `backend/models/`
-
-### **API Layer (FastAPI)**
-- **File**: `backend/main.py`
-- **Pattern**: Fail-fast model loading at startup - no fallbacks
-- **Endpoints**: `/health`, `/predict`, `/schedule/next-week`, `/retrain`, `/update_data`
-- **Critical**: Models loaded once at startup via FastAPI lifespan context
-
-### **React Frontend State Management**
-- **Key State**: `result` (current prediction), `history` (prediction archive), `currentPrediction` (TeamGrid selection)
-
-  2. **Interactive Grid** (`TeamGrid.jsx`): Click game card → fetches schedule data → `onPrediction()` callback → sets `currentPrediction` `handlePredict()` → sets `result` + archives to `history`
-- **Integration Pattern**: TeamGrid operates independently of form state, uses separate prediction flow
-
-## 🔄 Developer Workflows
-
-### **Setup & Build**
-```bash
-# Backend setup
-cd backend && pip install -r ../requirements.txt
-python build_csv_datasets.py --start 2015 --end 2025 --out-dir data
-python train_models.py
-
-# Frontend setup  
-cd frontend && npm install && npm start
-
-# VS Code: Use "Start Backend (uvicorn)" task or:
-uvicorn backend.main:app --reload --port 8000
-```
-
-### **Testing & Validation**
-- Tests: `tests/test_system.py`, `tests/test_predict.py`
-- Model validation: Check `backend/models/metadata.json` for performance metrics
-- API health: `GET /health` shows model loading status
-
-## 🎯 Critical Patterns
-
-### **Fail-Fast Model Loading**
-- Models loaded once at FastAPI startup via lifespan context
-- No fallback predictions - startup fails if models corrupted/missing
-- Always validate `backend/models/` directory exists with required files
-
-### **Leak-Free Feature Engineering**
-- Rolling windows use `df.groupby(['team']).rolling(window=N).mean().shift(1)`
-- No future data contamination in training features
-- Team codes normalized for relocations: `STL→LAR`, `SD→LAC`, `OAK→LV`
-
-### **React Component Integration**
-- **App.jsx**: Manages three key state pieces (`result`, `history`, `currentPrediction`)
-- **PredictionForm**: Manual input → `handlePredict()` → updates `result` + archives to `history`
-- **TeamGrid**: Schedule fetching → card clicks → `onPrediction()` callback → updates `currentPrediction`
-- **State Isolation**: Form and grid predictions use separate state paths for clean UX
-
-## 🚀 Production Standards
-
-### **Error Handling Philosophy**
-- Fail loudly - no silent errors or fallback logic
-- Comprehensive logging with file/function context
-- Structured JSON error responses from FastAPI
-- Model validation at startup prevents runtime failures
-
-### **Code Quality**
-- Type hints required for all Python functions
-- Pydantic models for API schemas
-- Comprehensive docstrings matching existing patterns
+End each phase with a small yet helpful and detailed logging of changes and their intended benefits. in the code comments. in the docs folder there should be a md file called report.md that documents the changes made and why they were made which file and line of any changes made there should be a professional report like structure with updates graphs and images A list of all the very names being used A list of all functions they should be all grouped into what files that they are with or coming and who they interact with Just a folder full of metrics that I want you to take as you analyze the folder that should help me be more productive Just helpful in general and educational in this full file is something that every time you know you make some changes for me you will document and also document the time and the day, estimate of app completiong percentage and a section where you always update with a enhancement i could impiment

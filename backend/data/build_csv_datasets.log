@@ -1,7 +1,7 @@
-2025-09-24 05:43:26,089 INFO Logger initialized. Writing to backend\data\build_csv_datasets.log
-2025-09-24 05:43:26,092 INFO Production dataset build - Current NFL state: 2025W1
-2025-09-24 05:43:26,092 INFO Building dataset for seasons=[2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026] (include_future=True)
-2025-09-24 05:43:26,092 INFO Loading schedules for seasons=[2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026] (include_future=True)
-2025-09-24 05:43:27,267 INFO Loaded 2524 completed games + 224 future games
-2025-09-24 05:43:27,336 INFO Kept future games - dropped only rows missing feature data
-2025-09-24 05:43:27,408 INFO Production dataset ready: backend\data\Nfl_data_sorted.csv (2748 games)
+2025-10-06 23:01:31,374 INFO Logger initialized. Writing to backend\data\build_csv_datasets.log
+2025-10-06 23:01:31,375 INFO Production dataset build - Current NFL state: 2025W1
+2025-10-06 23:01:31,375 INFO Building dataset for seasons=[2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026] (include_future=True)
+2025-10-06 23:01:31,376 INFO Loading schedules for seasons=[2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026] (include_future=True)
+2025-10-06 23:01:32,535 INFO Loaded 4156 completed games + 194 future games
+2025-10-06 23:01:32,607 INFO Kept future games - dropped only rows missing feature data
+2025-10-06 23:01:32,672 INFO Production dataset ready: backend\data\Nfl_data_sorted.csv (4350 games)
