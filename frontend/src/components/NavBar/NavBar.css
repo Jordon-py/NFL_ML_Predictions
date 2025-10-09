@@ -8,8 +8,45 @@
     z-index: -1;
 }
 
+/* SVG Border Container - Must not interfere with sticky positioning */
+/* Override TeamGrid.css .sb3 inline-block for navbar wrapper */
+.sb3--navbar {
+    display: block !important;
+    position: relative;
+    width: 100%;
+    border-radius: 0;
+}
+
+.sb3:has(.navBar) {
+    display: block !important;
+    position: relative;
+    width: 100%;
+    border-radius: 0;
+}
+
+/* More specific selector to override TeamGrid.css */
+.navBar.sb3__content,
+nav.sb3__content {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+/* Parent container for NavBar only - use more specific selector */
+nav.navBar ~ .sb3__svg,
+.navBar + .sb3__svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    overflow: visible;
+}
+
 .navBar {
     display: flex;
+    justify-content: space-between;
+    align-items: center;
     background-color: #000925;
     color: white;
     padding: 1rem;
@@ -29,7 +66,26 @@
     -webkit-backdrop-filter: blur(10px);
     transition: background-color 0.9s, box-shadow 0.93s;
 }
+
 .navBar h1 {
     margin: 0;
     font-size: 1.5rem;
+}
+
+.navBar__links ul {
+    display: flex;
+    list-style: none;
+    gap: 2rem;
+    margin: 0;
+    padding: 0;
+}
+
+.navBar__links a {
+    color: white;
+    text-decoration: none;
+    transition: color 0.3s;
+}
+
+.navBar__links a:hover {
+    color: #7aaaff;
 }

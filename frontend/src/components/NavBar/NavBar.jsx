@@ -15,7 +15,8 @@ function NavBar() {
      * ✅ Use regular synchronous setState (no async/await needed)
      */
     const handleScroll = () => {
-        const wScrollY = window.scrollY[0] || window.scrollY;
+        // window.scrollY is a number, not an array - no need for [0] index
+        const wScrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop;
         wScrollY > 25 ? setIsSticking('sticking') : setIsSticking('');
     };
 
@@ -32,7 +33,7 @@ function NavBar() {
     return (
         <>
             {/* SVG Defs for racetrack border effect - used globally */}
-            <svg width="0" height="0" aria-hidden="true" style={{position: 'relevant'}}>
+            <svg width="0" height="0" aria-hidden="true" style={{position: 'absolute'}}>
                 <defs>
                     <linearGradient id="sb3Gradient" x1="0%" y1="0%" x2="100%" y2="0%">
                         <stop offset="0%" stopColor="#7aaaff" />
@@ -55,7 +56,7 @@ function NavBar() {
                 </defs>
             </svg>
 
-            <div className="sb3" style={{borderRadius: '0'}}>
+            <div className="sb3 sb3--navbar" style={{borderRadius: '0'}}>
                 <nav className={`navBar sb3__content ${isSticking ? 'sticking' : ''}`}>
                     <h1>NFL Prediction App</h1>
                     <div className="navBar__links">
