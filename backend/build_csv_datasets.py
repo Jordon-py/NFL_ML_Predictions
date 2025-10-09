@@ -1126,8 +1126,3 @@ if __name__ == "__main__":
 #    collinearity and match many sports modeling baselines.
 # 3) Provide a "strict" mode that drops rows with insufficient history instead
 #    of imputing means, to allow unbiased validation when desired.
-#    drift; consider exporting it into metadata alongside the dataset build.
-# 2) Add opponent-relative features (home_minus_away of priors) to reduce
-#    collinearity and match many sports modeling baselines.
-# 3) Provide a "strict" mode that drops rows with insufficient history instead
-#    of imputing means, to allow unbiased validation when desired.

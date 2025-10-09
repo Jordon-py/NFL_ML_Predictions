@@ -46,7 +46,7 @@ logging.config.dictConfig({
 log = logging.getLogger("api")
 
 # ---------- Constants ----------
-DEFAULT_DATASET = DATA_DIR / "merged_game_features.csv"
+DEFAULT_DATASET = DATA_DIR / "merged_game_features.csv"  # Updated from 'Nfl_data_sorted.csv'
 DEFAULT_SCHEDULE = DATA_DIR / "Nfl_schedule_2025_2026.csv"
 
 # ---------- Schemas ----------

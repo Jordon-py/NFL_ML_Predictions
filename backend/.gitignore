@@ -34,6 +34,8 @@ data/**/*.csv
 # Environment
 .env
 .env.local
+.env.production
+
 
 # Testing
 .pytest_cache/

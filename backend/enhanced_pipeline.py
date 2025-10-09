@@ -772,7 +772,7 @@ def generate_markdown_report(results: List[ModelResult], output_path: str, holdo
     # Write report
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w", encoding="utf-8") as f:
-        f.write("/n".join(lines))
+        f.write("\n".join(lines))
 
 
 if __name__ == "__main__":

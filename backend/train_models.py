@@ -157,7 +157,7 @@ def _preprocessor(features: List[str]) -> ColumnTransformer:
 def _grid_lgbm_reg() -> Dict[str, List[Any]]:
     return {
         "n_estimators": [75, 150, 175],
-        "learning_rate": [0.05, 0.1, .02],
+        "learning_rate": [0.05, 0.1, 0.02],
         "max_depth": [4, 10],
         "num_leaves": [15, 25],
         "subsample": [0.4, 0.9],
