@@ -1,8 +1,12 @@
-# Safe minimal slugignore
+# Safe minimal slugignore - Backend (FastAPI) only for Heroku
+
+## Exclude entire frontend (deployed separately on Vercel)
+
+frontend/
 
 ## Node modules (largest space saver)
 
-frontend/node_modules/
+node_modules/
 
 ## Development artifacts
 
@@ -13,3 +17,9 @@ logs/
 __pycache__/
 .vscode/
 .github/
+*.md
+!README.md
+tests/
+.git/
+.env.example
+.pre-commit-config.yaml

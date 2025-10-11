@@ -1,38 +1,46 @@
-// NavBar component for the NFL Prediction app
 import {useEffect, useState} from 'react';
-import './NavBar.css';
+import './NavBarr.css';
 
+/**
+ * NavBar.jsx
+ * ----------
+ * Purpose:
+ *   Persistent navigation header that gains a "sticky" style after scrolling.
+ *
+ * Notes:
+ *   - `isSticking` holds the CSS class name "sticking" or "" (string-based to avoid breaking CSS).
+ *   - We call `handleScroll()` once on mount to sync initial state (in case the page loads scrolled).
+ *   - Passive scroll listener + SSR guard for safety.
+ */
 function NavBar() {
+    // Keep string type to avoid changing downstream CSS expectations
     const [isSticking, setIsSticking] = useState('');
 
-    /**
-        * EFFECT: Handle scroll to toggle 'sticking' class on navbar
-    
-     * CORRECT PATTERN:
-     * ✅ Define a scroll handler function
-     * ✅ Attach it to window with addEventListener in useEffect
-     * ✅ Return a cleanup function that removes the listener
-     * ✅ Use regular synchronous setState (no async/await needed)
-     */
+    // EFFECT: toggle the "sticking" class after scrolling a small distance.
     const handleScroll = () => {
-        const wScrollY = window.scrollY[0] || window.scrollY;
-        wScrollY > 25 ? setIsSticking('sticking') : setIsSticking('');
+        if (typeof window === 'undefined') return; // SSR/defensive guard
+        setIsSticking(window.scrollY > 25 ? 'sticking' : '');
     };
 
     useEffect(() => {
-        window.addEventListener('scroll', handleScroll);
+        if (typeof window === 'undefined') return;
 
-        // CRITICAL: Return cleanup function to prevent memory leaks
-        // This removes the listener when component unmounts
+        // Sync once on mount (covers initial load where user is already scrolled)
+        handleScroll();
+
+        // Add passive listener to avoid blocking scroll
+        window.addEventListener('scroll', handleScroll, {passive: true});
+
+        // Cleanup on unmount - CRITICAL to prevent memory leaks
         return () => {
             window.removeEventListener('scroll', handleScroll);
         };
-    }, []); // Empty dependency array = run once on mount
+    }, []); // run once on mount
 
     return (
         <>
-            {/* SVG Defs for racetrack border effect - used globally */}
-            <svg width="0" height="0" aria-hidden="true" style={{position: 'relevant'}}>
+            {/* SVG defs for the border animation – render once and reuse via ids. */}
+            <svg width="0" height="0" aria-hidden="true" style={{position: 'inherit'}}>
                 <defs>
                     <linearGradient id="sb3Gradient" x1="0%" y1="0%" x2="100%" y2="0%">
                         <stop offset="0%" stopColor="#7aaaff" />
@@ -42,8 +50,14 @@ function NavBar() {
                     </linearGradient>
                     <filter id="sb3Sparkle" x="-20%" y="-20%" width="140%" height="140%">
                         <feGaussianBlur in="SourceAlpha" stdDeviation="0.5" result="a" />
-                        <feSpecularLighting in="a" surfaceScale="1.2" specularConstant="0.5"
-                            specularExponent="18" lightingColor="white" result="b">
+                        <feSpecularLighting
+                            in="a"
+                            surfaceScale="0.4"
+                            specularConstant="0.5"
+                            specularExponent="18"
+                            lightingColor="white"
+                            result="b"
+                        >
                             <fePointLight x="-60" y="-40" z="80" />
                         </feSpecularLighting>
                         <feComposite in="b" in2="SourceAlpha" operator="in" result="spec" />
@@ -55,23 +69,18 @@ function NavBar() {
                 </defs>
             </svg>
 
-            <div className="sb3" style={{borderRadius: '0'}}>
-                <nav className={`navBar sb3__content ${isSticking ? 'sticking' : ''}`}>
-                    <h1>NFL Prediction App</h1>
-                    <div className="navBar__links">
-                        <ul>
-                            <li><a href="#home">Home</a></li>
-                            <li><a href="#about">About</a></li>
-                            <li><a href="#contact">Contact</a></li>
-                        </ul>
-                    </div>
-                </nav>
-                <svg className="sb3__svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-                    <rect className="sb3__rect" x="1.5" y="1.5" width="97" height="97" rx="0" ry="0" pathLength="1000" />
-                    <rect className="sb3__rect sb3__rect--car" x="1.5" y="1.5" width="97" height="97" rx="0" ry="0" pathLength="1000" />
-                </svg>
-            </div>
+            <nav className={`navBar ${isSticking}`} style={{position: 'sticky'}}>
+                <h1>NFL Prediction App</h1>
+                <div className="navBar__links">
+                    <ul>
+                        <li><a href="#home">Home</a></li>
+                        <li><a href="#about">About</a></li>
+                        <li><a href="#contact">Contact</a></li>
+                    </ul>
+                </div>
+            </nav>
         </>
     );
-};
+}
+
 export default NavBar;

@@ -1,22 +1,29 @@
 /**
  * PredictionResult.jsx
  * --------------------
- * Purpose:
- *   Present the latest prediction ("current") in a consistent schema.
+ * Component Purpose:
+ *   Present the most recent prediction entry supplied by the context.
  *
- * Layer 1 Fix:
- *   - Aligns with unified entry: metrics + probs.
+ * Core Logic Overview:
+ *   - Guard against `null` entries and return a helpful empty message.
+ *   - Compute display-friendly percentages using basic rounding.
+ *   - Render structured sections (meta, scores, probabilities) for clarity.
  *
- * Layer 2:
- *   - Stateless display. All logic lives in Context or containers.
+ * Modification Guide:
+ *   - Keep heavy calculations out of the component—normalise data inside the
+ *     context or dedicated selectors.
+ *   - When adding new metrics, ensure you handle `null`/`undefined` so the UI
+ *     never crashes while the backend evolves.
  */
 
 import React from 'react';
 
-export default function PredictionResult({ entry }) {
+export default function PredictionResult({entry}) {
+  // Provide a friendly fallback so the area never collapses visually.
   if (!entry) return <div className="prediction-result">No prediction yet.</div>;
 
-  const { game, metrics, probs } = entry;
+  const {game, metrics, probs} = entry;
+  // Convert probabilities to whole-number percentages for readability.
   const homePct = probs.home != null ? Math.round(probs.home * 100) : null;
   const awayPct = probs.away != null ? Math.round(probs.away * 100) : null;
   const ensemblePct = probs.ensemble != null ? Math.round(probs.ensemble * 100) : null;

@@ -1,20 +1,25 @@
 /**
  * HistoryChart.jsx
  * ----------------
- * Purpose:
- *   Consume the unified history entries and render a simple trend.
+ * Component Purpose:
+ *   Consume the shared history entries and render a minimal trend list.
  *
- * Layer 1 + 2 Fix:
- *   - Stop assuming `ensemble_proba` exists on root.
- *   - Use `entry.probs.ensemble ?? entry.probs.home ?? null` safely.
+ * Core Logic Overview:
+ *   - Derive `points` with `useMemo` so we only recompute when history updates.
+ *   - Safely pick the best probability value (`ensemble` ➜ `home`) and convert
+ *     it to a human-readable percentage.
+ *   - Provide a text-based fallback list you can later replace with a chart lib.
  *
- * Note:
- *   Replace the placeholder rendering with your chart lib as needed.
+ * Modification Guide:
+ *   - Swap the `<ul>` for your favourite chart component; just plug in `points`.
+ *   - If you need more metrics, extend the map function and keep null checks so
+ *     missing data never crashes the render.
  */
 
-import React, { useMemo } from 'react';
+import React, {useMemo} from 'react';
 
-export default function HistoryChart({ history }) {
+export default function HistoryChart({history}) {
+  // Transform history entries into chart-friendly tuples.
   const points = useMemo(() => {
     return (history ?? []).map((e) => {
       const y = (e?.probs?.ensemble ?? e?.probs?.home ?? null);
@@ -26,6 +31,7 @@ export default function HistoryChart({ history }) {
     });
   }, [history]);
 
+  // Empty states should still return semantic markup for screen readers.
   if (!points.length) return <div className="history-chart">No history yet.</div>;
 
   // Minimal textual fallback. Swap for a chart library in your stack.

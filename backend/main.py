@@ -150,7 +150,7 @@ async def lifespan(app: FastAPI):
     log.info("Shutdown complete")
 
 # Get CORS origins from environment variable
-CORS_ORIGINS = os.getenv("CORS_ORIGINS", "{*}localhost:3000").split(",")
+CORS_ORIGINS = os.getenv("CORS_ORIGINS","http://localhost:3000").split(",")
 CORS_ORIGINS = [origin.strip() for origin in CORS_ORIGINS if origin.strip()]
 
 log.info(f"CORS Origins configured: {CORS_ORIGINS}")

@@ -1,34 +1,19 @@
-import React, { useState, useEffect } from 'react';
-import { getNextWeekSchedule, predictGame } from '../api/client.js';
-import './TeamGrid.css';
+import React, {useState, useEffect} from 'react';
+import {getNextWeekSchedule, predictGame} from '../api/client.js';
+
 
 /**
  * TeamGrid Component - Displays NFL matchups for next week with prediction capabilities
- *
- * Features:
- * - Loads team metadata from CSV
- * - Fetches next week's schedule from API
- * - Displays matchup cards with team logos and kickoff times
- * - Handles prediction requests on card clicks
- * - Shows loading states and prediction results
- * - Responsive grid layout with accessibility features
- *
- * @component
- * @param {object} props - Component props
- * @param {Function} props.onPrediction - Callback when prediction is made (optional)
- * @returns {JSX.Element} TeamGrid component
+ * (Visual-only updates: removed inline styles, added CSS utility classes, preserved behavior)
  */
-function TeamGrid({ onPrediction = undefined }) {
+function TeamGrid({onPrediction = undefined}) {
   const [teams, setTeams] = useState({});
   const [schedule, setSchedule] = useState([]);
   const [predictions, setPredictions] = useState({});
   const [loading, setLoading] = useState({});
   const [error, setError] = useState(null);
 
-  /**
-   * Load team metadata from CSV file
-   * Parses team descriptions and creates lookup table by abbreviation
-   */
+  // Load team metadata from CSV
   useEffect(() => {
     const loadTeams = async () => {
       try {
@@ -36,7 +21,6 @@ function TeamGrid({ onPrediction = undefined }) {
         if (!response.ok) {
           throw new Error('Failed to load team data');
         }
-
         const csvText = await response.text();
         const lines = csvText.trim().split('\n');
         const headers = lines[0].split(',').map(h => h.trim());
@@ -46,27 +30,19 @@ function TeamGrid({ onPrediction = undefined }) {
           const values = lines[i].split(',').map(v => v.trim());
           if (values.length >= 3) {
             const [teamName, abbr, logoUrl] = values;
-            teamData[abbr] = {
-              name: teamName,
-              abbr,
-              logoUrl,
-            };
+            teamData[abbr] = {name: teamName, abbr, logoUrl};
           }
         }
-
         setTeams(teamData);
       } catch (err) {
         console.error('[TeamGrid] Failed to load teams:', err);
         setError('Failed to load team data');
       }
     };
-
     loadTeams();
   }, []);
 
-  /**
-   * Load next week's schedule from API
-   */
+  // Load next week's schedule from API
   useEffect(() => {
     const loadSchedule = async () => {
       try {
@@ -77,25 +53,17 @@ function TeamGrid({ onPrediction = undefined }) {
         setError('Failed to load schedule');
       }
     };
-
     if (Object.keys(teams).length > 0) {
       loadSchedule();
     }
   }, [teams]);
 
-  /**
-   * Handle prediction request for a matchup
-   * @param {object} game - Game object with season, week, home_abbr, away_abbr
-   */
+  // Predict a matchup
   const handlePredict = async (game) => {
     const gameKey = `${game.home_abbr}-${game.away_abbr}`;
+    if (loading[gameKey] || predictions[gameKey]) return;
 
-    // Don't make duplicate requests
-    if (loading[gameKey] || predictions[gameKey]) {
-      return;
-    }
-
-    setLoading(prev => ({ ...prev, [gameKey]: true }));
+    setLoading(prev => ({...prev, [gameKey]: true}));
     setError(null);
 
     try {
@@ -105,18 +73,13 @@ function TeamGrid({ onPrediction = undefined }) {
         season: game.season,
         week: game.week,
       });
-
-      setPredictions(prev => ({ ...prev, [gameKey]: result }));
-
-      // Notify parent component
-      if (onPrediction) {
-        onPrediction(game, result);
-      }
+      setPredictions(prev => ({...prev, [gameKey]: result}));
+      if (onPrediction) onPrediction(game, result);
     } catch (err) {
       console.error('[TeamGrid] Prediction failed:', err);
       setError(`Failed to predict ${game.home_abbr} vs ${game.away_abbr}`);
     } finally {
-      setLoading(prev => ({ ...prev, [gameKey]: false }));
+      setLoading(prev => ({...prev, [gameKey]: false}));
     }
   };
 
@@ -143,12 +106,7 @@ function TeamGrid({ onPrediction = undefined }) {
     }
   };
 
-  /**
-   * Render team logo and name
-   * @param {string} abbr - Team abbreviation
-   * @param {boolean} isHome - Whether this is the home team
-   * @returns {JSX.Element} Team display element
-   */
+  // Render team block (visual-only updates: class-based fallback toggle)
   const renderTeam = (abbr, isHome) => {
     const team = teams[abbr];
     if (!team) {
@@ -166,12 +124,14 @@ function TeamGrid({ onPrediction = undefined }) {
           src={team.logoUrl}
           alt={`${team.name} logo`}
           className="team-logo"
+          /* Enhancement 6: class-based fallback toggle (no inline style) */
           onError={(e) => {
-            e.target.style.display = 'none';
-            e.target.nextSibling.style.display = 'block';
+            e.currentTarget.classList.add('is-hidden');
+            const fallback = e.currentTarget.nextElementSibling;
+            if (fallback) fallback.classList.remove('is-hidden');
           }}
         />
-        <div className="team-logo-placeholder" style={{ display: 'none' }}>
+        <div className="team-logo-placeholder is-hidden">
           {team.abbr}
         </div>
         <div className="team-info">
@@ -215,8 +175,7 @@ function TeamGrid({ onPrediction = undefined }) {
           return (
             <div
               key={`${game.season}-${game.week}-${index}`}
-              className="sb3"
-              style={{borderRadius: '12px'}}
+              style={{'--i': index}}
             >
               <div
                 className={`matchup-card inner-card sb3__content ${prediction ? 'has-prediction' : ''} ${isLoading ? 'loading' : ''}`}
@@ -264,10 +223,7 @@ function TeamGrid({ onPrediction = undefined }) {
                   </div>
                 )}
               </div>
-              <svg className="sb3__svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-                <rect className="sb3__rect" x="1.5" y="1.5" width="97" height="97" rx="12" ry="12" pathLength="1000"/>
-                <rect className="sb3__rect sb3__rect--car" x="1.5" y="1.5" width="97" height="97" rx="12" ry="12" pathLength="1000"/>
-              </svg>
+             
             </div>
           );
         })}

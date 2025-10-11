@@ -10,7 +10,8 @@
    ========================================================================== */
 /* Base styles */
 body {
-  font-family: Geneva, Verdana, sans-serif;
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 400;
   margin: 0 auto;
   background-color: #071f45;
   color: lch(5.6% 8.51 237.49);
@@ -21,11 +22,11 @@ body {
   background-image: image('https://lh3.googleusercontent.com/gg-dl/AJfQ9KRHF4L1FNK3e1NjOF7RZysdQnHgtSI3sOC7HDkgdcu4Zeqx6yUstsbvgUeCPto9SyEmuI8bHAUM9KD1jhx8sjlvdaGDqZoyz5ZywXs4FaOwCFjTCl7DZigLkicqPwQVmUnxPg92qyeyTzjB-mEY46EvlJXWb-Ces8JRuOI4l2Ow1WS8=s1024');
 
   box-sizing: border-box;
-  overflow-x: hidden;
+  overflow-y: scroll;
   max-height: 100vh;
    /* Use 99vw to avoid accidental horizontal scrollbars on small viewports */
   max-width: 100vw;
-  width: 98%;
+  width: 100%;
    }
 
 main.app-main {
@@ -34,9 +35,11 @@ main.app-main {
     min-width: 100vw;
    }
 
+
+
 .container {
     /* keep container within viewport without forcing scrollbars */
-    max-width: 99vw;
+    max-width: 100vw;
   width: 100%;
   margin: 0 0;
   padding: 1.5rem;
@@ -116,10 +119,13 @@ main.app-main {
    - 'justify-content: stretch' is invalid -> use 'flex-start'.
    - remove transform: matrix3d(...) no-op.
    - backdrop-filter uses lengths (px), not percent. */
+
+
+
 .team-grid-section {
   display: -moz-grid-lines;
-  grid-template-columns: repeat(space-between, minmax(300px, 2fr));
-  gap: 0px 2rem;
+  grid-template-columns: repeat(space-between, minmax(300px, 1fr));
+  gap: 3rem 2rem;
  
   /* ensure grid fits in viewport height and width and stretches to available width */
   /* allow inherited height but ensure the section never exceeds viewport height */
