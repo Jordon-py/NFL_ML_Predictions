@@ -18,14 +18,20 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 # Third-party imports
 =======
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
 # Load environment variables
 from dotenv import load_dotenv
 # Load from backend/.env explicitly to ensure it's found
 load_dotenv(Path(__file__).parent / ".env")
 
+<<<<<<< HEAD
 >>>>>>> main
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
 import numpy as np
 import pandas as pd
 from dotenv import load_dotenv
@@ -82,12 +88,16 @@ log = logging.getLogger("api")
 
 # ---------- Constants ----------
 <<<<<<< HEAD
+<<<<<<< HEAD
 DEFAULT_DATASET = (
     DATA_DIR / "merged_game_features.csv"
 )  # Updated from 'Nfl_data_sorted.csv'
 =======
 DEFAULT_DATASET = DATA_DIR / "merged_game_features.csv"  # Updated from 'Nfl_data_sorted.csv'
 >>>>>>> main
+=======
+DEFAULT_DATASET = DATA_DIR / "merged_game_features.csv"  # Updated from 'Nfl_data_sorted.csv'
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
 DEFAULT_SCHEDULE = DATA_DIR / "Nfl_schedule_2025_2026.csv"
 
 
@@ -176,6 +186,7 @@ VALID_ABBRS = set(TEAM_ABBREVIATIONS.values())
 
 def get_abbr(name: str) -> str:
 <<<<<<< HEAD
+<<<<<<< HEAD
     if name == "LA":
         return name.replace("LA", "LAR")  # Los Angeles Rams
     if name in VALID_ABBRS:
@@ -183,6 +194,8 @@ def get_abbr(name: str) -> str:
     if name in TEAM_ABBREVIATIONS:
         return TEAM_ABBREVIATIONS[name]
 =======
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
     if name == 'LA': return name.replace('LA','LAR')  # Los Angeles Rams
     if name in VALID_ABBRS: return name
     if name in TEAM_ABBREVIATIONS: return TEAM_ABBREVIATIONS[name]
@@ -234,7 +247,10 @@ def load_objects() -> Dict[str, Any]:
     win_p_path  = MODELS_DIR / "win_clf_calibrated.joblib"
     for p in [home_p_path, away_p_path, win_p_path]:
         if not p.exists(): raise FileNotFoundError(f"Missing model file: {p}")
+<<<<<<< HEAD
 >>>>>>> main
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
 
     return {
         "mode": "production",
@@ -243,8 +259,11 @@ def load_objects() -> Dict[str, Any]:
         "away_model": joblib.load(away_p_path),
         "win_model": joblib.load(win_p_path),
 <<<<<<< HEAD
+<<<<<<< HEAD
         "raw_feature_columns": meta.get("raw_feature_columns", {mdl}),
 =======
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
         "raw_feature_columns": meta.get("raw_feature_columns", {}),
 >>>>>>> main
     }
@@ -268,6 +287,7 @@ async def lifespan(app: FastAPI):
     log.info("Shutdown complete")
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 
 # Get CORS origins from environment variable
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
@@ -275,12 +295,17 @@ CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
 # Get CORS origins from environment variable
 CORS_ORIGINS = os.getenv("CORS_ORIGINS","http://localhost:3000").split(",")
 >>>>>>> main
+=======
+# Get CORS origins from environment variable
+CORS_ORIGINS = os.getenv("CORS_ORIGINS","http://localhost:3000").split(",")
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
 CORS_ORIGINS = [origin.strip() for origin in CORS_ORIGINS if origin.strip()]
 
 log.info(f"CORS Origins configured: {CORS_ORIGINS}")
 
 app = FastAPI(title="NFL Game Prediction API", version="2.0.0", lifespan=lifespan)
 app.add_middleware(
+<<<<<<< HEAD
 <<<<<<< HEAD
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
@@ -290,22 +315,31 @@ app.add_middleware(
 )
 
 =======
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
     CORSMiddleware, 
     allow_origins=CORS_ORIGINS,
     allow_credentials=True, 
     allow_methods=["*"], 
     allow_headers=["*"]
 )
+<<<<<<< HEAD
 >>>>>>> main
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
 
 # ---------- Helpers ----------
 def get_current_nfl_context() -> Dict[str, Any]:
     now = datetime.now()
 <<<<<<< HEAD
+<<<<<<< HEAD
     log.info("Current time: %s", now.isoformat(), "now-->", now)
 =======
     log.info("Current time: %s", now.isoformat(),'now-->', now)
 >>>>>>> main
+=======
+    log.info("Current time: %s", now.isoformat(),'now-->', now)
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
     cur_season = now.year if now.month >= 8 else now.year - 1
     if dataset_df is not None and {
         "season",
@@ -354,7 +388,10 @@ def _build_future_row(
             "next_prediction_season": cur_season,"next_prediction_week": 1,"status": "preseason_or_early"}
 
 def _build_future_row(df: pd.DataFrame, home: str, away: str, season: int, week: int) -> pd.Series:
+<<<<<<< HEAD
 >>>>>>> main
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
     """Derive feature priors for a matchup not yet present in the dataset."""
 
     df = df.copy()
@@ -415,9 +452,12 @@ def _build_future_row(df: pd.DataFrame, home: str, away: str, season: int, week:
             f"Failed to build future row for {home} vs {away} ({season} W{week}): {exc}"
         )
 <<<<<<< HEAD
+<<<<<<< HEAD
 
 =======
 >>>>>>> main
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
 
 # ---------- Routes ----------
 @app.get("/health", response_model=HealthResponse)
@@ -430,6 +470,9 @@ def health():
         status="healthy", mode=model_objects.get("mode"), reason="models loaded"
     )
 
+
+from datetime import datetime, timezone
+import json, os
 
 from datetime import datetime, timezone
 import json, os
@@ -458,12 +501,16 @@ def debug_info():
                 debug["training_report"] = json.loads(tr.read_text(encoding="utf-8"))
             except json.JSONDecodeError as e:
 <<<<<<< HEAD
+<<<<<<< HEAD
                 debug["training_report_error"] = (
                     f"Invalid JSON in training_report.json: {e}"
                 )
 =======
                 debug["training_report_error"] = f"Invalid JSON in training_report.json: {e}"
 >>>>>>> main
+=======
+                debug["training_report_error"] = f"Invalid JSON in training_report.json: {e}"
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
 
     except Exception as e:
         debug["error"] = f"{type(e).__name__}: {e}"
@@ -479,6 +526,7 @@ def get_next_week_schedule():
     """
     try:
 <<<<<<< HEAD
+<<<<<<< HEAD
         schedule_path = BASE_DIR / "backend" / "data" / "Nfl_schedule_2025_2026.csv"
         if not schedule_path.exists():
             raise HTTPException(
@@ -489,6 +537,11 @@ def get_next_week_schedule():
         if not schedule_path.exists():
             raise HTTPException(status_code=404, detail=f"Schedule data not found: {schedule_path}")
 >>>>>>> main
+=======
+        schedule_path = BASE_DIR / 'backend' / 'data' / 'Nfl_schedule_2025_2026.csv'
+        if not schedule_path.exists():
+            raise HTTPException(status_code=404, detail=f"Schedule data not found: {schedule_path}")
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
 
         df = pd.read_csv(schedule_path)
 
@@ -500,6 +553,7 @@ def get_next_week_schedule():
 
         # Compose kickoff timestamp (UTC) from date + time; tolerate TBD times
         df["kickoff_ts_utc"] = pd.to_datetime(
+<<<<<<< HEAD
 <<<<<<< HEAD
             (
                 df["gameday"].astype(str).str.strip()
@@ -515,17 +569,23 @@ def get_next_week_schedule():
             df["kickoff_ts_utc"].notna(), date_only
         )
 =======
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
             (df["gameday"].astype(str).str.strip() + " " + df["gametime"].astype(str).str.strip()).str.strip(),
             errors="coerce", utc=True
         )
         # Fallback to date-only if time missing/unparseable
         date_only = pd.to_datetime(df["gameday"], errors="coerce", utc=True)
         df["kickoff_ts_utc"] = df["kickoff_ts_utc"].where(df["kickoff_ts_utc"].notna(), date_only)
+<<<<<<< HEAD
 >>>>>>> main
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
 
         # Choose next week from now; if no future games, last available week
         now = pd.Timestamp.now(tz="UTC")
         future = df[df["kickoff_ts_utc"].notna() & (df["kickoff_ts_utc"] >= now)]
+<<<<<<< HEAD
 <<<<<<< HEAD
         current_week = (
             int(future["week"].min()) if not future.empty else int(df["week"].max())
@@ -533,11 +593,15 @@ def get_next_week_schedule():
 =======
         current_week = int(future["week"].min()) if not future.empty else int(df["week"].max())
 >>>>>>> main
+=======
+        current_week = int(future["week"].min()) if not future.empty else int(df["week"].max())
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
 
         week_games = df[df["week"] == current_week].copy()
 
         games = []
         for _, row in week_games.iterrows():
+<<<<<<< HEAD
 <<<<<<< HEAD
             kickoff_iso = (
                 row["kickoff_ts_utc"].isoformat()
@@ -563,6 +627,8 @@ def get_next_week_schedule():
                 }
             )
 =======
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
             kickoff_iso = row["kickoff_ts_utc"].isoformat() if pd.notna(row["kickoff_ts_utc"]) else "TBD"
             home = str(row["home_team"]).strip()
             away = str(row["away_team"]).strip()
@@ -576,7 +642,10 @@ def get_next_week_schedule():
                 'kickoff_iso': kickoff_iso,
                 'game_id': str(row.get('game_id', f"{row['season']}W{row['week']}-{away}@{home}"))
             })
+<<<<<<< HEAD
 >>>>>>> main
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
 
         log.info("Schedule week %s games=%d", current_week, len(games))
         return games
@@ -616,12 +685,16 @@ def predict_game(payload: PredictionRequest):
         data = {c: [row[c]] if c in row.index else [np.nan] for c in features}
         if missing := [c for c in features if c not in row.index]:
 <<<<<<< HEAD
+<<<<<<< HEAD
             log.warning(
                 "Prediction using fallback fill for missing features: %s", missing
             )
 =======
             log.warning("Prediction using fallback fill for missing features: %s", missing)
 >>>>>>> main
+=======
+            log.warning("Prediction using fallback fill for missing features: %s", missing)
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
         X = model_objects["preprocessor"].transform(pd.DataFrame(data))
         # Score regressors
         home_score = float(
