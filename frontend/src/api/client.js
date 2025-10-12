@@ -1,88 +1,66 @@
 /**
- * API client for NFL prediction system
- * Centralizes all API calls with error handling and base URL management
- * Uses relative URLs since the backend is proxied through the development server
+ * client.js
+ * ---------
+ * Component Purpose:
+ *   Offer tiny wrapper functions around `fetch` so components stay declarative.
+ *
+ * Core Logic Overview:
+ *   - Detect the API base URL from `import.meta.env.VITE_API_URL` (Vite convention)
+ *     and fall back to the deployed Heroku URL for production builds.
+ *   - Provide a generic `api` helper that sets JSON headers and raises an Error
+ *     when the network request fails, keeping calling code simple.
+ *   - Export specific domain functions (`getNextWeekSchedule`, `predictGame`)
+ *     that components/hooks can call without worrying about HTTP details.
+ *
+ * Modification Guide:
+ *   - Add new endpoints by building small wrappers that call `api(path, opts)`.
+ *   - Keep data transformation (e.g. mapping to view models) outside this file
+ *     so the client stays focused on transport concerns.
+ *   - When authentication is introduced, inject headers inside the `api`
+ *     helper so all downstream requests pick up the token automatically.
  */
 
-const API = import.meta.env.VITE_API_URL;
+const BASE_URL =
+  import.meta.env.VITE_API_URL ||
+  'https://nfl-predict-ecf5a5bd34fe.herokuapp.com';
 
-/**
- * Generic fetch wrapper with JSON handling and error management
- * @param {string} endpoint - API endpoint (without base URL)
- * @param {object} options - Fetch options (method, body, etc.)
- * @returns {Promise<object>} Parsed JSON response
- * @throws {Error} If request fails or returns non-2xx status
- */
-async function apiRequest(endpoint, options = {}) {
-  const url = `${API}${endpoint}`;
+// Debug log for development
+if (import.meta.env.DEV) {
+  console.log('[API Client] Using BASE_URL:', BASE_URL);
+  console.log('[API Client] Mode:', import.meta.env.MODE);
+}
 
+function buildUrl(path) {
+  // Prefer the standard URL constructor which normalizes slashes.
   try {
-    const response = await fetch(url, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
-      ...options,
-    });
-    /** Log API request details */
-    console.log(`[API] ${options.method || 'GET'} ${endpoint} - Status: ${response.status}`);
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(`API Error: ${response.status} - ${errorData.detail || response.statusText}`);
-    }
-
-    return await response.json();
-  } catch (error) {
-    console.error(`[API] ${options.method || 'GET'} ${endpoint} failed: error`, error);
-    throw error;
+    return new URL(path, BASE_URL).toString();
+  } catch (err) {
+    // Fallback: trim trailing/leading slashes and join.
+    const base = BASE_URL.replace(/\/+$|$/, '');
+    const cleanPath = String(path).replace(/^\/+/, '');
+    return `${base}/${cleanPath}`;
   }
 }
 
-/**
- * Fetch next week's NFL schedule
- * @returns {Promise<Array<{season: number, week: number, kickoff_iso: string, home_abbr: string, away_abbr: string}>>}
- */
-export async function getNextWeekSchedule() {
-  /** Log API request details */
-  console.log("Fetching next week's schedule");
-  return apiRequest('/schedule/next-week');
-}
-
-/**
- * Predict game outcome using team abbreviations
- * @param {object} payload - Prediction payload
- * @param {string} payload.home_team - Home team abbreviation
- * @param {string} payload.away_team - Away team abbreviation
- * @param {number} payload.season - Season year
- * @param {number} payload.week - Week number
- * @returns {Promise<{home_score: number, away_score: number, point_diff: number, home_win_prob: number, away_win_prob: number}>}
- */
-export async function predictGame(payload) {
-  /** Log API request details */
-  console.log(`[API] POST /predict - Payload: ${JSON.stringify(payload)}`);
-    return await apiRequest('/predict', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
-  }
-
-   
-
-/**
- * Start model retraining process
- * @returns {Promise<{status: 'started' | 'queued' | 'done'}>}
- */
-export async function startTraining() {
-  return apiRequest('/train', {
-    method: 'POST',
+async function api(path, opts = {}) {
+  const url = buildUrl(path);
+  const res = await fetch(url, {
+    headers: {'Content-Type': 'application/json'},
+    ...opts,
   });
+  if (!res.ok) {
+    // Bubble up a useful error so calling components can show friendly UI.
+    const text = await res.text().catch(() => '');
+    throw new Error(`API ${path} failed: ${res.status} ${text}`);
+  }
+  return res.json();
 }
 
-/**
- * Health check for API connectivity
- * @returns {Promise<{status: string, mode: string, reason?: string}>}
- */
-export async function getHealthStatus() {
-  return apiRequest('/health');
+export async function getNextWeekSchedule() {
+  return api('schedule/next-week');
 }
+
+export async function predictGame(body) {
+  return api('predict', {method: 'POST', body: JSON.stringify(body)});
+}
+

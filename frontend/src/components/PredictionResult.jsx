@@ -1,22 +1,52 @@
+/**
+ * PredictionResult.jsx
+ * --------------------
+ * Component Purpose:
+ *   Present the most recent prediction entry supplied by the context.
+ *
+ * Core Logic Overview:
+ *   - Guard against `null` entries and return a helpful empty message.
+ *   - Compute display-friendly percentages using basic rounding.
+ *   - Render structured sections (meta, scores, probabilities) for clarity.
+ *
+ * Modification Guide:
+ *   - Keep heavy calculations out of the component—normalise data inside the
+ *     context or dedicated selectors.
+ *   - When adding new metrics, ensure you handle `null`/`undefined` so the UI
+ *     never crashes while the backend evolves.
+ */
+
 import React from 'react';
 
-/**
- * Component for displaying prediction results.
- *
- * Receives a `result` prop which contains the neural network, gradient
- * boosting and ensemble probabilities. Displays them in a clean card.
- */
-function PredictionResult({ result }) {
-  const { neural_network_proba, gradient_boosting_proba, ensemble_proba } = result;
-  const toPercent = (p) => (p * 100).toFixed(1) + '%';
+export default function PredictionResult({entry}) {
+  // Provide a friendly fallback so the area never collapses visually.
+  if (!entry) return <div className="prediction-result">No prediction yet.</div>;
+
+  const {game, metrics, probs} = entry;
+  // Convert probabilities to whole-number percentages for readability.
+  const homePct = probs.home != null ? Math.round(probs.home * 100) : null;
+  const awayPct = probs.away != null ? Math.round(probs.away * 100) : null;
+  const ensemblePct = probs.ensemble != null ? Math.round(probs.ensemble * 100) : null;
+
   return (
-    <div className="result-card">
-      <h2>Prediction Result</h2>
-      <p><strong>Neural Network:</strong> {toPercent(neural_network_proba)}</p>
-      <p><strong>Gradient Boosting:</strong> {toPercent(gradient_boosting_proba)}</p>
-      <p><strong>Ensemble (Final):</strong> {toPercent(ensemble_proba)}</p>
+    <div className="prediction-result" aria-live="polite">
+      <h3>Prediction</h3>
+      <div className="meta">
+        <span>Week {game.week} • {game.season}</span>
+        <span>{game.away_abbr} @ {game.home_abbr}</span>
+      </div>
+
+      <div className="scores">
+        <strong>{game.home_abbr}</strong> {metrics.home_score} — {metrics.away_score} <strong>{game.away_abbr}</strong>
+        <span className="separator">•</span>
+        <span>Diff: {metrics.point_diff}</span>
+      </div>
+
+      <div className="probs">
+        {homePct != null && <span>Home win: {homePct}%</span>}
+        {awayPct != null && <span>Away win: {awayPct}%</span>}
+        {ensemblePct != null && <span>Ensemble: {ensemblePct}%</span>}
+      </div>
     </div>
   );
 }
-
-export default PredictionResult;

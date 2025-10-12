@@ -1,0 +1,65 @@
+name: Deploy
+
+on:
+  push:
+    branches: [ master ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Heroku CLI
+        run: |
+          curl https://cli-assets.heroku.com/install.sh | sh
+
+      - name: Install Vercel CLI
+        run: |
+          npm i -g vercel@latest
+
+      - name: Login Heroku
+        env:
+          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+        run: |
+          heroku auth:token >/dev/null
+          heroku git:remote -a nfl-predict
+
+      - name: Vercel Link
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          vercel link --yes --project nfl-ml-predictions --scope christopher-jordons-projects
+
+      - name: Set Heroku CORS
+        run: |
+          heroku config:set CORS_ORIGINS="http://localhost:3000,https://localhost:3000,https://nfl-predict-frontend.vercel.app,https://nfl-ml-predictions.vercel.app" -a nfl-predict
+
+      - name: Install and Build Frontend
+        run: |
+          npm ci --prefix frontend
+          npm run build --prefix frontend
+
+      - name: Push to Heroku
+        env:
+          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+        run: |
+          git push https://heroku:${HEROKU_API_KEY}@git.heroku.com/nfl-predict.git HEAD:main
+
+      - name: Deploy to Vercel
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VITE_API_URL: https://nfl-predict-ecf5a5bd34fe.herokuapp.com
+        run: |
+          vercel --prod --yes --token "$VERCEL_TOKEN"

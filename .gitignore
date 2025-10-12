@@ -2,6 +2,57 @@
 __pycache__/
 *.py[cod]
 *$py.class
+## Repo hygiene: ignore local envs, build outputs, editor junk
+
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+.venv/
+backend/venv/
+backend/.venv/
+
+# Node
+node_modules/
+frontend/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Build outputs
+dist/
+build/
+.parcel-cache/
+frontend/dist/
+frontend/.vite/
+
+# Environment files
+.env
+.env.*
+backend/.env
+frontend/.env*
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/tasks.json
+!.vscode/settings.json
+
+# Coverage/test artifacts
+coverage/
+.pytest_cache/
+*.coverage
+
+# Notebooks checkpoints
+.ipynb_checkpoints/
+
+# Heroku slug cache
+.slugignore
 *.so
 .Python
 build/
@@ -65,3 +116,10 @@ yarn-error.log*
 # Build outputs
 frontend/build/
 frontend/dist/node_modules
+
+# Allow Vercel config at repo root
+!vercel.json
+.vercel
+
+# AI tool directories
+.serena/
