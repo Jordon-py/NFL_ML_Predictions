@@ -24,5 +24,11 @@
     "terminal.integrated.env.windows": {
         "VIRTUAL_ENV": "${workspaceFolder}\\venv",
         "PATH": "${workspaceFolder}\\venv\\Scripts;${env:PATH}"
+    },
+    "[python]": {
+        "editor.defaultFormatter": "charliermarsh.ruff"
+    },
+    "[jsonc]": {
+        "editor.defaultFormatter": "vscode.json-language-features"
     }
 }
