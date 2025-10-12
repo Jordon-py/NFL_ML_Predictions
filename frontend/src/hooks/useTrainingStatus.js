@@ -1,15 +1,23 @@
-import { useState, useCallback } from 'react';
-import { startTraining, getHealthStatus } from '../api/client.js';
+import {useState, useCallback} from 'react';
+import {startTraining, getHealthStatus} from '../api/client.js';
 
 /**
- * Custom hook for managing model training status and operations
- * Handles the complete training workflow with status tracking and polling
+ * hooks/useTrainingStatus.js
+ * --------------------------
+ * Component Purpose:
+ *   Orchestrate a full "kick off retraining ➜ poll for completion" workflow.
+ *   This is the version that hits real backend endpoints.
  *
- * @returns {object} Training status and control functions
- * @property {string} status - Current training status ('idle' | 'running' | 'done' | 'error')
- * @property {string|null} error - Error message if training failed
- * @property {Function} startRetraining - Function to initiate model retraining
- * @property {boolean} isLoading - Whether a training operation is in progress
+ * Core Logic Overview:
+ *   - `startRetraining` posts to the backend to begin model work, then kicks off polling.
+ *   - `pollTrainingStatus` periodically checks the health endpoint until models reload.
+ *   - State slices (`status`, `error`, `isLoading`) allow the UI to show progress, disable buttons, etc.
+ *
+ * Modification Guide:
+ *   - If the backend gains a dedicated training-status endpoint, swap it in inside
+ *     `pollTrainingStatus` so we stop depending on health checks.
+ *   - Keep error handling exhaustive: set both `status` and `error` so the UI knows what to show.
+ *   - When introducing new statuses, document them here so consuming components stay aligned.
  */
 export function useTrainingStatus() {
   const [status, setStatus] = useState('idle');
@@ -28,6 +36,7 @@ export function useTrainingStatus() {
     setStatus('running');
 
     try {
+      // Kick off the job. Backend should respond quickly even if work is long-running.
       // Start training
       const result = await startTraining();
       console.log('[Training] Started:', result);
@@ -55,6 +64,7 @@ export function useTrainingStatus() {
    * Checks health endpoint to see if models have been reloaded
    */
   const pollTrainingStatus = useCallback(async () => {
+    // Polling loop: keep an interval handle so we can stop it explicitly.
     const pollInterval = setInterval(async () => {
       try {
         const health = await getHealthStatus();

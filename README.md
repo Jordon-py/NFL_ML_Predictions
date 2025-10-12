@@ -2,18 +2,30 @@
 
 An advanced NFL game prediction system using machine learning models to predict game outcomes, scores, and win probabilities.
 
+```mermaid
+graph TD
+    A[Data Pipeline] --> B[Machine Learning Models]
+    B --> C[REST API]
+    C --> D[Frontend Interface]
+    D --> A[User Interaction]
+    A --> E[Real-time Predictions]
+    E --> D
+    
+```
 
-<img width="1909" height="1078" alt="Image" src="https://github.com/user-attachments/assets/826bfed3-ad7e-4c32-bfc7-e3b12cde826f" />
+![Project Screenshot](https://github.com/user-attachments/assets/826bfed3-ad7e-4c32-bfc7-e3b12cde826f)
+
+## Features
+
+This NFL Prediction System offers the following key features:
 
 ---
-
 
 - **Data Pipeline**: Semi-Automated data collection and preprocessing from NFL APIs
 - **Machine Learning Models**: Neural Network and Gradient Boosting models for predictions
 - **REST API**: FastAPI-based web API for serving predictions
 - **Frontend Interface**: React-based web interface for user interactions
 - **Real-time Predictions**: Get predictions for upcoming NFL games
-
 
 ## Quick Start
 
@@ -27,17 +39,20 @@ An advanced NFL game prediction system using machine learning models to predict 
 ### Installation
 
 1. Clone the repository:
+
 ```bash
 git clone https://github.com/your-username/NFL_ML_Predictions.git
 cd NFL_ML_Predictions
 ```
 
 2. Install Python dependencies:
+
 ```bash
 pip install -r requirements.txt
 ```
 
 3. Install frontend dependencies:
+
 ```bash
 cd frontend
 npm install
@@ -47,26 +62,31 @@ cd ..
 ### Usage
 
 1. **Build the dataset**:
+
 ```bash
 python backend/build_csv_datasets.py --start 2014 --end 2025 --out-dir backend/data
 ```
 
 2. **Create predictive dataset** (NEW):
+
 ```bash
 python build_predictive_dataset.py --data-dir data --output-dir data
 ```
 
 3. **Train the models**:
+
 ```bash
 python backend/train_models.py
 ```
 
 4. **Start the API server**:
+
 ```bash
 uvicorn backend.main:app --reload --port 8000
 ```
 
 5. **Start the frontend** (in a new terminal):
+
 ```bash
 cd frontend
 npm start
@@ -276,6 +296,7 @@ compare_feature_distributions(original_games, predictive_games)
 ```
 
 This comparison framework allows you to:
+
 - Evaluate which dataset produces more accurate predictions
 - Identify the most important features for prediction
 - Understand how the engineered features contribute to model performance
@@ -313,11 +334,12 @@ backend/data/             # CSV artifacts
   team_game_iter3.schema.json
   team_game_iter3.schema.md
 
-
 ## Contributing
+
 Please read our contributing guidelines before submitting pull requests.
 
 ## License
+
 =======
 backend/scripts/
   build_csvs.py    # Builds the four CSVs and auto-writes schema files
@@ -325,5 +347,8 @@ backend/scripts/
   train_models.py    # Trains NN + GBM, writes artifacts + metadata
   README.md
 
-
 This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+
+[architectureDiagram]: https://github.com/user-attachments/assets/826bfed3-ad7e-4c32-bfc7-e3b12cde826f

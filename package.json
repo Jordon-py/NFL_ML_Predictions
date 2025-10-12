@@ -2,16 +2,11 @@
   "name": "nfl_ml_predictions",
   "version": "1.0.0",
   "description": "An advanced NFL game prediction system using machine learning models to predict game outcomes, scores, and win probabilities.",
-  "main": "src/index.jsx",
+  "main": "backend/main.py",
   "scripts": {
-    "heroku-postbuild": "npm install --prefix frontend && npm run build --prefix frontend"
+    "heroku-postbuild": "echo 'Skipping frontend build - deployed separately on Vercel'"
   },
-  "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-scripts": "5.0.1",
-    "web-vitals": "^2.1.4"
-  },
+  "dependencies": {},
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Jordon-py/NFL_ML_Predictions.git"
@@ -25,8 +20,9 @@
   },
   "homepage": "https://github.com/Jordon-py/NFL_ML_Predictions#readme",
   "engines": {
+    "node": "20.x",
     "npm": "10.x",
-    "node": "22.x"
-  }
+    "python": "3.12.x"
+  },
+  "devDependencies": {}
 }
-

@@ -17,5 +17,8 @@ lightgbm>=4.0.0,<4.2.0
 # API and data validation
 pydantic>=2.4.0,<2.6.0
 
+# Environment variables
+python-dotenv>=1.0.0,<1.1.0
+
 # NFL data (may need specific version for compatibility)
 nfl-data-py>=0.3.0,<0.4.0

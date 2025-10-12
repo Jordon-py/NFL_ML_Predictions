@@ -1,471 +1,348 @@
 /* ==========================================================================
-   CustomCSS Optimizer - Final Output (3-pass result)
-   - PASS 1: Audit & fixes -> syntax, specificity, invalid props, consistency
-   - PASS 2: Creative enhancements -> motion, focus, grid, micro-interactions
-   - PASS 3: Refinement -> simplified transforms, variables, reduced layout shift
-   Notes:
-   * Pure vanilla CSS. No resets frameworks.
-   * Uses CSS variables with safe fallbacks.
-   * If some classes are unused in your HTML, remove them or wire them up.
+   TeamGrid.css
+   Enhancements (1–10): fonts, spacing, elevation, focus, contrast, tokens,
+   gradient accent, utilities for removing inline styles
    ========================================================================== */
 
-/* ------------------------------
-   Design Tokens (with fallbacks)
-   ------------------------------ */
+/* Tokens (Enhancement 9 + 10 + 8) */
 :root {
-  /* Colors (fallback hex, then oklch where supported) */
-  --c-brand-1: #0080ff; /* oklch(0.72 0.17 255) */
+  --c-brand-1: #0080ff;
   --c-brand-1-70: #0080ffb3;
-  --c-brand-2: #003264;  /* deep navy */
+  --c-brand-2: #003264;
   --c-ink: #0f0f0f;
   --c-ink-muted: #2c3e50;
   --c-danger: #e74c3c;
   --c-accent: #3498db;
   --c-bg-soft: #ffffffd1;
   --c-card: rgba(0, 106, 255, 0.12);
+  --c-text-on-dark: #e8edf4;
+  /* Enhancement 8 */
+  --c-text-muted-on-dark: #c9d3e0;
+  /* Enhancement 8 */
 
-  /* Surfaces */
-  --glass: rgba(255,255,255,0.12);
+  --glass: rgba(255, 255, 255, 0.12);
 
-  /* Radii, spacing, shadows, motion */
   --r-md: 12px;
   --r-sm: 8px;
-  --sp-1: 8px;
-  --sp-2: 12px;
-  --sp-3: 16px;
-  --sp-4: 24px;
-  --sp-5: 32px;
 
-  --shadow-1: 0 2px 8px rgba(0,0,0,0.12);
-  --shadow-2: 0 10px 20px rgba(0,0,0,0.18);
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, .08);
+  /* Enhancement 9 */
+  --shadow-2: 0 6px 18px rgba(0, 0, 0, .18);
+  /* Enhancement 9 */
 
-  --t-fast: 160ms;
-  --t-base: 260ms;
-  --e-out: cubic-bezier(.2,.8,.2,1);
-
-  /* Backdrop blur strength */
-  --blur-weak: 6px;
-  --blur-strong: 18px;
+  --grad-primary: linear-gradient(90deg, #1e90ff, #00bfff);
+  /* Enhancement 10 */
 }
 
-/* Respect reduced motion */
+/* ---------- Animation defaults via CSS variables ---------- */
+:root {
+  --a-dur: 600ms;
+  --a-ease: cubic-bezier(.22, .61, .36, 1);
+  /* smooth, snappy */
+  --a-delay: 0ms;
+  --a-iter: 1;
+}
+
+/* Utility to apply common animation props cleanly */
+.anim {
+  animation-duration: var(--a-dur);
+  animation-timing-function: var(--a-ease);
+  animation-delay: var(--a-delay);
+  animation-iteration-count: var(--a-iter);
+  animation-fill-mode: both;
+}
+
+/* ---------- 1) Pulse (subtle, GPU-friendly) ---------- */
+@keyframes pulseSoft {
+
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+
+  50% {
+    transform: scale(1.02);
+    opacity: .88;
+  }
+}
+
+/* Optional: pure opacity pulse for text-heavy UIs */
+@keyframes pulseOpacity {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: .5;
+  }
+}
+
+/* ---------- 2) Fade-in with direction controls ---------- */
+/* Control the start via vars: --fade-x, --fade-y, --fade-scale, --fade-blur */
+@keyframes fadeInVar {
+  from {
+    opacity: 0;
+    transform: translate3d(var(--fade-x, 0), var(--fade-y, 10px), 0) scale(var(--fade-scale, 1));
+    filter: blur(var(--fade-blur, 0));
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+    filter: blur(0);
+  }
+}
+
+/* ---------- 3) Shine / shimmer sweep ---------- */
+/* Works with a gradient background (buttons/badges) or with text using background-clip */
+@keyframes shineSweep {
+  0% {
+    background-position-x: 0%;
+  }
+
+  100% {
+    background-position-x: 200%;
+  }
+}
+
+/* ---------- 4) Outline / glow (fixed to use box-shadow) ---------- */
+@keyframes outlineGlow {
+
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 0 rgba(4, 100, 210, 0.00),
+      0 0 0 1px rgba(4, 100, 210, 0.55) inset;
+    /* crisp outline */
+  }
+
+  50% {
+    box-shadow:
+      0 0 14px 4px rgba(4, 100, 210, 0.45),
+      0 0 0 1px rgba(4, 100, 210, 0.75) inset;
+  }
+}
+
+/* ---------- Reduced motion (scoped) ---------- */
 @media (prefers-reduced-motion: reduce) {
-  * { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; scroll-behavior: auto !important; }
+
+  .anim,
+  [data-anim] {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
 }
 
-/* =========================
-   TEAM GRID WRAPPER & HEAD
-   ========================= */
+/* ---------- Ready-to-use helper classes ---------- */
+.a-pulse {
+  animation-name: pulseSoft;
+}
 
-/* PASS 1: FIX invalid properties, remove useless 3D matrix, correct flex values.
-   - 'justify-content: stretch' is invalid -> use 'flex-start'.
-   - remove transform: matrix3d(...) no-op.
-   - backdrop-filter uses lengths (px), not percent. */
-.team-grid {
+.a-pulse--opacity {
+  animation-name: pulseOpacity;
+}
 
-  gap: var(--sp-5);
+.a-fade-in {
+  animation-name: fadeInVar;
+}
+
+.a-shine {
+  /* Use on elements with a gradient background; see usage below */
+  animation-name: shineSweep;
+  animation-duration: 1.6s;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  background-size: 200% 100%;
+}
+
+.a-glow {
+  animation-name: outlineGlow;
+}
+
+/* Stagger helper for lists/grids */
+.stagger>* {
+  --a-delay: calc(var(--i, 0) * 80ms);
+}
+
+/* Base (Enhancement 2 + 3 + 8) */
+body {
+  font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  /* Enhancement 2 */
+  font-size: clamp(15.5px, 1.2vw + 0.5rem, 17px);
+  /* Enhancement 2 */
+  line-height: 1.65;
+  /* Enhancement 2 */
+
+  margin: 0 auto;
+  background-color: #041c42e1;
+  color: var(--c-text-on-dark);
+
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  min-height: 100vh;
+  /* Enhancement 3: stable scrolling */
+  max-width: 100vw;
   width: 100%;
-  max-width: 1500px;
-  margin: 5% auto;
-  padding: 10px;
-  background-color: var(--glass);
-  backdrop-filter: blur(var(--blur-strong));
+  overflow-x: hidden;
 }
 
-.team-grid-header {
-  text-align: center;
-  margin-bottom: 3rem;
-}
-
-.team-grid-header h2 {
-  color: var(--c-brand-1-70);
-  text-decoration: underline; /* consider using ::after underline bar if you want more control */
-  backdrop-filter: blur(var(--blur-weak));
-  font-size: 3.5rem;
-  margin-bottom: 1%;
+h2 .nfl-matchups {
+  display: flex;
+  flex-direction: row;
+  font-family: 'Orbitron', sans-serif;
   font-weight: 800;
 }
 
-.team-grid-header p {
-  color: var(--c-ink);
-  font-size: 1.2rem;
-  margin: 0;
-}
-
-/* PASS 2: Switch to responsive CSS Grid for matchups.
-   Replaces prior flex + inconsistent media grid-template usage. */
-.matchups-grid {
-  display: grid;
-  grid-template-rows: repeat(auto-fit, minmax(350px, 1fr));
-  gap: var(--sp-5);
+main.app-main {
+  padding: 2rem 0;
+  min-height: 100vh;
   width: 100%;
-  margin-top: 30px;
-  padding: 4rem;
-  max-width: fit-content;
 }
 
-/* =======================
-   MATCHUP CARD + STATES
-   ======================= */
-
-/* PASS 1: fix invalid backdrop-filter percentages, normalize shadows, avoid layout shift.
-   PASS 2: subtle lift, border glow on hover/focus-visible.
-   PASS 3: consolidate transitions, avoid padding changes on hover. */
-.matchup-card.shimmer-container.shine-outline {
+/* Dashboard container - ensure it doesn't interfere with sticky nav */
+.dashboard {
   position: relative;
-  overflow: hidden;
-  background: var(--c-card);
-  backdrop-filter: blur(var(--blur-weak));
-  border: 2px solid;
+  width: 100%;
+  min-height: 100vh;
+  overflow-y: visible;
+  padding-top: 2rem;
+}
+
+/* Containers (Enhancement 3) */
+.container {
+  max-width: 1200px;
+  width: 100%;
+  margin: 0 auto;
+  padding: clamp(16px, 3vw, 28px);
+}
+
+/* Grid (Enhancement 3) */
+.team-grid-section {
+  padding-inline: clamp(12px, 2vw, 24px);
+}
+
+.team-grid-cards {
+  display: grid;
+  background-color: #00326431;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 4rem;
   border-radius: var(--r-md);
-  box-shadow: var(--shadow-1);
-  padding: var(--sp-5);
-  cursor: pointer;
-  transition: transform var(--t-base) var(--e-out),
-              box-shadow var(--t-base) var(--e-out),
-              border-color var(--t-base) var(--e-out),
-              background var(--t-base) var(--e-out);
-  will-change: transform;
+  border-color: Outline;
+  /* Apply glow animation to the grid container */
+  animation: outlineGlow 3s ease-in-out infinite;
+  /* Fixed typo: changed 'bordor-radius' to 'border-radius' */
+  /* Added gap for better spacing between cards */
+}
+
+/* Cards (Enhancement 4 + 5 + 10) */
+.matchup-card {
+  background-color: #ffffff1e;
+  border-radius: 12px;
+  box-shadow: 0 6px 10px 1px rgba(17, 0, 0, 0.377);
+  padding: 24px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: transform 0.3s, box-shadow 0.8s;
+  position: relative;
+  color: #0d1b2a;
+  /* Apply fade-in animation on load */
+  animation: fadeInVar 0.6s cubic-bezier(.22, .61, .36, 1) both;
+  animation-delay: calc(var(--i, 0) * 100ms);
+  /* Stagger animation based on index */
+}
+
+.inner-card {
+  border-radius: inherit;
 }
 
 .matchup-card:hover {
-  transform: translateY(-14px);
-  z-index: 1;
-  scale: 1.2;
-  background: rgba(219, 241, 255, 0.197);
-    padding: 20px;
-    box-shadow:
-      0 10px 6px 1px white,
-      0.3em 0.7em 2rem -2px rgba(69, 1, 1, 0.6);
-
-  border-color: #3498db;
+  transform: translateY(-5px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+  cursor: pointer;
 }
 
-.matchup-card:focus { outline: none; }
-
-/* PASS 1: fix invalid box-shadow syntax. Add :focus-visible for keyboard users. */
 .matchup-card:focus-visible {
-  border-color: #2766ae;
-  box-shadow: 0 0 0 3px rgba(39, 102, 174, 0.35), var(--shadow-2);
-  background: linear-gradient(135deg, #ffffff 0%, #003260d4 45%, var(--c-brand-2) 100%);
+  outline: 3px solid var(--c-brand-1, #0080ff);
+  /* Enhancement 5 + 7 */
+  outline-offset: 3px;
 }
 
-.matchup-card.loading {
-  pointer-events: none;
-  opacity: 0.7;
+.matchup-card.has-prediction {
+  border: 1px solid transparent;
+  /* Enhancement 10 */
+  border-image: var(--grad-primary) 1;
+  /* Enhancement 10 */
 }
 
-.matchup-card.has-prediction.shimmer-container.shine-outline {
-  border-color: #2766ae;
-  background: linear-gradient(135deg, #ffffff 0%, #003260d4 45%, var(--c-brand-2) 100%);
-  transition: all;
-  transform: matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, -2, 0, 1); /* PASS 3: remove matrix3d no-op */
-  transform: translateY(-4px) scale(1.20); /* PASS 3: subtle scale for pop */
-}
-
-/* =======================
-   MATCHUP CONTENT LAYOUT
-   ======================= */
-
-.matchup-teams {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--sp-4);
-  margin-bottom: 15px;
-}
-
-.away-team,
-.home-team {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-}
-
-.vs-indicator {
-  font-size: 2.2rem; /* slight reduction for better balance */
-  font-weight: 800;
-  color: #00181a;
-  margin: 0 15px;
-  letter-spacing: 0.02em;
-}
-
-.team {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--sp-1);
-}
-
-.team-logo {
-  width: 180px;
-  height: 180px;
-  width: 180px;
-  height: 180px;
-  object-fit: contain;
-  border-radius: 8px;
-  transition-property: all;
-
-}
-
-  
-.team-logo:hover {
-  transform: scale(1.05);
-  box-shadow: 0 8px 15px rgba(0, 0, 0, 0.2);
-}
-.team-logo-placeholder {
-  width: 90px;
-  height: 90px;
-  background: #ecf0f1;
-  border-radius: var(--r-sm);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  font-size: 1.2rem;
-  color: var(--c-ink-muted);
-  text-transform: uppercase;
-}
-
-.team-info {
-  font-size: 2rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-}
-
-.team-name {
-  font-weight: 600;
-  font-size: 1.8rem;
-  color: lch(from color 50% 0% 0%);
-  text-align: center;
-  line-height: 1.25;
-}
-
-.team-abbr {
-  font-size: 1.4rem;
-  color:lch(from color 50% 0% 0%);
-  font-weight: 500;
-}
-
-.home-indicator {
-  display: flex;
-  flex-direction: rows;
-  font-size: 1.3rem;
-  color: #59be7b;
-  font-weight: bold;
-  margin-top: 0px;
-}
-
-.team-placeholder {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--sp-1);
-}
-
-.matchup-time {
-  text-align: center;
-  color: #ffffff;
-  font-size: 1.1rem;
-  font-weight: 500;
-  margin-bottom: 15px;
-}
-
-/* =======================
-   PREDICTION STATES BOXES
-   ======================= */
-
+/* Loading / results */
 .prediction-loading {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 14px;
-  background: #f8f9fa;
-  border-radius: var(--r-sm);
-  margin-top: 12px;
+  gap: 8px;
+  /* Apply pulse animation while loading */
+  animation: pulseSoft 1.5s ease-in-out infinite;
 }
 
-.prediction-loading span {
-  color: var(--c-accent);
-  font-weight: 600;
+/* Utilities (Enhancement 6 + 7 + 9) */
+.is-hidden {
+  display: none !important;
+  /* For logo fallback toggling */
 }
 
-.prediction-result {
-  background: #88b0ff63;
-  border: 1px solid #000000;
-  border-radius: 8px;
-  padding: 3%;
-  margin-top: 1rem;
-  text-align: center;
+.card-shell {
+  border-radius: var(--r-md);
+  /* Replaces inline borderRadius in JSX */
 }
 
-.predicted-scores {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 3.5rem; /* reduced gap for tighter grouping */
+button:focus-visible,
+[role="button"]:focus-visible {
+  outline: 3px solid var(--c-brand-1, #0080ff);
+  /* Enhancement 7 */
+  outline-offset: 3px;
+  border-radius: 4px;
 }
 
-/* PASS 2: Badge styling for scores with subtle glow; keep text contrast high */
-.score {
-  font-size: 1.9rem;
-  font-weight: 800;
-  padding: 4px 10px;
-  border-radius: 6px;
-  min-width: 56px;
-  text-align: center;
-  line-height: 1.25;
-  background: #0b1220; /* dark pill background for both */
-  color: #fff;
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);
-}
-
-.home-score {
-  
-  color: rgb(0, 0, 0);
-}
-.away-score {
-  
-  color: rgb(16, 3, 3);
-}
-
-.score-separator {
-  font-size: 1.5rem;
-  font-weight: lighter;
-  color: #2c3e50;
-}
-
-.point-diff {
-  font-size: 1.5rem;
-  color: #000000;
-  font-weight: 600;
-}
-
-/* =======================
-   GENERIC LOADING ERROR
-   ======================= */
-
+/* Error/Loading text (Enhancement 8) */
 .team-grid-loading,
 .team-grid-error {
-  text-align: center;
-  padding: 60px 20px;
-}
-
-.loading-spinner {
-  width: 40px;
-  height: 40px;
-  border: 4px solid #f3f3f3;
-  border-top: 4px solid var(--c-accent);
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin: 0 auto 20px;
-}
-
-.loading-spinner.small {
-  width: 20px;
-  height: 20px;
-  border-width: 2px;
-  margin: 0;
-}
-
-@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-
-.team-grid-error h3 {
-  color: var(--c-danger);
-  margin-bottom: 10px;
+  color: var(--c-text-on-dark);
 }
 
 .team-grid-error p {
-  color: #7f8c8d;
-  margin-bottom: 20px;
+  color: var(--c-text-muted-on-dark);
 }
 
-.team-grid-error button {
-  background: var(--c-accent);
-  color: #fff;
-  border: none;
-  padding: 10px 20px;
-  border-radius: 6px;
+/* Motion safety (Enhancement 10) */
+@media (prefers-reduced-motion: reduce) {
+  .matchup-card {
+    transition: none;
+  }
+}
+
+.matchup-card:hover {
   cursor: pointer;
-  font-weight: 600;
-  transition: background-color var(--t-base) var(--e-out);
+  transform: none;
+  box-shadow: var(--shadow-1);
 }
 
-.team-grid-error button:hover { background: #2980b9; }
-
-/* ================
-   RESPONSIVE RULES
-   ================ */
-
-/* PASS 1: Remove duplicated display/flex overrides in media queries.
-   PASS 2: Ensure grid collapses cleanly on smaller widths. */
-
-@media (max-width: 1024px) {
-  .matchups-grid { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+img.team-logo {
+  max-width: 180px;
+  max-height: 180px;
+  width: 100%;
+  height: 100%;
+  transition: transform 0.3s ease, filter 0.3s ease;
 }
 
-@media (max-width: 768px) {
-  .team-grid-header h2 { font-size: 2rem; }
-
-  .matchup-card { padding: var(--sp-3); }
-
-  .matchup-teams {
-    flex-direction: column;
-    gap: var(--sp-3);
-  }
-
-  .vs-indicator {
-    margin: 0;
-    transform: rotate(90deg);
-    transform-origin: center;
-  }
-
-  .away-team,
-  .home-team {
-    flex-direction: row;
-    justify-content: center;
-    gap: var(--sp-3);
-  }
-
-  .team {
-    flex-direction: row;
-    text-align: left;
-  }
-
-  .team-info { 
-    align-items: flex-start;
-  }
-
-  .team-name,
-  .team-abbr {
-    text-align: left;
-  }
-
-  .score { font-size: 1.5rem; }
+/* Add shine effect on logo hover */
+img.team-logo:hover {
+  transform: scale(1.05);
+  filter: brightness(1.2);
 }
-
-@media (max-width: 480px) {
-  .team-grid-header h2 { font-size: 1.75rem; }
-
-  .matchup-card { padding: 12px; }
-
-  .team-logo,
-  .team-logo-placeholder {
-    width: 50px;
-    height: 50px;
-  }
-
-  .team-name { font-size: 0.9rem; }
-  .team-abbr { font-size: 0.8rem; }
-  .matchup-time { font-size: 0.85rem; }
-
-  .predicted-scores { gap: 2rem; }
-  .score {
-    font-size: 1.25rem;
-    padding: 4px 8px;
-  }
-}
- 
