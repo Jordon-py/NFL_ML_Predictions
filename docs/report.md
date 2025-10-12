@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 ### 2025-10-12 — Repo hygiene: untrack venv and data artifacts
 
 - Summary: Removed backend/venv and other transient artifacts from Git index; ensured .gitignore prevents reintroduction.
@@ -11,6 +12,8 @@
   2) Migrate frontend to npm and clean install to resolve Vite "debug" module error.
   3) Verify local dev (Uvicorn task + Vite dev) and CI/CD builds (Heroku + Vercel).
 
+=======
+>>>>>>> main
 # NFL ML Predictions — Engineering Change Log
 
 ## Report By
