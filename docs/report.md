@@ -1,4 +1,5 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
 ### 2025-10-12 — Repo hygiene: untrack venv and data artifacts
 
 - Summary: Removed backend/venv and other transient artifacts from Git index; ensured .gitignore prevents reintroduction.
@@ -14,6 +15,8 @@
 
 =======
 >>>>>>> main
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
 # NFL ML Predictions — Engineering Change Log
 
 ## Report By

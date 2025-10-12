@@ -25,6 +25,7 @@
         "VIRTUAL_ENV": "${workspaceFolder}\\venv",
         "PATH": "${workspaceFolder}\\venv\\Scripts;${env:PATH}"
 <<<<<<< HEAD
+<<<<<<< HEAD
     },
     "[python]": {
         "editor.defaultFormatter": "charliermarsh.ruff"
@@ -33,5 +34,7 @@
         "editor.defaultFormatter": "vscode.json-language-features"
 =======
 >>>>>>> main
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
     }
 }

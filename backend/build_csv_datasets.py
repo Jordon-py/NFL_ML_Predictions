@@ -64,9 +64,12 @@ ABBR_FIX: Dict[str, str] = {
 }
 OUTPUT_DATASET_NAME = "merged_game_features.csv"
 <<<<<<< HEAD
+<<<<<<< HEAD
 
 =======
 >>>>>>> main
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
 
 def make_time_key(df: pd.DataFrame) -> pd.Series:
     """Return sortable integer key YYYYWW from 'season' and 'week' (assumes ints)."""
@@ -115,6 +118,7 @@ def _moneyline_to_prob(ml: pd.Series) -> pd.Series:
     negative = ml_numeric < 0
     positive = ml_numeric >= 0
 <<<<<<< HEAD
+<<<<<<< HEAD
     probs.loc[negative] = (-ml_numeric.loc[negative]) / (
         (-ml_numeric.loc[negative]) + 100
     )
@@ -125,6 +129,10 @@ def _moneyline_to_prob(ml: pd.Series) -> pd.Series:
     probs.loc[negative] = (-ml_numeric.loc[negative]) / ((-ml_numeric.loc[negative]) + 100)
     probs.loc[positive & ml_numeric.notna()] = 100 / (ml_numeric.loc[positive & ml_numeric.notna()] + 100)
 >>>>>>> main
+=======
+    probs.loc[negative] = (-ml_numeric.loc[negative]) / ((-ml_numeric.loc[negative]) + 100)
+    probs.loc[positive & ml_numeric.notna()] = 100 / (ml_numeric.loc[positive & ml_numeric.notna()] + 100)
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
     return probs
 
 
@@ -137,16 +145,21 @@ def load_team_game_metrics(pbp_path: Path) -> pd.DataFrame:
         # For now, load recent seasons (2016+) where advanced metrics available
         seasons_to_load = list(range(2016, 2026))
 <<<<<<< HEAD
+<<<<<<< HEAD
         logging.info(
             "Loading play-by-play via nflreadpy for seasons %s", seasons_to_load
         )
 =======
         logging.info("Loading play-by-play via nflreadpy for seasons %s", seasons_to_load)
 >>>>>>> main
+=======
+        logging.info("Loading play-by-play via nflreadpy for seasons %s", seasons_to_load)
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
 
         pbp = nfl.load_pbp(seasons=seasons_to_load).to_pandas()
         logging.info("Loaded %d play-by-play rows from nflreadpy", len(pbp))
     except Exception as exc:
+<<<<<<< HEAD
 <<<<<<< HEAD
         logging.warning(
             "nflreadpy PBP load failed (%s); falling back to cached CSV", exc
@@ -154,15 +167,22 @@ def load_team_game_metrics(pbp_path: Path) -> pd.DataFrame:
 =======
         logging.warning("nflreadpy PBP load failed (%s); falling back to cached CSV", exc)
 >>>>>>> main
+=======
+        logging.warning("nflreadpy PBP load failed (%s); falling back to cached CSV", exc)
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
         if not pbp_path.exists():
             logging.warning("Cached PBP missing; advanced features disabled")
             return pd.DataFrame(columns=["season", "week", "game_id", "team"])
         pbp = pd.read_csv(pbp_path, low_memory=False)
 <<<<<<< HEAD
+<<<<<<< HEAD
 
 =======
     
 >>>>>>> main
+=======
+    
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
     # Ensure required columns exist
     required_cols = ["season", "week", "game_id", "posteam"]
     missing = [c for c in required_cols if c not in pbp.columns]
@@ -197,6 +217,7 @@ def load_team_game_metrics(pbp_path: Path) -> pd.DataFrame:
 
     off_group = ["season", "week", "game_id", "posteam"]
 <<<<<<< HEAD
+<<<<<<< HEAD
     off_agg = (
         pbp.groupby(off_group)
         .agg(
@@ -218,6 +239,8 @@ def load_team_game_metrics(pbp_path: Path) -> pd.DataFrame:
         off_agg["off_third_down_conv"] + off_agg["off_third_down_fail"]
     )
 =======
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
     off_agg = pbp.groupby(off_group).agg(
         off_epa_per_play=("epa", "mean"),
         off_success_rate=("success", "mean"),
@@ -232,12 +255,16 @@ def load_team_game_metrics(pbp_path: Path) -> pd.DataFrame:
     ).reset_index()
 
     off_agg["off_third_down_total"] = off_agg["off_third_down_conv"] + off_agg["off_third_down_fail"]
+<<<<<<< HEAD
 >>>>>>> main
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
     off_agg["off_third_down_pct"] = np.where(
         off_agg["off_third_down_total"] > 0,
         off_agg["off_third_down_conv"] / off_agg["off_third_down_total"],
         np.nan,
     )
+<<<<<<< HEAD
 <<<<<<< HEAD
     off_agg["off_pass_over_expected"] = (
         off_agg["off_pass_rate"] - off_agg["off_expected_pass_rate"]
@@ -262,6 +289,8 @@ def load_team_game_metrics(pbp_path: Path) -> pd.DataFrame:
         def_agg["def_takeaways"]
         / (def_agg["def_pass_attempts_faced"] + def_agg["def_rush_attempts_faced"]),
 =======
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
     off_agg["off_pass_over_expected"] = off_agg["off_pass_rate"] - off_agg["off_expected_pass_rate"]
 
     def_group = ["season", "week", "game_id", "defteam"]
@@ -277,7 +306,10 @@ def load_team_game_metrics(pbp_path: Path) -> pd.DataFrame:
     def_agg["def_takeaway_rate"] = np.where(
         (def_agg["def_pass_attempts_faced"] + def_agg["def_rush_attempts_faced"]) > 0,
         def_agg["def_takeaways"] / (def_agg["def_pass_attempts_faced"] + def_agg["def_rush_attempts_faced"]),
+<<<<<<< HEAD
 >>>>>>> main
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
         np.nan,
     )
 
@@ -288,18 +320,23 @@ def load_team_game_metrics(pbp_path: Path) -> pd.DataFrame:
     )
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     metrics["off_total_plays"] = metrics["off_pass_attempts"].fillna(0) + metrics[
         "off_rush_attempts"
     ].fillna(0)
 =======
     metrics["off_total_plays"] = metrics["off_pass_attempts"].fillna(0) + metrics["off_rush_attempts"].fillna(0)
 >>>>>>> main
+=======
+    metrics["off_total_plays"] = metrics["off_pass_attempts"].fillna(0) + metrics["off_rush_attempts"].fillna(0)
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
     metrics["off_turnover_rate"] = np.where(
         metrics["off_total_plays"] > 0,
         metrics["off_turnovers"].fillna(0) / metrics["off_total_plays"],
         np.nan,
     )
 
+<<<<<<< HEAD
 <<<<<<< HEAD
     metrics = metrics.drop(
         columns=[
@@ -320,6 +357,8 @@ def load_team_game_metrics(pbp_path: Path) -> pd.DataFrame:
         errors="ignore",
     )
 =======
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
     metrics = metrics.drop(columns=[
         "off_third_down_total",
         "def_epa_allowed",
@@ -335,7 +374,10 @@ def load_team_game_metrics(pbp_path: Path) -> pd.DataFrame:
         "off_pass_rate",
         "off_expected_pass_rate",
     ], errors="ignore")
+<<<<<<< HEAD
 >>>>>>> main
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
 
     return metrics.fillna(np.nan)
 
@@ -345,6 +387,7 @@ def load_player_game_stats(seasons: List[int]) -> pd.DataFrame:
     Load weekly player-level stats from nflreadpy and aggregate to team-game level.
     Provides QB efficiency, RB production, WR targets, etc.
     """
+<<<<<<< HEAD
 <<<<<<< HEAD
 
     try:
@@ -429,6 +472,8 @@ def load_player_game_stats(seasons: List[int]) -> pd.DataFrame:
             "Failed to load player stats (%s); player features disabled", exc
         )
 =======
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
     
     try:
         logging.info("Loading player stats via nflreadpy for seasons %s", seasons)
@@ -489,7 +534,10 @@ def load_player_game_stats(seasons: List[int]) -> pd.DataFrame:
         
     except Exception as exc:
         logging.warning("Failed to load player stats (%s); player features disabled", exc)
+<<<<<<< HEAD
 >>>>>>> main
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
         return pd.DataFrame(columns=["season", "week", "team"])
 
 
@@ -498,6 +546,7 @@ def load_team_weekly_stats(seasons: List[int]) -> pd.DataFrame:
     Load official team-level stats from nflreadpy at weekly granularity.
     Provides points scored/allowed, yards, turnovers, etc.
     """
+<<<<<<< HEAD
 <<<<<<< HEAD
 
     try:
@@ -529,6 +578,8 @@ def load_team_weekly_stats(seasons: List[int]) -> pd.DataFrame:
         return team_stats[available_cols].fillna(0)
 
 =======
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
     
     try:
         logging.info("Loading team stats via nflreadpy for seasons %s", seasons)
@@ -549,11 +600,15 @@ def load_team_weekly_stats(seasons: List[int]) -> pd.DataFrame:
         
         return team_stats[available_cols].fillna(0)
         
+<<<<<<< HEAD
 >>>>>>> main
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
     except Exception as exc:
         logging.warning("Failed to load team stats (%s); team features disabled", exc)
         return pd.DataFrame(columns=["season", "week", "team"])
 
+<<<<<<< HEAD
 <<<<<<< HEAD
 
 def load_schedules(seasons: List[int], include_future: bool = False) -> pd.DataFrame:
@@ -564,6 +619,11 @@ def load_schedules(seasons: List[int], include_future: bool = False) -> pd.DataF
 def load_schedules(seasons: List[int], include_future: bool = False) -> pd.DataFrame:
     """
     Load schedules + final scores for given seasons using nflreadpy.
+=======
+def load_schedules(seasons: List[int], include_future: bool = False) -> pd.DataFrame:
+    """
+    Load schedules + final scores for given seasons using nflreadpy.
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
     
 >>>>>>> main
     Args:
@@ -577,6 +637,7 @@ def load_schedules(seasons: List[int], include_future: bool = False) -> pd.DataF
        'home_score','away_score', 'spread_line', 'total_line', 'away_rest', 'home_rest']
     """
 <<<<<<< HEAD
+<<<<<<< HEAD
 
     # nflreadpy returns Polars DataFrame—convert to pandas
 =======
@@ -584,6 +645,11 @@ def load_schedules(seasons: List[int], include_future: bool = False) -> pd.DataF
     
         # nflreadpy returns Polars DataFrame—convert to pandas
 >>>>>>> main
+=======
+ 
+    
+        # nflreadpy returns Polars DataFrame—convert to pandas
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
     sch = nfl.load_schedules(seasons=seasons).to_pandas()
 
     logging.info("Raw schedules loaded: %d games", len(sch))
@@ -610,7 +676,10 @@ def load_schedules(seasons: List[int], include_future: bool = False) -> pd.DataF
         "home_team", "away_team", "home_score", "away_score",
         "game_type", "away_moneyline", "home_moneyline",
         "spread_line", "total_line", "away_rest", "home_rest"
+<<<<<<< HEAD
 >>>>>>> main
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
     ]
     missing = [c for c in needed if c not in sch.columns]
     if missing:
@@ -722,12 +791,16 @@ def _team_game_long(sch: pd.DataFrame) -> pd.DataFrame:
 
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 def _rolling_prior_stats(
     long: pd.DataFrame, window: int = 3, advanced_cols: Optional[List[str]] = None
 ) -> pd.DataFrame:
 =======
 def _rolling_prior_stats(long: pd.DataFrame, window: int = 3, advanced_cols: Optional[List[str]] = None) -> pd.DataFrame:
 >>>>>>> main
+=======
+def _rolling_prior_stats(long: pd.DataFrame, window: int = 3, advanced_cols: Optional[List[str]] = None) -> pd.DataFrame:
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
     """
     Compute prior rolling means and win% per team with strict leakage protection.
     Only uses completed games to build priors for future game prediction.
@@ -751,8 +824,11 @@ def _rolling_prior_stats(long: pd.DataFrame, window: int = 3, advanced_cols: Opt
                 continue
             long[f"prior_{col}_{window}"] = grp[col].apply(safe_rolling_mean)
 <<<<<<< HEAD
+<<<<<<< HEAD
 
 =======
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
     
 >>>>>>> main
     return long
@@ -775,6 +851,7 @@ def add_features(
     if advanced_metrics is not None and not advanced_metrics.empty:
         advanced_cols = [
 <<<<<<< HEAD
+<<<<<<< HEAD
             c
             for c in advanced_metrics.columns
             if c not in {"season", "week", "game_id", "team"}
@@ -787,6 +864,11 @@ def add_features(
         ]
         long = long.merge(advanced_metrics, on=["season", "week", "game_id", "team"], how="left")
 >>>>>>> main
+=======
+            c for c in advanced_metrics.columns if c not in {"season", "week", "game_id", "team"}
+        ]
+        long = long.merge(advanced_metrics, on=["season", "week", "game_id", "team"], how="left")
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
 
     for w in windows:
         long = _rolling_prior_stats(long, window=w, advanced_cols=advanced_cols)
@@ -873,6 +955,7 @@ def add_features(
     final_cols = ordered_cols + prior_feature_cols + diff_feature_cols
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     schedule_extras = sch.drop_duplicates("game_id")[
         [
             "game_id",
@@ -885,6 +968,8 @@ def add_features(
         ]
     ]
 =======
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
     schedule_extras = sch.drop_duplicates("game_id")[[
         "game_id",
         "home_moneyline",
@@ -894,7 +979,10 @@ def add_features(
         "home_rest",
         "away_rest",
     ]]
+<<<<<<< HEAD
 >>>>>>> main
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
     wide = wide.merge(schedule_extras, on="game_id", how="left")
 
     wide["home_moneyline"] = pd.to_numeric(wide["home_moneyline"], errors="coerce")
@@ -902,12 +990,16 @@ def add_features(
     wide["home_moneyline_prob"] = _moneyline_to_prob(wide["home_moneyline"])
     wide["away_moneyline_prob"] = _moneyline_to_prob(wide["away_moneyline"])
 <<<<<<< HEAD
+<<<<<<< HEAD
     wide["moneyline_prob_diff"] = (
         wide["home_moneyline_prob"] - wide["away_moneyline_prob"]
     )
 =======
     wide["moneyline_prob_diff"] = wide["home_moneyline_prob"] - wide["away_moneyline_prob"]
 >>>>>>> main
+=======
+    wide["moneyline_prob_diff"] = wide["home_moneyline_prob"] - wide["away_moneyline_prob"]
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
 
     wide["spread_line"] = pd.to_numeric(wide["spread_line"], errors="coerce")
     wide["total_line"] = pd.to_numeric(wide["total_line"], errors="coerce")
@@ -915,6 +1007,7 @@ def add_features(
     wide["away_rest"] = pd.to_numeric(wide["away_rest"], errors="coerce")
     wide["rest_diff"] = wide["home_rest"] - wide["away_rest"]
 
+<<<<<<< HEAD
 <<<<<<< HEAD
     final_cols.extend(
         [
@@ -932,6 +1025,8 @@ def add_features(
     # Return the properly ordered DataFrame
     return wide[final_cols]
 =======
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
     final_cols.extend([
         "home_moneyline_prob",
         "away_moneyline_prob",
@@ -954,6 +1049,31 @@ def _merge_team_week_stats(
 ) -> pd.DataFrame:
     """
     Merge team-week level stats into game-level dataframe for both home and away teams.
+<<<<<<< HEAD
+=======
+    
+    Args:
+        game_df: Game-level dataframe with season, week, home_team, away_team
+        team_week_stats: Team-week stats with season, week, team, [stat_columns]
+        prefix: Prefix to add to merged columns (e.g. 'player' or 'team')
+    
+    Returns:
+        game_df with additional home_{prefix}_* and away_{prefix}_* columns
+    """
+    stat_cols = [c for c in team_week_stats.columns if c not in {"season", "week", "team"}]
+    
+    # Merge home team stats
+    home_stats = team_week_stats.copy()
+    home_stats.columns = ["season", "week", "home_team"] + [f"home_{prefix}_{c}" for c in stat_cols]
+    game_df = game_df.merge(home_stats, on=["season", "week", "home_team"], how="left")
+    
+    # Merge away team stats
+    away_stats = team_week_stats.copy()
+    away_stats.columns = ["season", "week", "away_team"] + [f"away_{prefix}_{c}" for c in stat_cols]
+    game_df = game_df.merge(away_stats, on=["season", "week", "away_team"], how="left")
+    
+    return game_df
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
     
     Args:
         game_df: Game-level dataframe with season, week, home_team, away_team
@@ -1143,6 +1263,7 @@ def get_current_nfl_week() -> tuple[int, int]:
     return current_season, 1
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 
 # Removed duplicate import pandas as pd here (was at line 738)
 
@@ -1155,13 +1276,18 @@ TIME_COLS_IN_ORDER = (
 )
 
 =======
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
 import pandas as pd
 import numpy as np
 
 # ========= CONFIG (edit this if your column names differ) =========
 HAS_winner_BOOL = True   # set to False if you only have scores
 TIME_COLS_IN_ORDER = None  # auto-detect; or set to e.g. ["season","week"] or ["game_date"]
+<<<<<<< HEAD
 >>>>>>> main
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
 
 # ========= Helpers =========
 def ensure_actual_winner(df):
@@ -1174,6 +1300,7 @@ def ensure_actual_winner(df):
             if {"home_points", "away_points"}.issubset(df.columns):
                 win_series = pd.Series(
 <<<<<<< HEAD
+<<<<<<< HEAD
                     df["home_points"] > df["away_points"],
                     index=df.index,
                     dtype="boolean",
@@ -1183,11 +1310,16 @@ def ensure_actual_winner(df):
                     "Need either 'winner' bool or score columns 'home_points'/'away_points'."
                 )
 =======
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
                     df["home_points"] > df["away_points"], index=df.index, dtype="boolean"
                 )
             else:
                 raise ValueError("Need either 'winner' bool or score columns 'home_points'/'away_points'.")
+<<<<<<< HEAD
 >>>>>>> main
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
         else:
             winner_col = df["winner"]
             if pd.api.types.is_bool_dtype(winner_col.dtype):
@@ -1205,14 +1337,18 @@ def ensure_actual_winner(df):
     return df
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 
 =======
 >>>>>>> main
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
 def detect_time_cols(df):
     if TIME_COLS_IN_ORDER is not None:
         return TIME_COLS_IN_ORDER
     if "game_date" in df.columns:
         return ["game_date"]
+<<<<<<< HEAD
 <<<<<<< HEAD
     if {"season", "week"}.issubset(df.columns):
         return ["season", "week"]
@@ -1221,12 +1357,17 @@ def detect_time_cols(df):
 
 
 =======
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
     if {"season","week"}.issubset(df.columns):
         return ["season","week"]
     # fallback: use current order; not ideal but keeps going
     return []
 
+<<<<<<< HEAD
 >>>>>>> main
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
 def make_long_edges(df):
     """
     Produce a 'long' dataframe with two rows per game:
@@ -1235,10 +1376,14 @@ def make_long_edges(df):
     Includes 'gid' (row index of original df) to merge features back later.
     """
 <<<<<<< HEAD
+<<<<<<< HEAD
     base = df.reset_index(drop=False).rename(columns={"index": "gid"}).copy()
 =======
     base = df.reset_index(drop=False).rename(columns={"index":"gid"}).copy()
 >>>>>>> main
+=======
+    base = df.reset_index(drop=False).rename(columns={"index":"gid"}).copy()
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
 
     if "home_win" in base.columns:
         win_series = pd.Series(base["home_win"], index=base.index, dtype="boolean")
@@ -1252,6 +1397,7 @@ def make_long_edges(df):
             win_series.loc[winner_col == base["away_team"]] = False
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     home_rows = base[["gid", "home_team", "away_team"]].copy()
     home_rows = home_rows.rename(columns={"home_team": "team", "away_team": "opponent"})
     home_rows["team_won"] = win_series.reindex(home_rows.index)
@@ -1262,6 +1408,8 @@ def make_long_edges(df):
     away_rows["team_won"] = (~win_series).reindex(away_rows.index)
     away_rows = away_rows[["gid", "team", "opponent", "team_won"]]
 =======
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
     home_rows = base[["gid","home_team","away_team"]].copy()
     home_rows = home_rows.rename(columns={"home_team":"team","away_team":"opponent"})
     home_rows["team_won"] = win_series.reindex(home_rows.index)
@@ -1271,7 +1419,10 @@ def make_long_edges(df):
     away_rows = away_rows.rename(columns={"away_team":"team","home_team":"opponent"})
     away_rows["team_won"] = (~win_series).reindex(away_rows.index)
     away_rows = away_rows[["gid","team","opponent","team_won"]]
+<<<<<<< HEAD
 >>>>>>> main
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
 
     long = pd.concat([home_rows, away_rows], ignore_index=True)
 
@@ -1282,14 +1433,18 @@ def make_long_edges(df):
     return long
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 
 =======
 >>>>>>> main
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
 def pairwise_table(long):
     """
     Static, all-time pairwise records (order matters: (team, opponent)).
     dominance = wins - losses = 2*wins - games
     """
+<<<<<<< HEAD
 <<<<<<< HEAD
     g = long.groupby(["team", "opponent"], as_index=False, observed=True)
     agg = g.agg(games=("team", "size"), wins=("team_won", "sum"))
@@ -1304,6 +1459,8 @@ def pairwise_table(long):
 
 
 =======
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
     g = long.groupby(["team","opponent"], as_index=False, observed=True)
     agg = g.agg(games=("team","size"),
                 wins=("team_won","sum"))
@@ -1314,7 +1471,10 @@ def pairwise_table(long):
     agg["signed_wins_style"] = agg["wins"]                # for team’s +8 (and opponent’s +3 on their row)
     return agg
 
+<<<<<<< HEAD
 >>>>>>> main
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
 def leak_free_pregame_features(long):
     """
     For each (team, opponent), compute *prior-to-game* counts:
@@ -1322,18 +1482,24 @@ def leak_free_pregame_features(long):
     Returns a dataframe with one row per (gid, team, opponent).
     """
 <<<<<<< HEAD
+<<<<<<< HEAD
     time_cols = [c for c in long.columns if c in ("game_date", "season", "week")]
     sort_cols = time_cols + ["gid"] if time_cols else ["gid"]
     long = long.sort_values(sort_cols).copy()
 
     grp = long.groupby(["team", "opponent"], group_keys=False, observed=True)
 =======
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
     time_cols = [c for c in long.columns if c in ("game_date","season","week")]
     sort_cols = time_cols + ["gid"] if time_cols else ["gid"]
     long = long.sort_values(sort_cols).copy()
 
     grp = long.groupby(["team","opponent"], group_keys=False, observed=True)
+<<<<<<< HEAD
 >>>>>>> main
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
 
     # Prior games is simply the index within the group before the current row:
     long["prior_games"] = grp.cumcount()
@@ -1342,6 +1508,7 @@ def leak_free_pregame_features(long):
     long["prior_wins"] = grp["team_won"].cumsum() - long["team_won"]
 
     long["prior_losses"] = long["prior_games"] - long["prior_wins"]
+<<<<<<< HEAD
 <<<<<<< HEAD
     long["prior_dom"] = (
         long["prior_wins"] - long["prior_losses"]
@@ -1364,6 +1531,8 @@ def leak_free_pregame_features(long):
 
 
 =======
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
     long["prior_dom"] = long["prior_wins"] - long["prior_losses"]          # wins - losses so far
     long["prior_win_pct"] = np.where(long["prior_games"]>0,
                                      long["prior_wins"]/long["prior_games"], np.nan)
@@ -1371,12 +1540,16 @@ def leak_free_pregame_features(long):
     keep_cols = ["gid","team","opponent","prior_games","prior_wins","prior_losses","prior_dom","prior_win_pct"]
     return long[keep_cols]
 
+<<<<<<< HEAD
 >>>>>>> main
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
 def attach_pregame_to_wide(df, pre):
     """
     Attach pre-game features back to the original wide df:
       home_vs_away_* and away_vs_home_*.
     """
+<<<<<<< HEAD
 <<<<<<< HEAD
     df = df.reset_index(drop=False).rename(columns={"index": "gid"}).copy()
 
@@ -1444,6 +1617,8 @@ def attach_pregame_to_wide(df, pre):
 
 
 =======
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
     df = df.reset_index(drop=False).rename(columns={"index":"gid"}).copy()
 
     # Home perspective: (team=home_team, opponent=away_team)
@@ -1480,7 +1655,10 @@ def attach_pregame_to_wide(df, pre):
 
     return out
 
+<<<<<<< HEAD
 >>>>>>> main
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
 def team_level_prediction_accuracy(df):
     """
     Accuracy of your classifier *when a given team plays*.
@@ -1491,16 +1669,21 @@ def team_level_prediction_accuracy(df):
 
     df = df.copy()
 <<<<<<< HEAD
+<<<<<<< HEAD
     df["pred_winner"] = np.where(
         df["prob_winner"] >= 0.5, df["home_team"], df["away_team"]
     )
 =======
     df["pred_winner"] = np.where(df["prob_winner"] >= 0.5, df["home_team"], df["away_team"])
 >>>>>>> main
+=======
+    df["pred_winner"] = np.where(df["prob_winner"] >= 0.5, df["home_team"], df["away_team"])
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
     df["actual_winner"] = np.where(df["winner"], df["home_team"], df["away_team"])
     df["pred_correct"] = (df["pred_winner"] == df["actual_winner"]).astype(int)
 
     # Give the same correctness stamp to both participants in that game:
+<<<<<<< HEAD
 <<<<<<< HEAD
     home_part = df[["home_team", "pred_correct"]].rename(columns={"home_team": "team"})
     away_part = df[["away_team", "pred_correct"]].rename(columns={"away_team": "team"})
@@ -1508,15 +1691,22 @@ def team_level_prediction_accuracy(df):
     home_part = df[["home_team","pred_correct"]].rename(columns={"home_team":"team"})
     away_part = df[["away_team","pred_correct"]].rename(columns={"away_team":"team"})
 >>>>>>> main
+=======
+    home_part = df[["home_team","pred_correct"]].rename(columns={"home_team":"team"})
+    away_part = df[["away_team","pred_correct"]].rename(columns={"away_team":"team"})
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
     team_games = pd.concat([home_part, away_part], ignore_index=True)
 
     acc = team_games.groupby("team")["pred_correct"].mean().sort_values(ascending=False)
     return acc
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 
 =======
 >>>>>>> main
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
 # ========= Main flow =========
 def build_dominance_features(dff):
     df = ensure_actual_winner(dff)
@@ -1532,6 +1722,7 @@ def build_dominance_features(dff):
     df_with_pregame = attach_pregame_to_wide(df, pre)
 
     # Optional: team-level prediction accuracy
+<<<<<<< HEAD
 <<<<<<< HEAD
     # team_acc = team_level_prediction_accuracy(df_with_pregame) if "prob_winner" in df_with_pregame.columns else None
 
@@ -1553,6 +1744,8 @@ def build_dominance_features(dff):
 
 
 =======
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
    # team_acc = team_level_prediction_accuracy(df_with_pregame) if "prob_winner" in df_with_pregame.columns else None
 
     # Optional: dominance matrix (index=team, columns=opponent) for quick lookup
@@ -1565,7 +1758,10 @@ def build_dominance_features(dff):
        # "team_prediction_accuracy": team_acc
     }
 
+<<<<<<< HEAD
 >>>>>>> main
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
 # ========= Example usage =========
 
 
@@ -1619,13 +1815,17 @@ def build_dataset(
     # Stage 1: Load base schedules with betting lines
     schedules = load_schedules(seasons, include_future=include_future)
     
+<<<<<<< HEAD
 >>>>>>> main
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
     # Stage 2: Load advanced play-by-play metrics
     data_dir = Path(__file__).resolve().parent / "data"
     pbp_metrics = load_team_game_metrics(data_dir / "pbp_clean.csv")
     if not pbp_metrics.empty:
         pbp_metrics = pbp_metrics[pbp_metrics["season"].isin(seasons)]
 <<<<<<< HEAD
+<<<<<<< HEAD
 
     # Stage 3: Load player-level stats (QB, RB, WR aggregations)
     player_stats = load_player_game_stats(seasons)
@@ -1637,6 +1837,8 @@ def build_dataset(
     final_df = add_features(schedules, windows=(3, 5), advanced_metrics=pbp_metrics)
 
 =======
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
     
     # Stage 3: Load player-level stats (QB, RB, WR aggregations)
     player_stats = load_player_game_stats(seasons)
@@ -1647,16 +1849,23 @@ def build_dataset(
     # Stage 5: Engineer rolling features with PBP advanced metrics
     final_df = add_features(schedules, windows=(3, 5), advanced_metrics=pbp_metrics)
     
+<<<<<<< HEAD
 >>>>>>> main
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
     # Stage 6: Merge player and team stats
     if not player_stats.empty:
         final_df = _merge_team_week_stats(final_df, player_stats, prefix="player")
         logging.info("Merged player stats: now %d columns", len(final_df.columns))
 <<<<<<< HEAD
+<<<<<<< HEAD
 
 =======
     
 >>>>>>> main
+=======
+    
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
     if not team_stats.empty:
         final_df = _merge_team_week_stats(final_df, team_stats, prefix="teamstat")
         logging.info("Merged team stats: now %d columns", len(final_df.columns))
@@ -1691,17 +1900,24 @@ def build_dataset(
 
 =======
     
+<<<<<<< HEAD
 >>>>>>> main
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
     # Create boolean home_win column before dominance analysis (nullable for ties/future games)
     home_win = pd.Series(pd.NA, index=final_df.index, dtype="boolean")
     home_win.loc[final_df["winner"] == final_df["home_team"]] = True
     home_win.loc[final_df["winner"] == final_df["away_team"]] = False
     final_df["home_win"] = home_win
 <<<<<<< HEAD
+<<<<<<< HEAD
 
 =======
     
 >>>>>>> main
+=======
+    
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
     # run df through pipeline to ensure no errors
     for col in final_df.select_dtypes(include=["object"]).columns:
         final_df[col] = final_df[col].astype(dtype="category")
@@ -1720,12 +1936,16 @@ def build_dataset(
     logging.info("Pairwise dominance table:\n%s", result["pair_table"].head(10))
     logging.info("Dominance matrix:\n%s", result["dominance_matrix"].head(10))
 <<<<<<< HEAD
+<<<<<<< HEAD
     logging.info(
         "DataFrame with pregame features:\n%s", result["df_with_pregame"].head(10)
     )
 =======
     logging.info("DataFrame with pregame features:\n%s", result["df_with_pregame"].head(10))
 >>>>>>> main
+=======
+    logging.info("DataFrame with pregame features:\n%s", result["df_with_pregame"].head(10))
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
     team_acc = result.get("team_prediction_accuracy")
     if team_acc is not None:
         logging.info("Team prediction accuracy:\n%s", team_acc.head(10))
@@ -1763,7 +1983,10 @@ def parse_args() -> argparse.Namespace:
     )
 =======
     p.add_argument("--out-dir", type=str, default="backend/data", help="Output directory.")
+<<<<<<< HEAD
 >>>>>>> main
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
     p.add_argument(
         "--legacy-root-copy",
         action="store_true",
@@ -1786,7 +2009,10 @@ def main() -> None:
         include_future=True,
     )
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
     
 >>>>>>> main
 
@@ -1794,7 +2020,10 @@ def main() -> None:
 if __name__ == "__main__":
     main()
     
+<<<<<<< HEAD
 
+=======
+>>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
 
 # -----------------------------
 # Suggested Enhancements
