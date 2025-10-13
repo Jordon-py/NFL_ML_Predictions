@@ -67,6 +67,46 @@ vite.config.js:            proxy to Heroku backend for /api, /schedule, /predict
 3. **Deploy & Verify**: Push CORS config changes to Heroku and verify frontend can connect
 4. **Monitor Logs**: Check Heroku logs to confirm CORS_ORIGINS is properly set
 
+### Documentation Created (2025-10-13 10:35)
+
+- **`docs/CORS_API_CONFIGURATION.md`**: Comprehensive 300+ line guide covering CORS architecture, configuration files, testing procedures, and troubleshooting
+- **`docs/API_CORS_CHECKLIST.md`**: Detailed verification checklist with deployment steps and success indicators
+- **`docs/CORS_QUICK_REFERENCE.md`**: Quick reference card with essential commands and common issues
+- **`scripts/verify_api_cors.py`**: Automated Python script (350+ lines) to verify API and CORS configuration
+
+### All Functions and Variables Referenced (2025-10-13 10:35)
+
+**Backend Functions:**
+- `load_objects()` - Loads ML models from disk (backend/main.py:185)
+- `lifespan()` - FastAPI startup/shutdown handler (backend/main.py:217)
+- `get_current_nfl_context()` - Determines current NFL season/week (backend/main.py:282)
+- `_build_future_row()` - Derives feature priors for new matchups (backend/main.py:317)
+- `health()` - Health check endpoint (backend/main.py:387)
+- `debug_info()` - Debug endpoint showing CORS config (backend/main.py:391)
+- `get_next_week_schedule()` - Returns next week's games (backend/main.py:445)
+- `predict_game()` - Main prediction endpoint (backend/main.py:506)
+
+**Frontend Functions:**
+- `buildUrl()` - Constructs API URLs (frontend/src/api/client.js:33)
+- `api()` - Generic fetch wrapper (frontend/src/api/client.js:45)
+- `getNextWeekSchedule()` - Fetches schedule (frontend/src/api/client.js:59)
+- `predictGame()` - Submits prediction request (frontend/src/api/client.js:63)
+
+**Key Variables:**
+- `CORS_ORIGINS` - Allowed frontend origins (backend/main.py:266)
+- `BASE_URL` - Backend API URL (frontend/src/api/client.js:23)
+- `VITE_API_URL` - Environment variable for API URL (frontend env files)
+- `model_objects` - Loaded ML models (backend/main.py:181)
+- `dataset_df` - Game features DataFrame (backend/main.py:182)
+
+**Environment Variables:**
+- `CORS_ORIGINS` - Backend CORS configuration
+- `VITE_API_URL` - Frontend API endpoint
+- `DATASET_PATH` - Path to game features CSV
+- `SCHEDULE_PATH` - Path to schedule CSV
+- `LOG_LEVEL` - Logging verbosity
+- `ENVIRONMENT` - dev/production flag
+
 ---
 
 ## 🔄 UPDATE: 2025-10-13 02:35 – Frontend Payload Guard & Dataset Normalization
