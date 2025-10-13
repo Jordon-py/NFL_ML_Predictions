@@ -338,6 +338,71 @@ backend/data/             # CSV artifacts
 
 Please read our contributing guidelines before submitting pull requests.
 
+## Deployment
+
+### Architecture
+
+This project uses a split deployment architecture:
+- **Backend (FastAPI)**: Deployed on Heroku at `https://nfl-predict-ecf5a5bd34fe.herokuapp.com`
+- **Frontend (React)**: Deployed on Vercel at `https://nfl-ml-predictions.vercel.app`
+
+### CORS Configuration
+
+The backend and frontend are properly configured for cross-origin requests:
+
+1. **Backend CORS**: Set `CORS_ORIGINS` environment variable on Heroku:
+   ```bash
+   heroku config:set CORS_ORIGINS="http://localhost:3000,https://localhost:3000,https://nfl-ml-predictions.vercel.app,https://nfl-predict-frontend.vercel.app" -a nfl-predict
+   ```
+
+2. **Frontend API URL**: Set `VITE_API_URL` in Vercel project settings or `frontend/.env.production`
+
+For detailed CORS and API configuration guide, see [docs/CORS_API_CONFIGURATION.md](docs/CORS_API_CONFIGURATION.md)
+
+### Deploy Backend to Heroku
+
+```bash
+# Login to Heroku
+heroku login
+
+# Deploy backend
+git push heroku main
+
+# Verify deployment
+heroku logs --tail -a nfl-predict
+curl https://nfl-predict-ecf5a5bd34fe.herokuapp.com/health
+```
+
+### Deploy Frontend to Vercel
+
+```bash
+# Login to Vercel
+vercel login
+
+# Deploy frontend
+cd frontend
+npm run build
+vercel --prod
+```
+
+### Deployment Scripts
+
+For automated deployment, use the PowerShell deployment script:
+
+```powershell
+pwsh -File scripts/deploy.ps1
+```
+
+This script handles:
+- CORS configuration on Heroku
+- Frontend dependency installation and build
+- Git commits and pushes
+- Backend deployment to Heroku
+- Frontend deployment to Vercel
+- Health check verification
+
+See [DEPLOYMENT_FIXED.md](DEPLOYMENT_FIXED.md) for detailed deployment troubleshooting.
+
 ## License
 
 =======
