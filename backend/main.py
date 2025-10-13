@@ -263,8 +263,7 @@ async def lifespan(app: FastAPI):
 
 
 # Get CORS origins from environment variable
-CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
-CORS_ORIGINS = [origin.strip() for origin in CORS_ORIGINS if origin.strip()]
+CORS_ORIGINS = "*"
 
 log.info(f"CORS Origins configured: {CORS_ORIGINS}")
 
@@ -410,7 +409,7 @@ def debug_info():
                 debug["metadata_error"] = f"Invalid JSON in metadata.json: {e}"
 
         tr = MODELS_DIR / "training_report.json"
-        debug["training_report_present"] = tr.is_file()
+        debug["training_report_present"] = str(tr.is_file())
         # If you prefer to load it when present, uncomment below:
         if tr.is_file():
             try:
