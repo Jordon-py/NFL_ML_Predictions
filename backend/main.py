@@ -17,21 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-<<<<<<< HEAD
-<<<<<<< HEAD
 # Third-party imports
-=======
-=======
->>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
-# Load environment variables
-from dotenv import load_dotenv
-# Load from backend/.env explicitly to ensure it's found
-load_dotenv(Path(__file__).parent / ".env")
-
-<<<<<<< HEAD
->>>>>>> main
-=======
->>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
 import numpy as np
 import pandas as pd
 from dotenv import load_dotenv
@@ -87,18 +73,11 @@ logging.config.dictConfig(
 log = logging.getLogger("api")
 
 # ---------- Constants ----------
-<<<<<<< HEAD
-<<<<<<< HEAD
 DEFAULT_DATASET = (
     DATA_DIR / "merged_game_features.csv"
 )  # Updated from 'Nfl_data_sorted.csv'
-=======
-DEFAULT_DATASET = DATA_DIR / "merged_game_features.csv"  # Updated from 'Nfl_data_sorted.csv'
->>>>>>> main
-=======
-DEFAULT_DATASET = DATA_DIR / "merged_game_features.csv"  # Updated from 'Nfl_data_sorted.csv'
->>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
 DEFAULT_SCHEDULE = DATA_DIR / "Nfl_schedule_2025_2026.csv"
+log.info("Resolved default dataset path: %s", DEFAULT_DATASET)
 
 
 # ---------- Schemas ----------
@@ -137,7 +116,6 @@ class ScheduleGame(BaseModel):
 
 # ---------- Teams ----------
 TEAM_ABBREVIATIONS = {
-<<<<<<< HEAD
     "Arizona Cardinals": "ARI",
     "Atlanta Falcons": "ATL",
     "Baltimore Ravens": "BAL",
@@ -170,36 +148,17 @@ TEAM_ABBREVIATIONS = {
     "Tampa Bay Buccaneers": "TB",
     "Tennessee Titans": "TEN",
     "Washington Commanders": "WAS",
-=======
-    "Arizona Cardinals":"ARI","Atlanta Falcons":"ATL","Baltimore Ravens":"BAL","Buffalo Bills":"BUF",
-    "Carolina Panthers":"CAR","Chicago Bears":"CHI","Cincinnati Bengals":"CIN","Cleveland Browns":"CLE",
-    "Dallas Cowboys":"DAL","Denver Broncos":"DEN","Detroit Lions":"DET","Green Bay Packers":"GB",
-    "Houston Texans":"HOU","Indianapolis Colts":"IND","Jacksonville Jaguars":"JAX","Kansas City Chiefs":"KC",
-    "Las Vegas Raiders":"LV","Los Angeles Chargers":"LAC","Los Angeles Rams":"LAR","Miami Dolphins":"MIA",
-    "Minnesota Vikings":"MIN","New England Patriots":"NE","New Orleans Saints":"NO","New York Giants":"NYG",
-    "New York Jets":"NYJ","Philadelphia Eagles":"PHI","Pittsburgh Steelers":"PIT","San Francisco 49ers":"SF",
-    "Seattle Seahawks":"SEA","Tampa Bay Buccaneers":"TB","Tennessee Titans":"TEN","Washington Commanders":"WAS"
->>>>>>> main
 }
 VALID_ABBRS = set(TEAM_ABBREVIATIONS.values())
 
 
 def get_abbr(name: str) -> str:
-<<<<<<< HEAD
-<<<<<<< HEAD
     if name == "LA":
         return name.replace("LA", "LAR")  # Los Angeles Rams
     if name in VALID_ABBRS:
         return name
     if name in TEAM_ABBREVIATIONS:
         return TEAM_ABBREVIATIONS[name]
-=======
-=======
->>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
-    if name == 'LA': return name.replace('LA','LAR')  # Los Angeles Rams
-    if name in VALID_ABBRS: return name
-    if name in TEAM_ABBREVIATIONS: return TEAM_ABBREVIATIONS[name]
->>>>>>> main
     raise ValueError(f"Unknown team: {name}")
 
 
@@ -232,40 +191,26 @@ def load_objects() -> Dict[str, Any]:
     meta = json.loads(meta_path.read_text())
 
     pre = joblib.load(MODELS_DIR / meta["preprocessor"])
-<<<<<<< HEAD
     mdl = meta.get("models", {"training_report": "training_report.json"})
     home_p_path = MODELS_DIR / "home_model.joblib"
     away_p_path = MODELS_DIR / "away_model.joblib"
-    win_p_path = MODELS_DIR / "win_clf_calibrated.joblib"
-    for p in [home_p_path, away_p_path, win_p_path]:
+
+    # Check for required models
+    for p in [home_p_path, away_p_path]:
         if not p.exists():
             raise FileNotFoundError(f"Missing model file: {p}")
-=======
-    mdl = meta.get("models", {"training_report":"training_report.json"})
-    home_p_path = MODELS_DIR / "home_model.joblib"
-    away_p_path = MODELS_DIR / "away_model.joblib"
-    win_p_path  = MODELS_DIR / "win_clf_calibrated.joblib"
-    for p in [home_p_path, away_p_path, win_p_path]:
-        if not p.exists(): raise FileNotFoundError(f"Missing model file: {p}")
-<<<<<<< HEAD
->>>>>>> main
-=======
->>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
+
+    # Optional: load win_clf_calibrated if available (for legacy compatibility)
+    win_p_path = MODELS_DIR / "win_clf_calibrated.joblib"
+    win_model = joblib.load(win_p_path) if win_p_path.exists() else None
 
     return {
         "mode": "production",
         "preprocessor": pre,
         "home_model": joblib.load(home_p_path),
         "away_model": joblib.load(away_p_path),
-        "win_model": joblib.load(win_p_path),
-<<<<<<< HEAD
-<<<<<<< HEAD
-        "raw_feature_columns": meta.get("raw_feature_columns", {mdl}),
-=======
-=======
->>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
-        "raw_feature_columns": meta.get("raw_feature_columns", {}),
->>>>>>> main
+        "win_model": win_model,  # Can be None
+        "raw_feature_columns": meta.get("raw_feature_columns", mdl),
     }
 
 
@@ -281,32 +226,50 @@ async def lifespan(app: FastAPI):
     if df.empty:
         raise RuntimeError("Dataset CSV is empty")
     df.columns = [c.strip() for c in df.columns]
+
+    # Derive home/away helper columns when the dataset stores per-team rows only.
+    if {
+        "home_team",
+        "away_team",
+    }.issubset(df.columns):
+        pass
+    elif {"team", "opponent_team", "is_home"}.issubset(df.columns):
+        local = df.copy()
+        raw_is_home = local["is_home"]
+
+        if pd.api.types.is_bool_dtype(raw_is_home):
+            is_home = raw_is_home.astype(bool)
+        else:
+            truthy = {"true", "t", "1", "yes", "y"}
+            is_home = raw_is_home.astype(str).str.strip().str.lower().isin(truthy)
+
+        local["is_home"] = is_home
+        local["home_team"] = np.where(is_home, local["team"], local["opponent_team"])
+        local["away_team"] = np.where(is_home, local["opponent_team"], local["team"])
+        df = local
+        log.info(
+            "Dataset derived home/away columns from team/opponent layout (rows=%d)",
+            len(df),
+        )
+    else:
+        log.warning(
+            "Dataset missing home/away columns and team/opponent fallback; predictions will rely on synthetic features only."
+        )
+
     dataset_df = df
     log.info("Loaded dataset rows=%d cols=%d", len(df), len(df.columns))
     yield
     log.info("Shutdown complete")
 
-<<<<<<< HEAD
-<<<<<<< HEAD
 
 # Get CORS origins from environment variable
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
-=======
-# Get CORS origins from environment variable
-CORS_ORIGINS = os.getenv("CORS_ORIGINS","http://localhost:3000").split(",")
->>>>>>> main
-=======
-# Get CORS origins from environment variable
-CORS_ORIGINS = os.getenv("CORS_ORIGINS","http://localhost:3000").split(",")
->>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
 CORS_ORIGINS = [origin.strip() for origin in CORS_ORIGINS if origin.strip()]
 
 log.info(f"CORS Origins configured: {CORS_ORIGINS}")
 
 app = FastAPI(title="NFL Game Prediction API", version="2.0.0", lifespan=lifespan)
 app.add_middleware(
-<<<<<<< HEAD
-<<<<<<< HEAD
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
     allow_credentials=True,
@@ -314,32 +277,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-=======
-=======
->>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
-    CORSMiddleware, 
-    allow_origins=CORS_ORIGINS,
-    allow_credentials=True, 
-    allow_methods=["*"], 
-    allow_headers=["*"]
-)
-<<<<<<< HEAD
->>>>>>> main
-=======
->>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
 
 # ---------- Helpers ----------
 def get_current_nfl_context() -> Dict[str, Any]:
     now = datetime.now()
-<<<<<<< HEAD
-<<<<<<< HEAD
-    log.info("Current time: %s", now.isoformat(), "now-->", now)
-=======
-    log.info("Current time: %s", now.isoformat(),'now-->', now)
->>>>>>> main
-=======
-    log.info("Current time: %s", now.isoformat(),'now-->', now)
->>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
+    log.info("Current time snapshot: iso=%s raw=%s", now.isoformat(), now)
     cur_season = now.year if now.month >= 8 else now.year - 1
     if dataset_df is not None and {
         "season",
@@ -355,7 +297,6 @@ def get_current_nfl_context() -> Dict[str, Any]:
             last = done.sort_values(["season", "week"]).iloc[-1]
             last_s, last_w = int(last["season"]), int(last["week"])
             nxt_s, nxt_w = last_s, last_w + 1
-<<<<<<< HEAD
             if nxt_w > 22:
                 nxt_s, nxt_w = last_s + 1, 1
             return {
@@ -379,19 +320,6 @@ def get_current_nfl_context() -> Dict[str, Any]:
 def _build_future_row(
     df: pd.DataFrame, home: str, away: str, season: int, week: int
 ) -> pd.Series:
-=======
-            if nxt_w > 22: nxt_s, nxt_w = last_s + 1, 1
-            return {"current_season": cur_season,"last_completed_season": last_s,"last_completed_week": last_w,
-                    "next_prediction_season": nxt_s,"next_prediction_week": nxt_w,
-                    "status": "nfl_season_active" if nxt_s == cur_season else "offseason"}
-    return {"current_season": cur_season,"last_completed_season": cur_season,"last_completed_week": 0,
-            "next_prediction_season": cur_season,"next_prediction_week": 1,"status": "preseason_or_early"}
-
-def _build_future_row(df: pd.DataFrame, home: str, away: str, season: int, week: int) -> pd.Series:
-<<<<<<< HEAD
->>>>>>> main
-=======
->>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
     """Derive feature priors for a matchup not yet present in the dataset."""
 
     df = df.copy()
@@ -451,13 +379,7 @@ def _build_future_row(df: pd.DataFrame, home: str, away: str, season: int, week:
         raise RuntimeError(
             f"Failed to build future row for {home} vs {away} ({season} W{week}): {exc}"
         )
-<<<<<<< HEAD
-<<<<<<< HEAD
 
-=======
->>>>>>> main
-=======
->>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
 
 # ---------- Routes ----------
 @app.get("/health", response_model=HealthResponse)
@@ -470,12 +392,6 @@ def health():
         status="healthy", mode=model_objects.get("mode"), reason="models loaded"
     )
 
-
-from datetime import datetime, timezone
-import json, os
-
-from datetime import datetime, timezone
-import json, os
 
 @app.get("/debug")
 def debug_info():
@@ -500,17 +416,9 @@ def debug_info():
             try:
                 debug["training_report"] = json.loads(tr.read_text(encoding="utf-8"))
             except json.JSONDecodeError as e:
-<<<<<<< HEAD
-<<<<<<< HEAD
                 debug["training_report_error"] = (
                     f"Invalid JSON in training_report.json: {e}"
                 )
-=======
-                debug["training_report_error"] = f"Invalid JSON in training_report.json: {e}"
->>>>>>> main
-=======
-                debug["training_report_error"] = f"Invalid JSON in training_report.json: {e}"
->>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
 
     except Exception as e:
         debug["error"] = f"{type(e).__name__}: {e}"
@@ -525,23 +433,11 @@ def get_next_week_schedule():
     - Builds kickoff ISO timestamp from gameday+gametime.
     """
     try:
-<<<<<<< HEAD
-<<<<<<< HEAD
         schedule_path = BASE_DIR / "backend" / "data" / "Nfl_schedule_2025_2026.csv"
         if not schedule_path.exists():
             raise HTTPException(
                 status_code=404, detail=f"Schedule data not found: {schedule_path}"
             )
-=======
-        schedule_path = BASE_DIR / 'backend' / 'data' / 'Nfl_schedule_2025_2026.csv'
-        if not schedule_path.exists():
-            raise HTTPException(status_code=404, detail=f"Schedule data not found: {schedule_path}")
->>>>>>> main
-=======
-        schedule_path = BASE_DIR / 'backend' / 'data' / 'Nfl_schedule_2025_2026.csv'
-        if not schedule_path.exists():
-            raise HTTPException(status_code=404, detail=f"Schedule data not found: {schedule_path}")
->>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
 
         df = pd.read_csv(schedule_path)
 
@@ -553,8 +449,6 @@ def get_next_week_schedule():
 
         # Compose kickoff timestamp (UTC) from date + time; tolerate TBD times
         df["kickoff_ts_utc"] = pd.to_datetime(
-<<<<<<< HEAD
-<<<<<<< HEAD
             (
                 df["gameday"].astype(str).str.strip()
                 + " "
@@ -568,41 +462,18 @@ def get_next_week_schedule():
         df["kickoff_ts_utc"] = df["kickoff_ts_utc"].where(
             df["kickoff_ts_utc"].notna(), date_only
         )
-=======
-=======
->>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
-            (df["gameday"].astype(str).str.strip() + " " + df["gametime"].astype(str).str.strip()).str.strip(),
-            errors="coerce", utc=True
-        )
-        # Fallback to date-only if time missing/unparseable
-        date_only = pd.to_datetime(df["gameday"], errors="coerce", utc=True)
-        df["kickoff_ts_utc"] = df["kickoff_ts_utc"].where(df["kickoff_ts_utc"].notna(), date_only)
-<<<<<<< HEAD
->>>>>>> main
-=======
->>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
 
         # Choose next week from now; if no future games, last available week
         now = pd.Timestamp.now(tz="UTC")
         future = df[df["kickoff_ts_utc"].notna() & (df["kickoff_ts_utc"] >= now)]
-<<<<<<< HEAD
-<<<<<<< HEAD
         current_week = (
             int(future["week"].min()) if not future.empty else int(df["week"].max())
         )
-=======
-        current_week = int(future["week"].min()) if not future.empty else int(df["week"].max())
->>>>>>> main
-=======
-        current_week = int(future["week"].min()) if not future.empty else int(df["week"].max())
->>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
 
         week_games = df[df["week"] == current_week].copy()
 
         games = []
         for _, row in week_games.iterrows():
-<<<<<<< HEAD
-<<<<<<< HEAD
             kickoff_iso = (
                 row["kickoff_ts_utc"].isoformat()
                 if pd.notna(row["kickoff_ts_utc"])
@@ -626,26 +497,6 @@ def get_next_week_schedule():
                     ),
                 }
             )
-=======
-=======
->>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
-            kickoff_iso = row["kickoff_ts_utc"].isoformat() if pd.notna(row["kickoff_ts_utc"]) else "TBD"
-            home = str(row["home_team"]).strip()
-            away = str(row["away_team"]).strip()
-            games.append({
-                'season': int(row['season']),
-                'week': int(row['week']),
-                'home_team': home,
-                'home_abbr': TEAM_ABBREVIATIONS.get(home, home),
-                'away_team': away,
-                'away_abbr': TEAM_ABBREVIATIONS.get(away, away),
-                'kickoff_iso': kickoff_iso,
-                'game_id': str(row.get('game_id', f"{row['season']}W{row['week']}-{away}@{home}"))
-            })
-<<<<<<< HEAD
->>>>>>> main
-=======
->>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
 
         log.info("Schedule week %s games=%d", current_week, len(games))
         return games
@@ -665,12 +516,21 @@ def predict_game(payload: PredictionRequest):
         h = get_abbr(payload.home_team)
         a = get_abbr(payload.away_team)
         season, week = int(payload.season), int(payload.week)
+        log.info(
+            "Predict request: home=%s away=%s season=%s week=%s",
+            h,
+            a,
+            season,
+            week,
+        )
         mask = (
             (dataset_df["season"] == season)
             & (dataset_df["week"] == week)
             & (dataset_df["home_team"] == h)
             & (dataset_df["away_team"] == a)
         )
+        if "is_home" in dataset_df.columns:
+            mask = mask & (dataset_df["is_home"].astype(bool))
         rows = dataset_df.loc[mask]
         if rows.empty:
             row = _build_future_row(dataset_df, h, a, season, week)
@@ -684,17 +544,9 @@ def predict_game(payload: PredictionRequest):
         features = _normalize_feature_cols(raw_cols)
         data = {c: [row[c]] if c in row.index else [np.nan] for c in features}
         if missing := [c for c in features if c not in row.index]:
-<<<<<<< HEAD
-<<<<<<< HEAD
             log.warning(
                 "Prediction using fallback fill for missing features: %s", missing
             )
-=======
-            log.warning("Prediction using fallback fill for missing features: %s", missing)
->>>>>>> main
-=======
-            log.warning("Prediction using fallback fill for missing features: %s", missing)
->>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
         X = model_objects["preprocessor"].transform(pd.DataFrame(data))
         # Score regressors
         home_score = float(
@@ -704,8 +556,20 @@ def predict_game(payload: PredictionRequest):
             np.clip(model_objects["away_model"].predict(X)[0], 0.0, 70.0)
         )
         point_diff = round(home_score - away_score, 1)
-        # Win probability from calibrated classifier
-        home_prob = float(model_objects["win_model"].predict_proba(X)[0, 1])
+
+        # Win probability from calibrated classifier (if available) or derived from score difference
+        if model_objects["win_model"] is not None:
+            home_prob = float(model_objects["win_model"].predict_proba(X)[0, 1])
+        else:
+            # Fallback: Use logistic function based on point differential
+            # This approximates win probability when win_model is unavailable
+            import math
+
+            home_prob = 1 / (1 + math.exp(-0.25 * point_diff))  # Sigmoid function
+            log.warning(
+                "Using point differential fallback for win probability (win_model not available)"
+            )
+
         return PredictionResponse(
             home_score=round(home_score, 1),
             away_score=round(away_score, 1),
@@ -738,7 +602,6 @@ def predict_next_week():
         out = []
         for _, g in games.iterrows():
             try:
-<<<<<<< HEAD
                 pr = predict_game(
                     PredictionRequest(
                         home_team=str(g["home_team"]),
@@ -763,18 +626,6 @@ def predict_next_week():
                         "prediction": pr.model_dump(),
                     }
                 )
-=======
-                pr = predict_game(PredictionRequest(
-                    home_team=str(g["home_team"]),
-                    away_team=str(g["away_team"]),
-                    season=int(g["season"]),
-                    week=int(g["week"])
-                ))
-                out.append({"game_id": str(g.get("game_id", f"{g['season']}W{g['week']}-{g['away_team']}@{g['home_team']}")),
-                            "season": int(g["season"]), "week": int(g["week"]),
-                            "home_team": str(g["home_team"]), "away_team": str(g["away_team"]),
-                            "kickoff": str(g.get("gameday","TBD")), "prediction": pr.model_dump()})
->>>>>>> main
             except Exception as e:
                 out.append(
                     {"game_id": str(g.get("game_id", "unknown")), "error": str(e)}

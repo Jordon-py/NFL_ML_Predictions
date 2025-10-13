@@ -67,17 +67,25 @@ function TeamGrid({onPrediction = undefined}) {
     setError(null);
 
     try {
-      const result = await predictGame({
+      if (!game.home_abbr || !game.away_abbr) {
+        console.warn('[TeamGrid] Missing abbreviations for game:', game);
+        throw new Error('Missing team abbreviations.');
+      }
+
+      const payload = {
         home_team: game.home_abbr,
         away_team: game.away_abbr,
         season: game.season,
         week: game.week,
-      });
+      };
+
+      const result = await predictGame(payload);
       setPredictions(prev => ({...prev, [gameKey]: result}));
       if (onPrediction) onPrediction(game, result);
     } catch (err) {
       console.error('[TeamGrid] Prediction failed:', err);
-      setError(`Failed to predict ${game.home_abbr} vs ${game.away_abbr}`);
+      const message = err instanceof Error ? err.message : 'Unknown error.';
+      setError(`Failed to predict ${game.home_abbr} vs ${game.away_abbr}: ${message}`);
     } finally {
       setLoading(prev => ({...prev, [gameKey]: false}));
     }
@@ -223,7 +231,7 @@ function TeamGrid({onPrediction = undefined}) {
                   </div>
                 )}
               </div>
-             
+
             </div>
           );
         })}
