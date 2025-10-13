@@ -61,6 +61,9 @@ export async function getNextWeekSchedule() {
 }
 
 export async function predictGame(body) {
+  if (import.meta.env.DEV) {
+    console.log('[API Client] predictGame body:', body);
+  }
   return api('predict', {method: 'POST', body: JSON.stringify(body)});
 }
 
