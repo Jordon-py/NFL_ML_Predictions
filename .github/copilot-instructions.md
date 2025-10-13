@@ -19,7 +19,7 @@
 >
 >    * Add or update **top-level documentation** in every file you touch.
 >
->      * Summarize purpose, key logic flow, and dependencies.
+>      * Summarize purpose, key logic flow, and dependencies syntax examples.
 >      * Add concise **inline comments** only where logic might confuse future maintainers.
 >    * Explain syntax or unusual constructs in plain language when appropriate.
 > 4. **README Management:**
@@ -28,6 +28,7 @@
 >    * Keep tone **professional, clear, and informative**.
 >    * Ensure the README reflects the current deployment architecture (FastAPI → Heroku; React → Vercel; npm-based builds).
 >    * Automatically correct broken links, outdated instructions, or unclear steps.
+
 > 5. **Professional Tone Enforcement:**
 >
 >    * Maintain a consistent, professional tone throughout the repository (code comments, docs, commit suggestions).
