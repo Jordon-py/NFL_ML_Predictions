@@ -32,16 +32,19 @@ export default function HistoryChart({history}) {
   }, [history]);
 
   // Empty states should still return semantic markup for screen readers.
-  if (!points.length) return <div className="history-chart">No history yet.</div>;
+  if (!points.length) {
+    return <div className="history-chart">No history yet.</div>;
+  }
 
   // Minimal textual fallback. Swap for a chart library in your stack.
   return (
     <div className="history-chart">
-      <h3>History (prob %)</h3>
+      <h3>Prediction History</h3>
       <ul>
         {points.map((p, i) => (
           <li key={i}>
-            <code>{p.x}</code> — <strong>{p.y ?? 'n/a'}%</strong> <em>({p.label})</em>
+            <code>{new Date(p.x).toLocaleTimeString()}</code> — <strong>{p.y ?? 'n/a'}%</strong>{' '}
+            <em>({p.label})</em>
           </li>
         ))}
       </ul>
