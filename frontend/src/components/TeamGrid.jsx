@@ -2,11 +2,14 @@ import React, {useState, useEffect} from 'react';
 import {getNextWeekSchedule, predictGame} from '../api/client.js';
 
 
+import {usePredictions, toEntry} from '../PredictionContext.js';
+
 /**
  * TeamGrid Component - Displays NFL matchups for next week with prediction capabilities
  * (Visual-only updates: removed inline styles, added CSS utility classes, preserved behavior)
  */
-function TeamGrid({onPrediction = undefined}) {
+function TeamGrid() {
+  const {actions} = usePredictions();
   const [teams, setTeams] = useState({});
   const [schedule, setSchedule] = useState([]);
   const [predictions, setPredictions] = useState({});
@@ -47,25 +50,10 @@ function TeamGrid({onPrediction = undefined}) {
     const loadSchedule = async () => {
       try {
         const scheduleData = await getNextWeekSchedule();
-
-        // Normalize response: handle both array and error object
-        if (scheduleData?.error) {
-          throw new Error(scheduleData.message || 'Failed to load schedule');
-        }
-
-        const normalizedSchedule = Array.isArray(scheduleData)
-          ? scheduleData
-          : (scheduleData?.games ?? []);
-
-        if (!Array.isArray(normalizedSchedule)) {
-          throw new Error('Schedule payload is malformed (expected array).');
-        }
-
-        setSchedule(normalizedSchedule);
+        setSchedule(scheduleData);
       } catch (err) {
-        console.error('[TeamGrid] Failed to load schedule:', err);
-        setError(err instanceof Error ? err.message : 'Failed to load schedule');
-        setSchedule([]); // Ensure schedule is always an array
+        console.error('[TeamGrid] Failed to load schedule: err', err);
+        setError('Failed to load schedule');
       }
     };
     if (Object.keys(teams).length > 0) {
@@ -96,7 +84,17 @@ function TeamGrid({onPrediction = undefined}) {
 
       const result = await predictGame(payload);
       setPredictions(prev => ({...prev, [gameKey]: result}));
-      if (onPrediction) onPrediction(game, result);
+
+      // Create a normalized entry and update context
+      const entry = toEntry({
+        ...game,
+        ...result,
+        home_abbr: game.home_abbr,
+        away_abbr: game.away_abbr,
+      });
+      actions.setCurrent(entry);
+      actions.pushHistory(entry);
+
     } catch (err) {
       console.error('[TeamGrid] Prediction failed:', err);
       const message = err instanceof Error ? err.message : 'Unknown error.';
