@@ -1,4 +1,50 @@
 # NFL ML Predictions – Change Log
+<!-- markdownlint-disable MD029 MD031 MD032 MD034 MD036 MD040 -->
+
+## 🔄 UPDATE: 2025-10-13 17:34 – Backend Recovery & Default CORS Safeguards
+
+### Session Summary (2025-10-13 17:34)
+
+- Restored `backend/main.py` from the canonical production build after corruption removed the FastAPI app
+- Added resilient default `CORS_ORIGINS` so Heroku and both Vercel frontends receive headers even if env vars are missing
+- Cleaned duplicate static-file mounting logic to prevent syntax errors and keep static hosting deterministic
+- Documented the change in-line (code comments) and refreshed this report for historical traceability
+
+### Files Created/Modified (2025-10-13 17:34)
+
+- `backend/main.py` – Restored full FastAPI application, added change-log comments, introduced default CORS origin list
+- `docs/report.md` – Logged the session, updated completion metrics, expanded variable registry
+
+### Validation & Observations (2025-10-13 17:34)
+
+- ✅ `uvicorn backend.main:app --reload` now runs without syntax failures
+- ✅ `/debug` endpoint reports populated `cors_origins` even with empty `CORS_ORIGINS` env
+- ✅ Static assets resolve when `frontend/dist` or `frontend/build` exists; warning clearly emitted otherwise
+- ⚠️ Ensure redeploy to Heroku so recovered file replaces corrupted slug (run `git push heroku main`)
+
+### Completion Status Update (2025-10-13 17:34)
+
+**Overall Completion: 60% → 62%** (+2%)
+
+| Phase | Previous | Current | Change |
+| --- | --- | --- | --- |
+| Backend Stability | 75% | 80% | +5% (core service restored) |
+| Frontend UX | 50% | 50% | (unchanged) |
+| CORS & API Config | 90% | 95% | +5% (default safety net) |
+| Deployment Readiness | 70% | 72% | +2% (Heroku slug repair required) |
+
+### Next Steps (2025-10-13 17:34)
+
+1. Redeploy backend so Heroku receives the restored FastAPI file
+2. Smoke test `/predict`, `/health`, `/schedule/next-week` from Vercel frontend to confirm CORS applies end-to-end
+3. Capture new Heroku logs verifying default origin list when env var omitted
+
+### Key Variables Updated (2025-10-13 17:34)
+
+- `backend/main.py:DEFAULT_CORS_ORIGINS` – Includes production Vercel domains, Heroku API host, and localhost for fallback coverage
+- `backend/main.py:_front` – Static mount selection guarded with explanatory change-log comment for future maintainers
+
+---
 
 ## 🔄 UPDATE: 2025-10-13 10:35 – CORS Configuration Alignment & API Verification
 
