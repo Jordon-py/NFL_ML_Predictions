@@ -8,7 +8,6 @@
         "jsonl": true,
         "csv": true
     },
-
     "terminal.integrated.profiles.windows": {
         "NFL venv": {
             "source": "PowerShell",
@@ -24,13 +23,14 @@
     "terminal.integrated.env.windows": {
         "VIRTUAL_ENV": "${workspaceFolder}\\venv",
         "PATH": "${workspaceFolder}\\venv\\Scripts;${env:PATH}"
-
     },
     "[python]": {
         "editor.defaultFormatter": "charliermarsh.ruff"
     },
     "[jsonc]": {
         "editor.defaultFormatter": "vscode.json-language-features"
-
+    },
+    "[json]": {
+        "editor.defaultFormatter": "vscode.json-language-features"
     }
 }
