@@ -269,6 +269,7 @@ DEFAULT_CORS_ORIGINS = [
     "https://nfl-predict-christopher-jordons-projects.vercel.app",
     "https://nfl-predict-ecf5a5bd34fe.herokuapp.com",
     "http://localhost:3000",
+    "http://127.0.0.1:3000",
 ]
 raw_cors = os.getenv("CORS_ORIGINS")
 if raw_cors:
