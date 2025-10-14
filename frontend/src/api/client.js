@@ -8,9 +8,20 @@ const LOCAL_BACKEND = 'http://localhost:8000';
 const PROD_BACKEND = 'https://nfl-predict-ecf5a5bd34fe.herokuapp.com';
 
 // Intelligent environment selection
-const BASE_URL =
-  import.meta.env.VITE_API_URL ||
-  (import.meta.env.DEV ? LOCAL_BACKEND : PROD_BACKEND);
+// src/api/client.js
+export const API_BASE =
+  import.meta.env.VITE_API_BASE || "http://localhost:8000";
+
+export const getNextWeekSchedule = () =>
+  fetch(`${API_BASE}/schedule/next`).then(r => r.json());
+
+export const predictGame = (body) =>
+  fetch(`${API_BASE}/predict`, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify(body),
+  }).then(r => r.json());
+
 
 console.log(`[API Client] Environment: ${import.meta.env.MODE}`);
 console.log(`[API Client] Backend: ${BASE_URL}`);

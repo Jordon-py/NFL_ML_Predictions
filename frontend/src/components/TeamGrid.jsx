@@ -1,3 +1,15 @@
+/**
+ * TeamGrid Component
+ * ------------------
+ * Renders a grid of NFL teams for selection. Fetches the upcoming week's schedule
+ * to determine which teams are playing and provides context for predictions.
+ *
+ * Key Logic:
+ * - Fetches team metadata and weekly schedule on component mount.
+ * - Uses a `useEffect` hook with an empty dependency array `[]` to ensure
+ *   API calls happen only once, preventing re-renders from causing duplicate requests.
+ * - Manages loading and error states for a robust user experience.
+ */
 import React, {useState, useEffect} from 'react';
 import {getNextWeekSchedule, predictGame} from '../api/client.js';
 
@@ -50,16 +62,26 @@ function TeamGrid() {
     const loadSchedule = async () => {
       try {
         const scheduleData = await getNextWeekSchedule();
-        setSchedule(scheduleData);
+        // Normalize the response to always be an array, guarding against malformed API data.
+        const normalizedSchedule = Array.isArray(scheduleData)
+          ? scheduleData
+          : scheduleData?.games ?? [];
+        if (!Array.isArray(normalizedSchedule)) {
+          throw new Error('Schedule payload is malformed.');
+        }
+        setSchedule(normalizedSchedule);
       } catch (err) {
-        console.error('[TeamGrid] Failed to load schedule: err', err);
+        console.error('[TeamGrid] Failed to load schedule:', err);
         setError('Failed to load schedule');
+        setSchedule([]); // Ensure schedule is always an array on error
       }
     };
-    if (Object.keys(teams).length > 0) {
-      loadSchedule();
-    }
-  }, [teams]);
+
+    loadSchedule();
+    // By using an empty dependency array [], this effect runs only ONCE when the component mounts.
+    // This is the correct pattern for one-time data fetching and prevents the multiple API calls
+    // seen in the logs. The previous dependency `[teams]` caused re-fetches on every re-render.
+  }, []);
 
   // Predict a matchup
   const handlePredict = async (game) => {

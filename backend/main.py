@@ -3,6 +3,8 @@ NFL Game Prediction API (FastAPI)
 Run: uvicorn backend.main:app --reload --port 8000
 
 CORS Configuration: Allows requests from specified origins (e.g., Vercel frontend) for cross-origin compatibility.
+
+Static asset serving is toggled via the SERVE_FRONTEND environment variable.
 """
 
 from __future__ import annotations
@@ -28,18 +30,121 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-
 # Load environment variables
 load_dotenv(Path(__file__).parent / ".env")
 
 
+# -----------------------------------------------------------
+# Global model/data objects (initialized to None for safe access)
+# ----------------------------------------------------------------
+
+model_objects = None
+dataset_df = None
+
+TRUTHY = {"true", "t", "1", "yes", "y"}
+SERVE_FRONTEND = os.getenv("SERVE_FRONTEND", "false").strip().lower() in TRUTHY
+
+# Change Log 2025-02-14: Added SERVE_FRONTEND toggle to prevent startup NameError and allow controlled static hosting.
+
+
+def _coerce_bool(s: pd.Series) -> pd.Series:
+    if pd.api.types.is_bool_dtype(s):
+        return s.astype(bool)
+    return s.astype(str).str.strip().str.lower().isin(TRUTHY)
+
+
+def _ensure_home_away(df: pd.DataFrame) -> pd.DataFrame:
+    cols = set(df.columns)
+    if {"home_team", "away_team"}.issubset(cols):
+        return df
+
+    if {"team", "opponent_team", "is_home"}.issubset(cols):
+        is_home = _coerce_bool(df["is_home"])
+        return df.assign(
+            is_home=is_home,
+            home_team=np.where(is_home, df["team"], df["opponent_team"]),
+            away_team=np.where(is_home, df["opponent_team"], df["team"]),
+        )
+
+    log.warning(
+        "Dataset missing home/away columns and team/opponent fallback; "
+        "predictions will rely on synthetic features only."
+    )
+    return df
+
+
+@asynccontextmanager
+async def app_lifespan():
+    """
+    FastAPI application lifespan context manager:
+      - Loads model objects and dataset once on startup.
+      - Normalizes columns and derives home/away if needed.
+    log.info("Startup: Loading models and dataset")
+    """
+    global model_objects, dataset_df
+
+    log.info("Startup: loading models and dataset")
+    model_objects = load_objects()
+
+    ds_path = Path(os.getenv("DATASET_PATH", str(DEFAULT_DATASET)))
+    log.info(f"Resolved dataset path: {ds_path}")
+    if not ds_path.exists():
+        raise RuntimeError(f"Dataset not found: {ds_path}")
+
+    df = pd.read_csv(ds_path)
+    if df.empty:
+        raise RuntimeError("Dataset CSV is empty")
+
+    df.columns = [c.strip() for c in df.columns]
+    # Normalize to ensure home_team and away_team columns exist for consistent downstream model logic.
+    df = _ensure_home_away(df)
+
+    dataset_df = df
+    log.info("Loaded dataset rows=%d cols=%d", len(df), df.shape[1])
+
+    try:
+        yield
+    finally:
+        # Log shutdown for graceful FastAPI server lifecycle management
+        log.info("Shutdown complete")
+
+# Initialize FastAPI app with lifespan context
+app = FastAPI(title="NFL Game Prediction API", version="2.0.0", lifespan=app_lifespan)
+BUILD_DIR = Path(__file__).parent / "frontend" / "build"
+FRONTEND_BUILD = BUILD_DIR
+
+if SERVE_FRONTEND == 'true' and FRONTEND_BUILD.exists():
+    from starlette.staticfiles import StaticFiles
+    app.mount("/", StaticFiles(directory=str(FRONTEND_BUILD), html=True), name="static")
+
+# CORS: explicit prod domains + regex for Vercel preview URLs
+origins = [
+    "https://nfl-predict.com"
+    "https://nfl-ml-predictions.vercel.app",
+    "https://nfl-predict.vercel.app",
+    "https://nfl-predict-christopher-jordons-projects.vercel.app",
+    "https://nfl-predict-git-master-christopher-jordons-projects.vercel.app",
+    "https://nfl-predict-i0eg7b3jg-christopher-jordons-projects.vercel.app",
+]
+allow_origin_regex = r"^https://.*\.vercel\.app$"  # previews
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_origin_regex=allow_origin_regex,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+#   ---------------------------
 # ---------- Paths ----------
+#   ---------------------------
 THIS_FILE = Path(__file__).resolve()
 BACKEND_DIR = THIS_FILE.parent
 BASE_DIR = BACKEND_DIR.parent
 MODELS_DIR = BACKEND_DIR / "models"
 DATA_DIR = BACKEND_DIR / "data"
-FRONTEND_DIST = BASE_DIR / "frontend" / "dist"
 FRONTEND_BUILD = BASE_DIR / "frontend" / "build"
 LOG_DIR = BACKEND_DIR / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -220,62 +325,18 @@ def load_objects() -> Dict[str, Any]:
     }
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    global model_objects, dataset_df
-    log.info("Startup: loading models and dataset")
-    model_objects = load_objects()
-    ds_path = Path(os.getenv("DATASET_PATH", str(DEFAULT_DATASET)))
-    if not ds_path.exists():
-        raise RuntimeError(f"Dataset not found: {ds_path}")
-    df = pd.read_csv(ds_path)
-    if df.empty:
-        raise RuntimeError("Dataset CSV is empty")
-    df.columns = [c.strip() for c in df.columns]
-
-    # Derive home/away helper columns when the dataset stores per-team rows only.
-    if {
-        "home_team",
-        "away_team",
-    }.issubset(df.columns):
-        pass
-    elif {"team", "opponent_team", "is_home"}.issubset(df.columns):
-        local = df.copy()
-        raw_is_home = local["is_home"]
-
-        if pd.api.types.is_bool_dtype(raw_is_home):
-            is_home = raw_is_home.astype(bool)
-        else:
-            truthy = {"true", "t", "1", "yes", "y"}
-            is_home = raw_is_home.astype(str).str.strip().str.lower().isin(truthy)
-
-        local["is_home"] = is_home
-        local["home_team"] = np.where(is_home, local["team"], local["opponent_team"])
-        local["away_team"] = np.where(is_home, local["opponent_team"], local["team"])
-        df = local
-        log.info(
-            "Dataset derived home/away columns from team/opponent layout (rows=%d)",
-            len(df),
-        )
-    else:
-        log.warning(
-            "Dataset missing home/away columns and team/opponent fallback; predictions will rely on synthetic features only."
-        )
-
-    dataset_df = df
-    log.info("Loaded dataset rows=%d cols=%d", len(df), len(df.columns))
-    yield
-    log.info("Shutdown complete")
 
 
 # Get CORS origins from environment variable
 # Change Log 2025-10-13 17:34: Default origins ensure Vercel + Heroku deployments work when CORS_ORIGINS not set.
 DEFAULT_CORS_ORIGINS = [
-    "http://localhost:3000",
+    "https://localhost:3000"
+    "https://nfl-predict.com",
     "http://127.0.0.1:3000",
     "https://nfl-ml-predictions.vercel.app",
     "https://www.nfl-predict.com",
-    "https://nfl-predict-frontend.vercel.app",
+    "https://nfl-predict-frontend.vercel.app"
+    " nfl-predict-christopher-jordons-projects.vercel.app",
 ]
 
 raw_cors = os.getenv("CORS_ORIGINS")
@@ -288,17 +349,7 @@ else:
 
 log.info("CORS Origins configured: %s", CORS_ORIGINS)
 
-# Initialize FastAPI app with lifespan context
-app = FastAPI(title="NFL Game Prediction API", version="2.0.0", lifespan=lifespan)
 
-# Configure CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=CORS_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 
 # ---------- Helpers ----------
@@ -706,14 +757,15 @@ def report_errors(limit: int = 50):
 
 
 # Serve built frontend
-# Change Log 2025-10-13 17:34: Preserve static serving for both dist/ and build/ outputs.
-_front = (
-    FRONTEND_DIST
-    if FRONTEND_DIST.exists()
-    else (FRONTEND_BUILD if FRONTEND_BUILD.exists() else "frontend/build")
-)
-if _front:
-    app.mount("/", StaticFiles(directory=str(_front), html=True), name="nfl-predict")
-    log.info("Serving frontend from %s", _front)
+# Change Log 2025-02-14: Unified static mount logic to respect SERVE_FRONTEND and prefer existing dist/build artifacts.
+if SERVE_FRONTEND:
+    static_candidates = [FRONTEND_DIST, FRONTEND_BUILD, BUILD_DIR]
+    for candidate in static_candidates:
+        if candidate.exists():
+            app.mount("/", StaticFiles(directory=str(candidate), html=True), name="nfl-predict")
+            log.info("Serving frontend from %s", candidate)
+            break
+    else:
+        log.warning("SERVE_FRONTEND enabled but no frontend build found; static assets not served")
 else:
-    log.warning("No frontend build found; not serving static files")
+    log.info("SERVE_FRONTEND disabled; skipping static asset mount")
