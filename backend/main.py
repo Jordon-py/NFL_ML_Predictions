@@ -43,10 +43,10 @@ FRONTEND_DIST = BASE_DIR / "frontend" / "dist"
 FRONTEND_BUILD = BASE_DIR / "frontend" / "build"
 LOG_DIR = BACKEND_DIR / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
-NODE_ENV = os.getenv('NODE_ENV')
-HOME_MODEL = MODELS_DIR / 'home_model.joblib'
-AWAY_MODEL = MODELS_DIR / 'away_model.joblib'
-PREPROCESS = 'preprocessor.joblib'
+NODE_ENV = os.getenv("NODE_ENV")
+HOME_MODEL = MODELS_DIR / "home_model.joblib"
+AWAY_MODEL = MODELS_DIR / "away_model.joblib"
+PREPROCESS = "preprocessor.joblib"
 
 # ---------- Logging ----------
 logging.config.dictConfig(
@@ -273,12 +273,15 @@ async def lifespan(app: FastAPI):
 DEFAULT_CORS_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "https://nfl-ml-predictions.vercel.app",
+    "https://www.nfl-predict.com",
+    "https://nfl-predict-frontend.vercel.app",
 ]
 
-raw_cors = os.getenv("CORS_ORIGINS", DEFAULT_CORS_ORIGINS)
+raw_cors = os.getenv("CORS_ORIGINS")
 if raw_cors:
     # Parse comma-separated origins from environment variable
-    CORS_ORIGINS = [origin.strip() for origin in str(raw_cors).split(",")]
+    CORS_ORIGINS = [origin.strip() for origin in raw_cors.split(",")]
 else:
     # Use default origins for local development
     CORS_ORIGINS = DEFAULT_CORS_ORIGINS
@@ -287,16 +290,16 @@ log.info("CORS Origins configured: %s", CORS_ORIGINS)
 
 # Initialize FastAPI app with lifespan context
 app = FastAPI(title="NFL Game Prediction API", version="2.0.0", lifespan=lifespan)
-for cors in CORS_ORIGINS:
-    # Configure CORS middleware
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=cors,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-   
+
+# Configure CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 # ---------- Helpers ----------
 def get_current_nfl_context() -> Dict[str, Any]:

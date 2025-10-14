@@ -47,6 +47,8 @@ $origins = @(
   'http://localhost:3000',
   'https://localhost:3000',
   'https://nfl-predict-frontend.vercel.app',
+  'https://nfl-ml-predictions.vercel.app',
+  'https://www.nfl-predict.com',
   $VercelProdDomain
 ) -join ','
 heroku config:set CORS_ORIGINS="$origins" -a $HerokuApp | Out-Host
