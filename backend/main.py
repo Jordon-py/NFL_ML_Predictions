@@ -43,6 +43,10 @@ FRONTEND_DIST = BASE_DIR / "frontend" / "dist"
 FRONTEND_BUILD = BASE_DIR / "frontend" / "build"
 LOG_DIR = BACKEND_DIR / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
+NODE_ENV = os.getenv('NODE_ENV')
+HOME_MODEL = MODELS_DIR / 'home_model.joblib'
+AWAY_MODEL = MODELS_DIR / 'away_model.joblib'
+PREPROCESS = 'preprocessor.joblib'
 
 # ---------- Logging ----------
 logging.config.dictConfig(
@@ -283,16 +287,16 @@ log.info("CORS Origins configured: %s", CORS_ORIGINS)
 
 # Initialize FastAPI app with lifespan context
 app = FastAPI(title="NFL Game Prediction API", version="2.0.0", lifespan=lifespan)
-
-# Configure CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=CORS_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
+for cors in CORS_ORIGINS:
+    # Configure CORS middleware
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=cors,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+   
 
 # ---------- Helpers ----------
 def get_current_nfl_context() -> Dict[str, Any]:
