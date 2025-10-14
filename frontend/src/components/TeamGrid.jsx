@@ -47,10 +47,25 @@ function TeamGrid({onPrediction = undefined}) {
     const loadSchedule = async () => {
       try {
         const scheduleData = await getNextWeekSchedule();
-        setSchedule(scheduleData);
+
+        // Normalize response: handle both array and error object
+        if (scheduleData?.error) {
+          throw new Error(scheduleData.message || 'Failed to load schedule');
+        }
+
+        const normalizedSchedule = Array.isArray(scheduleData)
+          ? scheduleData
+          : (scheduleData?.games ?? []);
+
+        if (!Array.isArray(normalizedSchedule)) {
+          throw new Error('Schedule payload is malformed (expected array).');
+        }
+
+        setSchedule(normalizedSchedule);
       } catch (err) {
-        console.error('[TeamGrid] Failed to load schedule: err', err);
-        setError('Failed to load schedule');
+        console.error('[TeamGrid] Failed to load schedule:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load schedule');
+        setSchedule([]); // Ensure schedule is always an array
       }
     };
     if (Object.keys(teams).length > 0) {
