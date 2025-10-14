@@ -314,7 +314,7 @@ def get_current_nfl_context() -> Dict[str, Any]:
             & dataset_df["away_points_for"].notna()
         ]
         if not done.empty:
-            last = done.sort_values(["season", "week"]).iloc[-1]
+            last = done.sort_values(by=["season", "week"]).iloc[-1]
             last_s, last_w = int(last["season"]), int(last["week"])
             nxt_s, nxt_w = last_s, last_w + 1
             if nxt_w > 22:
