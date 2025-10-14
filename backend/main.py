@@ -1,6 +1,8 @@
 """
 NFL Game Prediction API (FastAPI)
 Run: uvicorn backend.main:app --reload --port 8000
+
+CORS Configuration: Allows requests from specified origins (e.g., Vercel frontend) for cross-origin compatibility.
 """
 
 from __future__ import annotations
@@ -265,21 +267,24 @@ async def lifespan(app: FastAPI):
 # Get CORS origins from environment variable
 # Change Log 2025-10-13 17:34: Default origins ensure Vercel + Heroku deployments work when CORS_ORIGINS not set.
 DEFAULT_CORS_ORIGINS = [
-    "https://nfl-ml-predictions.vercel.app",
-    "https://nfl-predict-christopher-jordons-projects.vercel.app",
-    "https://nfl-predict-ecf5a5bd34fe.herokuapp.com",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
 ]
-raw_cors = os.getenv("CORS_ORIGINS")
+
+raw_cors = os.getenv("CORS_ORIGINS", DEFAULT_CORS_ORIGINS)
 if raw_cors:
-    CORS_ORIGINS = [origin.strip() for origin in raw_cors.split(",") if origin.strip()]
+    # Parse comma-separated origins from environment variable
+    CORS_ORIGINS = [origin.strip() for origin in str(raw_cors).split(",")]
 else:
+    # Use default origins for local development
     CORS_ORIGINS = DEFAULT_CORS_ORIGINS
 
 log.info("CORS Origins configured: %s", CORS_ORIGINS)
 
+# Initialize FastAPI app with lifespan context
 app = FastAPI(title="NFL Game Prediction API", version="2.0.0", lifespan=lifespan)
+
+# Configure CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
