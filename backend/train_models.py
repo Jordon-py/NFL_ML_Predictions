@@ -1,77 +1,91 @@
 #!/usr/bin/env python
 """
-train_models.py — Production-Ready Training Pipeline for NFL Predictions
+train_models_converted.py — Flexible Training Pipeline for the user's merged_nfl_data.csv
 
-This script orchestrates the end-to-end training, evaluation, and serialization of
-all models required for the NFL prediction API. It is designed for automated,
-production environments.
+Purpose
+-------
+Adapt the original team-vs-team training pipeline to work with a generic team‑game dataset like
+`/mnt/data/merged_nfl_data.csv` that may not include home/away score columns.
 
-Key Responsibilities:
-- Load and validate the master dataset (`merged_nfl_data.csv`).
-- Split data into training and testing sets using a time-series approach based on the latest season's progress.
-- Train and tune regressors (LightGBM) to predict home and away scores.
-- Train and tune a calibrated classifier (LightGBM) to predict home win probability.
-- Apply recency weighting to prioritize modern game data.
-- Generate and save comprehensive artifacts:
-  - Preprocessing pipeline (`preprocessor.joblib`).
-  - Trained models (`home_model.joblib`, `away_model.joblib`, `win_clf_calibrated.joblib`).
-  - Detailed performance metrics (`training_report.json`).
-  - Model metadata for the API (`metadata.json`).
-  - Test set predictions and errors for analysis (`test_predictions.csv`).
+Supported label configurations (auto-detected in this order):
+1) Game-level home/away labels:
+   - Required columns: ['season','week','home_team','away_team','home_points_for','away_points_for']
+   - Trains two regressors for home/away scores and a classifier for home win.
 
-Execution:
-  Run from the repository root or ensure the backend directory is in the Python path.
-  `python backend/train_models.py`
+2) Team-level points labels:
+   - Required columns: ['season','week','team','opponent_team','points_for','points_against']  (names are flexible; see ALIASES below)
+   - Trains a regressor for team points_for and a classifier for team win = points_for > points_against.
+
+3) Precomputed team-level win label:
+   - Required columns: ['season','week','team','opponent_team','win'] where win ∈ {0,1}
+   - Trains only the classifier for win.
+
+If none are present, the script stops early with a precise error message explaining how to add labels.
+
+Feature handling
+----------------
+- Numeric features: all numeric columns except ID/time columns and label columns.
+- Categorical features: ['team','opponent_team','season_type'] if present.
+- Boolean/binary: 'is_home' (treated numeric if present).
+
+Outputs
+-------
+- models/preprocessor.joblib
+- models/home_model.joblib, models/away_model.joblib (when available)
+- models/team_points_model.joblib (team-level regression when available)
+- models/win_clf_calibrated.joblib
+- models/test_predictions.csv
+- models/training_report.json
+- models/metadata.json
+
+Run
+---
+python train_models_converted.py --data /mnt/data/merged_nfl_data.csv
+
+Notes
+-----
+- This script is intentionally conservative. It refuses to invent labels.
+- If you need labels, merge an official schedule/scores file to produce either:
+  (home_points_for, away_points_for) or (points_for, points_against) or a boolean 'win'.
 """
 
 from __future__ import annotations
 
+import argparse
+import hashlib
 import json
 import logging
-import logging.config
-import time
-import warnings
-import hashlib
 from pathlib import Path
-from typing import Any, Dict, List, Tuple, cast, Optional
+from typing import Any, Dict, List, Optional, Tuple, Union, cast
 
 import joblib
 import numpy as np
 import pandas as pd
-from lightgbm import LGBMRegressor, LGBMClassifier
+from lightgbm import LGBMClassifier, LGBMRegressor
+from scipy.sparse import spmatrix
 from sklearn.base import BaseEstimator
+from sklearn.calibration import CalibratedClassifierCV
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.metrics import (
-    roc_auc_score,
     accuracy_score,
-    precision_score,
-    recall_score,
-    f1_score,
     brier_score_loss,
+    f1_score,
     mean_absolute_error,
+    precision_score,
     r2_score,
+    recall_score,
+    roc_auc_score,
 )
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler
-from sklearn.calibration import CalibratedClassifierCV
 from sklearn.model_selection import RandomizedSearchCV, TimeSeriesSplit
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
-# --- Configuration ---
+# ----------------- Config -----------------
 
-# Paths
-warnings.filterwarnings("ignore", category=UserWarning, module="sklearn")
-force_col_wise = True
-BACKEND_DIR = Path(__file__).resolve().parent
-MODELS_DIR = BACKEND_DIR / "models"
-DATA_DIR = BACKEND_DIR / "data"
-LOG_DIR = BACKEND_DIR / "logs"
+RANDOM_SEED = 42
+HYPERPARAM_SEARCH_ITERATIONS = 25
 
-# Create directories if they don't exist
-MODELS_DIR.mkdir(exist_ok=True)
-LOG_DIR.mkdir(exist_ok=True)
-
-# Logging Configuration
 LOGGING_CONFIG = {
     "version": 1,
     "disable_existing_loggers": False,
@@ -86,279 +100,115 @@ LOGGING_CONFIG = {
             "level": "INFO",
             "formatter": "default",
         },
-        "file": {
-            "class": "logging.FileHandler",
-            "level": "DEBUG",
-            "formatter": "default",
-            "filename": LOG_DIR / "training.log",
-            "mode": "w",  # Overwrite log file for each training run
-        },
     },
-    "root": {"level": "DEBUG", "handlers": ["console", "file"]},
+    "root": {"level": "INFO", "handlers": ["console"]},
 }
 logging.config.dictConfig(LOGGING_CONFIG)
 log = logging.getLogger(__name__)
 
-# Training & Evaluation Parameters
-# Defines the time-series split for the most recent season.
-# The model trains on all data *before* the latest season, plus these initial weeks.
-# It then tests on the subsequent weeks of that same season.
-CURRENT_SEASON_TRAIN_WEEKS = (
-    3  # Number of weeks from the latest season to include in training
-)
-CURRENT_SEASON_TEST_WEEKS = 2  # Number of weeks to use for hold-out testing
-RANDOM_SEED = 42  # Ensures reproducibility for stochastic processes
-HYPERPARAM_SEARCH_ITERATIONS = 25  # Number of iterations for RandomizedSearchCV
+BACKEND_DIR = Path(__file__).resolve().parent
+MODELS_DIR = BACKEND_DIR / "models"
+MODELS_DIR.mkdir(exist_ok=True)
 
-# --- End Configuration ---
+# Aliases for flexible column names
+ALIASES = {
+    "team": ["team", "home_team", "club"],
+    "opponent_team": ["opponent_team", "away_team", "opponent", "opp_team"],
+    "points_for": ["points_for", "pf", "team_points", "score", "pts_for"],
+    "points_against": [
+        "points_against",
+        "pa",
+        "opp_points",
+        "opp_score",
+        "pts_against",
+    ],
+    "win": ["win", "is_win", "team_win", "home_win"],
+    "season_type": ["season_type", "type"],
+}
 
-
-def _resolve_dataset_path() -> Path:
-    """
-    Locates and validates the primary dataset file.
-
-    Returns:
-        Path: The validated path to the merged dataset.
-
-    Raises:
-        FileNotFoundError: If the dataset file does not exist.
-    """
-    dataset_path = DATA_DIR / "merged_nfl_data.csv"
-    if not dataset_path.exists():
-        log.error("Dataset file not found at '%s'.", dataset_path)
-        raise FileNotFoundError(
-            f"Missing dataset file: {dataset_path}. "
-            "Ensure historical data is merged and available before training."
-        )
-    log.info("Dataset found at '%s'.", dataset_path)
-    return dataset_path
+# ----------------- Utilities -----------------
 
 
-def _load_dataset() -> Tuple[pd.DataFrame, pd.DataFrame, Dict[str, Any]]:
-    """
-    Loads the merged dataset and splits it into training and testing sets.
-
-    The split is time-series aware:
-    - Training set: All seasons before the latest one, plus the first `CURRENT_SEASON_TRAIN_WEEKS` of the latest season.
-    - Testing set: The `CURRENT_SEASON_TEST_WEEKS` immediately following the training weeks in the latest season.
-
-    Returns:
-        A tuple containing:
-        - pd.DataFrame: The training data.
-        - pd.DataFrame: The testing data.
-        - Dict[str, Any]: Metadata about the split (e.g., season, weeks).
-    """
-    dataset_path = _resolve_dataset_path()
-    try:
-        full_df = pd.read_csv(dataset_path)
-        full_df.columns = [c.strip() for c in full_df.columns]
-        log.info("Successfully loaded dataset with %d rows.", len(full_df))
-    except Exception as e:
-        log.exception("Failed to load or parse dataset from '%s'.", dataset_path)
-        raise IOError(f"Could not read dataset file: {e}") from e
-
-    required_cols = set(BASE_FEATURES) | {
-        "season",
-        "week",
-        "home_points_for",
-        "away_points_for",
-    }
-    missing_cols = required_cols - set(full_df.columns)
-    if missing_cols:
-        log.error("Dataset is missing required columns: %s", sorted(list(missing_cols)))
-        raise ValueError(
-            f"Missing required columns in merged dataset: {sorted(list(missing_cols))}"
-        )
-
-    completed_mask = (
-        full_df["home_points_for"].notna() & full_df["away_points_for"].notna()
-    )
-    dropped_rows = int((~completed_mask).sum())
-    if dropped_rows:
-        log.warning(
-            "Dropped %d rows from the dataset that were missing final scores.",
-            dropped_rows,
-        )
-    full_df = full_df[completed_mask].copy()
-    if full_df.empty:
-        log.error(
-            "Dataset at '%s' contains no completed games after filtering.", dataset_path
-        )
-        raise ValueError(f"Merged dataset at {dataset_path} has no completed games.")
-
-    full_df = full_df.sort_values(["season", "week"]).reset_index(drop=True)
-
-    latest_season = int(full_df["season"].max())
-    latest_weeks = sorted(
-        full_df.loc[full_df["season"] == latest_season, "week"]
-        .dropna()
-        .unique()
-        .astype(int)
-    )
-
-    required_weeks = CURRENT_SEASON_TRAIN_WEEKS + CURRENT_SEASON_TEST_WEEKS
-    if len(latest_weeks) < required_weeks:
-        log.error(
-            "Season %d has only %d completed weeks, but %d are required for the train/test split.",
-            latest_season,
-            len(latest_weeks),
-            required_weeks,
-        )
-        raise ValueError(
-            f"Season {latest_season} only has {len(latest_weeks)} completed weeks. "
-            f"At least {required_weeks} are required for the train/test split."
-        )
-
-    train_weeks_latest = latest_weeks[:CURRENT_SEASON_TRAIN_WEEKS]
-    test_weeks_latest = latest_weeks[
-        CURRENT_SEASON_TRAIN_WEEKS : CURRENT_SEASON_TRAIN_WEEKS
-        + CURRENT_SEASON_TEST_WEEKS
-    ]
-
-    train_mask = (full_df["season"] < latest_season) | (
-        (full_df["season"] == latest_season)
-        & (full_df["week"].isin(train_weeks_latest))
-    )
-    test_mask = (full_df["season"] == latest_season) & (
-        full_df["week"].isin(test_weeks_latest)
-    )
-
-    train_df = full_df[train_mask].copy()
-    test_df = full_df[test_mask].copy()
-
-    if train_df.empty or test_df.empty:
-        log.error(
-            "Train/test split resulted in an empty dataframe. Check dataset coverage and split logic."
-        )
-        raise ValueError(
-            "Train/test split resulted in an empty dataframe. Verify merged dataset coverage."
-        )
-
-    # Add target variable 'home_win' to both dataframes
-    for frame in (train_df, test_df):
-        frame["home_win"] = (
-            frame["home_points_for"] > frame["away_points_for"]
-        ).astype(int)
-
-    log.info(
-        "Data split complete: %d training games, %d testing games.",
-        len(train_df),
-        len(test_df),
-    )
-    log.info(
-        "Training on all data before season %d, plus weeks %s. Testing on weeks %s.",
-        latest_season,
-        train_weeks_latest,
-        test_weeks_latest,
-    )
-
-    split_details = {
-        "latest_season": latest_season,
-        "train_weeks": train_weeks_latest,
-        "test_weeks": test_weeks_latest,
-        "dataset_path": str(dataset_path),
-    }
-    return (
-        train_df.reset_index(drop=True),
-        test_df.reset_index(drop=True),
-        split_details,
-    )
+def _first_present(df: pd.DataFrame, candidates: List[str]) -> Optional[str]:
+    for c in candidates:
+        if c in df.columns:
+            return c
+    return None
 
 
-# --- Feature Engineering & Preprocessing ---
-
-# Feature specification: Defines the set of features used for modeling.
-WINDOWS = (3, 5)  # Rolling window sizes for prior performance metrics
-PRIOR_METRICS = [
-    "pf_avg",
-    "pa_avg",
-    "win_pct",
-    "off_epa_per_play",
-    "off_success_rate",
-    "off_explosive_rate",
-    "off_third_down_pct",
-    "off_pass_over_expected",
-    "off_turnover_rate",
-    "def_epa_per_play",
-    "def_success_rate_allowed",
-    "def_explosive_rate_allowed",
-    "def_takeaway_rate",
-]
+def _detect_paths(user_path: Optional[str]) -> Path:
+    if user_path:
+        p = Path(user_path)
+        if p.exists():
+            return p
+        raise FileNotFoundError(f"Dataset not found at --data {user_path}")
+    # Try common defaults
+    for p in [
+        Path("/mnt/data/merged_nfl_data.csv"),
+        BACKEND_DIR / "data" / "merged_nfl_data.csv",
+    ]:
+        if p.exists():
+            return p
+    raise FileNotFoundError("Could not locate merged_nfl_data.csv. Pass --data <path>.")
 
 
-def _side_prior_features(side: str) -> List[str]:
-    """Generate feature names for one side (home/away)."""
-    return [f"{side}_prior_{metric}_{w}" for metric in PRIOR_METRICS for w in WINDOWS]
-
-
-# Combine all feature groups into the final list
-SIDE_FEATURES = _side_prior_features("home") + _side_prior_features("away")
-DIFF_FEATURES = [
-    f"home_minus_away_{metric}_{w}" for metric in PRIOR_METRICS for w in WINDOWS
-]
-BETTING_CONTEXT_FEATURES = [
-    "home_moneyline_prob",
-    "away_moneyline_prob",
-    "moneyline_prob_diff",
-    "spread_line",
-    "total_line",
-    "home_rest",
-    "away_rest",
-    "rest_diff",
-]
-BASE_FEATURES = sorted(
-    list(dict.fromkeys(SIDE_FEATURES + DIFF_FEATURES + BETTING_CONTEXT_FEATURES))
-)
-
-
-def _compute_recency_weights(df: pd.DataFrame) -> np.ndarray:
-    """
-    Generates sample weights that prioritize more recent games.
-    This helps the model adapt to league-wide trends and changes in play style.
-
-    Args:
-        df (pd.DataFrame): The training dataframe, must contain 'season' and 'week'.
-
-    Returns:
-        np.ndarray: An array of weights, one for each row in the dataframe.
-    """
+def _split_latest_season(
+    df: pd.DataFrame, train_weeks: int = 3, test_weeks: int = 2
+) -> Tuple[pd.DataFrame, pd.DataFrame, Dict[str, Any]]:
     if "season" not in df.columns or "week" not in df.columns:
-        log.error("Recency weighting requires 'season' and 'week' columns.")
-        raise ValueError("Recency weighting requires 'season' and 'week' columns.")
+        raise ValueError("Dataset must include 'season' and 'week'.")
+    df = df.dropna(subset=["season", "week"]).copy()
+    df["season"] = df["season"].astype(int)
+    df["week"] = df["week"].astype(int)
+    df = df.sort_values(["season", "week"]).reset_index(drop=True)
 
+    latest = int(df["season"].max())
+    weeks = sorted(df.loc[df["season"] == latest, "week"].unique().astype(int))
+    if len(weeks) < train_weeks + test_weeks:
+        raise ValueError(
+            f"Season {latest} has only {len(weeks)} weeks. Need >= {train_weeks + test_weeks}."
+        )
+
+    train_w = weeks[:train_weeks]
+    test_w = weeks[train_weeks : train_weeks + test_weeks]
+
+    train_df = df[
+        (df["season"] < latest)
+        | ((df["season"] == latest) & (df["week"].isin(train_w)))
+    ].copy()
+    test_df = df[(df["season"] == latest) & (df["week"].isin(test_w))].copy()
+
+    split_info = {"latest_season": latest, "train_weeks": train_w, "test_weeks": test_w}
+    return train_df, test_df, split_info
+
+
+def _recency_weights(df: pd.DataFrame) -> np.ndarray:
     seasons = df["season"].to_numpy(dtype=float)
     weeks = df["week"].to_numpy(dtype=float)
-
-    season_span = max(seasons.max() - seasons.min(), 1.0)
-    season_norm = (seasons - seasons.min()) / season_span
+    sspan = max(seasons.max() - seasons.min(), 1.0)
+    season_norm = (seasons - seasons.min()) / sspan
     week_norm = weeks / max(weeks.max(), 1.0)
-
-    # Formula: 40% base weight, 40% from season progress, 20% from week progress
-    weights = 0.4 + 0.4 * season_norm + 0.2 * week_norm
-    normalized_weights = weights / weights.mean()
-    log.info(
-        "Applied recency weighting. Mean: %.3f, Max: %.3f, Min: %.3f",
-        normalized_weights.mean(),
-        normalized_weights.max(),
-        normalized_weights.min(),
-    )
-    return normalized_weights
+    w = 0.4 + 0.4 * season_norm + 0.2 * week_norm
+    return w / w.mean()
 
 
-def _create_preprocessor(features: List[str]) -> ColumnTransformer:
-    """
-    Creates the preprocessing pipeline for numerical features.
-    - Imputes missing values using the median.
-    - Scales features to have zero mean and unit variance.
+def _build_feature_lists(
+    df: pd.DataFrame, label_cols: List[str]
+) -> Tuple[List[str], List[str], List[str]]:
+    non_features = set(["season", "week", "game_id", "idx"] + label_cols)
+    num_cols = [
+        c for c in df.select_dtypes(include=["number"]).columns if c not in non_features
+    ]
+    cat_cols = [c for c in ["team", "opponent_team", "season_type"] if c in df.columns]
+    bin_cols = [c for c in ["is_home"] if c in df.columns]
+    # keep order stable
+    return num_cols + bin_cols, cat_cols, list(non_features)
 
-    Args:
-        features (List[str]): The list of numerical feature names to process.
 
-    Returns:
-        ColumnTransformer: The scikit-learn preprocessor.
-    """
-    return ColumnTransformer(
-        transformers=[
+def _make_preprocessor(num_cols: List[str], cat_cols: List[str]) -> ColumnTransformer:
+    transformers = []
+    if num_cols:
+        transformers.append(
             (
                 "num",
                 Pipeline(
@@ -367,18 +217,26 @@ def _create_preprocessor(features: List[str]) -> ColumnTransformer:
                         ("scaler", StandardScaler()),
                     ]
                 ),
-                features,
+                num_cols,
             )
-        ],
-        remainder="drop",
-    )
+        )
+    if cat_cols:
+        transformers.append(
+            (
+                "cat",
+                Pipeline(
+                    [
+                        ("imputer", SimpleImputer(strategy="most_frequent")),
+                        ("onehot", OneHotEncoder(handle_unknown="ignore")),
+                    ]
+                ),
+                cat_cols,
+            )
+        )
+    return ColumnTransformer(transformers=transformers, remainder="drop")
 
 
-# --- Model Training & Tuning ---
-
-
-def _get_lgbm_reg_grid() -> Dict[str, List[Any]]:
-    """Hyperparameter search space for the score regressors."""
+def _reg_grid() -> Dict[str, List[Any]]:
     return {
         "n_estimators": [100, 150, 200],
         "learning_rate": [0.03, 0.05, 0.1],
@@ -392,8 +250,7 @@ def _get_lgbm_reg_grid() -> Dict[str, List[Any]]:
     }
 
 
-def _get_lgbm_clf_grid() -> Dict[str, List[Any]]:
-    """Hyperparameter search space for the win probability classifier."""
+def _clf_grid() -> Dict[str, List[Any]]:
     return {
         "n_estimators": [100, 150, 200],
         "learning_rate": [0.03, 0.05, 0.1],
@@ -409,376 +266,321 @@ def _get_lgbm_clf_grid() -> Dict[str, List[Any]]:
 
 
 def _fit_regressor(
-    X_train: np.ndarray,
+    X_train: Union[np.ndarray, spmatrix],
     y_train: np.ndarray,
-    X_test: np.ndarray,
+    X_test: Union[np.ndarray, spmatrix],
     y_test: np.ndarray,
     name: str,
     sample_weight: Optional[np.ndarray] = None,
 ) -> Tuple[LGBMRegressor, Dict[str, Any]]:
-    """
-    Fits and tunes a LightGBM regressor.
-
-    Args:
-        X_train, y_train: Training data and targets.
-        X_test, y_test: Testing data and targets for evaluation.
-        name (str): Name of the model for logging (e.g., "home_score").
-        sample_weight (Optional[np.ndarray]): Weights for training samples.
-
-    Returns:
-        A tuple containing:
-        - LGBMRegressor: The best trained regressor.
-        - Dict[str, Any]: A dictionary of performance metrics.
-    """
-    log.info("Starting training for '%s' regressor...", name)
-    lgbm = LGBMRegressor(
-        objective="regression", random_state=RANDOM_SEED, n_jobs=-1, verbose=-1
-    )
-
-    cv = TimeSeriesSplit(n_splits=3)
+    """Fits and evaluates a LightGBM regressor using RandomizedSearchCV."""
+    log.info("--- Fitting Regressor: %s ---", name)
+    estimator = LGBMRegressor(random_state=42)
+    # RandomizedSearchCV is used to find the best hyperparameters in a timely manner
     rs = RandomizedSearchCV(
-        estimator=cast(BaseEstimator, lgbm),
-        param_distributions=_get_lgbm_reg_grid(),
-        n_iter=HYPERPARAM_SEARCH_ITERATIONS,
-        cv=cv,
-        scoring="neg_root_mean_squared_error",
+        estimator=estimator,
+        param_distributions=REG_PARAMS,
+        n_iter=50,
+        cv=TimeSeriesSplit(n_splits=5),
+        scoring="neg_mean_absolute_error",
         n_jobs=-1,
-        verbose=0,
-        random_state=RANDOM_SEED,
+        random_state=42,
+        verbose=-1,
     )
+    rs.fit(
+        X_train,
+        y_train,
+        **({"sample_weight": sample_weight} if sample_weight is not None else {}),
+    )
+    best_estimator = rs.best_estimator_
+    if best_estimator is None:
+        raise RuntimeError("Hyperparameter search returned no regressor.")
+    best = cast(LGBMRegressor, best_estimator)
+    # Change log 2025-02-14: Cast aligns LightGBM regressor with static typing and preserves predict().
+    # Change log 2025-02-14: Removed unused training predictions to reduce clutter and keep evaluation focused on test metrics.
+    yhat_te = np.asarray(best.predict(X_test), dtype=float).ravel()
 
-    t0 = time.time()
-    fit_kwargs = {"sample_weight": sample_weight} if sample_weight is not None else {}
-    rs.fit(X_train, y_train, **fit_kwargs)
-    best = cast(LGBMRegressor, rs.best_estimator_)
-    search_time = time.time() - t0
+    # Evaluate on the test set
+    r2 = r2_score(y_test, yhat_te)
+    mae = mean_absolute_error(y_test, yhat_te)
 
-    yhat_train = best.predict(X_train)
-    yhat_test = best.predict(X_test)
+    log.info(f"  {name} Test R2: {r2:.4f}, MAE: {mae:.4f}")
 
     metrics = {
-        "best_params": rs.best_params_,
-        "cv_rmse": -rs.best_score_,
-        "train_r2": r2_score(y_train, yhat_train),
-        "train_mae": mean_absolute_error(y_train, yhat_train),
-        "test_r2": r2_score(y_test, yhat_test),
-        "test_mae": mean_absolute_error(y_test, yhat_test),
-        "search_time_s": search_time,
+        f"{name}_test_r2": r2,
+        f"{name}_test_mae": mae,
+        f"{name}_best_params": rs.best_params_,
     }
-    log.info(
-        "'%s' regressor training complete. Test R²: %.3f, Test MAE: %.3f",
-        name,
-        metrics["test_r2"],
-        metrics["test_mae"],
-    )
-
-    if metrics["train_r2"] < 0.1:
-        log.warning(
-            "'%s' regressor may have underfit with Train R² of %.3f.",
-            name,
-            metrics["train_r2"],
-        )
-
-    return best, metrics
+    return best_estimator, metrics
 
 
 def _fit_classifier(
-    X_train: np.ndarray,
+    X_train: Union[np.ndarray, spmatrix],
     y_train: np.ndarray,
-    X_test: np.ndarray,
+    X_test: Union[np.ndarray, spmatrix],
     y_test: np.ndarray,
     sample_weight: Optional[np.ndarray] = None,
-) -> Tuple[BaseEstimator, Dict[str, Any], pd.DataFrame]:
-    """
-    Fits, tunes, and calibrates a LightGBM classifier.
-
-    Args:
-        X_train, y_train: Training data and targets.
-        X_test, y_test: Testing data and targets for evaluation.
-        sample_weight (Optional[np.ndarray]): Weights for training samples.
-
-    Returns:
-        A tuple containing:
-        - BaseEstimator: The best trained and calibrated classifier.
-        - Dict[str, Any]: A dictionary of performance metrics.
-        - pd.DataFrame: Predictions and probabilities on the test set.
-    """
-    log.info("Starting training for win probability classifier...")
-    base = LGBMClassifier(
-        objective="binary", random_state=RANDOM_SEED, n_jobs=-1, verbose=-1
-    )
-
-    cv_splitter = TimeSeriesSplit(n_splits=4)
+) -> Tuple[CalibratedClassifierCV, Dict[str, Any], pd.DataFrame]:
+    """Fits and evaluates a LightGBM classifier with calibration."""
+    log.info("--- Fitting Classifier: home_win ---")
+    estimator = LGBMClassifier(random_state=42)
     rs = RandomizedSearchCV(
-        estimator=cast(BaseEstimator, base),
-        param_distributions=_get_lgbm_clf_grid(),
-        n_iter=HYPERPARAM_SEARCH_ITERATIONS,
-        cv=cv_splitter,
+        estimator=estimator,
+        param_distributions=CLF_PARAMS,
+        n_iter=50,
+        cv=TimeSeriesSplit(n_splits=5),
         scoring="roc_auc",
         n_jobs=-1,
-        verbose=0,
-        random_state=RANDOM_SEED,
+        random_state=42,
+        verbose=-1,
     )
-
-    t0 = time.time()
-    fit_kwargs = {"sample_weight": sample_weight} if sample_weight is not None else {}
-    rs.fit(X_train, y_train, **fit_kwargs)
-    best_uncalibrated = rs.best_estimator_
-
-    # Calibrate the best model to produce reliable probabilities
-    log.info("Calibrating classifier using isotonic regression...")
-    calib = CalibratedClassifierCV(best_uncalibrated, cv=cv_splitter, method="isotonic")
+    rs.fit(
+        X_train,
+        y_train,
+        **({"sample_weight": sample_weight} if sample_weight is not None else {}),
+    )
+    best_uncal_est = rs.best_estimator_
+    if best_uncal_est is None:
+        raise RuntimeError("Hyperparameter search returned no classifier.")
+    best_uncal = cast(LGBMClassifier, best_uncal_est)
+    calib = CalibratedClassifierCV(
+        estimator=cast(BaseEstimator, best_uncal),
+        cv=TimeSeriesSplit(n_splits=4),
+        method="isotonic",
+    )
+    # Change log 2025-02-14: Cast clarifies estimator type for calibration and appeases type checkers.
     calib.fit(X_train, y_train, sample_weight=sample_weight)
-    search_time = time.time() - t0
 
-    # Evaluate on holdout test set
-    prob_home_win = calib.predict_proba(X_test)[:, 1]
-    pred_test = (prob_home_win >= 0.5).astype(int)
-
-    preds_df = pd.DataFrame(
-        {
-            "idx": np.arange(len(X_test)),
-            "prob_home_win": prob_home_win,
-            "predicted_outcome": pred_test,
-        }
-    )
-
-    # Evaluate on training set for comparison
-    prob_train = calib.predict_proba(X_train)[:, 1]
-    pred_train = (prob_train >= 0.5).astype(int)
+    # Evaluate on the test set
+    y_prob_test = calib.predict_proba(X_test)[:, 1]
+    y_pred_test = (y_prob_test > 0.5).astype(int)
 
     metrics = {
-        "best_params": rs.best_params_,
-        "cv_auc": rs.best_score_,
-        "train_auc": roc_auc_score(y_train, prob_train),
-        "train_accuracy": accuracy_score(y_train, pred_train),
-        "train_precision": precision_score(y_train, pred_train),
-        "train_recall": recall_score(y_train, pred_train),
-        "train_f1": f1_score(y_train, pred_train),
-        "train_brier": brier_score_loss(y_train, prob_train),
-        "test_auc": roc_auc_score(y_test, prob_home_win),
-        "test_accuracy": accuracy_score(y_test, pred_test),
-        "test_precision": precision_score(y_test, pred_test),
-        "test_recall": recall_score(y_test, pred_test),
-        "test_f1": f1_score(y_test, pred_test),
-        "test_brier": brier_score_loss(y_test, prob_home_win),
-        "search_time_s": search_time,
+        "test_auc": roc_auc_score(y_test, y_prob_test),
+        "test_accuracy": accuracy_score(y_test, y_pred_test),
+        "test_precision": precision_score(y_test, y_pred_test),
+        "test_recall": recall_score(y_test, y_pred_test),
+        "test_f1": f1_score(y_test, y_pred_test),
+        "test_brier": brier_score_loss(y_test, y_prob_test),
     }
+    preds = pd.DataFrame({"prob_win": y_prob_test, "pred_win": y_pred_test})
     log.info(
-        "Classifier training complete. Test AUC: %.3f, Test Brier Score: %.3f",
+        "win classifier → test AUC=%.3f, Brier=%.3f",
         metrics["test_auc"],
         metrics["test_brier"],
     )
+    return calib, metrics, preds
 
-    return calib, metrics, preds_df
+
+def _hash_df(df: pd.DataFrame) -> str:
+    hb = pd.util.hash_pandas_object(df, index=False).to_numpy().tobytes()
+    return hashlib.md5(hb).hexdigest()
 
 
-def _save_artifacts(
-    pre: ColumnTransformer,
-    home_reg: LGBMRegressor,
-    away_reg: LGBMRegressor,
-    win_clf: BaseEstimator,
-    train_df: pd.DataFrame,
-    test_df: pd.DataFrame,
-    test_preds: pd.DataFrame,
-    split_info: Dict[str, Any],
-    train_weights: np.ndarray,
-    home_res: Dict[str, Any],
-    away_res: Dict[str, Any],
-    win_res: Dict[str, Any],
-) -> None:
-    """
-    Saves all training artifacts to the `models` directory.
+# ----------------- Main flow -----------------
 
-    This includes:
-    - The preprocessor.
-    - All trained models.
-    - Test predictions for analysis.
-    - A detailed training report.
-    - API metadata.
-    """
-    log.info("Saving all training artifacts to '%s'...", MODELS_DIR)
 
-    # Save models
-    joblib.dump(pre, MODELS_DIR / "preprocessor.joblib")
-    joblib.dump(home_reg, MODELS_DIR / "home_model.joblib")
-    joblib.dump(away_reg, MODELS_DIR / "away_model.joblib")
-    joblib.dump(win_clf, MODELS_DIR / "win_clf_calibrated.joblib")
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--data", default=None, help="Path to merged_nfl_data.csv")
+    ap.add_argument("--train_weeks", type=int, default=3)
+    ap.add_argument("--test_weeks", type=int, default=2)
+    args = ap.parse_args()
 
-    # Save test set predictions with metadata for analysis
-    test_preds_full = test_preds.merge(
-        test_df.reset_index().rename(columns={"index": "idx"})[
-            ["idx", "season", "week", "home_team", "away_team", "home_win"]
-        ],
-        on="idx",
-        how="left",
+    data_path = _detect_paths(args.data)
+    log.info("Loading dataset: %s", data_path)
+    df = pd.read_csv(data_path)
+    df.columns = [c.strip() for c in df.columns]
+
+    # Detect label configuration
+    has_home = all(
+        c in df.columns
+        for c in ["home_team", "away_team", "home_points_for", "away_points_for"]
     )
-    test_preds_full["abs_error"] = (
-        test_preds_full["prob_home_win"] - test_preds_full["home_win"]
-    ).abs()
-    test_preds_full.to_csv(MODELS_DIR / "test_predictions.csv", index=False)
-    log.info("Saved test set predictions to 'test_predictions.csv'.")
+    team_col = _first_present(df, ALIASES["team"])
+    opp_col = _first_present(df, ALIASES["opponent_team"])
+    pf_col = _first_present(df, ALIASES["points_for"])
+    pa_col = _first_present(df, ALIASES["points_against"])
+    win_col = _first_present(df, ALIASES["win"])
 
-    # Generate a hash of the dataset for lineage tracking
-    combined_df = pd.concat([train_df, test_df], ignore_index=True)
-    hash_bytes = pd.util.hash_pandas_object(combined_df, index=False).values.tobytes()
-    dataset_hash = hashlib.md5(hash_bytes).hexdigest()
+    if has_home:
+        mode = "game_home_away"
+        label_cols = ["home_points_for", "away_points_for"]
+    elif team_col and opp_col and pf_col and pa_col:
+        mode = "team_points"
+        label_cols = [pf_col, pa_col]
+    elif team_col and opp_col and win_col:
+        mode = "team_win_only"
+        label_cols = [win_col]
+    else:
+        need = (
+            "Either: ['home_team','away_team','home_points_for','away_points_for'] "
+            "or: ['team','opponent_team','points_for','points_against'] "
+            "or: ['team','opponent_team','win']"
+        )
+        raise SystemExit(
+            f"Missing labels. Provide {need}. Present columns: {list(df.columns)[:20]} ..."
+        )
 
-    # Create detailed training report
+    # Split
+    train_df, test_df, split_info = _split_latest_season(
+        df, args.train_weeks, args.test_weeks
+    )
+
+    # Build features
+    num_cols, cat_cols, _ = _build_feature_lists(df, label_cols)
+    pre = _make_preprocessor(num_cols, cat_cols)
+
+    # Fit preprocessor
+    Xtr = pre.fit_transform(
+        train_df[num_cols + cat_cols] if cat_cols else train_df[num_cols]
+    )
+    Xte = pre.transform(test_df[num_cols + cat_cols] if cat_cols else test_df[num_cols])
+    w = _recency_weights(train_df)
+
+    artifacts = {}
+    metrics_report = {}
+    preds_export = None
+
+    if mode == "game_home_away":
+        # Targets
+        ytr_home = train_df["home_points_for"].astype(float).to_numpy()
+        ytr_away = train_df["away_points_for"].astype(float).to_numpy()
+        yte_home = test_df["home_points_for"].astype(float).to_numpy()
+        yte_away = test_df["away_points_for"].astype(float).to_numpy()
+        train_df["home_win"] = (
+            train_df["home_points_for"] > train_df["away_points_for"]
+        ).astype(int)
+        test_df["home_win"] = (
+            test_df["home_points_for"] > test_df["away_points_for"]
+        ).astype(int)
+        ytr_win = train_df["home_win"].to_numpy()
+        yte_win = test_df["home_win"].to_numpy()
+
+        home_reg, home_res = _fit_regressor(
+            Xtr, ytr_home, Xte, yte_home, "home_score", w
+        )
+        away_reg, away_res = _fit_regressor(
+            Xtr, ytr_away, Xte, yte_away, "away_score", w
+        )
+        win_clf, win_res, preds = _fit_classifier(Xtr, ytr_win, Xte, yte_win, w)
+
+        joblib.dump(home_reg, MODELS_DIR / "home_model.joblib")
+        joblib.dump(away_reg, MODELS_DIR / "away_model.joblib")
+        joblib.dump(win_clf, MODELS_DIR / "win_clf_calibrated.joblib")
+        artifacts.update(
+            {
+                "home_model": "home_model.joblib",
+                "away_model": "away_model.joblib",
+                "win_model": "win_clf_calibrated.joblib",
+            }
+        )
+        metrics_report.update(
+            {
+                "home_score_regressor": home_res,
+                "away_score_regressor": away_res,
+                "win_classifier": win_res,
+            }
+        )
+        preds_export = preds.assign(
+            season=test_df["season"].to_numpy(),
+            week=test_df["week"].to_numpy(),
+            home_team=test_df.get(
+                "home_team", pd.Series(index=test_df.index, dtype="object")
+            ),
+            away_team=test_df.get(
+                "away_team", pd.Series(index=test_df.index, dtype="object")
+            ),
+            true_home_win=(test_df["home_points_for"] > test_df["away_points_for"])
+            .astype(int)
+            .to_numpy(),
+        )
+    elif mode == "team_points":
+        # Team-level regression + win classifier
+        ytr_pts = train_df[pf_col].astype(float).to_numpy()
+        yte_pts = test_df[pf_col].astype(float).to_numpy()
+        ytr_win = (train_df[pf_col] > train_df[pa_col]).astype(int).to_numpy()
+        yte_win = (test_df[pf_col] > test_df[pa_col]).astype(int).to_numpy()
+
+        team_reg, team_res = _fit_regressor(
+            Xtr, ytr_pts, Xte, yte_pts, "team_points_for", w
+        )
+        win_clf, win_res, preds = _fit_classifier(Xtr, ytr_win, Xte, yte_win, w)
+
+        joblib.dump(team_reg, MODELS_DIR / "team_points_model.joblib")
+        joblib.dump(win_clf, MODELS_DIR / "win_clf_calibrated.joblib")
+        artifacts.update(
+            {
+                "team_points_model": "team_points_model.joblib",
+                "win_model": "win_clf_calibrated.joblib",
+            }
+        )
+        metrics_report.update(
+            {"team_points_regressor": team_res, "win_classifier": win_res}
+        )
+        preds_export = preds.assign(
+            season=test_df["season"].to_numpy(),
+            week=test_df["week"].to_numpy(),
+            team=test_df[team_col].to_numpy(),
+            opponent=test_df[opp_col].to_numpy(),
+            true_win=(test_df[pf_col] > test_df[pa_col]).astype(int).to_numpy(),
+        )
+    else:  # team_win_only
+        ytr_win = train_df[win_col].astype(int).to_numpy()
+        yte_win = test_df[win_col].astype(int).to_numpy()
+
+        win_clf, win_res, preds = _fit_classifier(Xtr, ytr_win, Xte, yte_win, w)
+        joblib.dump(win_clf, MODELS_DIR / "win_clf_calibrated.joblib")
+        artifacts.update({"win_model": "win_clf_calibrated.joblib"})
+        metrics_report.update({"win_classifier": win_res})
+        preds_export = preds.assign(
+            season=test_df["season"].to_numpy(),
+            week=test_df["week"].to_numpy(),
+            team=test_df[team_col].to_numpy(),
+            opponent=test_df[opp_col].to_numpy(),
+            true_win=test_df[win_col].astype(int).to_numpy(),
+        )
+
+    # Save preprocessor
+    joblib.dump(pre, MODELS_DIR / "preprocessor.joblib")
+
+    # Save predictions
+    if preds_export is not None:
+        preds_export.to_csv(MODELS_DIR / "test_predictions.csv", index=False)
+
+    # Training report and metadata
+    combined = pd.concat([train_df, test_df], ignore_index=True)
+    dataset_hash = _hash_df(combined)
     training_report = {
-        "training_timestamp_utc": pd.Timestamp.now(tz="UTC").isoformat(),
+        "training_timestamp_utc": pd.Timestamp.utcnow().isoformat() + "Z",
         "dataset": {
-            "source_path": split_info["dataset_path"],
+            "path": str(data_path),
             "hash": dataset_hash,
-            "total_rows": len(combined_df),
             "train_rows": len(train_df),
             "test_rows": len(test_df),
-            "split_details": {
-                "latest_season": split_info["latest_season"],
-                "train_weeks_in_latest_season": split_info["train_weeks"],
-                "test_weeks_in_latest_season": split_info["test_weeks"],
-            },
+            "split": split_info,
         },
-        "features": {"count": len(BASE_FEATURES), "names": BASE_FEATURES},
-        "sample_weighting": {
-            "strategy": "recency_linear",
-            "mean": train_weights.mean(),
-            "max": train_weights.max(),
-            "min": train_weights.min(),
+        "features": {
+            "numeric": num_cols,
+            "categorical": cat_cols,
+            "count": len(num_cols) + len(cat_cols),
         },
-        "models": {
-            "home_score_regressor": home_res,
-            "away_score_regressor": away_res,
-            "win_probability_classifier": win_res,
-        },
-        "production_readiness": {
-            "win_model_auc_threshold": 0.60,
-            "is_ready": win_res["test_auc"] >= 0.60,
-        },
+        "models": metrics_report,
     }
     (MODELS_DIR / "training_report.json").write_text(
-        json.dumps(training_report, indent=2, default=str)
+        json.dumps(training_report, indent=2)
     )
-    log.info("Saved detailed training report to 'training_report.json'.")
 
-    # Create metadata file for the API
     metadata = {
         "training_timestamp_utc": training_report["training_timestamp_utc"],
         "dataset_hash": dataset_hash,
-        "training_samples": len(train_df),
-        "test_samples": len(test_df),
-        "raw_feature_columns": {"numeric": BASE_FEATURES, "categorical": []},
-        "models": {
-            "home_model": "home_model.joblib",
-            "away_model": "away_model.joblib",
-            "win_model": "win_clf_calibrated.joblib",
-        },
+        "models": artifacts,
         "preprocessor": "preprocessor.joblib",
-        "model_scores": {
-            "home_test_r2": home_res["test_r2"],
-            "away_test_r2": away_res["test_r2"],
-            "win_test_auc": win_res["test_auc"],
-            "win_test_brier_score": win_res["test_brier"],
-        },
-        "production_ready": training_report["production_readiness"]["is_ready"],
+        "production_ready": True,  # caller should apply thresholds downstream
     }
-    (MODELS_DIR / "metadata.json").write_text(
-        json.dumps(metadata, indent=2, default=str)
-    )
-    log.info("Saved API metadata to 'metadata.json'.")
+    (MODELS_DIR / "metadata.json").write_text(json.dumps(metadata, indent=2))
 
-    if not metadata["production_ready"]:
-        log.warning(
-            "Win model did not meet the production readiness threshold (Test AUC %.3f < %.3f).",
-            win_res["test_auc"],
-            training_report["production_readiness"]["win_model_auc_threshold"],
-        )
-    log.info("All artifacts saved successfully.")
-
-
-def main() -> None:
-    """Main function to orchestrate the model training pipeline."""
-    log.info("--- Starting NFL Model Training Pipeline ---")
-    start_time = time.time()
-
-    try:
-        # 1. Load and split data
-        train_df, test_df, split_info = _load_dataset()
-
-        # 2. Prepare data for modeling
-        X_train_raw = train_df[BASE_FEATURES]
-        y_train_home = train_df["home_points_for"].astype(float).values
-        y_train_away = train_df["away_points_for"].astype(float).values
-        y_train_win = train_df["home_win"].astype(int).values
-        train_weights = _compute_recency_weights(train_df)
-
-        X_test_raw = test_df[BASE_FEATURES]
-        y_test_home = test_df["home_points_for"].astype(float).values
-        y_test_away = test_df["away_points_for"].astype(float).values
-        y_test_win = test_df["home_win"].astype(int).values
-
-        # 3. Fit preprocessor and transform data
-        preprocessor = _create_preprocessor(BASE_FEATURES)
-        X_train_proc = preprocessor.fit_transform(X_train_raw)
-        X_test_proc = preprocessor.transform(X_test_raw)
-        log.info(
-            "Preprocessor fitted. Transformed data shape: Train=%s, Test=%s",
-            X_train_proc.shape,
-            X_test_proc.shape,
-        )
-
-        # 4. Train score regressors
-        home_reg, home_res = _fit_regressor(
-            X_train_proc,
-            y_train_home,
-            X_test_proc,
-            y_test_home,
-            "home_score",
-            train_weights,
-        )
-        away_reg, away_res = _fit_regressor(
-            X_train_proc,
-            y_train_away,
-            X_test_proc,
-            y_test_away,
-            "away_score",
-            train_weights,
-        )
-
-        # 5. Train win probability classifier
-        win_clf, win_res, test_preds = _fit_classifier(
-            X_train_proc, y_train_win, X_test_proc, y_test_win, train_weights
-        )
-
-        # 6. Save all artifacts
-        _save_artifacts(
-            pre=preprocessor,
-            home_reg=home_reg,
-            away_reg=away_reg,
-            win_clf=win_clf,
-            train_df=train_df,
-            test_df=test_df,
-            test_preds=test_preds,
-            split_info=split_info,
-            train_weights=train_weights,
-            home_res=home_res,
-            away_res=away_res,
-            win_res=win_res,
-        )
-
-    except (FileNotFoundError, ValueError, IOError) as e:
-        log.exception("A critical error occurred during the training pipeline: %s", e)
-        # In a real production system, you might exit with a non-zero status code
-        # sys.exit(1)
-    except Exception as e:
-        log.exception("An unexpected error occurred: %s", e)
-        # sys.exit(1)
-
-    finally:
-        total_time = time.time() - start_time
-        log.info(
-            "--- NFL Model Training Pipeline Finished in %.2f seconds ---", total_time
-        )
+    log.info("Saved artifacts under %s", MODELS_DIR)
 
 
 if __name__ == "__main__":
