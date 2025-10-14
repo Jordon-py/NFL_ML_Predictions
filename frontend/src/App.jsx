@@ -17,8 +17,8 @@
 import React from 'react';
 import DashBoard from './components/DashBoard.jsx'; // FIX: default import, not named
 import ErrorBoundary from './components/ErrorBoundary.jsx';
-import { PredictionProvider } from './PredictionContext.js';
-
+import {PredictionProvider} from './PredictionContext.js';
+import HistoryChart from './components/HistoryChart.jsx';
 
 /**
  * App
@@ -29,7 +29,7 @@ import { PredictionProvider } from './PredictionContext.js';
  * dynamically import and render the component on the client only.
  */
 export default function App() {
-   // Keep App focused on composition. All prediction state lives in Context.
+  // Keep App focused on composition. All prediction state lives in Context.
   return (
     <ErrorBoundary>
       <PredictionProvider>

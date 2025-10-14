@@ -222,6 +222,16 @@ main.app-main {
   padding: clamp(16px, 3vw, 28px);
 }
 
+.team-grid-header {
+  display: flex ;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-content: center;
+  padding-left: 2rem;
+  gap: 2rem;
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
 /* Grid (Enhancement 3) */
 .team-grid-section {
   padding-inline: clamp(12px, 2vw, 24px);
@@ -231,30 +241,50 @@ main.app-main {
   display: grid;
   background-color: #00326431;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 4rem;
-  border-radius: var(--r-md);
-  border-color: Outline;
-  /* Apply glow animation to the grid container */
-  animation: outlineGlow 3s ease-in-out infinite;
-  /* Fixed typo: changed 'bordor-radius' to 'border-radius' */
-  /* Added gap for better spacing between cards */
+  gap: 2rem;
+  border-radius: 1%;
+  border-color: whitesmoke;
 }
 
+.matchup-time.inner-card{
+  display: flex;
+  flex-direction: row;
+  gap: 4rem;
+}
+.predicted-scores.inner-card {
+  display: flex;
+  flex-direction: column;
+  padding: 15px;
+  gap: 4rem;
+  font-weight: 900;
+  font-size: 2.5rem;
+  align-content: space-around;
+  color: black;
+
+}
 /* Cards (Enhancement 4 + 5 + 10) */
 .matchup-card {
-  background-color: #ffffff1e;
-  border-radius: 12px;
-  box-shadow: 0 6px 10px 1px rgba(17, 0, 0, 0.377);
-  padding: 24px;
+  display: flex;
+  flex-direction: row;
+
+  background-color: rgba(0, 65, 187, 0.226);
+  border-radius: 18px;
+  box-shadow: 0 6px 18px 1px rgba(17, 0, 0, 0.712);
+  padding: 20px;
   margin-bottom: 20px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  transition: transform 0.3s, box-shadow 0.8s;
+  transition: transform 0.7s, box-shadow 0.8s;
   position: relative;
-  color: #0d1b2a;
+  max-height: 450px;
+  height: 100%;
+  max-width: 300px;
+  transition: transformY(-9px);
+  width: 100%;
+  color: #cbe4ff;
   /* Apply fade-in animation on load */
-  animation: fadeInVar 0.6s cubic-bezier(.22, .61, .36, 1) both;
+  animation: outlineGlow, fadeInVar 0.6s cubic-bezier(.22, .61, .36, 1) ease-in-out;
   animation-delay: calc(var(--i, 0) * 100ms);
   /* Stagger animation based on index */
 }
@@ -343,6 +373,6 @@ img.team-logo {
 
 /* Add shine effect on logo hover */
 img.team-logo:hover {
-  transform: scale(1.05);
-  filter: brightness(1.2);
+  transform: scale(1.00);
+  filter: brightness(1.4);
 }
