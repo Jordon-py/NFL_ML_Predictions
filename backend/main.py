@@ -263,10 +263,21 @@ async def lifespan(app: FastAPI):
 
 
 # Get CORS origins from environment variable
-CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
-CORS_ORIGINS = [origin.strip() for origin in CORS_ORIGINS if origin.strip()]
+# Change Log 2025-10-13 17:34: Default origins ensure Vercel + Heroku deployments work when CORS_ORIGINS not set.
+DEFAULT_CORS_ORIGINS = [
+    "https://nfl-ml-predictions.vercel.app",
+    "https://nfl-predict-christopher-jordons-projects.vercel.app",
+    "https://nfl-predict-ecf5a5bd34fe.herokuapp.com",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+raw_cors = os.getenv("CORS_ORIGINS")
+if raw_cors:
+    CORS_ORIGINS = [origin.strip() for origin in raw_cors.split(",") if origin.strip()]
+else:
+    CORS_ORIGINS = DEFAULT_CORS_ORIGINS
 
-log.info(f"CORS Origins configured: {CORS_ORIGINS}")
+log.info("CORS Origins configured: %s", CORS_ORIGINS)
 
 app = FastAPI(title="NFL Game Prediction API", version="2.0.0", lifespan=lifespan)
 app.add_middleware(
@@ -410,7 +421,7 @@ def debug_info():
                 debug["metadata_error"] = f"Invalid JSON in metadata.json: {e}"
 
         tr = MODELS_DIR / "training_report.json"
-        debug["training_report_present"] = tr.is_file()
+        debug["training_report_present"] = str(tr.is_file())
         # If you prefer to load it when present, uncomment below:
         if tr.is_file():
             try:
@@ -683,12 +694,12 @@ def report_errors(limit: int = 50):
 
 
 # Serve built frontend
+# Change Log 2025-10-13 17:34: Preserve static serving for both dist/ and build/ outputs.
 _front = (
     FRONTEND_DIST
     if FRONTEND_DIST.exists()
     else (FRONTEND_BUILD if FRONTEND_BUILD.exists() else "frontend/build")
 )
-# comment: if (FRONTEND_BUILD if FRONTEND_BUILD.exists() else "frontend/build")
 if _front:
     app.mount("/", StaticFiles(directory=str(_front), html=True), name="nfl-predict")
     log.info("Serving frontend from %s", _front)
