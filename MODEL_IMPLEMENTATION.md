@@ -73,7 +73,28 @@ X_transformed = preprocessor.transform(X_sample)
 
 # Predict scores
 def predict_score(model, X):
+    """
+    Predict scores using ensemble model with input validation.
+    
+    Args:
+        model: Dict with 'weight', 'hgbr', 'ridge' keys
+        X: Preprocessed feature array
+    
+    Returns:
+        Predicted score
+    """
+    # Validate model structure
+    if not isinstance(model, dict):
+        raise ValueError("Model must be a dictionary")
+    if not all(k in model for k in ['weight', 'hgbr', 'ridge']):
+        raise ValueError("Model must contain 'weight', 'hgbr', and 'ridge' keys")
+    
+    # Validate weight range
     w = model['weight']
+    if not (0 <= w <= 1):
+        raise ValueError(f"Weight must be in [0, 1], got {w}")
+    
+    # Make predictions
     return w * model['hgbr'].predict(X) + (1-w) * model['ridge'].predict(X)
 
 home_score = predict_score(home_model, X_transformed)[0]
@@ -132,7 +153,11 @@ See `docs/report.md` for comprehensive documentation including:
 
 ## ⚠️ Known Limitations
 
-- Away score predictions less accurate than home (MAE 5.8 vs 0.06)
+- **Away score predictions less accurate than home** (MAE 5.8 vs 0.06)
+  - **Root cause**: Home Ridge model shows suspiciously low MAE (0.004), indicating possible overfitting
+  - **Comparison**: HGBR models are more consistent (Home: 0.27, Away: 5.8)
+  - **Recommendation**: Consider using HGBR-only for both home and away scores
+  - The final ensemble uses 80% Ridge for home (overfitted) vs 100% HGBR for away (more robust)
 - No feature engineering (rolling averages, matchup history)
 - No injury or weather data integration
 - Dataset ends at 2025 season
