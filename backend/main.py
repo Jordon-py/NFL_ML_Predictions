@@ -169,25 +169,34 @@ def _normalize_feature_cols(raw_cols: dict) -> List[str]:
 # Lifespan
 # -----------------------
 def load_objects() -> Dict[str, Any]:
+    """Load model metadata and instantiate reusable predictors for the API."""
     meta_path = MODELS_DIR / "metadata.json"
+    log.debug("Loading model metadata from %s", meta_path)
     if not meta_path.exists():
         raise FileNotFoundError(f"Missing {meta_path}")
+
     meta = json.loads(meta_path.read_text(encoding="utf-8"))
 
-    pre = joblib.load(MODELS_DIR / meta.get("preprocessor", "preprocessor.joblib"))
-    home_path = MODELS_DIR / meta.get("home_model", "home_model.joblib")
-    away_path = MODELS_DIR / meta.get("away_model", "away_model.joblib")
-    win_path = MODELS_DIR / meta.get("win_model", "win_clf_calibrated.joblib")
+    def resolve_model_path(meta_key: str, fallback: str) -> Path:
+        candidate = Path(meta.get(meta_key, fallback))
+        return candidate if candidate.is_absolute() else MODELS_DIR / candidate
+
+    preprocessor = joblib.load(resolve_model_path("preprocessor", "preprocessor.joblib"))
+    home_model = joblib.load(resolve_model_path("home_model", "home_model.joblib"))
+    away_model = joblib.load(resolve_model_path("away_model", "away_model.joblib"))
+    win_model_path = resolve_model_path("win_model", "win_clf_calibrated.joblib")
+    win_model = joblib.load(win_model_path) if win_model_path.exists() else None
 
     return {
-        "mode": "production",
-        "preprocessor": pre,
-        "home_model": joblib.load(home_path),
-        "away_model": joblib.load(away_path),
-        "win_model": joblib.load(win_path) if win_path.exists() else None,
+        "mode": meta.get("mode", "production"),
+        "preprocessor": preprocessor,
+        "home_model": home_model,
+        "away_model": away_model,
+        "win_model": win_model,
         "raw_feature_columns": meta.get("raw_feature_columns", {}),
         "win_threshold_optimal": meta.get("win_threshold_optimal", 0.5),
     }
+    # Change log 2025-01-05: Ensured metadata dict access and single-pass model loading for reliable startup.
 
 
 def _coerce_bool(s: pd.Series) -> pd.Series:
@@ -218,7 +227,6 @@ def _ensure_home_away(df: pd.DataFrame) -> pd.DataFrame:
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     global model_objects, dataset_df
     log.info("Startup: loading models and dataset")
-
     model_objects = load_objects()
 
     ds_path = Path(os.getenv("DATASET_PATH", str(DEFAULT_DATASET)))
@@ -546,22 +554,37 @@ def predict_game(payload: PredictionRequest) -> PredictionResponse:
 
         # Score regressors
         # Models are small ensembles saved as dicts: {"hgbr", "ridge", "weight"} from training
-        def _reg_predict(bundle):
-            w = bundle["weight"]
-            p1 = bundle["hgbr"].predict(X)
-            p2 = bundle["ridge"].predict(X)
-            return w * p1 + (1 - w) * p2
+        def _reg_predict(bundle: Any) -> np.ndarray:
+            log.debug("Model bundle type: %s, hasattr predict: %s", type(bundle), hasattr(bundle, "predict"))
+            if isinstance(bundle, dict):
+                log.debug("Model bundle keys: %s", list(bundle.keys()) if hasattr(bundle, 'keys') else 'no keys method')
+                if {"hgbr", "ridge", "weight"}.issubset(bundle):
+                    weight = float(bundle["weight"])
+                    preds_hgbr = bundle["hgbr"].predict(X)
+                    preds_ridge = bundle["ridge"].predict(X)
+                    return weight * preds_hgbr + (1.0 - weight) * preds_ridge
+                delegate = bundle.get("model") or bundle.get("estimator")
+                if delegate is not None and hasattr(delegate, "predict"):
+                    return delegate.predict(X)
+                # If dict but no expected structure, try to find any predictor
+                for key, value in bundle.items():
+                    if hasattr(value, "predict"):
+                        log.debug("Using predictor from dict key: %s", key)
+                        return value.predict(X)
+            if hasattr(bundle, "predict"):
+                return bundle.predict(X)
+            raise AttributeError(f"Score model lacks predict method. Type: {type(bundle)}")
 
         home_score = float(
             np.clip(
-                _reg_predict(joblib.load(MODELS_DIR / "home_model.joblib"))[0],
+                _reg_predict(model_objects["home_model"])[0],
                 0.0,
                 70.0,
             )
         )
         away_score = float(
             np.clip(
-                _reg_predict(joblib.load(MODELS_DIR / "away_model.joblib"))[0],
+                _reg_predict(model_objects["away_model"])[0],
                 0.0,
                 70.0,
             )
