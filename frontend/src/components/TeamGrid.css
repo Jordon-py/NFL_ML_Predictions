@@ -82,7 +82,7 @@
 
 /* ---------- 2) Fade-in with direction controls ---------- */
 /* Control the start via vars: --fade-x, --fade-y, --fade-scale, --fade-blur */
-@keyframes fadeInVar {
+@keyframes fadeInVar {                                                                                       d
   from {
     opacity: 0;
     transform: translate3d(var(--fade-x, 0), var(--fade-y, 10px), 0) scale(var(--fade-scale, 1));
