@@ -37,6 +37,7 @@ import numpy as np
 import pandas as pd
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.compose import ColumnTransformer
+from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression, Ridge
 from sklearn.metrics import (
     accuracy_score,
@@ -46,6 +47,7 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 from sklearn.model_selection import TimeSeriesSplit, RandomizedSearchCV
+from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.ensemble import HistGradientBoostingRegressor
 from scipy import sparse
@@ -142,7 +144,7 @@ def _infer_features(df: pd.DataFrame) -> Tuple[List[str], List[str]]:
       - home_team, away_team if present
     """
     cols = list(df.columns)
-    ignore = ID_COLS | {TARGET_HOME, TARGET_AWAY}
+    ignore = ID_COLS | {TARGET_HOME, TARGET_AWAY, CLASS_LABEL}
     numeric: List[str] = []
     categorical: List[str] = []
 
@@ -168,9 +170,12 @@ def _infer_features(df: pd.DataFrame) -> Tuple[List[str], List[str]]:
 def _make_preprocessor(num_cols: List[str], cat_cols: List[str]) -> ColumnTransformer:
     transformers = []
     if num_cols:
-        transformers.append(
-            ("num", StandardScaler(with_mean=True, with_std=True), num_cols)
-        )
+        # Add imputer to handle NaN values in numeric columns
+        num_pipeline = Pipeline([
+            ("imputer", SimpleImputer(strategy="median")),
+            ("scaler", StandardScaler(with_mean=True, with_std=True))
+        ])
+        transformers.append(("num", num_pipeline, num_cols))
     if cat_cols:
         transformers.append(
             (
@@ -247,6 +252,7 @@ def _fit_regressor(
     X: np.ndarray,
     y: np.ndarray,
     pre: ColumnTransformer,
+    df: pd.DataFrame = None,
 ) -> FitResult:
     base = HistGradientBoostingRegressor(random_state=RANDOM_SEED)
     rs = RandomizedSearchCV(
@@ -264,8 +270,12 @@ def _fit_regressor(
 
     # Simple 2-model blend: HGBR + Ridge; search blend weight on validation slice
     # Prepare validation slice
-    tscv = _time_splits(pd.DataFrame(index=np.arange(len(y))), n_splits=N_SPLITS)
-    tr_idx, te_idx = _last_split_indices(pd.DataFrame(index=np.arange(len(y))), tscv)
+    if df is not None:
+        tscv = _time_splits(df, n_splits=N_SPLITS)
+        tr_idx, te_idx = _last_split_indices(df, tscv)
+    else:
+        tscv = _time_splits(pd.DataFrame(index=np.arange(len(y))), n_splits=N_SPLITS)
+        tr_idx, te_idx = _last_split_indices(pd.DataFrame(index=np.arange(len(y))), tscv)
     X_tr, X_te, y_tr, y_te = X[tr_idx], X[te_idx], y[tr_idx], y[te_idx]
 
     hgbr = cast(HistGradientBoostingRegressor, rs.best_estimator_)
@@ -310,6 +320,7 @@ class ClfResult:
 def _fit_classifier(
     X: np.ndarray,
     y_clf: np.ndarray,
+    df: pd.DataFrame = None,
 ) -> ClfResult:
     base = LogisticRegression()
     rs = RandomizedSearchCV(
@@ -328,9 +339,13 @@ def _fit_classifier(
 
     # Final calibration on last split
     # Build a synthetic df to reuse the same splitter
-    df_idx = pd.DataFrame(index=np.arange(len(y_clf)))
-    tscv = _time_splits(df_idx, n_splits=N_SPLITS)
-    tr_idx, te_idx = _last_split_indices(df_idx, tscv)
+    if df is not None:
+        tscv = _time_splits(df, n_splits=N_SPLITS)
+        tr_idx, te_idx = _last_split_indices(df, tscv)
+    else:
+        df_idx = pd.DataFrame(index=np.arange(len(y_clf)))
+        tscv = _time_splits(df_idx, n_splits=N_SPLITS)
+        tr_idx, te_idx = _last_split_indices(df_idx, tscv)
 
     cal = CalibratedClassifierCV(best_lr, method=CALIBRATION_METHOD, cv="prefit")
     cal.fit(X[tr_idx], y_clf[tr_idx])
@@ -447,11 +462,11 @@ def main() -> None:
     y_clf = train_df["home_win"].to_numpy()
 
     # Train regressors with small ensemble
-    res_home = _fit_regressor(X_full, y_home, pre)
-    res_away = _fit_regressor(X_full, y_away, pre)
+    res_home = _fit_regressor(X_full, y_home, pre, train_df)
+    res_away = _fit_regressor(X_full, y_away, pre, train_df)
 
     # Train classifier with calibration and threshold sweep
-    clf_res = _fit_classifier(X_full, y_clf)
+    clf_res = _fit_classifier(X_full, y_clf, train_df)
 
     # Build a validation error table on last split for diagnostics
     tscv = _time_splits(train_df, n_splits=N_SPLITS)
