@@ -4,6 +4,44 @@
 This report documents incremental changes to the NFL ML Predictions repository, focusing on bug fixes, code clarity, and productivity enhancements. Changes are logged with timestamps, file/line references, and rationale to support deployment readiness and professional consistency.
 
 ## Recent Changes
+
+### **2025-10-16 02:15 UTC** - Backend Deployment & Model Version Fix
+**Files Modified:**
+- `backend/requirements.txt` – Updated to scikit-learn 1.7.x, numpy 2.3.x, pandas 2.3.x to match model training environment
+- `backend/main.py` – Fixed model loading logic (removed incorrect list unpacking)
+
+**Changes Summary:**
+1. **Fixed Model Loading Bug** (Commit 06bc80383):
+   - Removed incorrect `home_model, away_model, win_clf, preprocessor = load_objects()` list unpacking
+   - Fixed all references to use `model_objects["preprocessor"]` instead of `ml_models["preprocessor"]`
+   - Removed duplicate `away_score = float(` assignment (line 585)
+
+2. **Updated Requirements** (Commit ce117d4f6):
+   - Updated scikit-learn constraint from `<1.6.0` to `>=1.7.0,<2.0.0`
+   - Updated numpy constraint from `>=2.0.0` to `>=2.3.0`
+   - Updated pandas constraint from `>=2.0.0` to `>=2.3.0`
+   - **Reason:** Models were trained with sklearn 1.7.2, numpy 2.3.3, pandas 2.3.3 (local environment)
+
+3. **Deployment Status:**
+   - ✅ Heroku Release v143 deployed successfully
+   - ✅ Application startup complete (3 workers)
+   - ✅ Models and dataset loaded (14,143 rows × 130 columns)
+   - ✅ Health endpoint returns `{"status":"healthy","mode":"production","reason":"models loaded"}`
+   - ⚠️ **Known Issue:** Predictions still returning identical values due to 92 vs 86 feature mismatch
+
+4. **Validation Results:**
+   - **Test 1** (KC vs BUF): `home_score: 22.6, away_score: 22.3, home_win_prob: 0.519`
+   - **Test 2** (SF vs ARI): `home_score: 22.6, away_score: 22.3, home_win_prob: 0.519`
+   - **Diagnosis:** Feature count mismatch (metadata lists 86 features, models expect 92) causes fallback behavior
+
+**App Completion Estimate:** 72% (backend deployed but model retraining required)
+
+**Next Steps:**
+- Retrain models with correct dataset to resolve 92 vs 86 feature mismatch
+- Redeploy after retraining to verify varied predictions
+
+---
+
 - **Date:** 2025-10-15  
   **Time:** 21:10 UTC  
   **Files Modified:**  
@@ -53,5 +91,17 @@ This report documents incremental changes to the NFL ML Predictions repository, 
 - **Implement Error Handling in Predictions:** Add try-catch blocks in `predictGame` and `predictNextWeek` to handle network failures gracefully, improving user experience.  
 - **Add Unit Tests:** Create Jest tests for `client.js` functions to validate API calls and payload shaping, boosting reliability.  
 - **Performance Monitoring:** Integrate metrics logging (e.g., response times) in `api` function for real-time insights.  
+
+## Component Interaction Flow
+
+`TeamGrid.jsx` → `client.js` → `backend/main.py`
+     ↓              ↓              ↓
+`handlePredict`  `predictGame`  `predict_game()`
+     ↓              ↓              ↓
+   `toEntry`    `toPredictionRequest`  `PredictionResponse`
+     ↓
+`PredictionContext.js`
+     ↓
+`Dashboard.jsx` / `PredictionResult.jsx`
 
 *Report generated automatically per Repository Guardian Protocol.*
