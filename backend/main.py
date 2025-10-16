@@ -543,9 +543,9 @@ def predict_game(payload: PredictionRequest) -> PredictionResponse:
                 row.get("away_points_for")
             ):
                 raise HTTPException(400, "Game completed; no prediction.")
+        
 
-        raw_cols = model_objects.get("raw_feature_columns", {})
-        feature_names = _normalize_feature_cols(raw_cols)
+        feature_names = _normalize_feature_cols(model_objects["raw_feature_columns"])
         data = {c: [row[c]] if c in row.index else [np.nan] for c in feature_names}
         if missing := [c for c in feature_names if c not in row.index]:
             log.warning("Missing features filled with NaN: %s", missing)
