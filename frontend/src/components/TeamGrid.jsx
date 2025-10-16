@@ -86,20 +86,20 @@ export default function TeamGrid() {
 
   // Predict a matchup
   const handlePredict = async (game) => {
-    
+
     const key = makeKey(game);
     if (loading[key]) return;
-      setLoading((prev) => ({...prev, [key]: true}));
-      setError(null);
-      const payload = {
-        home_team: game.home_abbr,
-        away_team: game.away_abbr,
-        season: game.season,
-        week: game.week,
-      };
+    setLoading((prev) => ({...prev, [key]: true}));
+    setError(null);
+    const payload = {
+      home_team: game.home_abbr,
+      away_team: game.away_abbr,
+      season: game.season,
+      week: game.week,
+    };
     try {
       const res = await predictGame(payload);
-      const [{home_abbr, home_score, home_team ,away_abbr, away_score, away_team}] = res
+      const {home_score, away_score} = res;
       const result = {
         home_score: Number(home_score),
         away_score: Number(away_score),
@@ -167,7 +167,7 @@ export default function TeamGrid() {
 
   return (
     <div className="team-grid-section">
-      <div className="team-grid-cards">
+      <div className="team-grid-cards a-shine">
         {schedule.map((game, index) => {
           const key = makeKey(game);
           const prediction = predictions[key];
