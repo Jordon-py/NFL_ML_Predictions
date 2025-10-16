@@ -82,7 +82,7 @@
 
 /* ---------- 2) Fade-in with direction controls ---------- */
 /* Control the start via vars: --fade-x, --fade-y, --fade-scale, --fade-blur */
-@keyframes fadeInVar {                                                                                       d
+@keyframes fadeInVar {
   from {
     opacity: 0;
     transform: translate3d(var(--fade-x, 0), var(--fade-y, 10px), 0) scale(var(--fade-scale, 1));
@@ -223,7 +223,7 @@ main.app-main {
 }
 
 .team-grid-header {
-  display: flex ;
+  display: flex;
   flex-direction: row;
   flex-wrap: wrap;
   align-content: center;
@@ -232,6 +232,7 @@ main.app-main {
   text-align: center;
   margin-bottom: 1.5rem;
 }
+
 /* Grid (Enhancement 3) */
 .team-grid-section {
   padding-inline: clamp(12px, 2vw, 24px);
@@ -246,11 +247,12 @@ main.app-main {
   border-color: whitesmoke;
 }
 
-.matchup-time.inner-card{
+.matchup-time.inner-card {
   display: flex;
   flex-direction: row;
   gap: 4rem;
 }
+
 .predicted-scores.inner-card {
   display: flex;
   flex-direction: column;
@@ -262,6 +264,7 @@ main.app-main {
   color: black;
 
 }
+
 /* Cards (Enhancement 4 + 5 + 10) */
 .matchup-card {
   display: flex;
