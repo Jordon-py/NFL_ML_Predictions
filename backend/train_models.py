@@ -395,7 +395,7 @@ def main(data_path: str, out_dir: str) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train leak-free NFL models with time-aware CV.")
-    parser.add_argument("--data", type=str, default="backend/data/game_features.csv", help="Path to features CSV.")
-    parser.add_argument("--out", type=str, default="backend/models", help="Output directory for artifacts and reports.")
+    parser.add_argument("--data", type=str, default="data/game_features.csv", help="Path to features CSV.")
+    parser.add_argument("--out", type=str, default="models", help="Output directory for artifacts and reports.")
     args = parser.parse_args()
     main(args.data, args.out)

@@ -1,6 +1,6 @@
 {
   "name": "nfl-ml-predictions",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "",
   "main": "src/index.jsx",
   "type": "module",
@@ -28,7 +28,7 @@
     "vite": "^7.1.9"
   },
   "engines": {
-    "node": "22.x",
+    "node": ">=22.x",
     "npm": ">=10.0.0"
   },
   "browserslist": {
