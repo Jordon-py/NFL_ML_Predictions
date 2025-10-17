@@ -24,6 +24,7 @@
 ### 1. **Dead Code Removal** (Lines 191-228, 427-446)
 
 **Before:**
+
 ```python
 def build_regression_pipeline(...):  # NEVER CALLED
     """40+ lines of unused pipeline template"""
@@ -35,6 +36,7 @@ def _compute_recency_weights(...):   # NEVER USED
 ```
 
 **After:**
+
 ```python
 # ✅ REMOVED - Eliminated 80 lines of dead code
 ```
@@ -46,6 +48,7 @@ def _compute_recency_weights(...):   # NEVER USED
 ### 2. **Syntax Errors Fixed** (3 instances)
 
 #### Error #1: Missing Comma (Line 181)
+
 ```python
 # Before: Syntax error - missing comma between args
 return ColumnTransformer(transformers=transformers, verbose=True remainder="drop", ...)
@@ -60,6 +63,7 @@ return ColumnTransformer(
 ```
 
 #### Error #2: Invalid Raise Pattern (Line 472)
+
 ```python
 # Before: Invalid - `and` operator doesn't work with exceptions
 raise RuntimeError("Dataset is empty") and FileNotFoundError(...)
@@ -72,6 +76,7 @@ if df.empty:
 ```
 
 #### Error #3: Useless Return (Line 105)
+
 ```python
 # Before: Returns None (np.random.seed returns None)
 def set_all_seeds(seed: int) -> None:
@@ -90,6 +95,7 @@ def set_all_seeds(seed: int) -> None:
 ### 3. **Overly Complex Code Simplified**
 
 #### Example 1: _dataset_hash() Method Chaining
+
 ```python
 # Before: 5 chained method calls (hard to debug)
 def _dataset_hash(df: pd.DataFrame) -> str:
@@ -108,6 +114,7 @@ def _dataset_hash(df: pd.DataFrame) -> str:
 ```
 
 #### Example 2: Error Message Clarity
+
 ```python
 # Before: Redundant and unprofessional
 raise RuntimeError("No features selected. Check dataset and feature inference.: error msg from --> _make_preprocessor()");
@@ -140,6 +147,7 @@ raise RuntimeError(
 ### Example: Enhanced Function Documentation
 
 **Before:**
+
 ```python
 def _reg_grid() -> Dict[str, List[Any]]:
     return {
@@ -150,6 +158,7 @@ def _reg_grid() -> Dict[str, List[Any]]:
 ```
 
 **After:**
+
 ```python
 def _reg_grid() -> Dict[str, List[Any]]:
     """
@@ -176,6 +185,7 @@ def _reg_grid() -> Dict[str, List[Any]]:
 ## 🎯 Inline Comments Added
 
 ### Example 1: Feature Inference Logic
+
 ```python
 def _infer_features(df: pd.DataFrame) -> Tuple[List[str], List[str]]:
     """Automatically detect numeric and categorical features."""
@@ -198,6 +208,7 @@ def _infer_features(df: pd.DataFrame) -> Tuple[List[str], List[str]]:
 ```
 
 ### Example 2: Main Pipeline Structure
+
 ```python
 def main() -> None:
     """
@@ -233,6 +244,7 @@ def main() -> None:
 ## 🚀 Complexity Reduction
 
 ### Before: Overly Nested Logic
+
 ```python
 # 75+ line function with 3 nested loops, no section comments
 def _fit_classifier(X, y_clf):
@@ -250,6 +262,7 @@ def _fit_classifier(X, y_clf):
 ```
 
 ### After: Clear 7-Step Pipeline
+
 ```python
 def _fit_classifier(X, y_clf):
     """Train and calibrate win probability classifier."""
@@ -301,7 +314,8 @@ def _fit_classifier(X, y_clf):
 
 **Before:** Code was cryptic - required domain knowledge to understand.
 
-**After:** 
+**After:**
+
 - Every hyperparameter has a comment explaining its purpose
 - Every function has a docstring with Args/Returns/Raises
 - Pipeline steps are numbered and explained
@@ -312,18 +326,21 @@ def _fit_classifier(X, y_clf):
 ## ✅ Verification
 
 ### Syntax Check
+
 ```bash
 $ python -m py_compile train_models.py
 # ✅ No output = success
 ```
 
 ### Import Check
+
 ```bash
 $ python -c "from backend.train_models import main; print('OK')"
 # ✅ OK
 ```
 
 ### Line Count
+
 ```bash
 $ wc -l train_models.py
 # Before: 574 lines
@@ -339,13 +356,15 @@ $ wc -l train_models.py
 
 **Scenario:** New team member asked to understand the training pipeline.
 
-**Before:** 
+**Before:**
+
 - 🔴 45 minutes to understand main flow
 - 🔴 No comments to guide exploration
 - 🔴 Dead code causes confusion ("Is this used?")
 - 🔴 Syntax errors block local testing
 
 **After:**
+
 - ✅ 10 minutes to understand main flow (7-step breakdown)
 - ✅ Inline comments explain WHY, not just WHAT
 - ✅ No dead code distraction
@@ -358,6 +377,7 @@ $ wc -l train_models.py
 ### Recommended Enhancements
 
 1. **Add Unit Tests**
+
    ```python
    def test_dataset_hash_determinism():
        """Verify same data produces same hash."""
@@ -368,6 +388,7 @@ $ wc -l train_models.py
    ```
 
 2. **Extract Magic Numbers**
+
    ```python
    # Current
    for w in np.linspace(0.2, 0.9, 8):
@@ -380,6 +401,7 @@ $ wc -l train_models.py
    ```
 
 3. **Add Progress Logging**
+
    ```python
    log.info("Training home score regressor...")
    res_home = _fit_regressor(X_full, y_home, pre)
@@ -414,18 +436,21 @@ Ref: Repository Guardian Protocol, TRAIN_MODELS_REFACTOR.md"
 ## 🏆 Summary
 
 **Code Quality:**
+
 - ✅ Syntax errors eliminated
 - ✅ Dead code removed (14.6% smaller)
 - ✅ Complexity reduced (MEDIUM vs HIGH)
 - ✅ Readability improved (+50%)
 
 **Documentation:**
+
 - ✅ 13/13 functions documented
 - ✅ Every hyperparameter explained
 - ✅ Pipeline steps numbered and commented
 - ✅ Rationale provided for design decisions
 
 **Maintainability:**
+
 - ✅ Faster onboarding (60% reduction)
 - ✅ Easier debugging (clear sections)
 - ✅ Testable functions (unit test ready)
