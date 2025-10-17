@@ -22,7 +22,11 @@ import numpy as np
 import pandas as pd
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
+<<<<<<< HEAD
 from sklearn.linear_model import LogisticRegression
+=======
+from sklearn.linear_model import LogisticRegression, Ridge
+>>>>>>> 572910b09d95a69b5bb241dda05ce6698620f8e9
 from sklearn.metrics import (
     mean_absolute_error,
     roc_auc_score,
@@ -124,8 +128,19 @@ def _drop_leaky_columns(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _infer_features(df: pd.DataFrame) -> Tuple[List[str], List[str]]:
+<<<<<<< HEAD
     """Return numeric and categorical feature names after removing IDs and blocklisted fields."""
     ignore = set(ID_COLS) | set(TIME_KEYS) | set(LEAK_BLOCKLIST)
+=======
+    """
+    Numeric features default:
+      - any float/int columns that are not identifiers or targets
+    Categorical:
+      - home_team, away_team if present
+    """
+    cols = list(df.columns)
+    ignore = ID_COLS | {TARGET_HOME, TARGET_AWAY, CLASS_LABEL}
+>>>>>>> 572910b09d95a69b5bb241dda05ce6698620f8e9
     numeric: List[str] = []
     categorical: List[str] = []
     for c in df.columns:
@@ -141,6 +156,7 @@ def _infer_features(df: pd.DataFrame) -> Tuple[List[str], List[str]]:
 
 
 def _make_preprocessor(num_cols: List[str], cat_cols: List[str]) -> ColumnTransformer:
+<<<<<<< HEAD
     num_pipe = Pipeline(
         steps=[
             ("imputer", SimpleImputer(strategy="median")),
@@ -160,6 +176,27 @@ def _make_preprocessor(num_cols: List[str], cat_cols: List[str]) -> ColumnTransf
         ],
         sparse_threshold=0.0,  # Force dense output
     )
+=======
+    transformers = []
+    if num_cols:
+        # Add imputer to handle NaN values in numeric columns
+        num_pipeline = Pipeline([
+            ("imputer", SimpleImputer(strategy="median")),
+            ("scaler", StandardScaler(with_mean=True, with_std=True))
+        ])
+        transformers.append(("num", num_pipeline, num_cols))
+    if cat_cols:
+        transformers.append(
+            (
+                "cat",
+                OneHotEncoder(handle_unknown="ignore", sparse_output=False),
+                cat_cols,
+            )
+        )
+    if not transformers:
+        raise RuntimeError("No features selected. Check dataset and feature inference.")
+    return ColumnTransformer(transformers=transformers, remainder="drop", n_jobs=None)
+>>>>>>> 572910b09d95a69b5bb241dda05ce6698620f8e9
 
 
 def _split_for_calibration(tscv: TimeSeriesSplit, X: pd.DataFrame, y: pd.Series):
@@ -177,6 +214,7 @@ def _fit_classifier(
     X: pd.DataFrame,
     y: pd.Series,
     pre: ColumnTransformer,
+<<<<<<< HEAD
     random_state: int,
 ) -> Tuple[Pipeline, Dict[str, float]]:
     """
@@ -209,6 +247,11 @@ def _fit_classifier(
         )),
     ])
     
+=======
+    df: pd.DataFrame = None,
+) -> FitResult:
+    base = HistGradientBoostingRegressor(random_state=RANDOM_SEED)
+>>>>>>> 572910b09d95a69b5bb241dda05ce6698620f8e9
     rs = RandomizedSearchCV(
         estimator=base,
         param_distributions=CLF_PARAM_DISTS,
@@ -280,10 +323,47 @@ def _fit_regression(
         refit=True,
     )
     rs.fit(X, y)
+<<<<<<< HEAD
     
     # Fixed: Cast rs.best_estimator_ to Pipeline to match return type hint.
     # This resolves the type checker error while preserving runtime behavior.
     return cast(Pipeline, rs.best_estimator_)
+=======
+
+    # Simple 2-model blend: HGBR + Ridge; search blend weight on validation slice
+    # Prepare validation slice
+    if df is not None:
+        tscv = _time_splits(df, n_splits=N_SPLITS)
+        tr_idx, te_idx = _last_split_indices(df, tscv)
+    else:
+        tscv = _time_splits(pd.DataFrame(index=np.arange(len(y))), n_splits=N_SPLITS)
+        tr_idx, te_idx = _last_split_indices(pd.DataFrame(index=np.arange(len(y))), tscv)
+    X_tr, X_te, y_tr, y_te = X[tr_idx], X[te_idx], y[tr_idx], y[te_idx]
+
+    hgbr = cast(HistGradientBoostingRegressor, rs.best_estimator_)
+    ridge = Ridge(random_state=RANDOM_SEED)
+    ridge.fit(X_tr, y_tr)
+
+    preds_h = hgbr.predict(X_te)
+    preds_r = ridge.predict(X_te)
+    best_w, best_mae = 1.0, mean_absolute_error(y_te, preds_h)
+    for w in np.linspace(0.2, 0.9, 8):
+        blend = w * preds_h + (1 - w) * preds_r
+        mae = mean_absolute_error(y_te, blend)
+        if mae < best_mae:
+            best_mae, best_w = mae, w
+
+    # Wrap ensemble
+    model = {"hgbr": hgbr, "ridge": ridge, "weight": float(best_w)}
+    report = {
+        "best_params": rs.best_params_,
+        "val_mae_hgbr": float(mean_absolute_error(y_te, preds_h)),
+        "val_mae_ridge": float(mean_absolute_error(y_te, preds_r)),
+        "val_mae_blend": float(best_mae),
+        "blend_weight_hgbr": float(best_w),
+    }
+    return FitResult(model=model, mae_val=best_mae, report=report)
+>>>>>>> 572910b09d95a69b5bb241dda05ce6698620f8e9
 
 
 def _evaluate_regression(model: Pipeline, X: pd.DataFrame, y: pd.Series) -> float:
@@ -296,8 +376,89 @@ def _save(obj, path: str) -> None:
     joblib.dump(obj, path)
 
 
+<<<<<<< HEAD
 def _dataset_sort(df: pd.DataFrame) -> pd.DataFrame:
     return df.sort_values(TIME_KEYS).reset_index(drop=True)
+=======
+def _fit_classifier(
+    X: np.ndarray,
+    y_clf: np.ndarray,
+    df: pd.DataFrame = None,
+) -> ClfResult:
+    base = LogisticRegression()
+    rs = RandomizedSearchCV(
+        estimator=base,
+        param_distributions=CLF_PARAMS,
+        n_iter=HYPERPARAM_SEARCH_ITERATIONS,
+        cv=TimeSeriesSplit(n_splits=N_SPLITS),
+        scoring="roc_auc",
+        n_jobs=-1,
+        random_state=RANDOM_SEED,
+        verbose=0,
+        refit=True,
+    )
+    rs.fit(X, y_clf)
+    best_lr = cast(LogisticRegression, rs.best_estimator_)
+
+    # Final calibration on last split
+    # Build a synthetic df to reuse the same splitter
+    if df is not None:
+        tscv = _time_splits(df, n_splits=N_SPLITS)
+        tr_idx, te_idx = _last_split_indices(df, tscv)
+    else:
+        df_idx = pd.DataFrame(index=np.arange(len(y_clf)))
+        tscv = _time_splits(df_idx, n_splits=N_SPLITS)
+        tr_idx, te_idx = _last_split_indices(df_idx, tscv)
+
+    cal = CalibratedClassifierCV(best_lr, method=CALIBRATION_METHOD, cv="prefit")
+    cal.fit(X[tr_idx], y_clf[tr_idx])
+    proba = cal.predict_proba(X[te_idx])[:, 1]
+
+    # Metrics
+    auc = roc_auc_score(y_clf[te_idx], proba)
+    br = brier_score_loss(y_clf[te_idx], proba)
+    ll = log_loss(y_clf[te_idx], np.c_[1 - proba, proba])
+    acc50 = accuracy_score(y_clf[te_idx], (proba >= 0.5).astype(int))
+
+    # Reliability bins
+    bins = np.linspace(0, 1, RELIABILITY_BINS + 1)
+    bin_ids = np.digitize(proba, bins) - 1
+    reliab = []
+    for b in range(RELIABILITY_BINS):
+        m = bin_ids == b
+        if m.any():
+            mean_p = float(np.mean(proba[m]))
+            mean_y = float(np.mean(y_clf[te_idx][m]))
+            n = int(np.sum(m))
+            reliab.append({"bin": b, "n": n, "mean_pred": mean_p, "mean_true": mean_y})
+
+    # Threshold sweep on validation to maximize F1, tie-break to accuracy
+    best_th, best_f1, best_acc = 0.5, -1.0, 0.0
+    for th in np.linspace(0.3, 0.7, 41):
+        preds = (proba >= th).astype(int)
+        tp = np.sum((preds == 1) & (y_clf[te_idx] == 1))
+        fp = np.sum((preds == 1) & (y_clf[te_idx] == 0))
+        fn = np.sum((preds == 0) & (y_clf[te_idx] == 1))
+        prec = tp / (tp + fp + 1e-9)
+        rec = tp / (tp + fn + 1e-9)
+        f1 = 2 * prec * rec / (prec + rec + 1e-9)
+        acc = accuracy_score(y_clf[te_idx], preds)
+        if f1 > best_f1 or (math.isclose(f1, best_f1, rel_tol=1e-6) and acc > best_acc):
+            best_f1, best_acc, best_th = f1, acc, float(th)
+
+    report = {
+        "auc_val": float(auc),
+        "brier_val": float(br),
+        "logloss_val": float(ll),
+        "accuracy_at_0p5": float(acc50),
+        "reliability_bins": reliab,
+        "optimal_threshold": best_th,
+        "optimal_threshold_f1": float(best_f1),
+        "optimal_threshold_acc": float(best_acc),
+        "best_params": rs.best_params_,
+    }
+    return ClfResult(model=cal, report=report, threshold=best_th)
+>>>>>>> 572910b09d95a69b5bb241dda05ce6698620f8e9
 
 
 def main(data_path: str, out_dir: str) -> None:
@@ -342,12 +503,21 @@ def main(data_path: str, out_dir: str) -> None:
     log.info("Fitting away points regressor")
     away_model = _fit_regression(X, y_away, pre, RANDOM_SEED)
 
+<<<<<<< HEAD
     log.info("Fitting win classifier")
     win_model, win_holdout_metrics = _fit_classifier(X, y_win, pre, RANDOM_SEED)
 
     # Quick in-sample sanity MAE (for monitoring only)
     mae_home = _evaluate_regression(home_model, X, y_home)
     mae_away = _evaluate_regression(away_model, X, y_away)
+=======
+    # Train regressors with small ensemble
+    res_home = _fit_regressor(X_full, y_home, pre, train_df)
+    res_away = _fit_regressor(X_full, y_away, pre, train_df)
+
+    # Train classifier with calibration and threshold sweep
+    clf_res = _fit_classifier(X_full, y_clf, train_df)
+>>>>>>> 572910b09d95a69b5bb241dda05ce6698620f8e9
 
     # Persist artifacts
     os.makedirs(out_dir, exist_ok=True)
