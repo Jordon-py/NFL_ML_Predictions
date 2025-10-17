@@ -45,10 +45,12 @@ from sklearn.metrics import (
     mean_absolute_error,
     roc_auc_score,
 )
-from sklearn.model_selection import TimeSeriesSplit, RandomizedSearchCV
+from sklearn.model_selection import TimeSeriesSplit, RandomizedSearchCV, StratifiedKFold
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.ensemble import HistGradientBoostingRegressor
 from scipy import sparse
+from sklearn.pipeline import Pipeline
+from sklearn.impute import SimpleImputer
 
 # -----------------------
 # Paths and configuration 
@@ -61,7 +63,7 @@ MODELS_DIR.mkdir(parents=True, exist_ok=True)
 LOG_DIR = BACKEND_DIR / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
-DEFAULT_DATASET = DATA_DIR / os.getenv("TRAIN_DATASET_FILE", "C:\\iProg\\OneDrive\\Documents\\Football_predict\\nfl_prediction_system\\NFL_ML_Predictions\\backend\\data\\new_dataset.csv")
+DEFAULT_DATASET = DATA_DIR / os.getenv("TRAIN_DATASET_FILE", "new_dataset.csv")
 
 RANDOM_SEED = int(os.getenv("RANDOM_SEED", "1337"))
 HYPERPARAM_SEARCH_ITERATIONS = int(os.getenv("HP_NITER", "40"))
@@ -133,6 +135,8 @@ def _dataset_hash(df: pd.DataFrame) -> str:
     hash_sum = pd.util.hash_pandas_object(df.fillna(-999), index=True).sum()
     return str(int(hash_sum))
 
+# --- main(): sanitize targets before modeling ---
+
 
 def _infer_features(df: pd.DataFrame) -> Tuple[List[str], List[str]]:
     """
@@ -174,6 +178,7 @@ def _infer_features(df: pd.DataFrame) -> Tuple[List[str], List[str]]:
 
 
 def _make_preprocessor(num_cols: List[str], cat_cols: List[str]) -> ColumnTransformer:
+    """Preprocess features: impute → scale / encode. Keeps estimators NaN-free."""
     """
     Build sklearn preprocessing pipeline for numeric and categorical features.
     
@@ -190,34 +195,29 @@ def _make_preprocessor(num_cols: List[str], cat_cols: List[str]) -> ColumnTransf
     Raises:
         RuntimeError: If no features provided (invalid dataset)
     """
+    
     transformers = []
-    
-    # Add numeric transformer if numeric features exist
     if num_cols:
-        transformers.append(
-            ("num", StandardScaler(with_mean=True, with_std=True), num_cols)
-        )
-    
-    # Add categorical transformer if categorical features exist
+        transformers.append((
+            "num",
+            Pipeline(steps=[
+                ("impute", SimpleImputer(strategy="median")),   # handle numeric NaNs
+                ("scale", StandardScaler(with_mean=True, with_std=True)),
+            ]),
+            num_cols
+        ))
     if cat_cols:
-        transformers.append(
-            ("cat", OneHotEncoder(handle_unknown="ignore", sparse_output=False), cat_cols)
-        )
-    
-    # Ensure at least one feature type exists
+        transformers.append((
+            "cat",
+            Pipeline(steps=[
+                ("impute", SimpleImputer(strategy="most_frequent")),  # handle missing teams
+                ("ohe", OneHotEncoder(handle_unknown="ignore", sparse_output=False)),
+            ]),
+            cat_cols
+        ))
     if not transformers:
-        raise RuntimeError(
-            "No features selected for training. "
-            "Check dataset columns and _infer_features() logic."
-        )
-
-    return ColumnTransformer(
-        transformers=transformers,
-        verbose=True,                    # Log transformation steps
-        remainder="drop",                # Drop unused columns
-        n_jobs=None,                     # Single-threaded for reproducibility
-        verbose_feature_names_out=True   # Preserve feature name prefixes
-    )
+        raise RuntimeError("No features selected for training.")
+    return ColumnTransformer(transformers=transformers, verbose=True, remainder="drop")
 
 # -----------------------
 # Model search spaces
@@ -302,6 +302,7 @@ def _fit_regressor(
     X: np.ndarray,
     y: np.ndarray,
     pre: ColumnTransformer,
+    df: pd.DataFrame,  # Add DataFrame parameter for time-aware splitting
 ) -> FitResult:
     """
     Train score prediction model with ensemble blending (HGBR + Ridge).
@@ -340,8 +341,8 @@ def _fit_regressor(
     rs.fit(X, y)
 
     # Step 2: Get validation split for ensemble weight tuning
-    tscv = _time_splits(pd.DataFrame(index=np.arange(len(y))), n_splits=N_SPLITS)
-    tr_idx, te_idx = _last_split_indices(pd.DataFrame(index=np.arange(len(y))), tscv)
+    tscv = _time_splits(df, n_splits=N_SPLITS)
+    tr_idx, te_idx = _last_split_indices(df, tscv)
     X_tr, X_te, y_tr, y_te = X[tr_idx], X[te_idx], y[tr_idx], y[te_idx]
 
     # Step 3: Train both models on training split
@@ -389,6 +390,7 @@ class ClfResult:
 def _fit_classifier(
     X: np.ndarray,
     y_clf: np.ndarray,
+    df: pd.DataFrame,  # Add DataFrame parameter for time-aware splitting
 ) -> ClfResult:
     """
     Train and calibrate a win probability classifier with optimal threshold tuning.
@@ -412,7 +414,7 @@ def _fit_classifier(
         estimator=base,
         param_distributions=CLF_PARAMS,
         n_iter=HYPERPARAM_SEARCH_ITERATIONS,
-        cv=TimeSeriesSplit(n_splits=N_SPLITS),
+        cv=StratifiedKFold(n_splits=N_SPLITS, shuffle=True, random_state=RANDOM_SEED),  # Use stratified folds to ensure both classes
         scoring="roc_auc",              # Optimize for probability ranking quality
         n_jobs=-1,
         random_state=RANDOM_SEED,
@@ -423,9 +425,8 @@ def _fit_classifier(
     best_lr = cast(LogisticRegression, rs.best_estimator_)
 
     # Step 2: Get validation split for calibration and threshold tuning
-    df_idx = pd.DataFrame(index=np.arange(len(y_clf)))
-    tscv = _time_splits(df_idx, n_splits=N_SPLITS)
-    tr_idx, te_idx = _last_split_indices(df_idx, tscv)
+    tscv = _time_splits(df, n_splits=N_SPLITS)
+    tr_idx, te_idx = _last_split_indices(df, tscv)
 
     # Step 3: Calibrate probabilities (sigmoid/isotonic transformation)
     cal = CalibratedClassifierCV(best_lr, method=CALIBRATION_METHOD, cv="prefit")
@@ -472,19 +473,6 @@ def _fit_classifier(
             best_f1, best_acc, best_th = f1, acc, float(th)
 
     # Step 7: Package results
-    report = {
-        "auc_val": float(auc),
-        "brier_val": float(br),
-        "logloss_val": float(ll),
-        "accuracy_at_0p5": float(acc50),
-        "reliability_bins": reliab,
-        "optimal_threshold": best_th,
-        "optimal_threshold_f1": float(best_f1),
-        "optimal_threshold_acc": float(best_acc),
-        "best_params": rs.best_params_,
-    }
-    return ClfResult(model=cal, report=report, threshold=best_th)
-
     report = {
         "auc_val": float(auc),
         "brier_val": float(br),
@@ -553,8 +541,18 @@ def main() -> None:
     if df.empty:
         raise RuntimeError(f"Dataset is empty: {data_path}")
     
-    # Convert 'home_win' column from string 'true'/'false' to binary int (1/0)
-    df['home_win'] = (df['home_win'] == 'true').astype(int)
+    # Drop rows with missing targets (models and MAE require finite y)
+    df = df.dropna(subset=[TARGET_HOME, TARGET_AWAY]).reset_index(drop=True)
+    
+    # Drop rows with missing home_win labels (classifier needs both classes)
+    df = df.dropna(subset=["home_win"]).reset_index(drop=True)
+    
+    # Sort chronologically for time-aware cross-validation
+    df = df.sort_values(['season', 'week']).reset_index(drop=True)
+    
+    # Convert 'home_win' column from boolean True/False to binary int (1/0)
+    df['home_win'] = df['home_win'].astype(int)
+    
     train_df = df
 
     # ---------------------------------------
@@ -581,13 +579,13 @@ def main() -> None:
     # Step 3: Train prediction models
     # ---------------------------------------
     log.info("Training home score regressor...")
-    res_home = _fit_regressor(X_full, y_home, pre)
+    res_home = _fit_regressor(X_full, y_home, pre, train_df)
     
     log.info("Training away score regressor...")
-    res_away = _fit_regressor(X_full, y_away, pre)
+    res_away = _fit_regressor(X_full, y_away, pre, train_df)
     
     log.info("Training win probability classifier...")
-    clf_res = _fit_classifier(X_full, y_clf)
+    clf_res = _fit_classifier(X_full, y_clf, train_df)
 
     # ---------------------------------------
     # Step 4: Generate validation error analysis
