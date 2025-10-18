@@ -572,7 +572,7 @@ def predict_game(payload: PredictionRequest) -> PredictionResponse:
                     if hasattr(value, "predict"):
                         log.debug("Using predictor from dict key: %s", key)
                         return value.predict(X)
-            if hasattr(bundle, "predict"):
+            if not isinstance(bundle, dict) and hasattr(bundle, "predict"):
                 return bundle.predict(X)
             raise AttributeError(f"Score model lacks predict method. Type: {type(bundle)}")
 
