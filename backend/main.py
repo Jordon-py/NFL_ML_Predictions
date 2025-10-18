@@ -354,54 +354,125 @@ def get_current_nfl_context() -> Dict[str, Any]:
 def _build_future_row(
     df: pd.DataFrame, home: str, away: str, season: int, week: int
 ) -> pd.Series:
+    """
+    Build engineered features for a future game using historical data.
+    Computes rolling averages (3-game and 5-game windows) for both teams.
+    """
     local = df.copy()
     local["time_key"] = local["season"].astype(int) * 100 + local["week"].astype(int)
     cutoff = season * 100 + week
 
-    def latest_team_features(team: str, out_prefix: str) -> Dict[str, Any]:
-        mask = (local["home_team"] == team) | (local["away_team"] == team)
-        history = local[mask & (local["time_key"] < cutoff)]
+    def compute_team_features(team: str, prefix: str) -> Dict[str, Any]:
+        """Compute prior features for a team using their last N completed games."""
+        # Find all games where this team played
+        team_mask = (local["home_team"] == team) | (local["away_team"] == team)
+        # Only use completed games before the target game
+        completed_mask = (
+            local["home_points_for"].notna() & 
+            local["away_points_for"].notna() & 
+            (local["time_key"] < cutoff)
+        )
+        history = local[team_mask & completed_mask].sort_values("time_key")
+        
         if history.empty:
-            raise ValueError(f"No prior data for {team} before {season}-W{week}")
-        last = history.sort_values("time_key").iloc[-1]
-        was_home = str(last["home_team"]) == team
-        source_prefix = "home_" if was_home else "away_"
-        out: Dict[str, Any] = {}
-        for col in local.columns:
-            if not col.startswith(("home_prior_", "away_prior_")):
-                continue
-            if col.startswith(source_prefix):
-                suffix = col[len(source_prefix) :]
-                out[f"{out_prefix}{suffix}"] = last.get(col)
-        return out
-
-    home_features = latest_team_features(home, "home_")
-    away_features = latest_team_features(away, "away_")
-    feature_row: Dict[str, Any] = {**home_features, **away_features}
-
-    prior_suffixes = {
-        k[len("home_prior_") :] for k in feature_row if k.startswith("home_prior_")
-    }
-    for suf in prior_suffixes:
-        hk = f"home_prior_{suf}"
-        ak = f"away_prior_{suf}"
-        if hk in feature_row and ak in feature_row:
-            h_val, a_val = feature_row.get(hk), feature_row.get(ak)
-            if h_val is not None and a_val is not None:
-                feature_row[f"home_minus_away_{suf}"] = h_val - a_val
-
-    for static_col in (
-        "home_moneyline_prob",
-        "away_moneyline_prob",
-        "moneyline_prob_diff",
-        "spread_line",
-        "total_line",
-        "home_rest",
-        "away_rest",
-        "rest_diff",
-    ):
-        feature_row.setdefault(static_col, np.nan)
-
+            raise ValueError(f"No prior data for {team} before {season} Week {week}")
+        
+        features = {}
+        
+        # Get last 5 games for 5-game averages, last 3 for 3-game averages
+        last_5 = history.tail(5)
+        last_3 = history.tail(3)
+        
+        # Helper to extract team's stats from a game row
+        def get_team_stats(row, team_abbr):
+            is_home = row["home_team"] == team_abbr
+            if is_home:
+                return {
+                    "pf": row.get("home_points_for", np.nan),
+                    "pa": row.get("away_points_for", np.nan),
+                    "win": 1 if row.get("winner") == team_abbr else 0,
+                }
+            else:
+                return {
+                    "pf": row.get("away_points_for", np.nan),
+                    "pa": row.get("home_points_for", np.nan),
+                    "win": 1 if row.get("winner") == team_abbr else 0,
+                }
+        
+        # Compute 3-game averages
+        if len(last_3) >= 1:
+            stats_3 = [get_team_stats(row, team) for _, row in last_3.iterrows()]
+            features[f"{prefix}prior_pf_avg_3"] = np.mean([s["pf"] for s in stats_3 if not pd.isna(s["pf"])])
+            features[f"{prefix}prior_pa_avg_3"] = np.mean([s["pa"] for s in stats_3 if not pd.isna(s["pa"])])
+            features[f"{prefix}prior_win_pct_3"] = np.mean([s["win"] for s in stats_3])
+        
+        # Compute 5-game averages
+        if len(last_5) >= 1:
+            stats_5 = [get_team_stats(row, team) for _, row in last_5.iterrows()]
+            features[f"{prefix}prior_pf_avg_5"] = np.mean([s["pf"] for s in stats_5 if not pd.isna(s["pf"])])
+            features[f"{prefix}prior_pa_avg_5"] = np.mean([s["pa"] for s in stats_5 if not pd.isna(s["pa"])])
+            features[f"{prefix}prior_win_pct_5"] = np.mean([s["win"] for s in stats_5])
+        
+        # For advanced stats, try to use the most recent values from the dataset
+        # (these are pre-computed in game_features.csv)
+        last_game = history.iloc[-1]
+        was_home_last = last_game["home_team"] == team
+        source_prefix = "home_" if was_home_last else "away_"
+        
+        # Copy advanced prior stats from last game
+        for stat_name in [
+            "off_epa_per_play", "off_success_rate", "off_explosive_rate",
+            "off_third_down_pct", "off_pass_over_expected",
+            "def_success_rate_allowed", "def_explosive_rate_allowed",
+            "def_epa_per_play", "def_takeaway_rate", "off_turnover_rate"
+        ]:
+            for window in ["3", "5"]:
+                col_name = f"{source_prefix}prior_{stat_name}_{window}"
+                if col_name in last_game.index and pd.notna(last_game[col_name]):
+                    features[f"{prefix}prior_{stat_name}_{window}"] = last_game[col_name]
+        
+        return features
+    
+    # Get features for both teams
+    home_features = compute_team_features(home, "home_")
+    away_features = compute_team_features(away, "away_")
+    
+    # Merge all features
+    feature_row = {**home_features, **away_features}
+    
+    # Compute differential features (home - away)
+    for stat_suffix in [
+        "pf_avg_3", "pa_avg_3", "win_pct_3",
+        "off_epa_per_play_3", "off_success_rate_3", "off_explosive_rate_3",
+        "off_third_down_pct_3", "off_pass_over_expected_3",
+        "def_success_rate_allowed_3", "def_explosive_rate_allowed_3",
+        "def_epa_per_play_3", "def_takeaway_rate_3", "off_turnover_rate_3",
+        "pf_avg_5", "pa_avg_5", "win_pct_5",
+        "off_epa_per_play_5", "off_success_rate_5", "off_explosive_rate_5",
+        "off_third_down_pct_5", "off_pass_over_expected_5",
+        "def_success_rate_allowed_5", "def_explosive_rate_allowed_5",
+        "def_epa_per_play_5", "def_takeaway_rate_5", "off_turnover_rate_5",
+    ]:
+        home_key = f"home_prior_{stat_suffix}"
+        away_key = f"away_prior_{stat_suffix}"
+        if home_key in feature_row and away_key in feature_row:
+            h_val = feature_row[home_key]
+            a_val = feature_row[away_key]
+            if not pd.isna(h_val) and not pd.isna(a_val):
+                feature_row[f"home_minus_away_{stat_suffix}"] = h_val - a_val
+    
+    # Add betting/rest features with neutral defaults
+    feature_row["home_moneyline_prob"] = 0.5  # Neutral betting line
+    feature_row["away_moneyline_prob"] = 0.5
+    feature_row["moneyline_prob_diff"] = 0.0
+    feature_row["spread_line"] = 0.0  # Pick'em
+    feature_row["total_line"] = 45.0  # Average NFL total
+    feature_row["home_rest"] = 7  # Standard week rest
+    feature_row["away_rest"] = 7
+    feature_row["rest_diff"] = 0
+    feature_row["home_game_date"] = f"{season}-W{week:02d}"  # Categorical feature
+    
+    log.debug("Built future row for %s vs %s: %d features", home, away, len(feature_row))
     return pd.Series(feature_row)
 
 
@@ -537,49 +608,53 @@ def predict_game(payload: PredictionRequest) -> PredictionResponse:
             mask &= dataset_df["is_home"].astype(bool)
 
         rows = dataset_df.loc[mask]
-        if rows.empty:
-            # Try to find the game without the completed score check
-            mask_any = (
-                (dataset_df["season"] == season)
-                & (dataset_df["week"] == week)
-                & (dataset_df["home_team"] == h)
-                & (dataset_df["away_team"] == a)
-            )
-            rows_any = dataset_df.loc[mask_any]
-            if rows_any.empty:
-                raise HTTPException(
-                    400,
-                    f"No data found for {h} vs {a} in {season} Week {week}. "
-                    f"This matchup may not exist in the dataset."
-                )
-            row = rows_any.iloc[0]
-        else:
+        
+        # Try to get existing row from dataset
+        if not rows.empty:
             row = rows.iloc[0]
-            
-        # Check if game is already completed
-        if pd.notna(row.get("home_points_for")) and pd.notna(row.get("away_points_for")):
-            raise HTTPException(400, "Game completed; no prediction needed.")
-        
-
-        feature_names = _normalize_feature_cols(model_objects["raw_feature_columns"])
-        data = {c: [row[c]] if c in row.index else [np.nan] for c in feature_names}
-        
-        # Check if too many features are missing
-        missing = [c for c in feature_names if c not in row.index or pd.isna(row[c])]
-        if missing:
-            missing_count = len(missing)
-            total_count = len(feature_names)
-            missing_pct = (missing_count / total_count) * 100
-            log.warning(
-                "Missing %d/%d (%.1f%%) features for %s vs %s: %s", 
-                missing_count, total_count, missing_pct, h, a, missing[:10]
-            )
-            if missing_pct > 50:
+            # Check if game is already completed
+            if pd.notna(row.get("home_points_for")) and pd.notna(row.get("away_points_for")):
+                raise HTTPException(400, "Game completed; no prediction needed.")
+        else:
+            # Game not in dataset - build features dynamically for future game
+            log.info("Building features for future game: %s vs %s (%d Week %d)", h, a, season, week)
+            try:
+                row = _build_future_row(dataset_df, h, a, season, week)
+            except ValueError as e:
                 raise HTTPException(
                     400,
-                    f"Insufficient data: {missing_count}/{total_count} features missing ({missing_pct:.1f}%). "
-                    f"This game may not have enough historical data for prediction."
+                    f"Cannot predict {h} vs {a} ({season} Week {week}): {e}"
                 )
+        
+        # Now extract features for model input
+        # Note: game_features.csv columns are the actual feature names we need
+        all_dataset_cols = set(dataset_df.columns) | set(row.index)
+        
+        # Build feature vector using all available prior/differential columns
+        feature_cols = [
+            col for col in all_dataset_cols 
+            if any(col.startswith(prefix) for prefix in [
+                "home_prior_", "away_prior_", "home_minus_away_",
+                "home_moneyline", "away_moneyline", "moneyline_prob",
+                "spread_", "total_", "rest_", "home_game_date"
+            ])
+        ]
+        
+        # Create feature DataFrame
+        data = {}
+        for c in feature_cols:
+            if c in row.index:
+                val = row[c]
+                data[c] = [val if not pd.isna(val) else np.nan]
+            else:
+                data[c] = [np.nan]
+        
+        if not data:
+            raise HTTPException(
+                400,
+                f"No valid features could be extracted for {h} vs {a}. "
+                f"Historical data may be insufficient."
+            )
 
         # Models are Pipelines that include preprocessing, so pass raw DataFrame directly
         X = pd.DataFrame(data)
