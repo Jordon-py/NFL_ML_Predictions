@@ -536,19 +536,48 @@ def predict_game(payload: PredictionRequest) -> PredictionResponse:
 
         rows = dataset_df.loc[mask]
         if rows.empty:
-            row = _build_future_row(dataset_df, h, a, season, week)
+            # Try to find the game without the completed score check
+            mask_any = (
+                (dataset_df["season"] == season)
+                & (dataset_df["week"] == week)
+                & (dataset_df["home_team"] == h)
+                & (dataset_df["away_team"] == a)
+            )
+            rows_any = dataset_df.loc[mask_any]
+            if rows_any.empty:
+                raise HTTPException(
+                    400,
+                    f"No data found for {h} vs {a} in {season} Week {week}. "
+                    f"This matchup may not exist in the dataset."
+                )
+            row = rows_any.iloc[0]
         else:
             row = rows.iloc[0]
-            if pd.notna(row.get("home_points_for")) and pd.notna(
-                row.get("away_points_for")
-            ):
-                raise HTTPException(400, "Game completed; no prediction.")
+            
+        # Check if game is already completed
+        if pd.notna(row.get("home_points_for")) and pd.notna(row.get("away_points_for")):
+            raise HTTPException(400, "Game completed; no prediction needed.")
         
 
         feature_names = _normalize_feature_cols(model_objects["raw_feature_columns"])
         data = {c: [row[c]] if c in row.index else [np.nan] for c in feature_names}
-        if missing := [c for c in feature_names if c not in row.index]:
-            log.warning("Missing features filled with NaN: %s", missing)
+        
+        # Check if too many features are missing
+        missing = [c for c in feature_names if c not in row.index or pd.isna(row[c])]
+        if missing:
+            missing_count = len(missing)
+            total_count = len(feature_names)
+            missing_pct = (missing_count / total_count) * 100
+            log.warning(
+                "Missing %d/%d (%.1f%%) features for %s vs %s: %s", 
+                missing_count, total_count, missing_pct, h, a, missing[:10]
+            )
+            if missing_pct > 50:
+                raise HTTPException(
+                    400,
+                    f"Insufficient data: {missing_count}/{total_count} features missing ({missing_pct:.1f}%). "
+                    f"This game may not have enough historical data for prediction."
+                )
 
         # Models are Pipelines that include preprocessing, so pass raw DataFrame directly
         X = pd.DataFrame(data)
