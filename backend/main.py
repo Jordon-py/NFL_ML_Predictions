@@ -550,7 +550,8 @@ def predict_game(payload: PredictionRequest) -> PredictionResponse:
         if missing := [c for c in feature_names if c not in row.index]:
             log.warning("Missing features filled with NaN: %s", missing)
 
-        X = model_objects["preprocessor"].transform(pd.DataFrame(data))
+        # Models are Pipelines that include preprocessing, so pass raw DataFrame directly
+        X = pd.DataFrame(data)
 
         # Score regressors
         # Models are small ensembles saved as dicts: {"hgbr", "ridge", "weight"} from training
