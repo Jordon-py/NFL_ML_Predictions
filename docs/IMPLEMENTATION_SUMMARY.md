@@ -9,11 +9,13 @@
 ## 📊 What Was Accomplished
 
 ### 1. Fixed Dataset Mismatch Issue
+
 **Commit**: `b33e4337a` - "fix: use game_features.csv with engineered features"
 
 **Problem**: API was loading `merged_game_features.csv` (129 raw stat columns) but models expected `game_features.csv` (97 engineered features).
 
 **Solution**: Changed `DEFAULT_DATASET` path in `backend/main.py`:
+
 ```python
 # Before: merged_game_features.csv (raw stats only)
 # After:  game_features.csv (prior averages, differentials, betting data)
@@ -25,13 +27,15 @@ DEFAULT_DATASET = DATA_DIR / "game_features.csv"
 ---
 
 ### 2. Implemented Dynamic Feature Building
+
 **Commit**: `10f0b9801` - "feat: implement dynamic feature building for future game predictions"
 
 **Problem**: Future/scheduled games don't exist in historical dataset, so predictions failed with "No data found" errors.
 
 **Solution**: Completely rewrote `_build_future_row()` function to compute features dynamically:
 
-#### Key Features Implemented:
+#### Key Features Implemented
+
 - ✅ **Rolling Averages**: Computes 3-game and 5-game averages for:
   - Points for/against (`prior_pf_avg_3`, `prior_pa_avg_5`)
   - Win percentage (`prior_win_pct_3`, `prior_win_pct_5`)
@@ -50,8 +54,10 @@ DEFAULT_DATASET = DATA_DIR / "game_features.csv"
 
 - ✅ **Error Handling**: Validates sufficient historical data exists before building features
 
-#### Integration Changes:
+#### Integration Changes
+
 Updated `predict_game()` endpoint logic:
+
 ```python
 # OLD: Throw error if game not in dataset
 if rows_any.empty:
@@ -68,11 +74,13 @@ if rows.empty:
 ---
 
 ### 3. Created Comprehensive Testing Documentation
+
 **Commit**: `c0edcaca0` - "docs: add comprehensive testing guide"
 
 **File**: `docs/FUTURE_PREDICTION_TESTING.md` (313 lines)
 
 **Contents**:
+
 - 🧪 Step-by-step testing instructions
 - 🔍 Verification checklist
 - 📊 Expected outputs and log messages
@@ -85,6 +93,7 @@ if rows.empty:
 ## 🎨 Code Changes Summary
 
 ### Files Modified: 1
+
 - **`backend/main.py`**: 155 insertions, 80 deletions
 
 ### Functions Changed: 2
@@ -99,7 +108,8 @@ if rows.empty:
    - Improved feature extraction using column prefix matching
    - Better error messages with specific failure reasons
 
-### Key Improvements:
+### Key Improvements
+
 - ✅ **Minimal Changes**: Only touched 2 functions, no refactoring
 - ✅ **Backward Compatible**: Historical games still work exactly as before
 - ✅ **Well Documented**: Inline comments explain each step
@@ -109,14 +119,16 @@ if rows.empty:
 
 ## 📈 Expected Behavior
 
-### Before Implementation:
+### Before Implementation
+
 ```json
 {
   "detail": "No data found for KC vs LV in 2025 Week 7. This matchup may not exist in the dataset."
 }
 ```
 
-### After Implementation:
+### After Implementation
+
 ```json
 {
   "home_score": 24.3,
@@ -133,18 +145,22 @@ if rows.empty:
 ## 🧪 Testing Status
 
 ### ❌ Cannot Test Currently
+
 **Reason**: Python environment has broken `click` module dependency
+
 ```
 ModuleNotFoundError: No module named 'click.core'
 ```
 
 ### ✅ Code Quality Verified
+
 - [x] **Syntax**: No errors (`python -m py_compile` passed)
 - [x] **Logic**: Reviewed and validated
 - [x] **Integration**: Properly connected to predict_game()
 - [x] **Documentation**: Complete testing guide created
 
 ### 📋 Testing Instructions
+
 See `docs/FUTURE_PREDICTION_TESTING.md` for complete testing guide once Python environment is fixed:
 
 ```powershell
@@ -192,6 +208,7 @@ For **KC @ LV (2025 Week 7)**:
 7. **Return pd.Series** with ~85 features
 
 ### Model Input
+
 - **85 features** total:
   - 26 home_prior_* features (3-game + 5-game windows)
   - 26 away_prior_* features
@@ -203,17 +220,20 @@ For **KC @ LV (2025 Week 7)**:
 
 ## 🚀 Next Steps
 
-### Immediate (Before Testing):
+### Immediate (Before Testing)
+
 1. Fix Python environment: `pip install --force-reinstall click`
 2. Start backend server
 3. Run test suite from `docs/FUTURE_PREDICTION_TESTING.md`
 
-### After Testing Passes:
+### After Testing Passes
+
 1. Monitor prediction accuracy for Week 7 games
 2. Compare with actual results after games complete
 3. Iterate on feature weights if needed
 
-### Future Enhancements:
+### Future Enhancements
+
 1. **Live Betting Data**: Integrate real-time odds APIs
 2. **Team Strength Ratings**: Add Elo/Glicko ratings
 3. **Home Field Advantage**: Adjust for specific stadiums
@@ -237,18 +257,21 @@ c0edcaca0 - docs: add comprehensive testing guide for future game predictions
 
 ## 🎓 Learning Points
 
-### What Worked Well:
+### What Worked Well
+
 - ✅ **Step-by-step approach**: Fixed dataset first, then features
 - ✅ **Minimal changes**: Only touched necessary functions
 - ✅ **Clear separation**: Feature building isolated in helper function
 - ✅ **Good documentation**: Testing guide created upfront
 
-### What Could Be Better:
+### What Could Be Better
+
 - ⚠️ **Testing**: Python env issues prevented live testing
 - ⚠️ **Metadata**: `metadata.json` still has wrong feature list (cosmetic issue)
 - ⚠️ **Defaults**: Betting lines use neutral values (could improve accuracy)
 
-### Key Insights:
+### Key Insights
+
 - 🧠 **Data pipeline**: Training and inference must use identical features
 - 🧠 **Feature engineering**: Rolling averages are powerful but need historical data
 - 🧠 **Error messages**: Specific errors (50% missing features) help debugging

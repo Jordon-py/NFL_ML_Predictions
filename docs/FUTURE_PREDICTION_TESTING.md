@@ -15,6 +15,7 @@ This implementation enables the NFL prediction API to make predictions for **fut
 **Purpose**: Dynamically computes engineered features for future games using historical team performance data.
 
 **Key Features**:
+
 - ✅ Computes **rolling averages** (3-game and 5-game windows)
 - ✅ Extracts **team-specific stats** from historical games
 - ✅ Handles **home/away context** correctly
@@ -23,6 +24,7 @@ This implementation enables the NFL prediction API to make predictions for **fut
 - ✅ Validates **sufficient historical data** exists
 
 **Logic Flow**:
+
 ```python
 1. Filter historical games before target date (time_key < cutoff)
 2. For each team:
@@ -39,18 +41,21 @@ This implementation enables the NFL prediction API to make predictions for **fut
 **Location**: `backend/main.py` lines 610-658
 
 **Changes**:
+
 - ✅ First tries to find game in existing dataset
 - ✅ If not found, calls `_build_future_row()` to generate features
 - ✅ Extracts features using column prefix matching
 - ✅ Improved error handling with specific messages
 
 **Before**:
+
 ```python
 if rows_any.empty:
     raise HTTPException(400, "No data found for {h} vs {a}...")
 ```
 
 **After**:
+
 ```python
 if rows.empty:
     log.info("Building features for future game...")
@@ -84,6 +89,7 @@ python -m uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
 **Expected Output**:
+
 ```
 INFO:     Uvicorn running on http://127.0.0.1:8000
 INFO:     api Startup: loading models and dataset
@@ -98,6 +104,7 @@ Invoke-RestMethod -Uri 'http://127.0.0.1:8000/health' -Method GET
 ```
 
 **Expected Response**:
+
 ```json
 {
   "status": "healthy",
@@ -114,6 +121,7 @@ Invoke-RestMethod -Uri 'http://127.0.0.1:8000/predict' -Method POST -Body $body 
 ```
 
 **Expected Response**:
+
 ```json
 {
   "detail": "Game completed; no prediction needed."
@@ -139,6 +147,7 @@ Invoke-RestMethod -Uri 'http://127.0.0.1:8000/predict' -Method POST -Body $body 
 ```
 
 **Expected Response** (example):
+
 ```json
 {
   "home_score": 24.3,
@@ -157,6 +166,7 @@ Invoke-RestMethod -Uri 'http://127.0.0.1:8000/predict/next-week' -Method GET
 ```
 
 **Expected Response**:
+
 ```json
 {
   "context": {
@@ -232,6 +242,7 @@ When predicting a future game, check `backend/logs/api.log`:
 For a game **KC @ DEN (2025 Week 7)**:
 
 1. **Find Historical Games**:
+
    ```python
    # KC's last 5 games before 2025 Week 7
    KC_games = dataset[
@@ -242,6 +253,7 @@ For a game **KC @ DEN (2025 Week 7)**:
    ```
 
 2. **Compute Rolling Averages**:
+
    ```python
    home_prior_pf_avg_3 = mean([KC_game5.pf, KC_game4.pf, KC_game3.pf])
    home_prior_pa_avg_3 = mean([KC_game5.pa, KC_game4.pa, KC_game3.pa])
@@ -249,6 +261,7 @@ For a game **KC @ DEN (2025 Week 7)**:
    ```
 
 3. **Extract Advanced Stats** from most recent game:
+
    ```python
    home_prior_off_epa_per_play_3 = KC_game5.home_prior_off_epa_per_play_3
    home_prior_def_explosive_rate_3 = KC_game5.home_prior_def_explosive_rate_3
@@ -256,6 +269,7 @@ For a game **KC @ DEN (2025 Week 7)**:
    ```
 
 4. **Compute Differentials**:
+
    ```python
    home_minus_away_pf_avg_3 = home_prior_pf_avg_3 - away_prior_pf_avg_3
    home_minus_away_win_pct_5 = home_prior_win_pct_5 - away_prior_win_pct_5
