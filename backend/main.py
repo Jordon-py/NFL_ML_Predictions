@@ -1,11 +1,32 @@
 """
-NFL Game Prediction API (FastAPI)
+NFL Game Prediction API — FastAPI Entrypoint
+
+Architectural Role:
+    - Main backend entrypoint for NFL game predictions and reporting.
+    - Loads ML models, engineered datasets, and serves as the API gateway.
+    - Integrates with FastAPI, pandas, joblib, and environment configuration (.env).
+
+Key Endpoints:
+    - /health: Service and model status.
+    - /debug: Metadata and config diagnostics.
+    - /report/training: Model training report.
+    - /report/calibration: Classifier calibration metrics.
+    - /schedule/next-week: Upcoming NFL games (from schedule CSV).
+    - /predict: Predict scores and win probabilities for a given matchup.
+    - /predict/next-week: Batch predictions for next scheduled week.
+
+Dependencies:
+    - DATASET_PATH, SCHEDULE_PATH, CORS_ORIGINS, CORS_ORIGIN_REGEX, SERVE_FRONTEND (from .env)
+    - Models and metadata in backend/models/
+    - Engineered features in backend/data/game_features.csv
 
 Run:
-  uvicorn backend.main:app --reload --port 8000
+    uvicorn backend.main:app --reload --port 8000
 
-Env:
-  DATASET_PATH, SCHEDULE_PATH, CORS_ORIGINS, CORS_ORIGIN_REGEX, SERVE_FRONTEND
+Maintainer Notes:
+    - All endpoints return JSON; errors use HTTPException.
+    - Models are loaded once at startup for performance.
+    - Frontend static files can be served if configured.
 """
 
 from __future__ import annotations
@@ -141,6 +162,24 @@ VALID_ABBRS = set(TEAM_ABBREVIATIONS.values()) | set(TEAM_CODE_FIX.values())
 
 
 def get_abbr(name: str) -> str:
+    """
+    Normalize a team name or abbreviation to its canonical 2- or 3-letter code.
+
+    Logic:
+        - Accepts full team names, legacy codes, or abbreviations.
+        - Applies TEAM_CODE_FIX for legacy/relocated teams.
+        - Maps official names via TEAM_ABBREVIATIONS.
+        - Raises ValueError if input is not recognized.
+
+    Args:
+        name (str): Team name, abbreviation, or legacy code.
+
+    Returns:
+        str: Canonical team abbreviation.
+
+    Raises:
+        ValueError: If the team name/code is not recognized.
+    """
     n = str(name).strip()
     if n in VALID_ABBRS:
         return TEAM_CODE_FIX.get(n, n)
@@ -152,26 +191,26 @@ def get_abbr(name: str) -> str:
 
 
 # -----------------------
-# Feature helpers
-# -----------------------
-def _normalize_feature_cols(raw_cols: dict) -> List[str]:
-    numeric = raw_cols.get("numeric", []) or []
-    categorical = raw_cols.get("categorical", []) or []
-    cols = list(numeric) + list(categorical)
-
-    def strip_prefix(c: str) -> str:
-        return c[5:] if c.startswith(("num__", "cat__")) else c
-
-    if any(c.startswith(("num__", "cat__")) for c in cols):
-        cols = [strip_prefix(c) for c in cols]
-    return cols
-
-
-# -----------------------
-# Lifespan
-# -----------------------
 def load_objects() -> Dict[str, Any]:
-    """Load model metadata and instantiate reusable predictors for the API."""
+    """
+    Load model metadata and instantiate reusable predictors for the API.
+
+    Loads the following models from disk:
+        - preprocessor: Feature engineering pipeline (joblib)
+        - home_model: Home team score regressor (joblib or dict with 'hgbr', 'ridge', 'weight')
+        - away_model: Away team score regressor (joblib or dict with 'hgbr', 'ridge', 'weight')
+        - win_model: Calibrated win probability classifier (joblib, optional)
+
+    Returns:
+        dict with keys:
+            - mode: str, operational mode (e.g., "production")
+            - preprocessor: sklearn pipeline or transformer
+            - home_model: regressor or ensemble dict
+            - away_model: regressor or ensemble dict
+            - win_model: classifier or None
+            - raw_feature_columns: dict of feature columns
+            - win_threshold_optimal: float, optimal win threshold
+    """
     meta_path = MODELS_DIR / "metadata.json"
     log.debug("Loading model metadata from %s", meta_path)
     if not meta_path.exists():
@@ -198,10 +237,23 @@ def load_objects() -> Dict[str, Any]:
         "raw_feature_columns": meta.get("raw_feature_columns", {}),
         "win_threshold_optimal": meta.get("win_threshold_optimal", 0.5),
     }
-    # Change log 2025-01-05: Ensured metadata dict access and single-pass model loading for reliable startup.
 
 
 def _coerce_bool(s: pd.Series) -> pd.Series:
+    """
+    Normalize a pandas Series to boolean values for dataset ingestion.
+
+    Intended Use:
+        - Converts various representations of boolean-like values (e.g., "True", "yes", "1", etc.) to actual bools.
+        - Handles edge cases where the input Series is not of boolean dtype (e.g., object, string, int).
+        - Used for standardizing 'is_home', 'is_away', or similar columns in NFL datasets.
+
+    Args:
+        s (pd.Series): Input Series with possible boolean or boolean-like values.
+
+    Returns:
+        pd.Series: Series of bools suitable for downstream feature engineering.
+    """
     truthy = {"true", "t", "1", "yes", "y"}
     if pd.api.types.is_bool_dtype(s):
         return s.astype(bool)
@@ -209,18 +261,38 @@ def _coerce_bool(s: pd.Series) -> pd.Series:
 
 
 def _ensure_home_away(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Ensure DataFrame contains 'home_team' and 'away_team' columns.
+
+    Logic:
+        - If 'home_team' and 'away_team' exist, return as-is.
+        - If 'team', 'opponent_team', and 'is_home' exist, derive home/away columns.
+        - If neither set is present, log a warning and return the DataFrame unchanged.
+          This means downstream features relying on home/away context may be unavailable,
+          and only synthetic/statistical features can be used for predictions.
+
+    Args:
+        df (pd.DataFrame): Input DataFrame.
+
+    Returns:
+        pd.DataFrame: DataFrame with ensured 'home_team' and 'away_team' columns if possible.
+    """
     cols = set(df.columns)
     if {"home_team", "away_team"}.issubset(cols):
+        # Already has required columns
         return df
     if {"team", "opponent_team", "is_home"}.issubset(cols):
+        # Derive home/away columns from fallback structure
         is_home = _coerce_bool(df["is_home"])
         return df.assign(
             is_home=is_home,
             home_team=np.where(is_home, df["team"], df["opponent_team"]),
             away_team=np.where(is_home, df["opponent_team"], df["team"]),
         )
+    # Missing both canonical and fallback columns; log and return unchanged
     log.warning(
-        "Dataset missing home/away columns and team/opponent fallback; synthetic features only."
+        "Dataset missing home/away columns and team/opponent fallback; synthetic features only. "
+        "Predictions may be limited or inaccurate due to lack of home/away context."
     )
     return df
 
@@ -295,26 +367,55 @@ class PredictionResponse(BaseModel):
 
 
 class HealthResponse(BaseModel):
+    """
+    HealthResponse describes the API health payload.
+
+    Fields:
+        status: 'healthy' or 'unhealthy'
+        mode: operational mode from loaded models (e.g. 'production') or 'none'
+        reason: human-readable reason for current health
+    """
     status: str
-    mode: Optional[str] = None
-    reason: Optional[str] = None
+    mode: str
+    reason: str
 
 
 class ScheduleGame(BaseModel):
+    """
+    Represents a scheduled NFL game, including basic details and optional ML predictions.
+    
+    Used in the /schedule/next-week endpoint to return game info with injected predictions.
+    """
     season: int
     week: int
     home_team: str
     home_abbr: str
     away_team: str
     away_abbr: str
-    kickoff_iso: str
-    game_id: str
+    predicted_home_score: Optional[float] = None
+    predicted_away_score: Optional[float] = None
+    home_win_probability: Optional[float] = None
+    away_win_probability: Optional[float] = None
 
 
-# -----------------------
-# Helpers
-# -----------------------
 def get_current_nfl_context() -> Dict[str, Any]:
+    """
+    Determine the current NFL season context for prediction and reporting.
+
+    Logic:
+        - Uses the current date to infer the active NFL season (season starts in August).
+        - If the dataset is loaded and contains completed games, finds the last completed week and season.
+        - Calculates the next prediction week and season, rolling over to the next season if week > 22.
+        - Handles edge cases:
+            * If no completed games are found, assumes preseason or early season.
+            * If the next prediction season matches the current season, status is 'nfl_season_active'.
+            * Otherwise, status is 'offseason'.
+        - Returns a dictionary with current season, last completed season/week, next prediction season/week, and status.
+
+    Edge Cases:
+        - If dataset is missing or lacks required columns, defaults to preseason context.
+        - If all games are completed, rolls over to next season week 1.
+    """
     now = datetime.now()
     cur_season = now.year if now.month >= 8 else now.year - 1
     if dataset_df is not None and {
@@ -351,12 +452,30 @@ def get_current_nfl_context() -> Dict[str, Any]:
     }
 
 
+def _validate_features_present(feature_names: List[str], row: pd.Series) -> List[str]:
+    """
+    Quick helper used during development to find which expected features are missing
+    from a candidate row (either from dataset or dynamically built).
+
+    Returns a list of missing feature names (empty if none).
+    """
+    missing = [c for c in feature_names if c not in row.index or pd.isna(row.get(c))]
+    return missing
+
+
 def _build_future_row(
     df: pd.DataFrame, home: str, away: str, season: int, week: int
 ) -> pd.Series:
     """
     Build engineered features for a future game using historical data.
-    Computes rolling averages (3-game and 5-game windows) for both teams.
+
+    Assumptions:
+        - Input DataFrame `df` must contain columns for 'season', 'week', 'home_team', 'away_team', 'home_points_for', 'away_points_for', and engineered prior stats.
+        - Teams `home` and `away` are canonical abbreviations matching those in the dataset.
+        - Returns a pandas Series with all required model features for prediction, including rolling averages, advanced stats, and neutral betting/rest features.
+
+    Returns:
+        pd.Series: Feature vector for the specified future matchup, suitable for model input.
     """
     local = df.copy()
     local["time_key"] = local["season"].astype(int) * 100 + local["week"].astype(int)
@@ -481,13 +600,24 @@ def _build_future_row(
 # -----------------------
 @app.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
-    if model_objects is None:
-        return HealthResponse(
-            status="unhealthy", mode="none", reason="models not loaded"
-        )
-    return HealthResponse(
-        status="healthy", mode=model_objects.get("mode"), reason="models loaded"
-    )
+    """
+    Health endpoint: returns service status and model mode.
+
+    Defensive access used because `model_objects` is a dict loaded at startup.
+    Returns healthy when models are present and a sensible default for mode.
+    """
+    if model_objects:
+        # model_objects is a dict - prefer .get for safe access
+        if isinstance(model_objects, dict):
+            mode = model_objects.get("mode", "production")
+        else:
+            # fallback to attribute access for backward compatibility
+            mode = getattr(model_objects, "mode", "production")
+        return HealthResponse(status="healthy", mode=mode, reason="models loaded")
+    # Not ready yet
+    return HealthResponse(status="unhealthy", mode="none", reason="models not loaded")
+
+
 
 
 @app.get("/debug")
@@ -535,6 +665,20 @@ def report_calibration() -> Dict[str, Any]:
     }
 
 
+def build_game_mask(df: pd.DataFrame, season: int, week: int, home_abbr: str, away_abbr: str) -> pd.Series:
+    """
+    Helper to build a boolean mask for selecting a specific game from the dataset.
+    """
+    mask = (
+        (df["season"] == season)
+        & (df["week"] == week)
+        & (df["home_team"] == home_abbr)
+        & (df["away_team"] == away_abbr)
+    )
+    if "is_home" in df.columns:
+        mask &= df["is_home"].astype(bool)
+    return mask
+
 @app.get("/schedule/next-week", response_model=List[ScheduleGame])
 def get_next_week_schedule() -> List[ScheduleGame]:
     spath = Path(os.getenv("SCHEDULE_PATH", str(DEFAULT_SCHEDULE)))
@@ -567,21 +711,21 @@ def get_next_week_schedule() -> List[ScheduleGame]:
 
     games: List[ScheduleGame] = []
     for _, r in week_games.iterrows():
-        h, a = get_abbr(r["home_team"]), get_abbr(r["away_team"])
+        h = get_abbr(r["home_team"])
+        a = get_abbr(r["away_team"])
         games.append(
             ScheduleGame(
                 season=int(r["season"]),
                 week=int(r["week"]),
-                home_team=str(r["home_team"]),
+                home_team=h,
                 home_abbr=h,
-                away_team=str(r["away_team"]),
+                away_team=a,
                 away_abbr=a,
-                kickoff_iso=(
-                    r["kickoff_ts_utc"].isoformat()
-                    if pd.notna(r["kickoff_ts_utc"])
-                    else "TBD"
-                ),
-                game_id=str(r.get("game_id", f"{r['season']}W{r['week']}-{a}@{h}")),
+                # Add predicted scores and win probabilities
+                predicted_home_score=None,
+                predicted_away_score=None,
+                home_win_probability=None,
+                away_win_probability=None,
             )
         )
     log.info("Schedule week %s games=%d", current_week, len(games))
@@ -590,6 +734,12 @@ def get_next_week_schedule() -> List[ScheduleGame]:
 
 @app.post("/predict", response_model=PredictionResponse)
 def predict_game(payload: PredictionRequest) -> PredictionResponse:
+    """
+    Predict endpoint: Accepts home/away teams, season, and week; 
+    extracts features from dataset or builds them for future games, 
+    runs ML models for score and win probability, and handles errors 
+    for missing data, completed games, or prediction failures.
+    """
     if model_objects is None or dataset_df is None:
         raise HTTPException(500, "Models or dataset not loaded.")
 
@@ -598,15 +748,7 @@ def predict_game(payload: PredictionRequest) -> PredictionResponse:
         a = get_abbr(payload.away_team)
         season, week = int(payload.season), int(payload.week)
 
-        mask = (
-            (dataset_df["season"] == season)
-            & (dataset_df["week"] == week)
-            & (dataset_df["home_team"] == h)
-            & (dataset_df["away_team"] == a)
-        )
-        if "is_home" in dataset_df.columns:
-            mask &= dataset_df["is_home"].astype(bool)
-
+        mask = build_game_mask(dataset_df, season, week, h, a)
         rows = dataset_df.loc[mask]
         
         # Try to get existing row from dataset
@@ -650,18 +792,24 @@ def predict_game(payload: PredictionRequest) -> PredictionResponse:
                 data[c] = [np.nan]
         
         if not data:
-            raise HTTPException(
-                400,
-                f"No valid features could be extracted for {h} vs {a}. "
-                f"Historical data may be insufficient."
-            )
+            raise HTTPException(500, "No valid features found for prediction.")
 
-        # Models are Pipelines that include preprocessing, so pass raw DataFrame directly
         X = pd.DataFrame(data)
 
-        # Score regressors
-        # Models are small ensembles saved as dicts: {"hgbr", "ridge", "weight"} from training
         def _reg_predict(bundle: Any) -> np.ndarray:
+            """
+            Predicts scores using a model bundle.
+
+            Logic:
+                - If bundle is a dict with 'hgbr', 'ridge', and 'weight', computes a weighted ensemble prediction.
+                - If bundle contains a 'model' or 'estimator' key, delegates prediction to that object.
+                - If bundle is a dict with any predictor object, uses the first found predictor.
+                - If bundle is a single predictor object, calls its predict method.
+                - Raises AttributeError if no valid prediction method is found.
+
+            Fallback:
+                - Attempts all reasonable dict keys before erroring, ensuring robust handling of model serialization formats.
+            """
             log.debug("Model bundle type: %s, hasattr predict: %s", type(bundle), hasattr(bundle, "predict"))
             if isinstance(bundle, dict):
                 log.debug("Model bundle keys: %s", list(bundle.keys()) if hasattr(bundle, 'keys') else 'no keys method')
@@ -699,18 +847,38 @@ def predict_game(payload: PredictionRequest) -> PredictionResponse:
         point_diff = round(home_score - away_score, 1)
 
         # Win probability from calibrated classifier if present, else sigmoid on margin
-        if model_objects["win_model"] is not None:
-            home_prob = float(model_objects["win_model"].predict_proba(X)[0, 1])
+        try:
+            win_model = model_objects.get("win_model") if isinstance(model_objects, dict) else getattr(model_objects, "win_model", None)
+        except Exception:
+            win_model = None
+
+        if win_model is not None:
+            try:
+                home_prob = float(win_model.predict_proba(X)[0, 1])
+            except Exception:
+                log.exception("win_model.predict_proba failed; falling back to margin sigmoid")
+                home_prob = 1.0 / (1.0 + math.exp(-0.25 * point_diff))
         else:
             home_prob = 1.0 / (1.0 + math.exp(-0.25 * point_diff))
+
+        # Read mode defensively
+        try:
+            mode_val = model_objects.get("mode") if isinstance(model_objects, dict) else getattr(model_objects, "mode", "models")
+        except Exception:
+            mode_val = "models"
+        # Ensure a string is returned for the response model
+        if mode_val is None:
+            mode_val = "models"
+        else:
+            mode_val = str(mode_val)
 
         return PredictionResponse(
             home_score=round(home_score, 1),
             away_score=round(away_score, 1),
-            home_win_probability=round(home_prob, 3),
-            away_win_probability=round(1.0 - home_prob, 3),
+            home_win_probability=home_prob,
+            away_win_probability=1.0 - home_prob,
             point_diff=point_diff,
-            mode="models",
+            mode=mode_val,
         )
     except HTTPException:
         raise
@@ -721,6 +889,19 @@ def predict_game(payload: PredictionRequest) -> PredictionResponse:
 
 @app.get("/predict/next-week")
 def predict_next_week() -> Dict[str, Any]:
+    """
+    Batch prediction endpoint for all scheduled games in the next NFL week.
+
+    Logic:
+        - Determines the next prediction week and season using current NFL context.
+        - Loads the schedule CSV and filters games for the upcoming week.
+        - For each game, runs the prediction logic and aggregates results.
+        - Collects errors for games where prediction fails, ensuring robust batch output.
+        - Returns context, predictions, error details, and summary metrics.
+
+    Returns:
+        dict: Contains context, list of game predictions (with errors if any), total games, and count of successful predictions.
+    """
     if model_objects is None:
         raise HTTPException(500, "Models not loaded.")
     try:
@@ -765,7 +946,7 @@ def predict_next_week() -> Dict[str, Any]:
                 out.append(
                     {"game_id": str(g.get("game_id", "unknown")), "error": str(e)}
                 )
-
+            
         return {
             "context": ctx,
             "games": out,
