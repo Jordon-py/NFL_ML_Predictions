@@ -128,6 +128,7 @@ def _infer_features(df: pd.DataFrame) -> Tuple[List[str], List[str]]:
     ignore = set(ID_COLS) | set(TIME_KEYS) | set(LEAK_BLOCKLIST)
     numeric: List[str] = []
     categorical: List[str] = []
+    cat_check = df['home_team'].unique()
     for c in df.columns:
         if c in ignore:
             continue
@@ -137,6 +138,7 @@ def _infer_features(df: pd.DataFrame) -> Tuple[List[str], List[str]]:
             numeric.append(c)
         else:
             categorical.append(c)
+        
     return numeric, categorical
 
 
@@ -174,113 +176,16 @@ def _split_for_calibration(tscv: TimeSeriesSplit, X: pd.DataFrame, y: pd.Series)
 
 
 def _fit_classifier(
-    X: pd.DataFrame,
-    y: pd.Series,
-    pre: ColumnTransformer,
-    random_state: int,
-) -> Tuple[Pipeline, Dict[str, float]]:
-    """
-    Fit a calibrated classifier pipeline using RandomizedSearchCV, with holdout evaluation.
-    
-    Purpose: Trains a LogisticRegression classifier with hyperparameter tuning,
-    applies isotonic calibration, and evaluates on a chronological holdout fold.
-    
-    Key Logic Flow:
-    1. Split data: Use training folds for hyperparameter search, last fold as holdout.
-    2. Perform hyperparameter search on training folds.
-    3. Calibrate the best model on training folds.
-    4. Evaluate calibrated model on holdout fold (ROC AUC, Brier score, log loss).
-    5. Return the calibrated pipeline and holdout metrics.
-    
-    Dependencies: Requires scikit-learn (RandomizedSearchCV, CalibratedClassifierCV, metrics).
-    """
-    tscv = TimeSeriesSplit(n_splits=N_SPLITS)
-    train_idx, calib_tr, calib_va = _split_for_calibration(tscv, X, y)
-    X_train = X.iloc[train_idx]
-    y_train = y.iloc[train_idx]
-    X_holdout = X.iloc[calib_va]
-    y_holdout = y.iloc[calib_va]
-    
-    base = Pipeline([
-        ("pre", pre),
-        ("clf", LogisticRegression(
-            random_state=random_state,
-            max_iter=1000,  # Increased for convergence on larger datasets
-        )),
-    ])
-    
-    rs = RandomizedSearchCV(
-        estimator=base,
-        param_distributions=CLF_PARAM_DISTS,
-        n_iter=20,
-        cv=TimeSeriesSplit(n_splits=N_SPLITS - 1),  # Use remaining folds for CV
-        scoring="neg_brier_score",
-        n_jobs=-1,
-        random_state=random_state,
-        verbose=0,
-        refit=True,
-    )
-    rs.fit(X_train, y_train)
-    
-    best_pipeline = cast(Pipeline, rs.best_estimator_)
-    
-    # Calibrate on training folds
-    cal = CalibratedClassifierCV(best_pipeline, method="isotonic", cv="prefit")
-    cal.fit(X_train, y_train)
-    
-    # Evaluate on holdout
-    y_prob = cal.predict_proba(X_holdout)[:, 1]
-    y_pred = cal.predict(X_holdout)
-    holdout_metrics = {
-        "roc_auc": float(roc_auc_score(y_holdout, y_prob)),
-        "brier_score": float(brier_score_loss(y_holdout, y_prob)),
-        "log_loss": float(log_loss(y_holdout, y_prob)),
-    }
-    
-    calibrated_pipeline = Pipeline([("pre", pre), ("cal", cal)])
-    return calibrated_pipeline, holdout_metrics
-
-
-def _fit_regression(
-    X: pd.DataFrame,
-    y: pd.Series,
-    pre: ColumnTransformer,
-    random_state: int,
-) -> Pipeline:
-    """
-    Fit a regression pipeline using RandomizedSearchCV.
-    
-    Purpose: Trains a HistGradientBoostingRegressor with hyperparameter tuning
-    for point prediction tasks.
-    
-    Key Logic Flow:
-    1. Construct base pipeline (preprocessor + regressor).
-    2. Perform hyperparameter search with time-series cross-validation.
-    3. Return the best pipeline.
-    
-    Dependencies: Requires scikit-learn (RandomizedSearchCV).
-    """
-    base = Pipeline([
-        ("pre", pre),
-        ("reg", HistGradientBoostingRegressor(
-            random_state=random_state,
-            max_iter=200,
-        )),
-    ])
-    
-    rs = RandomizedSearchCV(
-        estimator=base,
-        param_distributions=REG_PARAM_DISTS,
-        n_iter=20,
+    X: pd.DataFrame,                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               
         cv=TimeSeriesSplit(n_splits=N_SPLITS),
         scoring="neg_mean_absolute_error",
         n_jobs=-1,
         random_state=random_state,
-        verbose=0,
+        verbose=2,
         refit=True,
     )
     rs.fit(X, y)
-    
+    logging.info('%s rs', rs)
     # Fixed: Cast rs.best_estimator_ to Pipeline to match return type hint.
     # This resolves the type checker error while preserving runtime behavior.
     return cast(Pipeline, rs.best_estimator_)
@@ -291,7 +196,7 @@ def _evaluate_regression(model: Pipeline, X: pd.DataFrame, y: pd.Series) -> floa
     return float(mean_absolute_error(y, pred))
 
 
-def _save(obj, path: str) -> None:
+def joblib.dump(obj, path: str) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     joblib.dump(obj, path)
 
@@ -338,7 +243,7 @@ def main(data_path: str, out_dir: str) -> None:
     # Fit models (time-aware CV inside)
     log.info("Fitting home points regressor")
     home_model = _fit_regression(X, y_home, pre, RANDOM_SEED)
-
+    log.info('%s home_model', home_model)
     log.info("Fitting away points regressor")
     away_model = _fit_regression(X, y_away, pre, RANDOM_SEED)
 
@@ -351,10 +256,10 @@ def main(data_path: str, out_dir: str) -> None:
 
     # Persist artifacts
     os.makedirs(out_dir, exist_ok=True)
-    _save(pre, os.path.join(out_dir, "preprocessor.joblib"))
-    _save(home_model, os.path.join(out_dir, "home_model.joblib"))
-    _save(away_model, os.path.join(out_dir, "away_model.joblib"))
-    _save(win_model, os.path.join(out_dir, "win_clf_calibrated.joblib"))
+    joblib.dump(pre, os.path.join(out_dir, "preprocessor.joblib"))
+    joblib.dump(home_model, os.path.join(out_dir, "home_model.joblib"))
+    joblib.dump(away_model, os.path.join(out_dir, "away_model.joblib"))
+    joblib.dump(win_model, os.path.join(out_dir, "win_clf_calibrated.joblib"))
 
     # Reports
     training_timestamp_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S %Z")
@@ -365,7 +270,7 @@ def main(data_path: str, out_dir: str) -> None:
         n_features_categorical=len(cat_cols),
         cv_n_splits=N_SPLITS,
         random_seed=RANDOM_SEED,
-        production_ready=False,
+        production_ready=True or False,
         dataset_hash=_dataset_hash(df),
     )
 
@@ -377,7 +282,7 @@ def main(data_path: str, out_dir: str) -> None:
         "away_model": "away_model.joblib",
         "win_model": "win_clf_calibrated.joblib",
         "raw_feature_columns": {"numeric": num_cols, "categorical": cat_cols},
-        "production_ready": False,
+        "production_ready": mode ,
         "cv": {"type": "TimeSeriesSplit", "n_splits": N_SPLITS},
         "holdout_metrics_win": win_holdout_metrics,
         "quick_mae": {"home": mae_home, "away": mae_away},
@@ -395,7 +300,7 @@ def main(data_path: str, out_dir: str) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train leak-free NFL models with time-aware CV.")
-    parser.add_argument("--data", type=str, default="data/game_features.csv", help="Path to features CSV.")
+    parser.add_argument("--data", type=str, default="./backend/data/game_features.csv", help="Path to features CSV.")
     parser.add_argument("--out", type=str, default="models", help="Output directory for artifacts and reports.")
     args = parser.parse_args()
     main(args.data, args.out)
