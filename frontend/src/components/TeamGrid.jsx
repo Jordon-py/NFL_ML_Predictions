@@ -1,10 +1,5 @@
-/**
- * TeamGrid Component
- * ------------------
- * Purpose: Display upcoming NFL matchups and trigger model predictions.
- * Flow: Fetch team metadata -> fetch schedule -> render cards -> request predictions per selection.
- * Dependencies: React hooks, local CSV data, API client helpers (getNextWeekSchedule, predictGame).
- */
+// @ts-nocheck
+// TeamGrid.jsx
 import React, {useState, useEffect} from 'react';
 import {getNextWeekSchedule, predictGame} from '../api/client.js';
 
@@ -18,24 +13,26 @@ const kickoffFormatter = new Intl.DateTimeFormat('en-US', {
   hour12: true,
 });
 
-const formatKickoffTime = (isoString) => {
-  try {
-    return kickoffFormatter.format(new Date(isoString));
-  } catch {
-    return isoString;
-  }
+/**
+ * @param {Object} row
+ * @returns {string}
+ */
+const formatKickoffTime = (row) => {
+  const iso = row.kickoff_ts_utc || row.kickoff_iso || row.kickoff || null;
+  if (!iso) return 'TBD';
+  try {return kickoffFormatter.format(new Date(iso));} catch {return String(iso);}
 };
 
+/**
+ * @param {string} csvText
+ * @returns {Object}
+ */
 const parseTeamCsv = (csvText) =>
-  csvText
-    .trim()
-    .split('\n')
-    .slice(1)
-    .reduce((acc, line) => {
-      const [teamName, abbr, logoUrl] = line.split(',').map((value) => value.trim());
-      if (abbr) acc[abbr] = {name: teamName, abbr, logoUrl};
-      return acc;
-    }, {});
+  csvText.trim().split('\n').slice(1).reduce((acc, line) => {
+    const [teamName, abbr, logoUrl] = line.split(',').map((v) => v.trim());
+    if (abbr) acc[abbr] = {name: teamName, abbr, logoUrl};
+    return acc;
+  }, {});
 
 const normalizeSchedulePayload = (data) => {
   if (Array.isArray(data)) return data;
@@ -45,7 +42,6 @@ const normalizeSchedulePayload = (data) => {
 
 const isActionKey = (key) => key === 'Enter' || key === ' ';
 
-/** Build a stable key per game */
 const makeKey = (g) => `${g.season}-${g.week}-${g.home_abbr}-${g.away_abbr}`;
 
 export default function TeamGrid() {
@@ -55,62 +51,63 @@ export default function TeamGrid() {
   const [loading, setLoading] = useState({});
   const [error, setError] = useState(null);
 
-  // Load team metadata from CSV
   useEffect(() => {
-    const loadTeams = async () => {
+    (async () => {
       try {
-        const response = await fetch('/data/myteamdescriptions.csv');
-        if (!response.ok) throw new Error('Failed to load team data');
-        setTeams(parseTeamCsv(await response.text()));
+        const res = await fetch('/data/myteamdescriptions.csv');
+        if (!res.ok) throw new Error('Failed to load team data');
+        setTeams(parseTeamCsv(await res.text()));
       } catch (err) {
-        console.error('[TeamGrid] Failed to load teams:', err);
+        console.error('[TeamGrid] loadTeams:', err);
         setError('Failed to load team data');
       }
-    };
-    loadTeams();
+    })();
   }, []);
 
-  // Load next week's schedule from API
   useEffect(() => {
-    const loadSchedule = async () => {
+    (async () => {
       try {
         setSchedule(normalizeSchedulePayload(await getNextWeekSchedule()));
       } catch (err) {
-        console.error('[TeamGrid] Failed to load schedule:', err);
+        console.error('[TeamGrid] loadSchedule:', err);
         setError('Failed to load schedule');
         setSchedule([]);
       }
-    };
-    loadSchedule();
+    })();
   }, []);
 
-  // Predict a matchup
   const handlePredict = async (game) => {
-
     const key = makeKey(game);
     if (loading[key]) return;
-    setLoading((prev) => ({...prev, [key]: true}));
+    setLoading((s) => ({...s, [key]: true}));
     setError(null);
-    const payload = {
-      home_team: game.home_abbr,
-      away_team: game.away_abbr,
-      season: game.season,
-      week: game.week,
-    };
+
     try {
-      const res = await predictGame(payload);
-      const {home_score, away_score} = res;
+      const payload = {
+        // Send both abbreviation (preferred) and fallback full name. Backend will normalize.
+        home_team: game.home_abbr || game.home_team,
+        away_team: game.away_abbr || game.away_team,
+        // Also include raw fields some backend builds expect (rest days) so the
+        // prediction endpoint can construct features if available.
+        home_abbr: game.home_abbr || game.home_team,
+        away_abbr: game.away_abbr || game.away_team,
+        home_rest: game.home_rest ?? 7,
+        away_rest: game.away_rest ?? 7,
+        season: Number(game.season),
+        week: Number(game.week),
+      };
+      const {home_score, away_score, home_abbr, away_abbr} = await predictGame(payload);
       const result = {
         home_score: Number(home_score),
         away_score: Number(away_score),
         point_diff: Number(home_score) - Number(away_score),
       };
-      return setPredictions((prev) => ({...prev, [key]: result}));
+      setPredictions((p) => ({...p, [key]: result}));
     } catch (e) {
-      console.error('[TeamGrid] predictGame failed:', e);
+      console.error('[TeamGrid] predictGame:', e);
       setError('Failed to get prediction');
     } finally {
-      setLoading((prev) => ({...prev, [key]: false}));
+      setLoading((s) => ({...s, [key]: false}));
     }
   };
 
@@ -189,12 +186,12 @@ export default function TeamGrid() {
                 aria-label={`Predict ${game.away_abbr} at ${game.home_abbr}`}
               >
                 <div className="matchup-teams inner-card">
-                  <div className="away-team">{renderTeam(game.away_abbr, false)}</div>
+                  <div className="away-team">{renderTeam(game.away_abbr || game.away_team, false)}</div>
                   <div className="vs-indicator inner-card">@</div>
-                  <div className="home-team inner-card">{renderTeam(game.home_abbr, true)}</div>
+                  <div className="home-team inner-card">{renderTeam(game.home_abbr || game.home_team, true)}</div>
                 </div>
 
-                <div className="matchup-time inner-card">{formatKickoffTime(game.kickoff_iso)}</div>
+                <div className="matchup-time inner-card">{formatKickoffTime(game)}</div>
 
                 {isLoading && (
                   <div className="prediction-loading">

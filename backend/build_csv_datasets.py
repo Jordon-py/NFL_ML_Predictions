@@ -22,8 +22,8 @@ pandas, numpy, nfl_data_py
 
 Usage Notes
 -----------
-- Output: single chronologically sorted CSV ``merged_game_features.csv`` written to
-    the specified ``out_dir`` (no duplicate root-level copy).
+- Output: single chronologically sorted CSV ``game_features.csv`` written to
+    the specified ``out_dir`` (optional legacy root-level copy for compatibility).
 - Rolling stats use ``groupby().rolling(...)`` to prevent future leakage.
 - Team codes are minimally normalized to limit join mismatches (LA→LAR, STL→LAR, ...).
 

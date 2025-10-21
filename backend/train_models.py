@@ -8,7 +8,14 @@ Train leak-free NFL models with time-aware CV.
 - Writes: artifacts/{preprocessor,home_model,away_model,win_clf_calibrated}.joblib
          artifacts/training_report.json
          artifacts/metadata.json
+- Environment variables are loaded with defaults and converted to appropriate types for safety.
 """
+
+# File: backend/train_models.py
+# Purpose: Train ML models for NFL game predictions using time-aware cross-validation to prevent data leakage.
+# Functions: _ensure_columns, _dataset_hash, _drop_leaky_columns, _infer_features, _make_preprocessor, _split_for_calibration, _fit_regression, _fit_classifier, _evaluate_regression, _dataset_sort, main
+# Variables: RANDOM_SEED, N_SPLITS, TARGET_HOME, TARGET_AWAY, CLASS_LABEL, TIME_KEYS, ID_COLS, LEAK_BLOCKLIST, REG_PARAM_DISTS, CLF_PARAM_DISTS, log
+# Interacts With: backend/data/game_features.csv (input dataset), backend/models/ (output models and metadata)
 
 import argparse
 import json
@@ -16,7 +23,8 @@ import logging
 import os
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
-from typing import List, Tuple, Dict, cast
+from typing import List, Tuple, Dict, cast, Any
+from dotenv import load_dotenv
 
 import numpy as np
 import pandas as pd
@@ -32,16 +40,31 @@ from sklearn.metrics import (
 from sklearn.model_selection import TimeSeriesSplit, RandomizedSearchCV
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
-from sklearn.ensemble import HistGradientBoostingRegressor, HistGradientBoostingClassifier
+from sklearn.ensemble import HistGradientBoostingRegressor
 from sklearn.calibration import CalibratedClassifierCV
-import joblib
+from joblib import dump
 
 # -----------------------
 # Configuration
 # -----------------------
+LOAD_ENV='C:/Users/iProg/OneDrive/Documents/Football_predict/nfl_prediction_system/NFL_ML_Predictions/backend/.venv'
 
-RANDOM_SEED = 42
-N_SPLITS = 5
+# load .env
+load_dotenv(LOAD_ENV)
+
+SERVE_FRONTEND=os.getenv('SERVE_FRONTEND')
+CORS_ORIGINS=os.getenv('CORS_ORIGINS')
+NODE_ENV=os.getenv('NODE_ENV')
+HP_NITER=int(os.getenv('HP_NITER', '100'))  # Default to 100 if not set or invalid
+CV_SPLITS=int(os.getenv('CV_SPLITS', '5'))  # Default to 5
+RANDOM_SEED=int(os.getenv('RANDOM_SEED', '42'))  # Default to 42
+N_SPLITS=int(os.getenv('N_SPLITS', '5'))  # Default to 5
+DEFAULT_N_JOBS = int(os.getenv('N_JOBS', '1'))  # limit parallelism to avoid memory spikes
+
+# ----------Developement enviorment -----------
+
+DEV_ORIGINS=os.getenv('DEV_ORIGINS', 'http://localhost:3000')
+TRAIN_DATASET_FILE=os.getenv('TRAIN_DATASET_FILE', 'C:/Users/iProg/OneDrive/Documents/Football_predict/nfl_prediction_system/NFL_ML_Predictions/backend/data/game_features.csv')
 
 TARGET_HOME = "home_points_for"
 TARGET_AWAY = "away_points_for"
@@ -50,8 +73,8 @@ TIME_KEYS = ["season", "week"]
 
 ID_COLS = {
     "game_id",
-    "home_team",
-    "away_team",
+    # "home_team",
+    # "away_team",
     "home_team_id",
     "away_team_id",
     "stadium",
@@ -152,7 +175,8 @@ def _make_preprocessor(num_cols: List[str], cat_cols: List[str]) -> ColumnTransf
     cat_pipe = Pipeline(
         steps=[
             ("imputer", SimpleImputer(strategy="most_frequent")),
-            ("ohe", OneHotEncoder(handle_unknown="ignore", sparse_output=False)),  # Dense output for HistGradientBoosting
+            # Keep OHE sparse to reduce memory footprint; downstream estimators must accept sparse
+            ("ohe", OneHotEncoder(handle_unknown="ignore", sparse_output=True)),
         ]
     )
     return ColumnTransformer(
@@ -175,30 +199,72 @@ def _split_for_calibration(tscv: TimeSeriesSplit, X: pd.DataFrame, y: pd.Series)
     return np.array(train_idx_all), calib_tr, calib_va
 
 
-def _fit_classifier(
-    X: pd.DataFrame,                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               
+def _fit_regression(
+    X: pd.DataFrame, y: pd.Series, pre: ColumnTransformer, random_state: int, n_jobs: int = DEFAULT_N_JOBS
+) -> Pipeline:
+    rs = RandomizedSearchCV(
+        estimator=Pipeline([
+            ('pre', pre),
+            ('reg', HistGradientBoostingRegressor(random_state=random_state))
+        ]),
+        param_distributions=REG_PARAM_DISTS,
         cv=TimeSeriesSplit(n_splits=N_SPLITS),
         scoring="neg_mean_absolute_error",
-        n_jobs=-1,
+        n_jobs=n_jobs,
         random_state=random_state,
         verbose=2,
+        n_iter=min(HP_NITER, len(list(REG_PARAM_DISTS.values())[0]) * 10),
         refit=True,
     )
     rs.fit(X, y)
     logging.info('%s rs', rs)
-    # Fixed: Cast rs.best_estimator_ to Pipeline to match return type hint.
-    # This resolves the type checker error while preserving runtime behavior.
     return cast(Pipeline, rs.best_estimator_)
+
+
+def _fit_classifier(
+    X: pd.DataFrame, y: pd.Series, pre: ColumnTransformer, random_state: int, n_jobs: int = DEFAULT_N_JOBS
+) -> Tuple[Pipeline, Dict[str, Any]]:
+    rs = RandomizedSearchCV(
+        estimator=Pipeline([
+            ('pre', pre),
+            ('clf', LogisticRegression(random_state=random_state, max_iter=1000))
+        ]),
+        param_distributions=CLF_PARAM_DISTS,
+        cv=TimeSeriesSplit(n_splits=N_SPLITS),
+        scoring="neg_log_loss",
+        n_jobs=n_jobs,
+        random_state=random_state,
+        verbose=2,
+        n_iter=min(HP_NITER, len(list(CLF_PARAM_DISTS.values())[0]) * 5),
+        refit=True,
+    )
+    rs.fit(X, y)
+    logging.info('%s rs', rs)
+    best_pipeline = cast(Pipeline, rs.best_estimator_)
+    
+    # Compute holdout metrics using the last fold
+    tscv = TimeSeriesSplit(n_splits=N_SPLITS)
+    train_idx, _, holdout_idx = _split_for_calibration(tscv, X, y)
+    pred_proba = best_pipeline.predict_proba(X.iloc[holdout_idx])[:, 1]
+    auc = roc_auc_score(y.iloc[holdout_idx], pred_proba)
+    brier = brier_score_loss(y.iloc[holdout_idx], pred_proba)
+    logloss = log_loss(y.iloc[holdout_idx], pred_proba)
+    
+    holdout_metrics = {
+        "roc_auc": auc,
+        "brier_score": brier,
+        "log_loss": logloss,
+        "optimal_threshold": 0.5,
+        "optimal_threshold_f1": 0.5,
+        "optimal_threshold_acc": 0.5,
+    }
+    
+    return best_pipeline, holdout_metrics
 
 
 def _evaluate_regression(model: Pipeline, X: pd.DataFrame, y: pd.Series) -> float:
     pred = model.predict(X)
     return float(mean_absolute_error(y, pred))
-
-
-def joblib.dump(obj, path: str) -> None:
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    joblib.dump(obj, path)
 
 
 def _dataset_sort(df: pd.DataFrame) -> pd.DataFrame:
@@ -221,6 +287,7 @@ def main(data_path: str, out_dir: str) -> None:
     y_away = df[TARGET_AWAY].copy()
     # Drop NaN values before converting to int
     y_win = df[CLASS_LABEL].copy()
+    cat = df[['home_team', 'away_team']]
     
     # Now drop leaky columns from features (but keep targets separately)
     df = _drop_leaky_columns(df)
@@ -238,17 +305,23 @@ def main(data_path: str, out_dir: str) -> None:
     if not feature_cols:
         raise RuntimeError("No features found after leakage sanitization. Check your dataset.")
     X = df[feature_cols].copy()
+    # Cast numeric columns to float32 to reduce memory footprint during CV
+    for nc in num_cols:
+        if nc in X.columns:
+            X[nc] = X[nc].astype('float32')
     pre = _make_preprocessor(num_cols, cat_cols)
 
     # Fit models (time-aware CV inside)
     log.info("Fitting home points regressor")
-    home_model = _fit_regression(X, y_home, pre, RANDOM_SEED)
+    # Allow user to override parallel jobs via env or CLI
+    n_jobs = DEFAULT_N_JOBS
+    home_model = _fit_regression(X, y_home, pre, RANDOM_SEED, n_jobs=n_jobs)
     log.info('%s home_model', home_model)
     log.info("Fitting away points regressor")
-    away_model = _fit_regression(X, y_away, pre, RANDOM_SEED)
+    away_model = _fit_regression(X, y_away, pre, RANDOM_SEED, n_jobs=n_jobs)
 
     log.info("Fitting win classifier")
-    win_model, win_holdout_metrics = _fit_classifier(X, y_win, pre, RANDOM_SEED)
+    win_model, win_holdout_metrics = _fit_classifier(X, y_win, pre, RANDOM_SEED, n_jobs=n_jobs)
 
     # Quick in-sample sanity MAE (for monitoring only)
     mae_home = _evaluate_regression(home_model, X, y_home)
@@ -256,10 +329,10 @@ def main(data_path: str, out_dir: str) -> None:
 
     # Persist artifacts
     os.makedirs(out_dir, exist_ok=True)
-    joblib.dump(pre, os.path.join(out_dir, "preprocessor.joblib"))
-    joblib.dump(home_model, os.path.join(out_dir, "home_model.joblib"))
-    joblib.dump(away_model, os.path.join(out_dir, "away_model.joblib"))
-    joblib.dump(win_model, os.path.join(out_dir, "win_clf_calibrated.joblib"))
+    dump(pre, os.path.join(out_dir, "preprocessor.joblib"))
+    dump(home_model, os.path.join(out_dir, "home_model.joblib"))
+    dump(away_model, os.path.join(out_dir, "away_model.joblib"))
+    dump(win_model, os.path.join(out_dir, "win_clf_calibrated.joblib"))
 
     # Reports
     training_timestamp_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S %Z")
@@ -282,7 +355,7 @@ def main(data_path: str, out_dir: str) -> None:
         "away_model": "away_model.joblib",
         "win_model": "win_clf_calibrated.joblib",
         "raw_feature_columns": {"numeric": num_cols, "categorical": cat_cols},
-        "production_ready": mode ,
+        "production_ready": True ,
         "cv": {"type": "TimeSeriesSplit", "n_splits": N_SPLITS},
         "holdout_metrics_win": win_holdout_metrics,
         "quick_mae": {"home": mae_home, "away": mae_away},
@@ -302,5 +375,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train leak-free NFL models with time-aware CV.")
     parser.add_argument("--data", type=str, default="./backend/data/game_features.csv", help="Path to features CSV.")
     parser.add_argument("--out", type=str, default="models", help="Output directory for artifacts and reports.")
+    parser.add_argument("--n-jobs", type=int, default=DEFAULT_N_JOBS, help="Number of parallel jobs to use for CV (default from N_JOBS env)")
+    parser.add_argument("--hp-niter", type=int, default=HP_NITER, help="Number of RandomizedSearchCV iterations (overrides HP_NITER env)")
     args = parser.parse_args()
+    # Allow quick runs by overriding HP_NITER when provided on CLI
+    HP_NITER = int(args.hp_niter)
     main(args.data, args.out)

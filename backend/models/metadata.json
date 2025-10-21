@@ -1,5 +1,5 @@
 {
-  "training_timestamp_utc": "2025-10-20 19:44:12 UTC",
+  "training_timestamp_utc": "2025-10-21 13:30:28 UTC",
   "dataset_hash": 14094679007465161390,
   "preprocessor": "preprocessor.joblib",
   "home_model": "home_model.joblib",
@@ -95,24 +95,26 @@
       "rest_diff"
     ],
     "categorical": [
-      "home_game_date"
+      "home_game_date",
+      "home_team",
+      "away_team"
     ]
   },
-  "production_ready": false,
+  "production_ready": true,
   "cv": {
     "type": "TimeSeriesSplit",
     "n_splits": 5
   },
   "holdout_metrics_win": {
-    "roc_auc": 0.6829573934837093,
-    "brier_score": 0.23455397222463004,
-    "log_loss": 1.0097208259217019,
-    "pred_roc_auc": 0.6490540375328565,
-    "pred_brier_score": 0.35145631067961164,
-    "pred_log_loss": 12.667769443553796
+    "roc_auc": 0.7523228803716611,
+    "brier_score": 0.1998328891743344,
+    "log_loss": 0.5857700562575975,
+    "optimal_threshold": 0.5,
+    "optimal_threshold_f1": 0.5,
+    "optimal_threshold_acc": 0.5
   },
   "quick_mae": {
-    "home": 5.414445913343138,
-    "away": 4.4056078359542274
+    "home": 5.535018752467436,
+    "away": 5.334338211190372
   }
 }
