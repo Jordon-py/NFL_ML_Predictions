@@ -16,7 +16,7 @@
  *   - Keep data transformations in the context/provider layer—children should
  *     receive ready-to-render props.
  */
-import {usePredictions} from '../PredictionContext.js';
+import {usePredictions} from '../PredictionContext.jsx';
 
 import TeamGrid from './TeamGrid.jsx';
 import PredictionResult from './PredictionResult.jsx';
