@@ -1,19 +1,18 @@
 {
-  {
+    "version": 2,
     "framework": "vite",
     "buildCommand": "npm run build",
     "outputDirectory": "dist",
     "devCommand": "npm run dev",
     "installCommand": "npm install",
-    "framework": "vite",
     "rewrites": [
     {
       "source": "/(.*)",
       "destination": "/index.html"
     }
-  ],
-  "env": {
-    "VITE_API_URL": "https://nfl-predict-ecf5a5bd34fe.herokuapp.com",
-    "REACT_APP_API_URL": "https://nfl-predict-ecf5a5bd34fe.herokuapp.com"
+    ],
+    "env": {
+      "VITE_API_URL": "https://nfl-predict-ecf5a5bd34fe.herokuapp.com",
+      "REACT_APP_API_URL": "https://nfl-predict-ecf5a5bd34fe.herokuapp.com"
+    }
   }
-}
