@@ -104,6 +104,7 @@ export default function TeamGrid() {
 
   const handlePredict = async (game) => {
     const key = makeKey(game);
+    console.log('key: -->',key)
     if (loading[key]) return;
     setLoading((s) => ({...s, [key]: true}));
     setError(null);
@@ -234,30 +235,19 @@ export default function TeamGrid() {
                       <span className="score home-score inner-card">{prediction.home_score.toFixed(1)}</span>
                       <br />
                     </div>
-                    <div className="inner-card point-diff a-shine">
+                    
                       <div className="point-diff">
                         Spread: {prediction.point_diff > 0 ? '+' : ''}{prediction.point_diff.toFixed(1)}<br />
                       </div>
-                    </div>
-                    <div className="point-diff">
-                      Home Win Probability: {prediction.home_win_probability.toFixed(2)}
-                    </div>
+                
+                      <div className="point-prob">
+                        Home Win Probability: {prediction.home_win_probability.toFixed(2)}
+                      </div>
 
                     {/* Render PredictionResult with a normalized entry shape */}
-                    <PredictionResult
-                      entry={{
-                        game,
-                        metrics: {
-                          home_score: prediction.home_score,
-                          away_score: prediction.away_score,
-                          point_diff: prediction.point_diff,
-                        },
-                        probs: {
-                          home: prediction.home_win_probability,
-                          away: prediction.away_win_probability,
-                        },
-                      }}
-                    />
+                  <div className="hidden">
+                    <PredictionResult entry={{ game, prediction }} />
+                  </div>
 
                     <div className="save-history">
                       <button
