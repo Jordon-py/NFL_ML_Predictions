@@ -38,7 +38,7 @@ async function api(path = API_BASE, options = {}) {
   const ctrl = new AbortController();
   const id = setTimeout(() => ctrl.abort(), options.timeout ?? DEFAULT_TIMEOUT_MS);
   const p = String(path || "");
-  const url = `${API_BASE}${p.startsWith("/") ? p : `/${p}`}`;
+  const url = `${API_BASE}${p.startsWith("") ? p : `/${p}`}`;
 
   const headers = {
     ...(options.body ? {"Content-Type": "application/json"} : {}),
