@@ -309,15 +309,43 @@ div.probability.home-win-prob.inner-card.a-shine {
 }
 
 .inner-card {
-  border-radius: 2%;
+  border-radius: 1%;
+
 }
 
-.inner-card.point-diff.a-shine {
+div .point-diff {
   display: flex;
-  animation: var(a-shine);
+  flex-direction: column;
+  gap: 5rem;
 }
 
-div.prediction-result.inner-card.a-glow {
+.point-diff.inner-card.a-shine {
+  display: flex;
+  flex-direction: row;
+  position: fixed;
+  top: 25%;
+  right: 3%;
+  gap: .3rem;
+  font-weight: 300;
+  font-size: 1rem;
+  color: #ffffffd8;
+  font-family: 'Inter', sans-serif;
+  transition: all transform(a-glow);
+}
+
+.point-prob {
+  position: fixed;
+  font-size: 1rem;
+  top: 8%;
+  left: 50%;
+  display: flex;
+  flex-direction: row;
+  color: var(a-shine);
+  background-color: var(--grad-primary);
+  width: 20px;
+}
+
+div .prediction-result.inner-card.a-glow {
   display: flex;
   flex-direction: column;
   padding: 1px;
@@ -345,6 +373,10 @@ div.prediction-result.inner-card.a-glow {
   /* Enhancement 10 */
   border-image: var(--grad-primary) 1;
   /* Enhancement 10 */
+}
+
+.hidden {
+  display: none;
 }
 
 /* Loading / results */
