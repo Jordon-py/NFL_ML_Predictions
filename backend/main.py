@@ -504,6 +504,7 @@ class ScheduleGame(BaseModel):
     """
     season: int
     week: int
+    kickoff: datetime
     home_team: str
     home_abbr: str
     away_team: str
@@ -842,6 +843,7 @@ def get_next_week_schedule() -> List[ScheduleGame]:
                 predicted_away_score=None,
                 home_win_probability=None,
                 away_win_probability=None,
+                kickoff=r["kickoff_ts_utc"],
             )
         )
     log.info("Schedule week %s games=%d", current_week, len(games))
@@ -1007,19 +1009,44 @@ def predict_game(payload: PredictionRequest) -> PredictionResponse:
 
         # Win probability from calibrated classifier if present, else sigmoid on margin
         try:
-            win_model = model_objects.get("win_model", "/models/win_clf_calibrated.joblib") if isinstance(model_objects, dict) else getattr(model_objects, "win_model", None)
-        except Exception:
-            win_model = "win_clf_calibrated.joblib"
-        win_m = joblib.load(win_model)
-        if win_model is not None:
+            # Read raw entry from model_objects (may be a path string or an already-loaded estimator)
             try:
-                home_prob = float(win_m.predict_proba(X)[0, 1])
+                win_model_entry = (
+                    model_objects.get("win_model", "win_clf_calibrated.joblib")
+                    if isinstance(model_objects, dict)
+                    else getattr(model_objects, "win_model", None)
+                )
             except Exception:
-                log.exception("win_model.predict_proba failed; falling back to margin sigmoid")
+                win_model_entry = "win_clf_calibrated.joblib"
+
+            win_m = None
+            # If entry is a path-like, resolve and load from disk
+            if isinstance(win_model_entry, (str, bytes, os.PathLike)):
+                win_path = Path(str(win_model_entry))
+                if not win_path.is_absolute():
+                    win_path = MODELS_DIR / win_path
+                try:
+                    win_m = joblib.load(win_path)
+                except Exception:
+                    log.exception("Failed to load win_model from %s; proceeding without classifier", win_path)
+                    win_m = None
+            else:
+                # Assume it's already a loaded estimator / Pipeline (do not joblib.load again)
+                win_m = win_model_entry
+
+            if win_m is not None:
+                try:
+                    home_prob = float(win_m.predict_proba(X)[0, 1])
+                except Exception:
+                    log.exception("win_model.predict_proba failed; falling back to margin sigmoid")
+                    home_prob = 1.0 / (1.0 + math.exp(-0.25 * point_diff))
+            else:
                 home_prob = 1.0 / (1.0 + math.exp(-0.25 * point_diff))
-        else:
+                print(f'is real home prob: {home_prob}')
+        except Exception:
+            # Keep outer try/except but ensure any unexpected error still falls back gracefully
+            log.exception("Unexpected error while computing win probability; using sigmoid fallback")
             home_prob = 1.0 / (1.0 + math.exp(-0.25 * point_diff))
-            print(f'is real home prob: {home_prob}')
 
         # Read mode defensively
         try:
