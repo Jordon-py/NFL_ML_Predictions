@@ -1,20 +1,14 @@
 {
-  "version": 2,
-  "buildCommand": "cd frontend && npm install && npm run build",
-  "outputDirectory": "frontend/dist",
-  "installCommand": "cd frontend && npm install",
   "framework": "vite",
+  "installCommand": "npm --prefix frontend ci",
+  "buildCommand": "npm --prefix frontend run build",
+  "devCommand": "npm --prefix frontend run dev",
+  "outputDirectory": "frontend/dist",
   "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
-    }
+    { "source": "/(.*)", "destination": "/index.html" }
   ],
   "env": {
     "VITE_API_URL": "https://nfl-predict-ecf5a5bd34fe.herokuapp.com",
-    "REACT_APP_API_URL": "https://nfl-predict-ecf5a5bd34fe.herokuapp.com",
-    "PUPPETEER_SKIP_CHROMIUM_DOWNLOAD": "true",
-    "PUPPETEER_SKIP_DOWNLOAD": "true",
-    "PUPPETEER_PRODUCT": "firefox"
+    "REACT_APP_API_URL": "https://nfl-predict-ecf5a5bd34fe.herokuapp.com"
   }
 }

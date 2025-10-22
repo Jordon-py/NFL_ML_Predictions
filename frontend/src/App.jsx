@@ -17,7 +17,7 @@
 import React from 'react';
 import DashBoard from './components/DashBoard.jsx'; // FIX: default import, not named
 import ErrorBoundary from './components/ErrorBoundary.jsx';
-import {PredictionProvider} from './PredictionContext.js';
+import {PredictionProvider} from './PredictionContext.jsx';
 import HistoryChart from './components/HistoryChart.jsx';
 
 /**
@@ -34,6 +34,7 @@ export default function App() {
     <ErrorBoundary>
       <PredictionProvider>
         <DashBoard />
+        <HistoryChart />
       </PredictionProvider>
     </ErrorBoundary>
   );

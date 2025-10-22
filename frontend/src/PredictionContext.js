@@ -1,5 +1,5 @@
 /**
- * PredictionContext.js
+ * PredictionContext.jsx
  * --------------------
  * Component Purpose:
  *   Provide a shared prediction store (current result + historical list)

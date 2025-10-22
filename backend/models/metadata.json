@@ -1,5 +1,5 @@
 {
-  "training_timestamp_utc": "2025-10-21 13:30:28 UTC",
+  "training_timestamp_utc": "2025-10-21 14:41:38 UTC",
   "dataset_hash": 14094679007465161390,
   "preprocessor": "preprocessor.joblib",
   "home_model": "home_model.joblib",
@@ -106,15 +106,15 @@
     "n_splits": 5
   },
   "holdout_metrics_win": {
-    "roc_auc": 0.7523228803716611,
-    "brier_score": 0.1998328891743344,
-    "log_loss": 0.5857700562575975,
+    "roc_auc": 0.7521853414022862,
+    "brier_score": 0.19998318188501601,
+    "log_loss": 0.5860899256427184,
     "optimal_threshold": 0.5,
     "optimal_threshold_f1": 0.5,
     "optimal_threshold_acc": 0.5
   },
   "quick_mae": {
-    "home": 5.535018752467436,
-    "away": 5.334338211190372
+    "home": 5.520557791737331,
+    "away": 5.332876753782511
   }
 }
