@@ -1009,42 +1009,57 @@ def predict_game(payload: PredictionRequest) -> PredictionResponse:
 
         # Win probability from calibrated classifier if present, else sigmoid on margin
         try:
-            # Read raw entry from model_objects (may be a path string or an already-loaded estimator)
+            # Safely obtain the raw "win_model" entry from model_objects. It may be:
+            #  - a string/path (filename saved with joblib)
+            #  - an already-loaded Pipeline object
+            #  - None / missing
             try:
                 win_model_entry = (
-                    model_objects.get("win_model", "win_clf_calibrated.joblib")
+                    model_objects.get("win_model")
                     if isinstance(model_objects, dict)
                     else getattr(model_objects, "win_model", None)
                 )
             except Exception:
-                win_model_entry = "win_clf_calibrated.joblib"
+                win_model_entry = None
 
             win_m = None
-            # If entry is a path-like, resolve and load from disk
+            # If entry appears to be a path, attempt to load from disk once
             if isinstance(win_model_entry, (str, bytes, os.PathLike)):
                 win_path = Path(str(win_model_entry))
+                # If a relative path, assume models directory
                 if not win_path.is_absolute():
                     win_path = MODELS_DIR / win_path
                 try:
                     win_m = joblib.load(win_path)
                 except Exception:
-                    log.exception("Failed to load win_model from %s; proceeding without classifier", win_path)
+                    log.exception("Failed to load win_model from path %s; will fallback to sigmoid", win_path)
                     win_m = None
             else:
-                # Assume it's already a loaded estimator / Pipeline (do not joblib.load again)
-                win_m = win_model_entry
+                # If it's not a path and not None, assume it's already a loaded estimator (Pipeline)
+                # Do not call joblib.load on an object.
+                if win_model_entry is not None:
+                    win_m = win_model_entry
+                else:
+                    win_m = None
 
+            # Use the estimator if available and supports predict_proba, else fallback
             if win_m is not None:
                 try:
-                    home_prob = float(win_m.predict_proba(X)[0, 1])
+                    # Expect X to be a DataFrame or array prepared earlier
+                    if hasattr(win_m, "predict_proba"):
+                        home_prob = float(win_m.predict_proba(X)[0, 1])
+                    else:
+                        # If estimator lacks predict_proba, fallback to predict then sigmoid
+                        pred_margin = float(win_m.predict(X)[0])
+                        home_prob = 1.0 / (1.0 + math.exp(-0.25 * pred_margin))
                 except Exception:
-                    log.exception("win_model.predict_proba failed; falling back to margin sigmoid")
+                    log.exception("win_model prediction failed; falling back to margin sigmoid")
                     home_prob = 1.0 / (1.0 + math.exp(-0.25 * point_diff))
             else:
+                # No classifier available — use margin-based sigmoid as fallback
                 home_prob = 1.0 / (1.0 + math.exp(-0.25 * point_diff))
-                print(f'is real home prob: {home_prob}')
         except Exception:
-            # Keep outer try/except but ensure any unexpected error still falls back gracefully
+            # Very defensive final fallback
             log.exception("Unexpected error while computing win probability; using sigmoid fallback")
             home_prob = 1.0 / (1.0 + math.exp(-0.25 * point_diff))
 
