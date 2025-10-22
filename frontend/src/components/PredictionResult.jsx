@@ -16,7 +16,7 @@
  *     never crashes while the backend evolves.
  */
 
-import * as React from 'react';
+import React from 'react';
 
 export default function PredictionResult({entry}) {
   // Provide a friendly fallback so the area never collapses visually.
@@ -30,32 +30,37 @@ export default function PredictionResult({entry}) {
   const ensemblePct = probs.ensemble != null ? Math.round(probs.ensemble * 100) : null;
 
   return (
-    <div className="prediction-result" aria-live="polite">
-      <h3>Prediction</h3>
-      <div className="meta">
-        <span>Week {game.week} • {game.season}</span>
-        <span>{game.away_abbr} @ {game.home_abbr}</span>
-      </div>
-      <div className="scores">
-        <div className="score-line">
-          <b>{game.home_abbr} (Home): {metrics.home_score}</b>
-          <span className="score-sep"> — </span>
-          <b>{game.away_abbr} (Away): {metrics.away_score}</b>
+    <>
+      <div className="prediction-result" aria-live="polite">
+        <h3>Prediction</h3>
+        <div className="meta">
+          <span>
+            {game.week != null && game.season != null
+              ? `Week ${game.week} • ${game.season}`
+              : 'Game info unavailable'}
+          </span>
         </div>
-        <div className="score-diff">
-          <strong>{game.home_abbr}</strong> {metrics.home_score} — {metrics.away_score} <strong>{game.away_abbr}</strong>
-          <span className="separator">•</span>
-          <span>Diff: {metrics.point_diff}</span>
+        <div className="scores">
+          <div className="score-line">
+            <strong>{game.home_abbr} (Home): {metrics.home_score != null ? metrics.home_score : '-'}</strong>
+            <span className="score-sep"> — </span>
+            <strong>{game.away_abbr} (Away): {metrics.away_score != null ? metrics.away_score : '-'}</strong>
+          </div>
+          <div className="score-diff">
+            <strong>{game.home_abbr}</strong> {metrics.home_score != null ? metrics.home_score : '-'} — {metrics.away_score != null ? metrics.away_score : '-'} <strong>{game.away_abbr}</strong>
+            <span className="separator">•</span>
+            <span>Diff: {metrics.point_diff != null ? metrics.point_diff : '-'}</span>
+          </div>
+        </div>
+        <div className="probs">
+          {homePct != null && <span>Home win: {homePct}%</span>}
+          {awayPct != null && <span>Away win: {awayPct}%</span>}
+          {ensemblePct != null && <span>Ensemble: {ensemblePct}%</span>}
+          {[homePct, awayPct, ensemblePct].every(v => v == null) && (
+            <span>No probability data available.</span>
+          )}
         </div>
       </div>
-      <div className="probs">
-        {homePct != null && <span>Home win: {homePct}%</span>}
-        {awayPct != null && <span>Away win: {awayPct}%</span>}
-        {ensemblePct != null && <span>Ensemble: {ensemblePct}%</span>}
-        {homePct == null && awayPct == null && ensemblePct == null && (
-          <span>No probability data available.</span>
-        )}
-      </div>
-    </div>
+    </>
   );
 }

@@ -6,7 +6,6 @@
   "scripts": {
     "heroku-postbuild": "echo 'Skipping frontend build - deployed separately on Vercel'"
   },
-  "dependencies": {},
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Jordon-py/NFL_ML_Predictions.git"
@@ -24,5 +23,9 @@
     "npm": "10.x",
     "python": "3.12.x"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "typescript": "^5.9.3"
+  }
 }
