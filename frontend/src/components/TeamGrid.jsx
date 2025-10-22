@@ -77,6 +77,19 @@ export default function TeamGrid() {
     })();
   }, []);
 
+  // Load persisted history from localStorage on mount
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("prediction_history");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) setHistory(parsed.slice(-100));
+      }
+    } catch (err) {
+      console.debug("Failed to load prediction history from localStorage", err);
+    }
+  }, []);
+
   useEffect(() => {
     (async () => {
       try {
@@ -263,7 +276,19 @@ export default function TeamGrid() {
                               away: prediction.away_win_probability,
                             },
                           };
-                          setHistory((h) => [...h, entry]);
+                          // Persist with dedupe and cap
+                          const makeKey = (e) => `${e.game.season}-${e.game.week}-${e.game.home_abbr || e.game.home_team}-${e.game.away_abbr || e.game.away_team}`;
+                          setHistory((h) => {
+                            const key = makeKey(entry);
+                            const filtered = h.filter((x) => makeKey(x) !== key);
+                            const next = [...filtered, entry].slice(-100);
+                            try {
+                              localStorage.setItem("prediction_history", JSON.stringify(next));
+                            } catch (err) {
+                              console.debug("Failed to save prediction history", err);
+                            }
+                            return next;
+                          });
                         }}
                       >
                         Save to History
