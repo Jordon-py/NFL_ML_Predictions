@@ -19,8 +19,12 @@
 import React from 'react';
 
 export default function PredictionResult({entry}) {
-  // Provide a friendly fallback so the area never collapses visually.
-  if (!entry) return <div className="prediction-result">No prediction yet.</div>;
+// Checks entry prop for the predictions
+  console.log(`entry: ${JSON.stringify(entry)}, rawEntry in predictionResult.jsx: ${entry}`);
+  if (!entry) return (
+      <div className="prediction-result">No prediction yet.</div>  
+      // Provide a friendly fallback so the area never collapses visually.
+  ); 
 
   // Defensive destructuring: fallback to empty objects to avoid runtime errors if entry is malformed.
   const {game = {}, metrics = {}, probs = {}} = entry;
