@@ -16,13 +16,14 @@
  *     never crashes while the backend evolves.
  */
 
-import React from 'react';
+import * as React from 'react';
 
 export default function PredictionResult({entry}) {
   // Provide a friendly fallback so the area never collapses visually.
   if (!entry) return <div className="prediction-result">No prediction yet.</div>;
 
-  const {game, metrics, probs} = entry;
+  // Defensive destructuring: fallback to empty objects to avoid runtime errors if entry is malformed.
+  const {game = {}, metrics = {}, probs = {}} = entry;
   // Convert probabilities to whole-number percentages for readability.
   const homePct = probs.home != null ? Math.round(probs.home * 100) : null;
   const awayPct = probs.away != null ? Math.round(probs.away * 100) : null;
@@ -35,17 +36,25 @@ export default function PredictionResult({entry}) {
         <span>Week {game.week} • {game.season}</span>
         <span>{game.away_abbr} @ {game.home_abbr}</span>
       </div>
-
       <div className="scores">
-        <strong>{game.home_abbr}</strong> {metrics.home_score} — {metrics.away_score} <strong>{game.away_abbr}</strong>
-        <span className="separator">•</span>
-        <span>Diff: {metrics.point_diff}</span>
+        <div className="score-line">
+          <b>{game.home_abbr} (Home): {metrics.home_score}</b>
+          <span className="score-sep"> — </span>
+          <b>{game.away_abbr} (Away): {metrics.away_score}</b>
+        </div>
+        <div className="score-diff">
+          <strong>{game.home_abbr}</strong> {metrics.home_score} — {metrics.away_score} <strong>{game.away_abbr}</strong>
+          <span className="separator">•</span>
+          <span>Diff: {metrics.point_diff}</span>
+        </div>
       </div>
-
       <div className="probs">
         {homePct != null && <span>Home win: {homePct}%</span>}
         {awayPct != null && <span>Away win: {awayPct}%</span>}
         {ensemblePct != null && <span>Ensemble: {ensemblePct}%</span>}
+        {homePct == null && awayPct == null && ensemblePct == null && (
+          <span>No probability data available.</span>
+        )}
       </div>
     </div>
   );
