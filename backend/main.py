@@ -20,20 +20,31 @@ Dependencies:
     - Models and metadata in backend/models/
     - Engineered features in backend/data/game_features.csv
 
-Run:
-    uvicorn backend.main:app --reload --port 8000
+    Run:
+        uvicorn backend.main:app --reload --port 8000
 
-Maintainer Notes:
-    - All endpoints return JSON; errors use HTTPException.
-    - Models are loaded once at startup for performance.
-    - Frontend static files can be served if configured.
+    Maintainer Notes:
+        - All endpoints return JSON; errors use HTTPException.
+        - Models are loaded once at startup for performance.
+        - Frontend static files can be served if configured.
+
+---------------------------------------------------------------------
+    # File: backend/main.py
+    # Purpose: FastAPI backend for NFL game predictions, serving ML models and API endpoints.
+    
+    # Functions: 
+    # load_objects, _validate_dataset_schema,_validate_features_present,  
+    #  _sanity_predict,_coerce_bool, _ensure_home_away, get_current_nfl_context,                  
+    #  _build_future_row, _normalize_feature_cols, health, debug_info, 
+    #  report_training, report_calibration, build_game_mask,
+    #  get_next_week_schedule, predict_game, predict_next_week
+    
+    # Variables: 
+    # model_objects, dataset_df, DEFAULT_CORS_ORIGINS, CORS_ORIGINS, CORS_ORIGIN_REGEX, TEAM_ABBREVIATIONS, TEAM_CODE_FIX, VALID_ABBRS, THIS_FILE, BACKEND_DIR, BASE_DIR, DATA_DIR, MODELS_DIR, LOG_DIR, DEFAULT_DATASET, DEFAULT_SCHEDULE, FRONTEND_DIR, FRONTEND_BUILD, FRONTEND_DIST, TRUTHY, SERVE_FRONTEND
+    
+    # Interacts With: backend/models/ (joblib models), backend/data/ (CSV datasets), frontend/ (static files if served), .env (config)
 """
 
-# File: backend/main.py
-# Purpose: FastAPI backend for NFL game predictions, serving ML models and API endpoints.
-# Functions: load_objects, _validate_dataset_schema, _sanity_predict, _coerce_bool, _ensure_home_away, get_current_nfl_context, _validate_features_present, _build_future_row, _normalize_feature_cols, health, debug_info, report_training, report_calibration, build_game_mask, get_next_week_schedule, predict_game, predict_next_week
-# Variables: model_objects, dataset_df, DEFAULT_CORS_ORIGINS, CORS_ORIGINS, CORS_ORIGIN_REGEX, TEAM_ABBREVIATIONS, TEAM_CODE_FIX, VALID_ABBRS, THIS_FILE, BACKEND_DIR, BASE_DIR, DATA_DIR, MODELS_DIR, LOG_DIR, DEFAULT_DATASET, DEFAULT_SCHEDULE, FRONTEND_DIR, FRONTEND_BUILD, FRONTEND_DIST, TRUTHY, SERVE_FRONTEND
-# Interacts With: backend/models/ (joblib models), backend/data/ (CSV datasets), frontend/ (static files if served), .env (config)
 
 from __future__ import annotations
 
@@ -70,8 +81,10 @@ MODELS_DIR = BACKEND_DIR / "models"
 LOG_DIR = BACKEND_DIR / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
+# ---------------------------------------------------------------------
 # Use game_features.csv which has the engineered features (prior stats, differentials, betting data)
 # merged_game_features.csv only has raw stats and won't work with trained models
+# ---------------------------------------------------------------
 DEFAULT_DATASET = DATA_DIR / "game_features.csv"
 DEFAULT_SCHEDULE = DATA_DIR / "Nfl_schedule_2025_2026.csv"
 
@@ -121,6 +134,7 @@ DEFAULT_CORS_ORIGINS = [
     "https://nfl-predict-frontend.vercel.app",
     "https://www.nfl-predict.com",
     "https://nfl-predict.com",
+    "https://new-nfl-predict.com",
 ]
 raw_cors = os.getenv("CORS_ORIGINS", "")
 CORS_ORIGINS = [
@@ -796,7 +810,7 @@ def build_game_mask(df: pd.DataFrame, season: int, week: int, home_abbr: str, aw
         mask &= df["is_home"].astype(bool)
     return mask
 
-@app.get("/schedule/next-week", response_model=List[ScheduleGame])
+@app.get("schedule/next-week", response_model=List[ScheduleGame])
 def get_next_week_schedule() -> List[ScheduleGame]:
     spath = Path(os.getenv("SCHEDULE_PATH", str(DEFAULT_SCHEDULE)))
     if not spath.exists():

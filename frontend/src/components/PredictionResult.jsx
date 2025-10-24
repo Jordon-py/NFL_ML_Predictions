@@ -17,24 +17,24 @@
  */
 
 import React from 'react';
+import HistoryChart from './HistoryChart';
+
 
 export default function PredictionResult({entry}) {
-// Checks entry prop for the predictions
-  console.log(`entry: ${JSON.stringify(entry)}, rawEntry in predictionResult.jsx: ${entry}`);
-  if (!entry) return (
-      <div className="prediction-result">No prediction yet.</div>  
-      // Provide a friendly fallback so the area never collapses visually.
-  ); 
+  const [history, setHistory] = useState([]);
+  let data = JSON.stringify(entry)
+  setHistory(data);
 
-  // Defensive destructuring: fallback to empty objects to avoid runtime errors if entry is malformed.
-  const {game = {}, metrics = {}, probs = {}} = entry;
-  // Convert probabilities to whole-number percentages for readability.
+  const {game = {}, metrics = {}, probs = {}} = data;
+
+  // Compute human-readable percentages, guarding against missing data.
   const homePct = probs.home != null ? Math.round(probs.home * 100) : null;
   const awayPct = probs.away != null ? Math.round(probs.away * 100) : null;
   const ensemblePct = probs.ensemble != null ? Math.round(probs.ensemble * 100) : null;
 
   return (
     <>
+      <HistoryChart {...history} />
       <div className="prediction-result" aria-live="polite">
         <h3>Prediction</h3>
         <div className="meta">
