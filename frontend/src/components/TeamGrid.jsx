@@ -103,6 +103,7 @@ export default function TeamGrid() {
   }, []);
 
   const handlePredict = async (game) => {
+  
     const key = makeKey(game);
     console.log('key: -->',key)
     if (loading[key]) return;
@@ -119,7 +120,7 @@ export default function TeamGrid() {
         season: Number(game.season),
         week: Number(game.week),
       };
-      const {home_score, away_score, home_win_probability, away_win_probability, point_diff} = await predictGame(payload);
+      let {home_score, away_score, home_win_probability, away_win_probability, point_diff} = await predictGame(payload);
       const result = {
         home_score: Number(home_score),
         away_score: Number(away_score),
@@ -128,6 +129,7 @@ export default function TeamGrid() {
         away_win_probability: Number(away_win_probability),
       };
       setPredictions((p) => ({...p, [key]: result}));
+      console.log(predictions)
     } catch (e) {
       console.error('[TeamGrid] predictGame:', e);
       setError('Failed to get prediction');
@@ -146,6 +148,7 @@ export default function TeamGrid() {
         </div>
       );
     }
+
     return (
       <div className="team">
         <img
@@ -186,6 +189,7 @@ export default function TeamGrid() {
       </div>
     );
   }
+ 
 
   return (
     <div className="team-grid-section">
