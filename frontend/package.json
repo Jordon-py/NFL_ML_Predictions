@@ -21,7 +21,6 @@
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
-    "@esbuild/win32-x64": "^0.25.11",
     "@vitejs/plugin-react": "^4.3.4",
     "esbuild": "^0.25.11",
     "typescript": "^5.6.3",
