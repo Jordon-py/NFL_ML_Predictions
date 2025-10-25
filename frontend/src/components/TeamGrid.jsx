@@ -75,8 +75,8 @@ export default function TeamGrid() {
 
     try {
       const payload = {
-        home_abbr: game.home_abbr || game.home_team,
-        away_abbr: game.away_abbr || game.away_team,
+        home_team: game.home_abbr || game.home_team,
+        away_team: game.away_abbr || game.away_team,
         season: Number(game.season), week: Number(game.week),
       };
       const res = await predictGame(payload);
@@ -92,7 +92,7 @@ export default function TeamGrid() {
       // persist to history
       const entry = {
         ts: new Date().toISOString(),
-        game: { season: payload.season, week: payload.week, home_abbr: payload.home_abbr, away_abbr: payload.away_abbr },
+        game: { season: payload.season, week: payload.week, home_abbr: payload.home_team, away_abbr: payload.away_team },
         probs: { home: result.home_win_probability, away: result.away_win_probability, ensemble: result.home_win_probability },
       };
       setHistory((h) => {

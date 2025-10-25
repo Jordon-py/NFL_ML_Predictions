@@ -24,45 +24,40 @@ body {
   box-sizing: border-box;
   overflow-y: scroll;
   max-height: 100vh;
-   /* Use 99vw to avoid accidental horizontal scrollbars on small viewports */
+  /* Use 99vw to avoid accidental horizontal scrollbars on small viewports */
   max-width: 100vw;
   width: 100%;
-   }
+}
 
 main.app-main {
-    padding: 2rem 0;
-    min-height: 100vh;
-    min-width: 100vw;
-   }
+  padding: 2rem 0;
+  min-height: 100vh;
+  min-width: 100vw;
+}
 
 
 
 .container {
-    /* keep container within viewport without forcing scrollbars */
-    max-width: 100vw;
+  /* keep container within viewport without forcing scrollbars */
+  max-width: 100vw;
   width: 100%;
   margin: 0 0;
   padding: 1.5rem;
-   }
-   
-   
-/* ------------------------------
-   Design Tokens (with fallbacks)
+}
+
+
+/* Design Tokens (with fallbacks)
    ------------------------------ */
 :root {
-  /* Colors (fallback hex, then oklch where supported) */
-  --c-brand-1: #0080ff; /* oklch(0.72 0.17 255) */
-  --c-brand-1-70: #0080ffb3;
-  --c-brand-2: #003264;  /* deep navy */
-  --c-ink: #0f0f0f;
+  --c-brand-1: #0080ff;
+  --c-brand-2: #003264;
   --c-ink-muted: #2c3e50;
   --c-danger: #e74c3c;
   --c-accent: #3498db;
-  --c-bg-soft: #ffffffd1;
   --c-card: rgba(0, 106, 255, 0.12);
 
   /* Surfaces */
-  --glass: rgba(255,255,255,0.12);
+  --glass: rgba(255, 255, 255, 0.12);
 
   /* Radii, spacing, shadows, motion */
   --r-md: 12px;
@@ -73,12 +68,11 @@ main.app-main {
   --sp-4: 24px;
   --sp-5: 32px;
 
-  --shadow-1: 0 2px 8px rgba(0,0,0,0.12);
+  --shadow-1: 0 2px 8px rgba(0, 0, 0, 0.12);
   --shadow-2: 0 10px 20px lch(5.24% 22.39 286.16 / 0.271);
 
-  --t-fast: 160ms;
   --t-base: 260ms;
-  --e-out: cubic-bezier(.2,.8,.2,1);
+  --e-out: cubic-bezier(.2, .8, .2, 1);
 
   /* Backdrop blur strength */
   --blur-weak: 6px;
@@ -87,28 +81,59 @@ main.app-main {
 
 /* Keyframes for animations */
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.5;
+  }
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes shine {
-  0% { background-position: -200% center; }
-  100% { background-position: 200% center; }
+  0% {
+    background-position: -200% center;
+  }
+
+  100% {
+    background-position: 200% center;
+  }
 }
 
 @keyframes outlineGlow {
-  0%, 100% { border-color: 0 0 0 0 rgba(4, 100, 210, 0.35); }
-  50% { border-color: 0 0 10px 3px rgba(4, 100, 210, 0.5); }
+
+  0%,
+  100% {
+    border-color: 0 0 0 0 rgba(4, 100, 210, 0.35);
+  }
+
+  50% {
+    border-color: 0 0 10px 3px rgba(4, 100, 210, 0.5);
+  }
 }
 
 /* Respect reduced motion */
 @media (prefers-reduced-motion: reduce) {
-  * { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; scroll-behavior: auto !important; }
+  * {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* =========================
@@ -126,7 +151,7 @@ main.app-main {
   display: -moz-grid-lines;
   grid-template-columns: repeat(space-between, minmax(300px, 1fr));
   gap: 3rem 2rem;
- 
+
   /* ensure grid fits in viewport height and width and stretches to available width */
   /* allow inherited height but ensure the section never exceeds viewport height */
   height: 100%;
@@ -150,7 +175,8 @@ main.app-main {
 .team-grid-header h2 {
   background-color: #000000;
   color: whitesmoke;
-  text-decoration: underline; /* consider using ::after underline bar if you want more control */
+  text-decoration: underline;
+  /* consider using ::after underline bar if you want more control */
   font-size: 4.5rem;
   font-weight: 800;
   border-radius: var(--r-md);
@@ -168,7 +194,7 @@ main.app-main {
   align-items: space-between;
   background: var(--c-card);
   backdrop-filter: blur(var(--blur-weak));
-  border: 2px solid ;
+  border: 2px solid;
   gap: 30px;
   max-height: 300px;
   border-radius: var(--r-md);
@@ -177,11 +203,12 @@ main.app-main {
   margin-bottom: 2rem;
   cursor: pointer;
   transition: transform var(--t-base) var(--e-out),
-      box-shadow var(--t-base) var(--e-out),
-      border-color var(--outlineGlow);
+    box-shadow var(--t-base) var(--e-out),
+    border-color var(--t-base) var(--e-out);
   will-change: transform;
   animation: fadeIn 0.9s ease-in-out;
 }
+
 /* PASS 2: Switch to responsive CSS Grid for matchups.*/
 .matchup-card.inner-card.has-prediction {
   display: flex;
@@ -195,11 +222,12 @@ main.app-main {
   padding: 10px;
   margin-top: 4rem;
   box-shadow:
-   0 8px 16px 0px white,
-   0.3em 0.7em 20rem 1px rgba(255, 255, 255, 0.487);
+    0 8px 16px 0px white,
+    0.3em 0.7em 20rem 1px rgba(255, 255, 255, 0.487);
 
   border-color: #7dcbffbf;
 }
+
 /* =======================
    MATCHUP CARD + STATES
    ======================= */
@@ -222,14 +250,16 @@ main.app-main {
   margin-bottom: 2rem;
   cursor: pointer;
   transition: transform var(--t-base) var(--e-out),
-      box-shadow var(--t-base) var(--e-out),
-      border-color var(--t-base) var(--e-out);
+    box-shadow var(--t-base) var(--e-out),
+    border-color var(--t-base) var(--e-out);
   will-change: transform;
   animation: fadeIn 0.9s ease-in-out;
 }
 
 
-.matchup-card:focus { outline: 2px solid #2766ae; }
+.matchup-card:focus {
+  outline: 2px solid #2766ae;
+}
 
 /* PASS 1: fix invalid box-shadow syntax. Add :focus-visible for keyboard users. */
 .matchup-card:focus-visible {
@@ -248,8 +278,10 @@ main.app-main {
   border-color: #2766ae;
   background: linear-gradient(135deg, #ffffff 0%, #003260d4 45%, var(--c-brand-2) 100%);
   transition: all;
-  transform: matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, -2, 0, 1); /* PASS 3: remove matrix3d no-op */
-  transform: translateY(-4px) scale(1.20); /* PASS 3: subtle scale for pop */
+  transform: matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, -2, 0, 1);
+  /* PASS 3: remove matrix3d no-op */
+  transform: translateY(-4px) scale(1.20);
+  /* PASS 3: subtle scale for pop */
 }
 
 /* =======================
@@ -272,7 +304,8 @@ main.app-main {
 }
 
 .vs-indicator {
-  font-size: 2.2rem; /* slight reduction for better balance */
+  font-size: 2.2rem;
+  /* slight reduction for better balance */
   font-weight: 800;
   color: #00181a;
   margin: 0 auto;
@@ -299,11 +332,12 @@ main.app-main {
 
 }
 
-  
+
 .team-logo:hover {
   transform: scale(1.05);
   box-shadow: 0 8px 15px rgba(0, 0, 0, 0.2);
 }
+
 .team-logo-placeholder {
   /* responsive square placeholder */
   max-width: 90px;
@@ -339,7 +373,7 @@ main.app-main {
 
 .team-abbr {
   font-size: 1.4rem;
-  color:lch(from color 50% 0% 0%);
+  color: lch(from color 50% 0% 0%);
   font-weight: 700;
 }
 
@@ -400,11 +434,13 @@ main.app-main {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 3.5rem; /* reduced gap for tighter grouping */
+  gap: 3.5rem;
+  /* reduced gap for tighter grouping */
 }
 
 /* PASS 2: Badge styling for scores with subtle glow; keep text contrast high */
-.score.home-score, .score.away-score {
+.score.home-score,
+.score.away-score {
   font-size: 1.9rem;
   font-weight: 800;
   padding: 4px 10px;
@@ -412,9 +448,10 @@ main.app-main {
   min-width: 56px;
   text-align: center;
   line-height: 1.25;
-  background: #0b1220; /* dark pill background for both */
+  background: #0b1220;
+  /* dark pill background for both */
   color: #fff;
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 
 .score-separator {
@@ -456,7 +493,15 @@ main.app-main {
   margin: 0;
 }
 
-@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
 
 .team-grid-error h3 {
   color: var(--c-danger);
@@ -479,10 +524,10 @@ main.app-main {
   transition: background-color var(--t-base) var(--e-out), transform var(--t-base) var(--e-out), box-shadow var(--t-base) var(--e-out);
 }
 
-.team-grid-error button:hover { 
-  background: #2980b9; 
+.team-grid-error button:hover {
+  background: #2980b9;
   transform: scale(1.05);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 /* ================
@@ -493,9 +538,11 @@ main.app-main {
    PASS 2: Ensure grid collapses cleanly on smaller widths. */
 
 @media (max-width: 430px) {
-  .team-grid-header h2 { font-size: 2rem; }
+  .team-grid-header h2 {
+    font-size: 2rem;
+  }
 
-  .matchup-card { 
+  .matchup-card {
     max-height: 400px;
     max-width: 400px;
     height: 380px;
@@ -530,7 +577,7 @@ main.app-main {
     text-align: left;
   }
 
-  .team-info { 
+  .team-info {
     align-items: flex-start;
   }
 
@@ -539,13 +586,19 @@ main.app-main {
     text-align: left;
   }
 
-  .score { font-size: 1.5rem; }
+  .score {
+    font-size: 1.5rem;
+  }
 }
 
 @media (max-width: 600px) {
-  .team-grid-header h2 { font-size: 1.9rem; }
+  .team-grid-header h2 {
+    font-size: 1.9rem;
+  }
 
-  .matchup-card { padding: var(--sp-4); }
+  .matchup-card {
+    padding: var(--sp-4);
+  }
 
   .matchup-teams {
     gap: var(--sp-2);
@@ -563,43 +616,59 @@ main.app-main {
 
 @media (max-width: 430px) {
   .team-grid-section {
-    grid-template-columns: 1fr; /* single column on small screens */
+    grid-template-columns: 1fr;
+    /* single column on small screens */
     width: 95%;
     margin: 3rem auto;
     padding: 1rem;
   }
-  .team-grid-header h2 { font-size: 1.75rem; }
 
-  .matchup-card.inner-card { padding: 12px;
+  .team-grid-header h2 {
+    font-size: 1.75rem;
+  }
+
+  .matchup-card.inner-card {
+    padding: 12px;
     max-height: 250px;
     max-width: 90vw;
     height: 350px;
     width: 350px;
     margin: 0 auto;
   }
+
   .matchup-card.inner-card {
     display: contents;
   }
+
   .team-logo,
   .team-logo-placeholder {
     width: 50px;
     height: 50px;
   }
 
-  .team-name { font-size: 0.9rem; }
-  .team-abbr { font-size: 0.8rem; }
-  .matchup-time { font-size: 0.85rem; }
+  .team-name {
+    font-size: 0.9rem;
+  }
 
-  .matchup-card.inner-card.has-prediction { 
+  .team-abbr {
+    font-size: 0.8rem;
+  }
+
+  .matchup-time {
+    font-size: 0.85rem;
+  }
+
+  .matchup-card.inner-card.has-prediction {
     overflow: visible;
     display: flex;
     max-height: 240px;
 
   }
+
   .predicted-scores {
     display: flex;
     flex-direction: column;
-    align-items:flex-start;
+    align-items: flex-start;
     justify-content: center;
     font-size: 1rem;
     padding: 4px 4px;

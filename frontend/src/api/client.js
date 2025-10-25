@@ -142,8 +142,8 @@ function postJson(path, payload, opts = {}) {
 /** Shape normalizer for /predict input */
 export function toPredictionRequest(game) {
   return {
-    home_abbr: game.home_abbr || game.home_team,
-    away_abbr: game.away_abbr || game.away_team,
+    home_team: game.home_abbr || game.home_team,
+    away_team: game.away_abbr || game.away_team,
     season: Number(game.season),
     week: Number(game.week),
   };
