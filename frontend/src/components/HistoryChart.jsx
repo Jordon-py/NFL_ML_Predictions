@@ -1,50 +1,62 @@
-/**
- * HistoryChart.jsx
- * ----------------
- * Render a compact history view for prediction entries.
- * Accepts either a single entry or an array of entries as `historyData`.
- */
-
+// /frontend/src/components/HistoryChart.jsx
+// @ts-nocheck
 import React, { useMemo } from 'react';
 
-export default function HistoryChart({ state, history }) {
-  // Handle different prop patterns
-  const historyArray = state?.history || history || [];
+export default function HistoryChart({ history = [] }) {
+  const items = Array.isArray(history) ? history : [];
 
   const points = useMemo(() => {
-    return historyArray.map((e, idx) => {
-      const ts = e?.ts ?? e?.game?.ts ?? null;
-      const rawProb = e?.probs?.ensemble ?? e?.probs?.home ?? e?.probs?.away ?? null;
-      const pct = rawProb != null && typeof rawProb === 'number' ? Math.round(rawProb * 100) : null;
-      const label = `${e?.game?.away_abbr ?? 'Away'} @ ${e?.game?.home_abbr ?? 'Home'}`;
-      const time = ts ? new Date(ts) : null;
+    return items.map((e, i) => {
+      const ts = e.ts || e.time || null;
+      const label = e?.game
+        ? `${e.game.season} W${e.game.week} ${e.game.away_abbr}@${e.game.home_abbr}`
+        : `Entry ${i + 1}`;
+      const homeProb = e?.probs?.home ?? e?.probs?.ensemble ?? e?.home_win_probability ?? null;
       return {
-        x: time,
-        y: pct,
+        x: ts ? new Date(ts) : null,
+        y: homeProb != null ? Math.round(homeProb * 100) : null,
         label,
-        originalIndex: idx,
+        idx: i
       };
     });
-  }, [historyArray]);
+  }, [items]);
 
-  if (points.length === 0) {
-    return <div className="history-chart">No history yet.</div>;
-  }
+  const summary = useMemo(() => {
+    const ys = points.map(p => p.y).filter(v => typeof v === "number");
+    const avg = ys.length ? (ys.reduce((a, b) => a + b, 0) / ys.length) : null;
+    return {
+      count: items.length,
+      last: items[0]?.ts || null,
+      avgHomeWinPct: avg != null ? Math.round(avg) : null
+    };
+  }, [points, items]);
 
   return (
-    <div className="history-chart" aria-live="polite">
-      <h3>Prediction History</h3>
-      <ul>
-        {points.map((p) => (
-          <li key={p.originalIndex}>
-            <code>{p.x ? p.x.toLocaleString() : '—'}</code>
-            {' — '}
-            <strong>{p.y != null ? `${p.y}%` : 'n/a'}</strong>
-            {' '}
-            <em>({p.label})</em>
-          </li>
-        ))}
-      </ul>
-    </div>
+    <section className="history-chart">
+      <header>
+        <h3>Prediction History</h3>
+        <small>
+          {summary.count} item(s)
+          {summary.last ? <> • last: {new Date(summary.last).toLocaleString()}</> : null}
+          {summary.avgHomeWinPct != null ? <> • avg home win: {summary.avgHomeWinPct}%</> : null}
+        </small>
+      </header>
+
+      {points.length === 0 ? (
+        <p>No history yet. Make some predictions to populate this view.</p>
+      ) : (
+        <ol className="history-points">
+          {points.map((p) => (
+            <li key={p.idx} title={p.label}>
+              <code>{p.x ? p.x.toLocaleString() : "—"}</code>
+              {" — "}
+              <strong>{p.y != null ? `${p.y}%` : "n/a"}</strong>
+              {" "}
+              <em>({p.label})</em>
+            </li>
+          ))}
+        </ol>
+      )}
+    </section>
   );
 }

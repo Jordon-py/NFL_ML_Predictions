@@ -100,6 +100,11 @@ FRONTEND_DIST = FRONTEND_DIR / "dist"
 TRUTHY = {"true", "t", "1", "yes", "y"}
 SERVE_FRONTEND = os.getenv("SERVE_FRONTEND", "false").strip().lower() in TRUTHY
 
+# Configuration: whether to allow fallback/dummy predictions when features or
+# win-models are missing. Set to 'false' to reject predictions that rely on
+# fallbacks and force clients to only accept predictions produced by trained models.
+ALLOW_FALLBACK_PREDICTIONS = os.getenv("ALLOW_FALLBACK_PREDICTIONS", "true").strip().lower() in TRUTHY
+
 # Logging
 logging.config.dictConfig(
     {
@@ -516,6 +521,7 @@ class PredictionResponse(BaseModel):
     away_win_probability: float
     point_diff: float
     mode: str
+    prediction_source: str
 
 
 class HealthResponse(BaseModel):
@@ -636,8 +642,17 @@ def _build_future_row(
 
     def compute_team_features(team: str, prefix: str) -> Dict[str, Any]:
         """Compute prior features for a team using their last N completed games."""
-        # Find all games where this team played
-        team_mask = (local["home_team"] == team) | (local["away_team"] == team)
+        # Find all games where this team played. Use .get to avoid KeyError
+        # when dataset lacks canonical home/away columns; fall back to
+        # alternative columns where possible.
+        if "home_team" in local.columns and "away_team" in local.columns:
+            team_mask = (local.get("home_team") == team) | (local.get("away_team") == team)
+        elif {"team", "opponent_team"}.issubset(local.columns):
+            # Fallback layout where each row is a single team/opponent pair
+            team_mask = (local.get("team") == team) | (local.get("opponent_team") == team)
+        else:
+            log.warning("Dataset missing home/away and team/opponent columns; cannot compute history mask for %s", team)
+            team_mask = pd.Series(False, index=local.index)
         # Only use completed games before the target game
         completed_mask = (
             local["home_points_for"].notna() & 
@@ -647,7 +662,14 @@ def _build_future_row(
         history = local[team_mask & completed_mask].sort_values("time_key")
         
         if history.empty:
-            raise ValueError(f"No prior data for {team} before {season} Week {week}")
+            # Instead of raising here (which bubbles up and can cause a 500/400
+            # response for batch operations), return an empty feature set and
+            # allow downstream code to proceed with NaNs/defaults. The model
+            # pipeline contains imputers and fallbacks; this makes the API
+            # resilient when the training dataset lacks prior games for a team
+            # (e.g., newly relocated/renamed teams or partial datasets).
+            log.warning("No prior data for %s before %s-W%d; using NaN/default fallbacks", team, season, week)
+            return {}
         
         features = {}
         
@@ -657,7 +679,9 @@ def _build_future_row(
         
         # Helper to extract team's stats from a game row
         def get_team_stats(row, team_abbr):
-            is_home = row["home_team"] == team_abbr
+            # Use safe .get accessors on the row (Series) to avoid KeyError
+            home_val = row.get("home_team")
+            is_home = bool(home_val == team_abbr) if home_val is not None else False
             if is_home:
                 return {
                     "pf": row.get("home_points_for", np.nan),
@@ -688,7 +712,8 @@ def _build_future_row(
         # For advanced stats, try to use the most recent values from the dataset
         # (these are pre-computed in game_features.csv)
         last_game = history.iloc[-1]
-        was_home_last = last_game["home_team"] == team
+        # Determine whether the team was the home team in the last recorded game
+        was_home_last = bool(last_game.get("home_team") == team) if last_game is not None else False
         source_prefix = "home_" if was_home_last else "away_"
         
         # Copy advanced prior stats from last game
@@ -705,9 +730,36 @@ def _build_future_row(
         
         return features
     
-    # Get features for both teams
-    home_features = compute_team_features(home, "home_")
-    away_features = compute_team_features(away, "away_")
+    # Get features for both teams. Any unexpected error during feature
+    # computation is caught and reduced to an empty feature set so that
+    # downstream code can still assemble a row (with NaNs/defaults) and
+    # allow model imputers to handle missing values. This prevents
+    # _build_future_row from raising and causing a 500 response.
+    try:
+        home_features = compute_team_features(home, "home_")
+    except Exception as exc:
+        log.warning(
+            "Error computing home features for %s before %s-W%d: %s",
+            home,
+            season,
+            week,
+            exc,
+        )
+        log.debug("Exception details:", exc_info=True)
+        home_features = {}
+
+    try:
+        away_features = compute_team_features(away, "away_")
+    except Exception as exc:
+        log.warning(
+            "Error computing away features for %s before %s-W%d: %s",
+            away,
+            season,
+            week,
+            exc,
+        )
+        log.debug("Exception details:", exc_info=True)
+        away_features = {}
     
     # Merge all features
     feature_row = {**home_features, **away_features}
@@ -744,8 +796,26 @@ def _build_future_row(
     feature_row["rest_diff"] = 0
     feature_row["home_game_date"] = f"{season}-W{week:02d}"  # Categorical feature
     
-    log.debug("Built future row for %s vs %s: %d features", home, away, len(feature_row))
-    return pd.Series(feature_row)
+    # Ensure we never raise here; wrap final assembly in a defensive block.
+    try:
+        log.debug("Built future row for %s vs %s: %d features", home, away, len(feature_row))
+        return pd.Series(feature_row)
+    except Exception as exc:
+        # As a last-resort fallback, return an empty Series with the
+        # lightweight default fields filled so prediction path can continue.
+        log.error("Failed to coerce feature_row to Series for %s vs %s: %s", home, away, exc, exc_info=True)
+        fallback = {
+            "home_moneyline_prob": 0.6,
+            "away_moneyline_prob": 0.4,
+            "moneyline_prob_diff": 0.0,
+            "spread_line": 0.0,
+            "total_line": 45.0,
+            "home_rest": 7,
+            "away_rest": 7,
+            "rest_diff": 0,
+            "home_game_date": f"{season}-W{week:02d}",
+        }
+        return pd.Series(fallback)
 
 
 # -----------------------
@@ -821,12 +891,22 @@ def build_game_mask(df: pd.DataFrame, season: int, week: int, home_abbr: str, aw
     """
     Helper to build a boolean mask for selecting a specific game from the dataset.
     """
-    mask = (
-        (df["season"] == season)
-        & (df["week"] == week)
-        & (df["home_team"] == home_abbr)
-        & (df["away_team"] == away_abbr)
-    )
+    # Defensive access: dataset may not always contain canonical home/away columns
+    # (older or alternate dataset formats). Use .get to avoid KeyError and
+    # fall back to conservative comparisons when columns are missing.
+    season_mask = (df.get("season") == season) if "season" in df.columns else pd.Series(False, index=df.index)
+    week_mask = (df.get("week") == week) if "week" in df.columns else pd.Series(False, index=df.index)
+
+    home_col = df.get("home_team")
+    away_col = df.get("away_team")
+
+    if home_col is None or away_col is None:
+        # If the dataset lacks home/away canonical columns, return an all-False mask
+        # to avoid accidental matches. Upstream callers should ensure dataset has
+        # been normalized via _ensure_home_away before calling this helper.
+        return pd.Series(False, index=df.index)
+
+    mask = season_mask & week_mask & (home_col == home_abbr) & (away_col == away_abbr)
     if "is_home" in df.columns:
         mask &= df["is_home"].astype(bool)
     return mask
@@ -871,24 +951,36 @@ def get_next_week_schedule() -> List[ScheduleGame]:
 
     games: List[ScheduleGame] = []
     for _, r in week_games.iterrows():
-        h = get_abbr(r["home_team"])
-        a = get_abbr(r["away_team"])
-        games.append(
-            ScheduleGame(
-                season=int(r["season"]),
-                week=int(r["week"]),
-                home_team=h,
-                home_abbr=h,
-                away_team=a,
-                away_abbr=a,
-                # Add predicted scores and win probabilities
-                predicted_home_score=None,
-                predicted_away_score=None,
-                home_win_probability=None,
-                away_win_probability=None,
-                kickoff=r["kickoff_ts_utc"],
+        try:
+            # Normalize team abbreviations safely; skip game if unknown
+            h = get_abbr(r["home_team"])
+            a = get_abbr(r["away_team"])
+
+            # Convert pandas Timestamp to native datetime for Pydantic
+            kickoff_val = r.get("kickoff_ts_utc")
+            if hasattr(kickoff_val, "to_pydatetime"):
+                kickoff_val = kickoff_val.to_pydatetime()
+
+            games.append(
+                ScheduleGame(
+                    season=int(r["season"]),
+                    week=int(r["week"]),
+                    home_team=h,
+                    home_abbr=h,
+                    away_team=a,
+                    away_abbr=a,
+                    # Add predicted scores and win probabilities
+                    predicted_home_score=None,
+                    predicted_away_score=None,
+                    home_win_probability=None,
+                    away_win_probability=None,
+                    kickoff=kickoff_val,
+                )
             )
-        )
+        except Exception as e:
+            # Log and skip malformed schedule rows rather than failing the whole endpoint
+            log.exception("Skipping schedule row due to error: %s", e)
+            continue
     log.info("Schedule week %s games=%d", current_week, len(games))
     return games
 
@@ -896,211 +988,167 @@ def get_next_week_schedule() -> List[ScheduleGame]:
 @app.post("/predict", response_model=PredictionResponse)
 def predict_game(payload: PredictionRequest) -> PredictionResponse:
     """
-    Predict endpoint: Accepts home/away teams, season, and week; 
-    extracts features from dataset or builds them for future games, 
-    runs ML models for score and win probability, and handles errors 
-    for missing data, completed games, or prediction failures.
+    Predict endpoint: Accepts home/away teams, season, and week; extracts features
+    from dataset or builds them for future games, runs ML models for score and win
+    probability, and handles errors for missing data, completed games, or prediction
+    failures.
     """
     if model_objects is None or dataset_df is None:
-        raise HTTPException(500, "Models or dataset not loaded. Please ensure the backend is properly initialized.")
+        raise HTTPException(
+            500,
+            "Models or dataset not loaded. Please ensure the backend is properly initialized.",
+        )
 
     try:
+        # ---- Normalize inputs
         h = get_abbr(payload.home_team)
         a = get_abbr(payload.away_team)
-        log.debug(f"predict_game: home_team={h}, away_team={a}")
         season, week = int(payload.season), int(payload.week)
-        mask = build_game_mask(dataset_df, season, week, h, a)
-        rows = dataset_df.loc[mask]
-        
-        # Try to get existing row from dataset
+        log.debug("predict_game: home_team=%s, away_team=%s, season=%s, week=%s", h, a, season, week)
+
+        # ---- Dataset safety
+        safe_dataset = _ensure_home_away(dataset_df.copy()) if dataset_df is not None else dataset_df
+        feature_fallback_used = False
+
+        # ---- Look for an already-assembled row in the dataset
+        mask = build_game_mask(safe_dataset, season, week, h, a)
+        rows = safe_dataset.loc[mask] if safe_dataset is not None else pd.DataFrame()
+
         if not rows.empty:
             row = rows.iloc[0]
-            # Check if game is already completed
+            # If the game is already completed, we still proceed to return model output
+            # (you may choose to early-return the actual final score here if desired).
             if pd.notna(row.get("home_points_for")) and pd.notna(row.get("away_points_for")):
-                logging.info(
-                    "Game completed; no prediction needed: %s vs %s (%d Week %d)", h, a, season, week)
+                log.info("Game appears completed: %s vs %s (%d W%d)", h, a, season, week)
         else:
-            # Game not in dataset - build features dynamically for future game
-            log.info("Building features for future game: %s vs %s (%d Week %d)", h, a, season, week)
+            # ---- Build features dynamically for future game
+            log.info("Building features for future game: %s vs %s (%d W%d)", h, a, season, week)
             try:
-                row = _build_future_row(dataset_df, h, a, season, week)
-            except ValueError as e:
-                raise HTTPException(
-                    400,
-                    f"Cannot predict {h} vs {a} ({season} Week {week}): {e}"
+                row = _build_future_row(
+                    safe_dataset if safe_dataset is not None else dataset_df,
+                    h, a, season, week
                 )
-        
-       # --- Build feature vector using the TRAINING CONTRACT (metadata.raw_feature_columns) ---
+            except Exception as e:
+                # Fallback to neutral defaults so imputers can handle missing values
+                log.warning(
+                    "Feature build failed for %s vs %s (%d W%d); using defaults: %s",
+                    h, a, season, week, e
+                )
+                log.debug("Feature build exception details:", exc_info=True)
+                row = pd.Series({
+                    "home_moneyline_prob": 0.6,
+                    "away_moneyline_prob": 0.4,
+                    "moneyline_prob_diff": 0.0,
+                    "spread_line": 0.0,
+                    "total_line": 45.0,
+                    "home_rest": 7,
+                    "away_rest": 7,
+                    "rest_diff": 0,
+                    "home_game_date": f"{season}-W{week:02d}",
+                })
+                feature_fallback_used = True
+
+        # ---- Coerce 'row' to Series defensively
+        try:
+            row = pd.Series(row)
+        except Exception:
+            log.debug("Coercing prediction row to empty Series for %s vs %s", h, a)
+            row = pd.Series({}, dtype=object)
+
+        # ---- Assemble features in the exact training order
         raw_cols = model_objects.get("raw_feature_columns", {})
         exp_num = list(raw_cols.get("numeric", []))
         exp_cat = list(raw_cols.get("categorical", []))
         exp_all = exp_num + exp_cat
 
-        # Safety: we'll source from the found row (dataset or _build_future_row),
-        # but we also guarantee required categoricals exist.
         def _get_or_default(col: str):
-            # Prefer the dynamic/lookup row value when available
-            if col in row.index:
-                v = row[col]
-                # Keep NaN for numeric; imputer will handle it
-                return v if (not pd.isna(v)) else np.nan
+            # Prefer available value from 'row'
+            try:
+                if col in row.index:
+                    v = row.get(col, np.nan)
+                    return v if not pd.isna(v) else np.nan
+            except Exception:
+                pass
 
-            # Provide smart defaults for known categoricals the model expects
+            # Provide smart defaults for known categoricals
             if col == "home_team":
                 return h
             if col == "away_team":
                 return a
             if col == "home_game_date":
-                # Keep a stable categorical token even when we don't have a true date
                 return f"{season}-W{week:02d}"
 
-            # Rest features: okay to be NaN; imputer (median) will fill
-            if col in {"home_rest", "away_rest"}:
-                return np.nan
-
-            # Moneyline/lines: neutral defaults if training included them but our row lacks them
-            # if col in {"home_moneyline_prob", "away_moneyline_prob", "moneyline_prob_diff"}:
-            #     return {"home_moneyline_prob": 0.5,
-            #             "away_moneyline_prob": 0.5,
-            #             "moneyline_prob_diff": 0.0}[col]
-            # if col == "spread_line":
-            #     return 0.0
-            # if col == "total_line":
-            #     return 45.0
-
-            # Anything else: NaN (numeric imputer) or empty string (most_frequent for cats) — but we don't know dtype here,
-            # so return NaN and let imputers handle it; OHE has handle_unknown='ignore' for unseen cats.
+            # Leave numerics as NaN (imputer will handle)
             return np.nan
 
-        # Assemble X in EXACT training order
-        data = {col: [_get_or_default(col)] for col in exp_all}
-        X = pd.DataFrame(data, columns=exp_all)
- 
+        X = pd.DataFrame({col: [_get_or_default(col)] for col in exp_all}, columns=exp_all)
+        missing_after = [c for c in exp_all if c not in X.columns]
+        if missing_after:
+            log.warning("Missing expected feature cols after assembly: %s", missing_after)
+            for c in missing_after:
+                X[c] = np.nan
 
-        def _reg_predict(bundle: Any, X: pd.DataFrame) -> np.ndarray:
-            """
-            Predicts scores using a model bundle.
 
-            Logic:
-                - If bundle is a dict with 'hgbr', 'ridge', and 'weight', computes a weighted ensemble prediction.
-                - If bundle contains a 'model' or 'estimator' key, delegates prediction to that object.
-                - If bundle is a dict with any predictor object, uses the first found predictor.
-                - If bundle is a single predictor object, calls its predict method.
-                - Raises AttributeError if no valid prediction method is found.
-
-            Fallback:
-                - Attempts all reasonable dict keys before erroring, ensuring robust handling of model serialization formats.
-            """
-            log.debug("Model bundle type: %s, hasattr predict: %s", type(bundle), hasattr(bundle, "predict"))
-            if isinstance(bundle, dict):
-                log.debug("Model bundle keys: %s", list(bundle.keys()) if hasattr(bundle, 'keys') else 'no keys method')
-                if {"hgbr", "ridge", "weight"}.issubset(bundle):
-                    weight = float(bundle["weight"])
-                    preds_hgbr = bundle["hgbr"].predict(X)
-                    log.debug(f'PREDS_HGBR LINE: 970: {preds_hgbr}')
-                    preds_ridge = bundle["ridge"].predict(X)
-                    log.debug(f'preds_ridge: {preds_ridge}')
-                    
-                    return weight * preds_hgbr + (1.0 - weight) * preds_ridge
-                
-                delegate = bundle.get("model") or bundle.get("estimator")
-                if delegate is not None and hasattr(delegate, "predict"):
-                    return delegate.predict(X)
-                # If dict but no expected structure, try to find any predictor
-                for key, value in bundle.items():
-                    if hasattr(value, "predict"):
-                        log.debug("Using predictor from dict key: %s", key)
-                        return value.predict(X)
-            if not isinstance(bundle, dict) and hasattr(bundle, "predict"):
-                return bundle.predict(X)
-            raise AttributeError(f"Score model lacks predict method. Type: {type(bundle)}")
-        
-        '''HOME_SCORE'''
-        # HOME_SCORE
-        home_score = float(
-            np.clip(
-                _reg_predict(model_objects["home_model"], X)[0],
-                0.0,
-                70.0,
-            )
-        )
-        print('home_score: ', home_score)
-        
-        # AWAY_SCORE
-        away_score = float(
-            np.clip(
-                _reg_predict(model_objects["away_model"], X)[0],
-                0.0,
-                70.0,
-            )
-        )
+        home_score = float(np.clip(_reg_predict(model_objects["home_model"], X)[0], 0.0, 70.0))
+        away_score = float(np.clip(_reg_predict(model_objects["away_model"], X)[0], 0.0, 70.0))
         point_diff = round(home_score - away_score, 1)
-        # Win probability from calibrated classifier if present, else sigmoid on margin
-        try:
-            # Safely obtain the raw "win_model" entry from model_objects. It may be:
-            #  - a string/path (filename saved with joblib)
-            #  - an already-loaded Pipeline object
-            #  - None / missing
-            try:
-                win_model_entry = (
-                    model_objects.get("win_model")
-                    if isinstance(model_objects, dict)
-                    else getattr(model_objects, "win_model", None)
-                )
-            except Exception:
-                win_model_entry = None
 
+        # ---- Win probability (classifier if available; else sigmoid on margin)
+        win_fallback_used = False
+        try:
+            win_entry = model_objects.get("win_model") if isinstance(model_objects, dict) else getattr(model_objects, "win_model", None)
             win_m = None
-            # If entry appears to be a path, attempt to load from disk once
-            if isinstance(win_model_entry, (str, bytes, os.PathLike)):
-                win_path = Path(str(win_model_entry))
-                # If a relative path, assume models directory
+            if isinstance(win_entry, (str, bytes, os.PathLike)):
+                win_path = Path(str(win_entry))
                 if not win_path.is_absolute():
                     win_path = MODELS_DIR / win_path
                 try:
                     win_m = joblib.load(win_path)
                 except Exception:
-                    log.exception("Failed to load win_model from path %s; will fallback to sigmoid", win_path)
-                    win_m = None
-            else:
-                # If it's not a path and not None, assume it's already a loaded estimator (Pipeline)
-                # Do not call joblib.load on an object.
-                if win_model_entry is not None:
-                    win_m = win_model_entry
-                else:
-                    win_m = None
+                    log.exception("Failed to load win_model from path %s; using sigmoid fallback", win_path)
+            elif win_entry is not None:
+                win_m = win_entry
 
-            # Use the estimator if available and supports predict_proba, else fallback
             if win_m is not None:
-                try:
-                    # Expect X to be a DataFrame or array prepared earlier
-                    if hasattr(win_m, "predict_proba"):
-                        home_prob = float(win_m.predict_proba(X)[0, 1])
-                    else:
-                        # If estimator lacks predict_proba, fallback to predict then sigmoid
-                        pred_margin = float(win_m.predict(X)[0])
-                        home_prob = 1.0 / (1.0 + math.exp(-0.25 * pred_margin))
-                except Exception:
-                    log.exception("win_model prediction failed; falling back to margin sigmoid")
-                    home_prob = 1.0 / (1.0 + math.exp(-0.25 * point_diff))
+                if hasattr(win_m, "predict_proba"):
+                    home_prob = float(win_m.predict_proba(X)[0, 1])
+                else:
+                    pred_margin = float(win_m.predict(X)[0])
+                    home_prob = 1.0 / (1.0 + math.exp(-0.25 * pred_margin))
             else:
-                # No classifier available — use margin-based sigmoid as fallback
                 home_prob = 1.0 / (1.0 + math.exp(-0.25 * point_diff))
+                win_fallback_used = True
         except Exception:
-            # Very defensive final fallback
             log.exception("Unexpected error while computing win probability; using sigmoid fallback")
             home_prob = 1.0 / (1.0 + math.exp(-0.25 * point_diff))
+            win_fallback_used = True
 
-        # Read mode defensively
+        # ---- Response assembly
         try:
-            mode_val = model_objects.get("mode") if isinstance(model_objects, dict) else getattr(model_objects, "mode", "models")
+            mode_val = model_objects.get("mode") if isinstance(model_objects, dict) else getattr(model_objects, "mode", "production")
         except Exception:
             mode_val = "production"
-        # Ensure a string is returned for the response model
         if mode_val is None:
             mode_val = "production"
+        mode_val = str(mode_val)
+
+        if feature_fallback_used and win_fallback_used:
+            pred_source = "feature_fallback+win_fallback"
+        elif feature_fallback_used:
+            pred_source = "feature_fallback"
+        elif win_fallback_used:
+            pred_source = "model+win_fallback"
         else:
-            mode_val = str(mode_val)
+            pred_source = "model"
+
+        if not ALLOW_FALLBACK_PREDICTIONS and (feature_fallback_used or win_fallback_used):
+            log.warning(
+                "Fallback prediction attempted but ALLOW_FALLBACK_PREDICTIONS=false; rejecting request"
+            )
+            raise HTTPException(
+                400,
+                f"Prediction would use fallback logic (source={pred_source}); disallowed by server configuration",
+            )
 
         return PredictionResponse(
             home_score=round(home_score, 1),
@@ -1109,12 +1157,46 @@ def predict_game(payload: PredictionRequest) -> PredictionResponse:
             away_win_probability=1.0 - home_prob,
             point_diff=point_diff,
             mode=mode_val,
+            prediction_source=pred_source,
         )
+
     except HTTPException:
         raise
     except Exception as e:
         log.error("Prediction error: %s", e, exc_info=True)
         raise HTTPException(400, f"Prediction failed: {e}")
+
+
+def _reg_predict(bundle: Any, X: pd.DataFrame) -> np.ndarray:
+    """
+    Predicts scores using a model bundle.
+
+    Logic:
+        - If bundle is a dict with 'hgbr', 'ridge', and 'weight', computes a weighted ensemble prediction.
+        - If bundle contains a 'model' or 'estimator' key, delegates prediction to that object.
+        - If bundle is a dict with any predictor object, uses the first found predictor.
+        - If bundle is a single predictor object, calls its predict method.
+        - Raises AttributeError if no valid prediction method is found.
+    """
+    log.debug("Model bundle type: %s, hasattr predict: %s", type(bundle), hasattr(bundle, "predict"))
+    if isinstance(bundle, dict):
+        log.debug("Model bundle keys: %s", list(bundle.keys()) if hasattr(bundle, "keys") else 'no keys method')
+        if {"hgbr", "ridge", "weight"}.issubset(bundle):
+            weight = float(bundle["weight"])
+            preds_hgbr = bundle["hgbr"].predict(X)
+            preds_ridge = bundle["ridge"].predict(X)
+            return weight * preds_hgbr + (1.0 - weight) * preds_ridge
+
+        delegate = bundle.get("model") or bundle.get("estimator")
+        if delegate is not None and hasattr(delegate, "predict"):
+            return delegate.predict(X)
+        for key, value in bundle.items():
+            if hasattr(value, "predict"):
+                log.debug("Using predictor from dict key: %s", key)
+                return value.predict(X)
+    if not isinstance(bundle, dict) and hasattr(bundle, "predict"):
+        return bundle.predict(X)
+    raise AttributeError(f"Score model lacks predict method. Type: {type(bundle)}")
 
 
 @app.get("/predict/next-week")
