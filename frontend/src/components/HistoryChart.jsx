@@ -6,18 +6,13 @@
  */
 
 import React, { useMemo } from 'react';
-import PropTypes from 'prop-types';
 
-export default function HistoryChart({ historyData = [] }) {
-  // Normalize the prop to an array so callers can pass a single object or an array.
-  const entries = Array.isArray(historyData)
-    ? historyData
-    : historyData
-    ? [historyData]
-    : [];
+export default function HistoryChart({ state, history }) {
+  // Handle different prop patterns
+  const historyArray = state?.history || history || [];
 
   const points = useMemo(() => {
-    return entries.map((e, idx) => {
+    return historyArray.map((e, idx) => {
       const ts = e?.ts ?? e?.game?.ts ?? null;
       const rawProb = e?.probs?.ensemble ?? e?.probs?.home ?? e?.probs?.away ?? null;
       const pct = rawProb != null && typeof rawProb === 'number' ? Math.round(rawProb * 100) : null;
@@ -30,7 +25,7 @@ export default function HistoryChart({ historyData = [] }) {
         originalIndex: idx,
       };
     });
-  }, [entries]);
+  }, [historyArray]);
 
   if (points.length === 0) {
     return <div className="history-chart">No history yet.</div>;
@@ -53,23 +48,3 @@ export default function HistoryChart({ historyData = [] }) {
     </div>
   );
 }
-
-HistoryChart.propTypes = {
-  historyData: PropTypes.oneOfType([
-    PropTypes.arrayOf(
-      PropTypes.shape({
-        ts: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
-        probs: PropTypes.shape({
-          ensemble: PropTypes.number,
-          home: PropTypes.number,
-          away: PropTypes.number,
-        }),
-        game: PropTypes.shape({
-          home_abbr: PropTypes.string,
-          away_abbr: PropTypes.string,
-        }),
-      })
-    ),
-    PropTypes.object,
-  ]),
-};

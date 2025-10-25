@@ -14,9 +14,9 @@ export default defineConfig({
     port: 3000,
     open: true,
     proxy: {
-      '/api': { target: 'https://nfl-predict-ecf5a5bd34fe.herokuapp.com', changeOrigin: true, secure: true },
-      '/schedule': { target: 'https://nfl-predict-ecf5a5bd34fe.herokuapp.com', changeOrigin: true, secure: true },
-      '/predict': { target: 'https://nfl-predict-ecf5a5bd34fe.herokuapp.com', changeOrigin: true, secure: true }
+      '/api': { target: 'http://127.0.0.1:5000', changeOrigin: true },
+      '/schedule': { target: 'http://127.0.0.1:5000', changeOrigin: true },
+      '/predict': { target: 'http://127.0.0.1:5000', changeOrigin: true }
     }
   },
   build: {

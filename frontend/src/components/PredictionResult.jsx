@@ -19,22 +19,31 @@
 import React from 'react';
 import HistoryChart from './HistoryChart';
 
-
+/**
+ * PredictionResult
+ * ----------------
+ * Displays the most recent prediction entry, including game metadata, scores, and win probabilities.
+ *
+ * @param {Object} props
+ * @param {Object|null} props.entry - The prediction entry object, or null if unavailable.
+ *   - entry.game: {Object} Game metadata (week, season, home/away abbreviations).
+ *   - entry.metrics: {Object} Prediction metrics (scores, point_diff).
+ *   - entry.probs: {Object} Probability metrics (home, away, ensemble).
+ *
+ * Renders a chart and structured prediction details, handling missing/null data gracefully.
+ */
 export default function PredictionResult({entry}) {
-  const [history, setHistory] = useState([]);
-  let data = JSON.stringify(entry)
-  setHistory(data);
+  // Safely destructure, defaulting to empty objects if entry is null.
+  const {game = {}, metrics = {}, probs = {}} = entry || {};
 
-  const {game = {}, metrics = {}, probs = {}} = data;
-
-  // Compute human-readable percentages, guarding against missing data.
+  // Compute display-friendly percentages, rounding if values exist.
   const homePct = probs.home != null ? Math.round(probs.home * 100) : null;
   const awayPct = probs.away != null ? Math.round(probs.away * 100) : null;
   const ensemblePct = probs.ensemble != null ? Math.round(probs.ensemble * 100) : null;
 
   return (
     <>
-      <HistoryChart {...history} />
+      <HistoryChart {...entry} />
       <div className="prediction-result" aria-live="polite">
         <h3>Prediction</h3>
         <div className="meta">

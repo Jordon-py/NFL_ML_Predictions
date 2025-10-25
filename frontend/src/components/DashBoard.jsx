@@ -39,7 +39,7 @@ export default function DashBoard() {
           </div>
         </header>
         <section>
-          <TeamGrid />
+          <TeamGrid state={state} />
         </section>
 
         <section aria-live="polite">
