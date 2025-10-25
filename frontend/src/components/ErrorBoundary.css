@@ -1,0 +1,30 @@
+/* ErrorBoundary.css */
+
+.error-boundary-container {
+  padding: 20px;
+  margin: 20px;
+  border: 1px solid #ff6b6b;
+  border-radius: 8px;
+  background-color: #ffeaea;
+  color: #d63031;
+  font-family: Arial, sans-serif;
+}
+
+.error-boundary-container h2 {
+  margin-top: 0;
+  color: #d63031;
+}
+
+.error-summary {
+  margin: 10px 0;
+  font-weight: bold;
+}
+
+.error-boundary-container details {
+  margin-top: 15px;
+}
+
+.error-boundary-container summary {
+  cursor: pointer;
+  font-weight: bold;
+}

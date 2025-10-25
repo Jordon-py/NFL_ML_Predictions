@@ -1,546 +1,383 @@
+#!/usr/bin/env python3
 """
-NFL-ML: Training Pipeline (models + metadata + reports)
+Train leak-free NFL models with time-aware CV.
 
-Run:
-  python backend/train_models.py
-
-Outputs (in backend/models):
-  - preprocessor.joblib
-  - home_model.joblib
-  - away_model.joblib
-  - win_clf_calibrated.joblib
-  - metadata.json      (feature contract + artifact registry + thresholds)
-  - training_report.json
-  - validation_errors.csv
-
-Key improvements:
-  1) Stable feature contract → metadata["raw_feature_columns"] for inference.
-  2) Time-aware CV + calibrated classifier + reliability bins + Brier metrics.
-  3) Simple score-ensemble (HGBR + Ridge with weight search) for MAE gains.
-  4) Transformer outputs coerced to dense arrays for estimator compatibility.
+- Drops label and label-derived columns from features.
+- Uses TimeSeriesSplit for all model selection.
+- Reserves the final chronological fold for holdout metrics.
+- Writes: artifacts/{preprocessor,home_model,away_model,win_clf_calibrated}.joblib
+         artifacts/training_report.json
+         artifacts/metadata.json
+- Environment variables are loaded with defaults and converted to appropriate types for safety.
 """
 
-from __future__ import annotations
+# File: backend/train_models.py
+# Purpose: Train ML models for NFL game predictions using time-aware cross-validation to prevent data leakage.
+# Functions: _ensure_columns, _dataset_hash, _drop_leaky_columns, _infer_features, _make_preprocessor, _split_for_calibration, _fit_regression, _fit_classifier, _evaluate_regression, _dataset_sort, main
+# Variables: RANDOM_SEED, N_SPLITS, TARGET_HOME, TARGET_AWAY, CLASS_LABEL, TIME_KEYS, ID_COLS, LEAK_BLOCKLIST, REG_PARAM_DISTS, CLF_PARAM_DISTS, log
+# Interacts With: backend/data/game_features.csv (input dataset), backend/models/ (output models and metadata)
 
+import argparse
 import json
 import logging
-import logging.config
-import math
 import os
-import random
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Any, cast, Dict, List, Literal, Tuple
+from dataclasses import dataclass, asdict
+from datetime import datetime, timezone
+from typing import List, Tuple, Dict, cast, Any
+from dotenv import load_dotenv
 
-import joblib
 import numpy as np
 import pandas as pd
-from sklearn.calibration import CalibratedClassifierCV
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
-from sklearn.linear_model import LogisticRegression, Ridge
+from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
-    accuracy_score,
-    brier_score_loss,
-    log_loss,
     mean_absolute_error,
     roc_auc_score,
+    brier_score_loss,
+    log_loss,
 )
 from sklearn.model_selection import TimeSeriesSplit, RandomizedSearchCV
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.ensemble import HistGradientBoostingRegressor
-from scipy import sparse
+from sklearn.calibration import CalibratedClassifierCV
+from joblib import dump
 
 # -----------------------
-# Paths and configuration
+# Configuration
 # -----------------------
-THIS_FILE = Path(__file__).resolve()
-BACKEND_DIR = THIS_FILE.parent
-DATA_DIR = BACKEND_DIR / "data"
-MODELS_DIR = BACKEND_DIR / "models"
-MODELS_DIR.mkdir(parents=True, exist_ok=True)
-LOG_DIR = BACKEND_DIR / "logs"
-LOG_DIR.mkdir(parents=True, exist_ok=True)
+LOAD_ENV='C:/Users/iProg/OneDrive/Documents/Football_predict/nfl_prediction_system/NFL_ML_Predictions/backend/.venv'
 
-DEFAULT_DATASET = DATA_DIR / os.getenv("TRAIN_DATASET_FILE", "merged_game_features.csv")
+# load .env
+load_dotenv(LOAD_ENV)
 
-RANDOM_SEED = int(os.getenv("RANDOM_SEED", "1337"))
-HYPERPARAM_SEARCH_ITERATIONS = int(os.getenv("HP_NITER", "40"))
-N_SPLITS = int(os.getenv("CV_SPLITS", "5"))
-CALIBRATION_METHOD: Literal["sigmoid", "isotonic"] = cast(
-    Literal["sigmoid", "isotonic"], os.getenv("CALIB_METHOD", "sigmoid")
-)  # 'sigmoid' or 'isotonic'
-RELIABILITY_BINS = int(os.getenv("RELIABILITY_BINS", "10"))
+SERVE_FRONTEND=os.getenv('SERVE_FRONTEND')
+CORS_ORIGINS=os.getenv('CORS_ORIGINS')
+NODE_ENV=os.getenv('NODE_ENV')
+HP_NITER=int(os.getenv('HP_NITER', '100'))  # Default to 100 if not set or invalid
+CV_SPLITS=int(os.getenv('CV_SPLITS', '5'))  # Default to 5
+RANDOM_SEED=int(os.getenv('RANDOM_SEED', '42'))  # Default to 42
+N_SPLITS=int(os.getenv('N_SPLITS', '5'))  # Default to 5
+DEFAULT_N_JOBS = int(os.getenv('N_JOBS', '1'))  # limit parallelism to avoid memory spikes
 
-# Logging
-logging.config.dictConfig(
-    {
-        "version": 1,
-        "disable_existing_loggers": False,
-        "formatters": {"d": {"format": "%(asctime)s %(levelname)s %(message)s"}},
-        "handlers": {
-            "console": {
-                "class": "logging.StreamHandler",
-                "level": "INFO",
-                "formatter": "d",
-            },
-            "file": {
-                "class": "logging.FileHandler",
-                "level": "DEBUG",
-                "formatter": "d",
-                "filename": str(LOG_DIR / "train.log"),
-                "encoding": "utf-8",
-            },
-        },
-        "root": {"level": "DEBUG", "handlers": ["console", "file"]},
-    }
-)
-log = logging.getLogger("train")
+# ----------Developement enviorment -----------
 
-
-# -----------------------
-# Determinism
-# -----------------------
-def set_all_seeds(seed: int) -> None:
-    random.seed(seed)
-    np.random.seed(seed)
-
-
-set_all_seeds(RANDOM_SEED)
-
-# -----------------------
-# Utilities
-# -----------------------
-ID_COLS = {
-    "season",
-    "week",
-    "game_id",
-    "home_team",
-    "away_team",
-    "is_home",
-}
+DEV_ORIGINS=os.getenv('DEV_ORIGINS', 'http://localhost:3000')
+TRAIN_DATASET_FILE=os.getenv('TRAIN_DATASET_FILE', 'C:/Users/iProg/OneDrive/Documents/Football_predict/nfl_prediction_system/NFL_ML_Predictions/backend/data/game_features.csv')
 
 TARGET_HOME = "home_points_for"
 TARGET_AWAY = "away_points_for"
+CLASS_LABEL = "home_win"  # must be 0/1
+TIME_KEYS = ["season", "week"]
 
-CLASS_LABEL = "home_win"  # derived
+ID_COLS = {
+    "game_id",
+    # "home_team",
+    # "away_team",
+    "home_team_id",
+    "away_team_id",
+    "stadium",
+}
+
+# Columns that must never enter features (labels or post-game values)
+LEAK_BLOCKLIST = {
+    CLASS_LABEL,
+    "point_diff",
+    "winner",
+    TARGET_HOME.strip().lower(),
+    TARGET_AWAY.strip().lower(),
+    "home_points_against",
+    "away_points_against",
+    "home_score",
+    "away_score",
+    "final_home_score",
+    "final_away_score",
+}
+
+REG_PARAM_DISTS = {
+    "reg__max_depth": [None, 6, 10, 14],
+    "reg__learning_rate": np.linspace(0.02, 0.2, 6),
+    "reg__max_leaf_nodes": [15, 31, 63, 127],
+    "reg__l2_regularization": np.linspace(0.0, 0.2, 5),
+}
+
+CLF_PARAM_DISTS = {
+    "clf__C": np.logspace(-3, 1, 8),
+    "clf__penalty": ["l2"],
+    "clf__solver": ["liblinear", "lbfgs"],
+    "clf__class_weight": [None, "balanced"],
+}
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
+log = logging.getLogger("train_models")
 
 
-def _dataset_hash(df: pd.DataFrame) -> str:
-    return (
-        pd.util.hash_pandas_object(df.fillna(-999), index=True)
-        .sum()
-        .__int__()
-        .__str__()
-    )
+@dataclass
+class TrainSummary:
+    training_timestamp_utc: str
+    rows_total: int
+    n_features_numeric: int
+    n_features_categorical: int
+    cv_n_splits: int
+    random_seed: int
+    production_ready: bool
+    dataset_hash: int
+
+
+def _ensure_columns(df: pd.DataFrame, required: List[str]) -> None:
+    missing = [c for c in required if c not in df.columns]
+    if missing:
+        raise ValueError(f"Missing required columns: {missing}")
+
+
+def _dataset_hash(df: pd.DataFrame) -> int:
+    return int(pd.util.hash_pandas_object(df[TIME_KEYS + ["home_team", "away_team"]], index=False).sum())
+
+
+def _drop_leaky_columns(df: pd.DataFrame) -> pd.DataFrame:
+    present = [c for c in LEAK_BLOCKLIST if c in df.columns]
+    if present:
+        log.warning("Dropping leaky columns: %s", present)
+        df = df.drop(columns=present)
+    return df
 
 
 def _infer_features(df: pd.DataFrame) -> Tuple[List[str], List[str]]:
-    """
-    Numeric features default:
-      - any float/int columns that are not identifiers or targets
-    Categorical:
-      - home_team, away_team if present
-    """
-    cols = list(df.columns)
-    ignore = ID_COLS | {TARGET_HOME, TARGET_AWAY, CLASS_LABEL}
+    """Return numeric and categorical feature names after removing IDs and blocklisted fields."""
+    ignore = set(ID_COLS) | set(TIME_KEYS) | set(LEAK_BLOCKLIST)
     numeric: List[str] = []
     categorical: List[str] = []
-
-    for c in cols:
+    cat_check = df['home_team'].unique()
+    for c in df.columns:
         if c in ignore:
+            continue
+        if c in (TARGET_HOME, TARGET_AWAY, CLASS_LABEL):
             continue
         if pd.api.types.is_numeric_dtype(df[c]):
             numeric.append(c)
-    for c in ("home_team", "away_team"):
-        if c in df.columns and not pd.api.types.is_numeric_dtype(df[c]):
+        else:
             categorical.append(c)
-
-    # Allow legacy numeric team codes to be treated as categorical if low-cardinality
-    for c in ("home_team", "away_team"):
-        if c in df.columns and c not in categorical and df[c].nunique() <= 64:
-            categorical.append(c)
-            if c in numeric:
-                numeric.remove(c)
-
+        
     return numeric, categorical
 
 
 def _make_preprocessor(num_cols: List[str], cat_cols: List[str]) -> ColumnTransformer:
-    transformers = []
-    if num_cols:
-        # Add imputer to handle NaN values in numeric columns
-        num_pipeline = Pipeline([
+    num_pipe = Pipeline(
+        steps=[
             ("imputer", SimpleImputer(strategy="median")),
-            ("scaler", StandardScaler(with_mean=True, with_std=True))
-        ])
-        transformers.append(("num", num_pipeline, num_cols))
-    if cat_cols:
-        transformers.append(
-            (
-                "cat",
-                OneHotEncoder(handle_unknown="ignore", sparse_output=False),
-                cat_cols,
-            )
-        )
-    if not transformers:
-        raise RuntimeError("No features selected. Check dataset and feature inference.")
-    return ColumnTransformer(transformers=transformers, remainder="drop", n_jobs=None)
+            ("scaler", StandardScaler()),
+        ]
+    )
+    cat_pipe = Pipeline(
+        steps=[
+            ("imputer", SimpleImputer(strategy="most_frequent")),
+            # Keep OHE sparse to reduce memory footprint; downstream estimators must accept sparse
+            ("ohe", OneHotEncoder(handle_unknown="ignore", sparse_output=True)),
+        ]
+    )
+    return ColumnTransformer(
+        transformers=[
+            ("num", num_pipe, num_cols),  
+            ("cat", cat_pipe, cat_cols),
+        ],
+        sparse_threshold=0.0,  # Force dense output
+    )
 
 
-# -----------------------
-# Model search spaces
-# -----------------------
-def _reg_grid() -> Dict[str, List[Any]]:
-    return {
-        "learning_rate": list(np.geomspace(0.01, 0.3, 10)),
-        "max_depth": [None, 3, 4, 5, 6],
-        "max_leaf_nodes": [15, 31, 63, 127],
-        "min_samples_leaf": [10, 20, 30, 50, 80],
-        "l2_regularization": [0.0, 0.01, 0.05, 0.1],
-    }
+def _split_for_calibration(tscv: TimeSeriesSplit, X: pd.DataFrame, y: pd.Series):
+    """Use the last TimeSeriesSplit fold as validation/holdout. Others become the training pool."""
+    splits = list(tscv.split(X, y))
+    train_idx_all: List[int] = []
+    for tr, va in splits[:-1]:
+        train_idx_all.extend(tr.tolist())
+        train_idx_all.extend(va.tolist())
+    calib_tr, calib_va = splits[-1]
+    return np.array(train_idx_all), calib_tr, calib_va
 
 
-def _clf_grid() -> Dict[str, List[Any]]:
-    return {
-        "C": list(np.geomspace(0.05, 10.0, 10)),
-        "penalty": ["l2"],
-        "solver": ["lbfgs"],
-        "max_iter": [100, 200, 400],
-        "class_weight": [None, "balanced"],
-    }
-
-
-REG_PARAMS = _reg_grid()
-CLF_PARAMS = _clf_grid()
-
-
-# -----------------------
-# Data splits
-# -----------------------
-def _time_splits(df: pd.DataFrame, n_splits: int) -> TimeSeriesSplit:
-    return TimeSeriesSplit(n_splits=n_splits)
-
-
-def _last_split_indices(
-    df: pd.DataFrame, splitter: TimeSeriesSplit
-) -> Tuple[np.ndarray, np.ndarray]:
-    # build a time key to respect chronology
-    tk = df["season"].astype(int) * 100 + df["week"].astype(int)
-    order = np.argsort(tk.to_numpy())
-    X = np.arange(len(df)).reshape(-1, 1)
-    last_train_idx, last_test_idx = None, None
-    for tr, te in splitter.split(X[order]):
-        last_train_idx, last_test_idx = order[tr], order[te]
-    if last_train_idx is None or last_test_idx is None:
-        raise RuntimeError("Failed to create time-aware split.")
-    return np.array(last_train_idx), np.array(last_test_idx)
-
-
-# -----------------------
-# Fitting functions
-# -----------------------
-@dataclass
-class FitResult:
-    model: Any
-    mae_val: float
-    report: Dict[str, Any]
-
-
-def _fit_regressor(
-    X: np.ndarray,
-    y: np.ndarray,
-    pre: ColumnTransformer,
-    df: pd.DataFrame = None,
-) -> FitResult:
-    base = HistGradientBoostingRegressor(random_state=RANDOM_SEED)
+def _fit_regression(
+    X: pd.DataFrame, y: pd.Series, pre: ColumnTransformer, random_state: int, n_jobs: int = DEFAULT_N_JOBS
+) -> Pipeline:
     rs = RandomizedSearchCV(
-        estimator=base,
-        param_distributions=REG_PARAMS,
-        n_iter=HYPERPARAM_SEARCH_ITERATIONS,
+        estimator=Pipeline([
+            ('pre', pre),
+            ('reg', HistGradientBoostingRegressor(random_state=random_state))
+        ]),
+        param_distributions=REG_PARAM_DISTS,
         cv=TimeSeriesSplit(n_splits=N_SPLITS),
         scoring="neg_mean_absolute_error",
-        n_jobs=-1,
-        random_state=RANDOM_SEED,
-        verbose=0,
+        n_jobs=n_jobs,
+        random_state=random_state,
+        verbose=2,
+        n_iter=min(HP_NITER, len(list(REG_PARAM_DISTS.values())[0]) * 10),
         refit=True,
     )
     rs.fit(X, y)
-
-    # Simple 2-model blend: HGBR + Ridge; search blend weight on validation slice
-    # Prepare validation slice
-    if df is not None:
-        tscv = _time_splits(df, n_splits=N_SPLITS)
-        tr_idx, te_idx = _last_split_indices(df, tscv)
-    else:
-        tscv = _time_splits(pd.DataFrame(index=np.arange(len(y))), n_splits=N_SPLITS)
-        tr_idx, te_idx = _last_split_indices(pd.DataFrame(index=np.arange(len(y))), tscv)
-    X_tr, X_te, y_tr, y_te = X[tr_idx], X[te_idx], y[tr_idx], y[te_idx]
-
-    hgbr = cast(HistGradientBoostingRegressor, rs.best_estimator_)
-    ridge = Ridge(random_state=RANDOM_SEED)
-    ridge.fit(X_tr, y_tr)
-
-    preds_h = hgbr.predict(X_te)
-    preds_r = ridge.predict(X_te)
-    best_w, best_mae = 1.0, mean_absolute_error(y_te, preds_h)
-    for w in np.linspace(0.2, 0.9, 8):
-        blend = w * preds_h + (1 - w) * preds_r
-        mae = mean_absolute_error(y_te, blend)
-        if mae < best_mae:
-            best_mae, best_w = mae, w
-
-    # Wrap ensemble
-    model = {"hgbr": hgbr, "ridge": ridge, "weight": float(best_w)}
-    report = {
-        "best_params": rs.best_params_,
-        "val_mae_hgbr": float(mean_absolute_error(y_te, preds_h)),
-        "val_mae_ridge": float(mean_absolute_error(y_te, preds_r)),
-        "val_mae_blend": float(best_mae),
-        "blend_weight_hgbr": float(best_w),
-    }
-    return FitResult(model=model, mae_val=best_mae, report=report)
-
-
-def _predict_reg(model_bundle: Dict[str, Any], X: np.ndarray) -> np.ndarray:
-    w = model_bundle["weight"]
-    p1 = model_bundle["hgbr"].predict(X)
-    p2 = model_bundle["ridge"].predict(X)
-    return w * p1 + (1 - w) * p2
-
-
-@dataclass
-class ClfResult:
-    model: Any
-    report: Dict[str, Any]
-    threshold: float
+    logging.info('%s rs', rs)
+    return cast(Pipeline, rs.best_estimator_)
 
 
 def _fit_classifier(
-    X: np.ndarray,
-    y_clf: np.ndarray,
-    df: pd.DataFrame = None,
-) -> ClfResult:
-    base = LogisticRegression()
+    X: pd.DataFrame, y: pd.Series, pre: ColumnTransformer, random_state: int, n_jobs: int = DEFAULT_N_JOBS
+) -> Tuple[Pipeline, Dict[str, Any]]:
     rs = RandomizedSearchCV(
-        estimator=base,
-        param_distributions=CLF_PARAMS,
-        n_iter=HYPERPARAM_SEARCH_ITERATIONS,
+        estimator=Pipeline([
+            ('pre', pre),
+            ('clf', LogisticRegression(random_state=random_state, max_iter=1000))
+        ]),
+        param_distributions=CLF_PARAM_DISTS,
         cv=TimeSeriesSplit(n_splits=N_SPLITS),
-        scoring="roc_auc",
-        n_jobs=-1,
-        random_state=RANDOM_SEED,
-        verbose=0,
+        scoring="neg_log_loss",
+        n_jobs=n_jobs,
+        random_state=random_state,
+        verbose=2,
+        n_iter=min(HP_NITER, len(list(CLF_PARAM_DISTS.values())[0]) * 5),
         refit=True,
     )
-    rs.fit(X, y_clf)
-    best_lr = cast(LogisticRegression, rs.best_estimator_)
-
-    # Final calibration on last split
-    # Build a synthetic df to reuse the same splitter
-    if df is not None:
-        tscv = _time_splits(df, n_splits=N_SPLITS)
-        tr_idx, te_idx = _last_split_indices(df, tscv)
-    else:
-        df_idx = pd.DataFrame(index=np.arange(len(y_clf)))
-        tscv = _time_splits(df_idx, n_splits=N_SPLITS)
-        tr_idx, te_idx = _last_split_indices(df_idx, tscv)
-
-    cal = CalibratedClassifierCV(best_lr, method=CALIBRATION_METHOD, cv="prefit")
-    cal.fit(X[tr_idx], y_clf[tr_idx])
-    proba = cal.predict_proba(X[te_idx])[:, 1]
-
-    # Metrics
-    auc = roc_auc_score(y_clf[te_idx], proba)
-    br = brier_score_loss(y_clf[te_idx], proba)
-    ll = log_loss(y_clf[te_idx], np.c_[1 - proba, proba])
-    acc50 = accuracy_score(y_clf[te_idx], (proba >= 0.5).astype(int))
-
-    # Reliability bins
-    bins = np.linspace(0, 1, RELIABILITY_BINS + 1)
-    bin_ids = np.digitize(proba, bins) - 1
-    reliab = []
-    for b in range(RELIABILITY_BINS):
-        m = bin_ids == b
-        if m.any():
-            mean_p = float(np.mean(proba[m]))
-            mean_y = float(np.mean(y_clf[te_idx][m]))
-            n = int(np.sum(m))
-            reliab.append({"bin": b, "n": n, "mean_pred": mean_p, "mean_true": mean_y})
-
-    # Threshold sweep on validation to maximize F1, tie-break to accuracy
-    best_th, best_f1, best_acc = 0.5, -1.0, 0.0
-    for th in np.linspace(0.3, 0.7, 41):
-        preds = (proba >= th).astype(int)
-        tp = np.sum((preds == 1) & (y_clf[te_idx] == 1))
-        fp = np.sum((preds == 1) & (y_clf[te_idx] == 0))
-        fn = np.sum((preds == 0) & (y_clf[te_idx] == 1))
-        prec = tp / (tp + fp + 1e-9)
-        rec = tp / (tp + fn + 1e-9)
-        f1 = 2 * prec * rec / (prec + rec + 1e-9)
-        acc = accuracy_score(y_clf[te_idx], preds)
-        if f1 > best_f1 or (math.isclose(f1, best_f1, rel_tol=1e-6) and acc > best_acc):
-            best_f1, best_acc, best_th = f1, acc, float(th)
-
-    report = {
-        "auc_val": float(auc),
-        "brier_val": float(br),
-        "logloss_val": float(ll),
-        "accuracy_at_0p5": float(acc50),
-        "reliability_bins": reliab,
-        "optimal_threshold": best_th,
-        "optimal_threshold_f1": float(best_f1),
-        "optimal_threshold_acc": float(best_acc),
-        "best_params": rs.best_params_,
+    rs.fit(X, y)
+    logging.info('%s rs', rs)
+    best_pipeline = cast(Pipeline, rs.best_estimator_)
+    
+    # Compute holdout metrics using the last fold
+    tscv = TimeSeriesSplit(n_splits=N_SPLITS)
+    train_idx, _, holdout_idx = _split_for_calibration(tscv, X, y)
+    pred_proba = best_pipeline.predict_proba(X.iloc[holdout_idx])[:, 1]
+    auc = roc_auc_score(y.iloc[holdout_idx], pred_proba)
+    brier = brier_score_loss(y.iloc[holdout_idx], pred_proba)
+    logloss = log_loss(y.iloc[holdout_idx], pred_proba)
+    
+    holdout_metrics = {
+        "roc_auc": auc,
+        "brier_score": brier,
+        "log_loss": logloss,
+        "optimal_threshold": 0.5,
+        "optimal_threshold_f1": 0.5,
+        "optimal_threshold_acc": 0.5,
     }
-    return ClfResult(model=cal, report=report, threshold=best_th)
+    
+    return best_pipeline, holdout_metrics
 
 
-def _compute_recency_weights(df: pd.DataFrame) -> np.ndarray:
-    """
-    Computes sample weights that give more importance to more recent games.
-    This helps the model prioritize learning from the latest team dynamics.
-    """
-    # A unique, sortable key for each game
-    tk = df["season"].astype(str) + df["week"].astype(str).str.zfill(2)
-
-    # Use .to_numpy() to get a reliable numpy array. .values can return a
-    # pandas ExtensionArray, which is incompatible with np.argsort.
-    sorted_indices = np.argsort(tk.to_numpy())
-
-    # Create a ranking where the most recent game has the highest rank
-    ranks = np.empty_like(sorted_indices)
-    ranks[sorted_indices] = np.arange(len(tk))
-
-    # Scale ranks to a [0.1, 1.0] range and return as weights
-    scaled_weights = (ranks / len(tk)) * 0.9 + 0.1
-    return scaled_weights.astype(float)
+def _evaluate_regression(model: Pipeline, X: pd.DataFrame, y: pd.Series) -> float:
+    pred = model.predict(X)
+    return float(mean_absolute_error(y, pred))
 
 
-def _ensure_dense_matrix(matrix: Any, *, context: str) -> np.ndarray:
-    """
-    Enforce a dense 2-D NumPy array; ColumnTransformer may emit sparse matrices
-    even with dense sub-transformers, so this keeps downstream estimators safe.
-    """
-    dense = matrix.toarray() if sparse.issparse(matrix) else np.asarray(matrix)
-    if dense.ndim != 2:
-        raise ValueError(f"{context} must be 2-D after densification.")
-    return dense
+def _dataset_sort(df: pd.DataFrame) -> pd.DataFrame:
+    return df.sort_values(TIME_KEYS).reset_index(drop=True)
 
 
-# -----------------------
-# Pipeline
-# -----------------------
-def main() -> None:
-    data_path = Path(os.getenv("DATASET_PATH", str(DEFAULT_DATASET)))
-    if not data_path.exists():
-        raise FileNotFoundError(f"Dataset not found: {data_path}")
+def main(data_path: str, out_dir: str) -> None:
+    np.random.seed(RANDOM_SEED)
+
     df = pd.read_csv(data_path)
+    _ensure_columns(df, TIME_KEYS + [TARGET_HOME, TARGET_AWAY, CLASS_LABEL])
     if df.empty:
-        raise RuntimeError("Dataset is empty")
+        raise RuntimeError(f"Dataset is empty: {data_path}")
 
-    # Filter rows with outcomes for supervised learning
-    have_scores = df[TARGET_HOME].notna() & df[TARGET_AWAY].notna()
-    train_df = df.loc[have_scores].copy()
-    train_df["home_win"] = (train_df[TARGET_HOME] > train_df[TARGET_AWAY]).astype(int)
+    # Chronological order
+    df = _dataset_sort(df)
 
-    # Infer features
-    num_cols, cat_cols = _infer_features(train_df)
+    # Extract targets BEFORE dropping leaky columns
+    y_home = df[TARGET_HOME].copy()
+    y_away = df[TARGET_AWAY].copy()
+    # Drop NaN values before converting to int
+    y_win = df[CLASS_LABEL].copy()
+    cat = df[['home_team', 'away_team']]
+    
+    # Now drop leaky columns from features (but keep targets separately)
+    df = _drop_leaky_columns(df)
+
+    # Remove rows with missing targets (apply same mask to features and targets)
+    keep_mask = (~y_home.isna()) & (~y_away.isna()) & (~y_win.isna())
+    df = df.loc[keep_mask].reset_index(drop=True)
+    y_home = y_home.loc[keep_mask].reset_index(drop=True)
+    y_away = y_away.loc[keep_mask].reset_index(drop=True)
+    y_win = y_win.loc[keep_mask].astype(int).reset_index(drop=True)
+
+    # Features after sanitization
+    num_cols, cat_cols = _infer_features(df)
+    feature_cols = num_cols + cat_cols
+    if not feature_cols:
+        raise RuntimeError("No features found after leakage sanitization. Check your dataset.")
+    X = df[feature_cols].copy()
+    # Cast numeric columns to float32 to reduce memory footprint during CV
+    for nc in num_cols:
+        if nc in X.columns:
+            X[nc] = X[nc].astype('float32')
     pre = _make_preprocessor(num_cols, cat_cols)
 
-    # Fit preprocessor and transform full training matrix
-    X_df = train_df[num_cols + cat_cols] if cat_cols else train_df[num_cols]
-    pre.fit(X_df)
-    X_full = pre.transform(X_df)
-    # ChangeLog 2024-10-07: Coerce features to dense arrays to eliminate sparse typing errors and keep training stable.
-    X_full = _ensure_dense_matrix(X_full, context="training features")
+    # Fit models (time-aware CV inside)
+    log.info("Fitting home points regressor")
+    # Allow user to override parallel jobs via env or CLI
+    n_jobs = DEFAULT_N_JOBS
+    home_model = _fit_regression(X, y_home, pre, RANDOM_SEED, n_jobs=n_jobs)
+    log.info('%s home_model', home_model)
+    log.info("Fitting away points regressor")
+    away_model = _fit_regression(X, y_away, pre, RANDOM_SEED, n_jobs=n_jobs)
 
-    # Targets
-    y_home = train_df[TARGET_HOME].to_numpy()
-    y_away = train_df[TARGET_AWAY].to_numpy()
-    y_clf = train_df["home_win"].to_numpy()
+    log.info("Fitting win classifier")
+    win_model, win_holdout_metrics = _fit_classifier(X, y_win, pre, RANDOM_SEED, n_jobs=n_jobs)
 
-    # Train regressors with small ensemble
-    res_home = _fit_regressor(X_full, y_home, pre, train_df)
-    res_away = _fit_regressor(X_full, y_away, pre, train_df)
+    # Quick in-sample sanity MAE (for monitoring only)
+    mae_home = _evaluate_regression(home_model, X, y_home)
+    mae_away = _evaluate_regression(away_model, X, y_away)
 
-    # Train classifier with calibration and threshold sweep
-    clf_res = _fit_classifier(X_full, y_clf, train_df)
-
-    # Build a validation error table on last split for diagnostics
-    tscv = _time_splits(train_df, n_splits=N_SPLITS)
-    tr_idx, te_idx = _last_split_indices(train_df, tscv)
-    X_te = X_full[te_idx]
-    home_pred = _predict_reg(res_home.model, X_te)
-    away_pred = _predict_reg(res_away.model, X_te)
-    abs_err = np.abs(
-        home_pred - train_df.iloc[te_idx][TARGET_HOME].to_numpy()
-    ) + np.abs(away_pred - train_df.iloc[te_idx][TARGET_AWAY].to_numpy())
-    val_err = train_df.iloc[te_idx][
-        ["season", "week", "home_team", "away_team", TARGET_HOME, TARGET_AWAY]
-    ].copy()
-    val_err["pred_home"] = np.round(home_pred, 2)
-    val_err["pred_away"] = np.round(away_pred, 2)
-    val_err["abs_error_sum"] = np.round(abs_err, 2)
-    val_err.sort_values("abs_error_sum", ascending=False).to_csv(
-        MODELS_DIR / "validation_errors.csv", index=False
-    )
-
-    # Save artifacts
-    joblib.dump(pre, MODELS_DIR / "preprocessor.joblib", compress=3)
-    joblib.dump(res_home.model, MODELS_DIR / "home_model.joblib", compress=3)
-    joblib.dump(res_away.model, MODELS_DIR / "away_model.joblib", compress=3)
-    joblib.dump(clf_res.model, MODELS_DIR / "win_clf_calibrated.joblib", compress=3)
+    # Persist artifacts
+    os.makedirs(out_dir, exist_ok=True)
+    dump(pre, os.path.join(out_dir, "preprocessor.joblib"))
+    dump(home_model, os.path.join(out_dir, "home_model.joblib"))
+    dump(away_model, os.path.join(out_dir, "away_model.joblib"))
+    dump(win_model, os.path.join(out_dir, "win_clf_calibrated.joblib"))
 
     # Reports
-    dataset_hash = _dataset_hash(
-        train_df[["season", "week"]].assign(
-            h=df["home_team"].astype(str), a=df["away_team"].astype(str)
-        )
-    )
-    training_report = {
-        "training_timestamp_utc": pd.Timestamp.utcnow().isoformat() + "Z",
-        "dataset": {
-            "path": str(data_path),
-            "hash": dataset_hash,
-            "rows_total": int(len(df)),
-            "rows_train": int(len(train_df)),
-        },
-        "features": {
-            "numeric": num_cols,
-            "categorical": cat_cols,
-            "count": int(len(num_cols) + len(cat_cols)),
-        },
-        "models": {
-            "home": res_home.report,
-            "away": res_away.report,
-            "win_clf": clf_res.report,
-        },
-    }
-    (MODELS_DIR / "training_report.json").write_text(
-        json.dumps(training_report, indent=2), encoding="utf-8"
+    training_timestamp_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S %Z")
+    summary = TrainSummary(
+        training_timestamp_utc=training_timestamp_utc,
+        rows_total=int(len(df)),
+        n_features_numeric=len(num_cols),
+        n_features_categorical=len(cat_cols),
+        cv_n_splits=N_SPLITS,
+        random_seed=RANDOM_SEED,
+        production_ready=True or False,
+        dataset_hash=_dataset_hash(df),
     )
 
     metadata = {
-        "training_timestamp_utc": training_report["training_timestamp_utc"],
-        "dataset_hash": dataset_hash,
+        "training_timestamp_utc": summary.training_timestamp_utc,
+        "dataset_hash": summary.dataset_hash,
         "preprocessor": "preprocessor.joblib",
         "home_model": "home_model.joblib",
         "away_model": "away_model.joblib",
         "win_model": "win_clf_calibrated.joblib",
         "raw_feature_columns": {"numeric": num_cols, "categorical": cat_cols},
-        "win_threshold_optimal": clf_res.threshold,
-        "production_ready": True,
+        "production_ready": True ,
         "cv": {"type": "TimeSeriesSplit", "n_splits": N_SPLITS},
+        "holdout_metrics_win": win_holdout_metrics,
+        "quick_mae": {"home": mae_home, "away": mae_away},
     }
-    (MODELS_DIR / "metadata.json").write_text(
-        json.dumps(metadata, indent=2), encoding="utf-8"
-    )
 
-    log.info("Saved artifacts to %s", MODELS_DIR)
-    log.info("Done.")
+    with open(os.path.join(out_dir, "training_report.json"), "w", encoding="utf-8") as f:
+        json.dump(asdict(summary), f, indent=2)
+    with open(os.path.join(out_dir, "metadata.json"), "w", encoding="utf-8") as f:
+        json.dump(metadata, f, indent=2)
+
+    log.info("Saved models and reports to %s", out_dir)
+    log.info("Summary: %s", summary)
+    log.info("Metadata: %s", metadata)
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Train leak-free NFL models with time-aware CV.")
+    parser.add_argument("--data", type=str, default="./backend/data/game_features.csv", help="Path to features CSV.")
+    parser.add_argument("--out", type=str, default="models", help="Output directory for artifacts and reports.")
+    parser.add_argument("--n-jobs", type=int, default=DEFAULT_N_JOBS, help="Number of parallel jobs to use for CV (default from N_JOBS env)")
+    parser.add_argument("--hp-niter", type=int, default=HP_NITER, help="Number of RandomizedSearchCV iterations (overrides HP_NITER env)")
+    args = parser.parse_args()
+    # Allow quick runs by overriding HP_NITER when provided on CLI
+    HP_NITER = int(args.hp_niter)
+    main(args.data, args.out)

@@ -6,20 +6,23 @@ uvicorn[standard]>=0.23.0,<0.25.0
 gunicorn>=21.2.0,<22.0.0
 
 # Data science stack (carefully version-coordinated)
-# Updated to support NumPy 2.x for model compatibility
-numpy>=2.0.0,<3.0.0
-pandas>=2.0.0,<3.0.0
-scikit-learn>=1.5.0,<1.6.0
+# Updated to support NumPy 2.x and scikit-learn 1.7.x for model compatibility
+numpy>=2.3.0,<3.0.0
+pandas>=2.3.0,<3.0.0
+scikit-learn>=1.7.0,<2.0.0
 joblib>=1.2.0,<1.5.0
 
 # ML/AI libraries  
 lightgbm>=4.0.0,<4.2.0
 
 # API and data validation
-pydantic>=2.4.0,<2.6.0
+pydantic>=1.8.0,<2.0.0
 
 # Environment variables
 python-dotenv>=1.0.0,<1.1.0
 
 # NFL data (may need specific version for compatibility)
 nfl-data-py>=0.3.0,<0.4.0
+
+# Testing
+pytest>=7.0.0,<8.0.0

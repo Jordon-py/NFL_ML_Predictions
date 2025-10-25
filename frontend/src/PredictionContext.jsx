@@ -1,5 +1,5 @@
 /**
- * PredictionContext.js
+ * PredictionContext.jsx
  * --------------------
  * Component Purpose:
  *   Provide a shared prediction store (current result + historical list)
@@ -22,34 +22,48 @@
  *   - When adding fields to entries, update `toEntry` so downstream renderers
  *     see the new data in a predictable structure.
  */
+// frontend/src/PredictionContext.js
+import React, {
+  createContext,
+  useContext,
+  useMemo,
+  useReducer,
+  useCallback,
+} from 'react';
 
-import React, {createContext, useContext, useMemo, useReducer, useCallback} from 'react';
+/**
+ * PredictionContext
+ * Purpose: Shared prediction store using React Context + Reducer.
+ * State shape:
+ *   {
+ *     current: { ... } | null,
+ *     history: Array<{ ... }>
+ *   }
+ */
 
 const PredictionContext = createContext(null);
 
-// We keep a simple state shape so components can destructure easily.
+// Simple, destructurable state
 const initialState = {
   current: null,
   history: [],
 };
 
-// Reducers should stay pure: given the previous state and an action we return
-// the next state object without mutating the previous state.
+// Pure reducer (no mutations)
 function reducer(state, action) {
   switch (action.type) {
     case 'SET_CURRENT':
-      return {...state, current: action.payload};
+      return { ...state, current: action.payload };
     case 'PUSH_HISTORY':
-      return {...state, history: [action.payload, ...state.history]};
+      return { ...state, history: [action.payload, ...state.history] };
     case 'RESET_HISTORY':
-      return {...state, history: []};
+      return { ...state, history: [] };
     default:
-      // Returning the existing state ensures unknown actions are no-ops.
-      return state;
+      return state; // no-op for unknown actions
   }
 }
 
-/** Helper to create a normalized entry from any backend response */
+/** Normalize any backend response into a UI-friendly entry */
 export function toEntry({
   source = 'teamgrid',
   season,
@@ -61,12 +75,12 @@ export function toEntry({
   point_diff,
   home_win_probability,
   away_win_probability,
-  ensemble_probability
+  ensemble_probability,
 }) {
   return {
     ts: new Date().toISOString(),
     source,
-    game: {season, week, home_abbr, away_abbr},
+    game: { season, week, home_abbr, away_abbr },
     metrics: {
       home_score,
       away_score,
@@ -80,26 +94,48 @@ export function toEntry({
   };
 }
 
-export function PredictionProvider({children}) {
+export function PredictionProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, initialState);
 
-  // Actions are stable callbacks. Co-locate logic here to keep views dumb.
-  const setCurrent = useCallback((entry) => dispatch({type: 'SET_CURRENT', payload: entry}), []);
-  const pushHistory = useCallback((entry) => dispatch({type: 'PUSH_HISTORY', payload: entry}), []);
-  const resetHistory = useCallback(() => dispatch({type: 'RESET_HISTORY'}), []);
+  // Stable action creators
+  const setCurrent = useCallback(
+    (entry) => dispatch({ type: 'SET_CURRENT', payload: entry }),
+    []
+  );
+  const pushHistory = useCallback(
+    (entry) => dispatch({ type: 'PUSH_HISTORY', payload: entry }),
+    []
+  );
+  const resetHistory = useCallback(
+    () => dispatch({ type: 'RESET_HISTORY' }),
+    []
+  );
 
-  // Expose a stable bundle of actions; include every dependency to avoid stale closures.
-  const actions = useMemo(() => ({setCurrent, pushHistory, resetHistory}), [setCurrent, pushHistory, resetHistory]);
+  const actions = useMemo(() => ({ setCurrent, pushHistory, resetHistory }), [setCurrent, pushHistory, resetHistory]);
+  
+  const value = useMemo(() => ({ state, actions }), [state, actions]);
 
-  // Memoise context value so consumers only re-render when state/actions change.
-  const value = useMemo(() => ({state, actions}), [state, actions]);
-
-  return <PredictionContext.Provider value={value}>{children}</PredictionContext.Provider>;
-
+  // Use React.createElement to avoid JSX in .js files (fixes previous parse error)
+  return React.createElement(
+    PredictionContext.Provider,
+    { value },
+    children
+  );
 }
 
+/** Primary hook */
 export function usePredictions() {
   const ctx = useContext(PredictionContext);
-  if (!ctx) throw new Error('usePredictions must be used within a PredictionProvider');
+  if (!ctx) {
+    throw new Error('usePredictions must be used within a <PredictionProvider>');
+  }
   return ctx;
 }
+
+/** Alias hook for callers importing singular form */
+export function usePrediction() {
+  return usePredictions();
+}
+
+// Optional direct context export if you need it elsewhere
+export { PredictionContext };
