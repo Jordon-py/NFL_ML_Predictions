@@ -16,7 +16,7 @@ Key Endpoints:
     - /predict/next-week: Batch predictions for next scheduled week.
 
 Dependencies:
-    - DATASET_PATH, SCHEDULE_PATH, CORS_ORIGINS, CORS_ORIGIN_REGEX, SERVE_FRONTEND (from .env)
+    - DATASET_PATH, SCHEDULE_PATH,ALLOWED_ORIGINS, ALLOWED_ORIGINS, SERVE_FRONTEND (from .env)
     - Models and metadata in backend/models/
     - Engineered features in backend/data/game_features.csv
 
@@ -40,7 +40,7 @@ Dependencies:
     #  get_next_week_schedule, predict_game, predict_next_week
     
     # Variables: 
-    # model_objects, dataset_df, DEFAULT_CORS_ORIGINS, CORS_ORIGINS, CORS_ORIGIN_REGEX, TEAM_ABBREVIATIONS, TEAM_CODE_FIX, VALID_ABBRS, THIS_FILE, BACKEND_DIR, BASE_DIR, DATA_DIR, MODELS_DIR, LOG_DIR, DEFAULT_DATASET, DEFAULT_SCHEDULE, FRONTEND_DIR, FRONTEND_BUILD, FRONTEND_DIST, TRUTHY, SERVE_FRONTEND
+    # model_objects, dataset_df, DEFAULT_ALLOWALLOWED_ORIGINS,ALLOWED_ORIGINS, ALLOWED_ORIGINS, TEAM_ABBREVIATIONS, TEAM_CODE_FIX, VALID_ABBRS, THIS_FILE, BACKEND_DIR, BASE_DIR, DATA_DIR, MODELS_DIR, LOG_DIR, DEFAULT_DATASET, DEFAULT_SCHEDULE, FRONTEND_DIR, FRONTEND_BUILD, FRONTEND_DIST, TRUTHY, SERVE_FRONTEND
     
     # Interacts With: backend/models/ (joblib models), backend/data/ (CSV datasets), frontend/ (static files if served), .env (config)
 """
@@ -131,18 +131,46 @@ log = logging.getLogger("api")
 model_objects: Optional[Dict[str, Any]] = None
 dataset_df: Optional[pd.DataFrame] = None
 
-# CORS
-# By default allow all origins ("*") for local dev and convenience. Override
-# with the CORS_ORIGINS environment variable (comma-separated) to restrict
-# origins in production. CORS_ORIGIN_REGEX is optional and will be treated as
-# None when not set to avoid sending an empty string to the middleware.
-DEFAULT_CORS_ORIGINS = ["*"]
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+import os
 
-raw_cors = os.getenv("CORS_ORIGINS", "")
-CORS_ORIGINS = [o.strip() for o in raw_cors.split(",") if o.strip()] or DEFAULT_CORS_ORIGINS
-# If CORS_ORIGIN_REGEX is not provided, use None so the middleware doesn't try
-# to compile an empty pattern. When provided, it should be a valid regex string.
-CORS_ORIGIN_REGEX = os.getenv("CORS_ORIGIN_REGEX", "").strip() or None
+app = FastAPI(title="NFL Predict API")
+
+# Pull from env in prod; fall back to a safe list for dev
+def _origins_from_env():
+    raw = os.getenv("ALLOWALLOWED_ORIGINS", "")
+    return [o.strip() for o in raw.split(",") if o.strip()]
+
+ALLOWED_ORIGINS = _origins_from_env() or [
+    "localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://localhost:3000",
+    "http://localhost:3000"
+    # Vercel preview + prod (add yours)
+    "https://nfl-ml-predictions.vercel.app",
+    "https://nfl-ml-predictions-pr5uahmqx-christopher-jordons-projects.vercel.app",
+    "https://nfl-predict-6fghcp7sx-christopher-jordons-projects.vercel.app",
+    # Custom domains
+    "https://new-nfl-predict.com",
+    "https://www.nfl-predict.com",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    # allow any *.vercel.app subdomain without listing each preview URL:
+    allow_origin_regex=r"https://.*\.vercel\.app$",
+    allow_credentials=True,  # if you use cookies/sessions; keep True for most auth setups
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["*"],  # or list explicitly: ["Authorization", "Content-Type"]
+    expose_headers=["Content-Disposition"],  # e.g., if you return files
+    max_age=86400,  # cache preflight for 1 day
+)
+
+log.info("ADD_LOCALHOST_ORIGINS enabled: appended local dev origins toALLOWED_ORIGINS")
+
+log.debug("ALLOWALLOWED_ORIGINS=%s ALLOWED_ORIGINS=%s", ALLOWED_ORIGINS)
 
 # Teams
 TEAM_ABBREVIATIONS = {
@@ -464,11 +492,11 @@ app = FastAPI(title="NFL Game Prediction API", version="2.1.0", lifespan=lifespa
 
 # If the regex is an empty string / None, pass None to the middleware so that
 # only explicit origins (or '*' in the list) are used.
-_allow_origin_regex = CORS_ORIGIN_REGEX if CORS_ORIGIN_REGEX else None
+_allow_origin_regex = ALLOWED_ORIGINS if ALLOWED_ORIGINS else "*"
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=CORS_ORIGINS,
+    allow_origins=ALLOWED_ORIGINS,
     allow_origin_regex=_allow_origin_regex,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -765,8 +793,9 @@ def debug_info() -> Dict[str, Any]:
     out: Dict[str, Any] = {
         "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "status": "active",
-        "cors_origins": CORS_ORIGINS,
-        "cors_origin_regex": CORS_ORIGIN_REGEX,
+        "ALLOWALLOWED_ORIGINS":ALLOWED_ORIGINS,
+        "ALLOWED_ORIGINS": ALLOWED_ORIGINS,
+
     }
     try:
         mpath = MODELS_DIR / "metadata.json"
