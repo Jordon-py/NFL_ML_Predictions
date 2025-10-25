@@ -23,119 +23,92 @@
  *     see the new data in a predictable structure.
  */
 // frontend/src/PredictionContext.js
+// /frontend/src/state/PredictionContext.jsx
 import React, {
-  createContext,
-  useContext,
-  useMemo,
-  useReducer,
-  useCallback,
+  createContext, useContext, useMemo,
+  useReducer, useCallback, useEffect
 } from 'react';
 
-/**
- * PredictionContext
- * Purpose: Shared prediction store using React Context + Reducer.
- * State shape:
- *   {
- *     current: { ... } | null,
- *     history: Array<{ ... }>
- *   }
- */
+const KEY = "prediction_history";
+const MAX_HISTORY = 100;
 
-const PredictionContext = createContext(null);
+// Action types
+const SET_CURRENT = 'SET_CURRENT';
+const PUSH_HISTORY = 'PUSH_HISTORY';
+const RESET_HISTORY = 'RESET_HISTORY';
 
-// Simple, destructurable state
-const initialState = {
-  current: null,
-  history: [],
-};
+const initialState = { current: null, history: [] };
 
-// Pure reducer (no mutations)
 function reducer(state, action) {
   switch (action.type) {
-    case 'SET_CURRENT':
+    case SET_CURRENT:
       return { ...state, current: action.payload };
-    case 'PUSH_HISTORY':
-      return { ...state, history: [action.payload, ...state.history] };
-    case 'RESET_HISTORY':
+    case PUSH_HISTORY:
+      return { ...state, history: [action.payload, ...state.history].slice(0, MAX_HISTORY) };
+    case RESET_HISTORY:
       return { ...state, history: [] };
     default:
-      return state; // no-op for unknown actions
+      return state;
   }
 }
 
-/** Normalize any backend response into a UI-friendly entry */
-export function toEntry({
-  source = 'teamgrid',
-  season,
-  week,
-  home_abbr,
-  away_abbr,
-  home_score,
-  away_score,
-  point_diff,
-  home_win_probability,
-  away_win_probability,
-  ensemble_probability,
-}) {
+// Safe hydration from localStorage
+function loadHistory() {
+  try { const raw = localStorage.getItem(KEY); return Array.isArray(JSON.parse(raw)) ? JSON.parse(raw) : []; }
+  catch { return []; }
+}
+
+export function toEntry({ source='teamgrid', season, week, home_abbr, away_abbr,
+  home_score, away_score, point_diff, home_win_probability, away_win_probability, ensemble_probability }) {
   return {
     ts: new Date().toISOString(),
     source,
     game: { season, week, home_abbr, away_abbr },
-    metrics: {
-      home_score,
-      away_score,
-      point_diff,
-    },
+    metrics: { home_score, away_score, point_diff },
     probs: {
       home: home_win_probability,
       away: away_win_probability,
-      ensemble: ensemble_probability,
-    },
+      ensemble: ensemble_probability ?? home_win_probability
+    }
   };
 }
 
+const Ctx = createContext(null);
+
 export function PredictionProvider({ children }) {
-  const [state, dispatch] = useReducer(reducer, initialState);
+  const [state, dispatch] = useReducer(reducer, initialState, (s) => ({
+    ...s, history: loadHistory()
+  }));
 
-  // Stable action creators
-  const setCurrent = useCallback(
-    (entry) => dispatch({ type: 'SET_CURRENT', payload: entry }),
-    []
-  );
-  const pushHistory = useCallback(
-    (entry) => dispatch({ type: 'PUSH_HISTORY', payload: entry }),
-    []
-  );
-  const resetHistory = useCallback(
-    () => dispatch({ type: 'RESET_HISTORY' }),
-    []
-  );
+  // Actions
+  const setCurrent   = useCallback((e) => dispatch({ type: SET_CURRENT,  payload: e }), []);
+  const pushHistory  = useCallback((e) => dispatch({ type: PUSH_HISTORY, payload: e }), []);
+  const resetHistory = useCallback(()  => dispatch({ type: RESET_HISTORY }), []);
 
-  const actions = useMemo(() => ({ setCurrent, pushHistory, resetHistory }), [setCurrent, pushHistory, resetHistory]);
-  
-  const value = useMemo(() => ({ state, actions }), [state, actions]);
+  // Persist
+  useEffect(() => { try {
+    localStorage.setItem(KEY, JSON.stringify(state.history));
+  } catch {} }, [state.history]);
 
-  // Use React.createElement to avoid JSX in .js files (fixes previous parse error)
-  return React.createElement(
-    PredictionContext.Provider,
-    { value },
-    children
-  );
+  // Tiny dev logger
+  useEffect(() => {
+    if (import.meta.env?.DEV) console.debug("[PredictionContext] state:", state);
+  }, [state]);
+
+  // Selectors
+  const count = state.history.length;
+  const latest = state.history[0] ?? null;
+
+  const value = useMemo(() => ({
+    state, actions: { setCurrent, pushHistory, resetHistory },
+    selectors: { count, latest }
+  }), [state, setCurrent, pushHistory, resetHistory, count, latest]);
+
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
-/** Primary hook */
-export function usePredictions() {
-  const ctx = useContext(PredictionContext);
-  if (!ctx) {
-    throw new Error('usePredictions must be used within a <PredictionProvider>');
-  }
+export const usePredictions = () => {
+  const ctx = useContext(Ctx);
+  if (!ctx) throw new Error("usePredictions must be used within PredictionProvider");
   return ctx;
-}
-
-/** Alias hook for callers importing singular form */
-export function usePrediction() {
-  return usePredictions();
-}
-
-// Optional direct context export if you need it elsewhere
-export { PredictionContext };
+};
