@@ -141,26 +141,22 @@ from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 import os, re
 
+# CORS configuration
+# By default allow all origins (useful for Heroku deployments). To restrict CORS,
+# set the environment variable RESTRICT_CORS=true and provide a comma-separated
+# list in ALLOWED_ORIGINS.
 def _origins_from_env():
     raw = os.getenv("ALLOWED_ORIGINS", "")
     return [o.strip() for o in raw.split(",") if o.strip()]
 
-ALLOWED_ORIGINS = _origins_from_env() or [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "https://nfl-ml-predictions.vercel.app",
-    "https://nfl-ml-predictions-pr5uahmqx-christopher-jordons-projects.vercel.app",
-    "https://nfl-predict-6fghcp7sx-christopher-jordons-projects.vercel.app",
-    "https://new-nfl-predict.vercel.app",
-    "https://www.nfl-predict.vercel.app",
-]
+if os.getenv("RESTRICT_CORS", "false").strip().lower() in TRUTHY:
+    ALLOWED_ORIGINS = _origins_from_env() or ["http://localhost:3000"]
+    log.info("CORS restricted to ALLOWED_ORIGINS: %s", ALLOWED_ORIGINS)
+else:
+    ALLOWED_ORIGINS = ["*"]  # allow all origins by default on Heroku
+    log.info("CORS configured to allow all origins (ALLOWED_ORIGINS='*')")
 
 # ⚠️ Add ANY custom middlewares BEFORE this line (auth/logging/sentry/etc)
-
-
-log.info("ADD_LOCALHOST_ORIGINS enabled: appended local dev origins to ALLOWED_ORIGINS")
-
-log.debug("ALLOWED_ORIGINS=%s", ALLOWED_ORIGINS)
 
 # Teams
 TEAM_ABBREVIATIONS = {
