@@ -22,7 +22,7 @@ function normalizeBase(base) {
 // In dev: empty string enables Vite proxy (`server.proxy`) so calls go to the backend
 // In prod: require absolute base, fallback to Heroku URL
 export const API_BASE = normalizeBase(import.meta.env?.VITE_API_BASE || (
-  import.meta.env?.VITE_PROD_ENV ? "https://nfl-predict-ecf5a5bd34fe.herokuapp.com" : ""));
+  import.meta.env?.VITE_PROD_ENV ? "https://nfl-predict-ecf5a5bd34fe.herokuapp.com/" : "https://nfl-predict-ecf5a5bd34fe.herokuapp.com/"));
 console.log('CLIENT.JS LINE 26 API_BASE: ', API_BASE);
 
 // Internal fetch with JSON defaults and timeout
@@ -75,8 +75,8 @@ export const getTrainingReport = () => api("/report/training");
 export const getCalibrationReport = () => api("/report/calibration");
 
 export const getNextWeekSchedule = () => {
-  console.log('CLIENT.JS: Fetching schedule from URL:', `${API_BASE}/schedule/next-week`);
-  return api("/schedule/next-week");
+  console.log('CLIENT.JS: Fetching schedule from URL:', `${API_BASE}schedule/next-week`);
+  return api("schedule/next-week");
 };
 
 /**
