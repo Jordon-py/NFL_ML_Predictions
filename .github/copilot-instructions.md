@@ -24,7 +24,7 @@
 7. **Self-Awareness & Reflexion:** Before completing changes, self-check: "Is this clearer? Simpler? Would a new contributor understand without explanation?"
 
 ### Dev Quickstart
-- Start backend (local): `cd backend && python -m venv .venv && .\.venv\Scripts\Activate.ps1 && python -m pip install -r requirements.txt && python -m uvicorn backend.main:app --reload --host 127.0.0.1 --port 5000`
+- Start backend (local): `cd backend && python -m venv .venv && .\.venv\Scripts\Activate.ps1 && python -m pip install -r requirements.txt && python -m uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000`
 - Start frontend (local): `cd frontend && npm install && npm run dev`
 - Build frontend for production: `cd frontend && npm run build`
 - Deploy backend to Heroku: `heroku create --stack=container <app> && git push heroku master` (set env vars via `heroku config:set`)
@@ -46,7 +46,7 @@ def get_current_nfl_context() -> Dict[str, Any]:
 ```
 
 ### Services & Integrations
-- Backend: FastAPI on port 5000, CORS from CORS_ORIGINS env var (backend/main.py:L120). No DB/cache/queues.
+- Backend: FastAPI on port 8000, CORS from CORS_ORIGINS env var (backend/main.py:L120). No DB/cache/queues.
 - Frontend: Vite dev server proxies to backend, production uses VITE_API_URL.
 - ML: scikit-learn, lightgbm models loaded via joblib (backend/models/).
 - Deployment: Heroku (Procfile, app.json), Vercel (vercel.json).
@@ -72,8 +72,12 @@ def get_current_nfl_context() -> Dict[str, Any]:
 - Fixed HistoryChart.jsx to properly handle history array instead of stringifying state.
 - Cleaned up malformed comments in PredictionResult.jsx.
 - Added leading slash to /schedule/next-week endpoint in backend/main.py.
-- Updated Vite proxy to target localhost:5000 for dev API calls.
+- Updated Vite proxy to target localhost:8000 for dev API calls.
 - Modified sanity check to handle unfitted preprocessor during startup.
+- Updated API_BASE in frontend/src/api/client.js to use empty string in dev (enables Vite proxy) and Heroku URL in prod.
+- Verified CORS config in backend/main.py includes localhost:3000 for dev testing.
+- Tested /schedule/next-week endpoint returns 13 games for Week 8.
+- Deployed to Heroku v183 after local validation.
 
 
 
