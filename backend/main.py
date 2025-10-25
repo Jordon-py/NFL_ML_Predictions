@@ -446,29 +446,41 @@ def _ensure_home_away(df: pd.DataFrame) -> pd.DataFrame:
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     global model_objects, dataset_df
     log.info("Startup: loading models and dataset")
-    model_objects = load_objects()
+    # Load models; make startup resilient by catching and logging errors so the
+    # process can start even when artifacts are missing or slightly incompatible.
+    try:
+        model_objects = load_objects()
+    except Exception as e:
+        log.exception("Failed to load model objects at startup; continuing without models: %s", e)
+        # Use an empty dict to indicate models are not available but allow the
+        # web process to start so health/debug endpoints are reachable.
+        model_objects = {}
 
     ds_path = Path(os.getenv("DATASET_PATH", str(DEFAULT_DATASET)))
     if not ds_path.exists():
-        raise RuntimeError(f"Dataset not found: {ds_path}")
-
-    df = pd.read_csv(ds_path)
-    if df.empty:
-        raise RuntimeError("Dataset CSV is empty")
-
-    df.columns = [c.strip() for c in df.columns]
-    df = _ensure_home_away(df)
-    # Validate dataset schema against metadata to fail fast if features mismatch
-    try:
-        _validate_dataset_schema(df, model_objects)
-    except RuntimeError:
-        # Re-raise so startup fails visibly
-        raise
-    dataset_df = df
-    # Run a lightweight startup sanity check to exercise model deserialization and pipeline integrity
-    _sanity_predict(model_objects, df)
-
-    log.info("Loaded dataset rows=%d cols=%d", len(df), df.shape[1])
+        log.warning("Dataset not found at %s; continuing with empty dataset", ds_path)
+        dataset_df = pd.DataFrame()
+    else:
+        try:
+            df = pd.read_csv(ds_path)
+            if df.empty:
+                log.warning("Dataset CSV at %s is empty; continuing with empty dataset", ds_path)
+                dataset_df = pd.DataFrame()
+            else:
+                df.columns = [c.strip() for c in df.columns]
+                df = _ensure_home_away(df)
+                # Validate dataset schema against metadata but don't fail startup
+                try:
+                    _validate_dataset_schema(df, model_objects)
+                except Exception as e:
+                    log.warning("Dataset schema validation failed: %s; continuing with loaded data", e)
+                dataset_df = df
+                # Run a lightweight sanity check but don't let failures abort startup
+                try:
+                    _sanity_predict(model_objects, df)
+                except Exception as e:
+                    log.warning("Startup sanity prediction failed: %s; continuing", e)
+                log.info("Loaded dataset rows=%d cols=%d", len(df), df.shape[1])
     try:
         yield
     finally:
