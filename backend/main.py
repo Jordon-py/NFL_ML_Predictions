@@ -139,7 +139,7 @@ app = FastAPI(title="NFL Predict API")
 
 # Pull from env in prod; fall back to a safe list for dev
 def _origins_from_env():
-    raw = os.getenv("ALLOWALLOWED_ORIGINS", "")
+    raw = os.getenv("ALLOWED_ORIGINS", "*")
     return [o.strip() for o in raw.split(",") if o.strip()]
 
 ALLOWED_ORIGINS = _origins_from_env() or [
@@ -152,6 +152,8 @@ ALLOWED_ORIGINS = _origins_from_env() or [
     "https://nfl-ml-predictions-pr5uahmqx-christopher-jordons-projects.vercel.app",
     "https://nfl-predict-6fghcp7sx-christopher-jordons-projects.vercel.app",
     # Custom domains
+    "https://new-nfl-predict.vercel.app",
+    "https://www.nfl-predict.vercel.app",
     "https://new-nfl-predict.com",
     "https://www.nfl-predict.com",
 ]
