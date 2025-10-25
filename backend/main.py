@@ -321,7 +321,11 @@ def _sanity_predict(model_objects: Dict[str, Any], df: pd.DataFrame) -> None:
     transformed = None
     if pre is not None:
         try:
-            transformed = pre.transform(x)
+            # Check if preprocessor is fitted before trying to transform
+            if hasattr(pre, '_is_fitted') and pre._is_fitted:
+                transformed = pre.transform(x)
+            else:
+                log.warning("Preprocessor not fitted, skipping transform in sanity check")
         except Exception as e:
             failures.append(f"preprocessor.transform failed: {type(e).__name__}: {e}")
             log.debug("Sanity predict: preprocessor.transform failed during startup check", exc_info=True)
@@ -435,15 +439,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     df.columns = [c.strip() for c in df.columns]
     df = _ensure_home_away(df)
     # Validate dataset schema against metadata to fail fast if features mismatch
-    # try:
-    #     _validate_dataset_schema(df, model_objects)
-    # except RuntimeError:
-    #     # Re-raise so startup fails visibly
-    #     raise
+    try:
+        _validate_dataset_schema(df, model_objects)
+    except RuntimeError:
+        # Re-raise so startup fails visibly
+        raise
     dataset_df = df
     # Run a lightweight startup sanity check to exercise model deserialization
     # Temporarily disabled due to unfitted models
-    # _sanity_predict(model_objects, df)
+    _sanity_predict(model_objects, df)
 
     log.info("Loaded dataset rows=%d cols=%d", len(df), df.shape[1])
     try:
@@ -810,8 +814,16 @@ def build_game_mask(df: pd.DataFrame, season: int, week: int, home_abbr: str, aw
         mask &= df["is_home"].astype(bool)
     return mask
 
-@app.get("schedule/next-week", response_model=List[ScheduleGame])
+@app.get("/schedule/next-week", response_model=List[ScheduleGame])
 def get_next_week_schedule() -> List[ScheduleGame]:
+    """
+    Retrieve the list of scheduled NFL games for the upcoming week.
+    
+    This endpoint filters the schedule CSV based on current NFL context (season/week),
+    normalizes team abbreviations, and formats kickoff times. It supports frontend
+    rendering of matchups and prediction requests. Depends on: get_current_nfl_context(),
+    SCHEDULE_PATH env var, and team_abbr_map.json for normalization.
+    """
     spath = Path(os.getenv("SCHEDULE_PATH", str(DEFAULT_SCHEDULE)))
     if not spath.exists():
         raise HTTPException(status_code=404, detail=f"Schedule not found: {spath}")
@@ -882,21 +894,6 @@ def predict_game(payload: PredictionRequest) -> PredictionResponse:
         season, week = int(payload.season), int(payload.week)
         mask = build_game_mask(dataset_df, season, week, h, a)
         rows = dataset_df.loc[mask]
-
-        print(f'model_objects in main.py on line: 867 {model_objects.items()}')
-        # Check if models are fitted; if not, return dummy predictions for testing
-        if hasattr(model_objects["home_model"], "steps_"):
-            log.warning("Models not fitted; returning dummy predictions")
-            return PredictionResponse(
-                home_score=25.0,
-                away_score=22.0,
-                home_win_probability=0.55,
-                away_win_probability=0.45,
-                point_diff=3.0,
-                mode="dummy",
-            )
-        #mask = build_game_mask(dataset_df, season, week, h, a)
-        #rows = dataset_df.loc[mask]
         
         # Try to get existing row from dataset
         if not rows.empty:
