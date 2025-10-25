@@ -132,21 +132,17 @@ model_objects: Optional[Dict[str, Any]] = None
 dataset_df: Optional[pd.DataFrame] = None
 
 # CORS
-DEFAULT_CORS_ORIGINS = [
-    "*" or ["https://localhost:3000",
-    "https://127.0.0.1:3000",
-    "https://nfl-ml-predictions.vercel.app",
-    "https://nfl-predict-frontend.vercel.app",
-    "https://www.nfl-predict.com",
-    "https://nfl-predict.com",
-    "https://new-nfl-predict.com"]
-]
+# By default allow all origins ("*") for local dev and convenience. Override
+# with the CORS_ORIGINS environment variable (comma-separated) to restrict
+# origins in production. CORS_ORIGIN_REGEX is optional and will be treated as
+# None when not set to avoid sending an empty string to the middleware.
+DEFAULT_CORS_ORIGINS = ["*"]
 
 raw_cors = os.getenv("CORS_ORIGINS", "")
-CORS_ORIGINS = [
-    o.strip() for o in raw_cors.split(",") if o.strip()
-] or DEFAULT_CORS_ORIGINS
-CORS_ORIGIN_REGEX = os.getenv("CORS_ORIGIN_REGEX", r"https://.*\.vercel\.app$").strip()
+CORS_ORIGINS = [o.strip() for o in raw_cors.split(",") if o.strip()] or DEFAULT_CORS_ORIGINS
+# If CORS_ORIGIN_REGEX is not provided, use None so the middleware doesn't try
+# to compile an empty pattern. When provided, it should be a valid regex string.
+CORS_ORIGIN_REGEX = os.getenv("CORS_ORIGIN_REGEX", "").strip() or None
 
 # Teams
 TEAM_ABBREVIATIONS = {
@@ -466,10 +462,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 # -----------------------
 app = FastAPI(title="NFL Game Prediction API", version="2.1.0", lifespan=lifespan)
 
+# If the regex is an empty string / None, pass None to the middleware so that
+# only explicit origins (or '*' in the list) are used.
+_allow_origin_regex = CORS_ORIGIN_REGEX if CORS_ORIGIN_REGEX else None
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
-    allow_origin_regex=CORS_ORIGIN_REGEX,
+    allow_origin_regex=_allow_origin_regex,
     allow_methods=["*"],
     allow_headers=["*"],
 )
