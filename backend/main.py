@@ -21,7 +21,7 @@ Dependencies:
     - Engineered features in backend/data/game_features.csv
 
     Run:
-        uvicorn backend.main:app --reload --port 8000
+        uvicorn backend.main:app --reload --port 5000
 
     Maintainer Notes:
         - All endpoints return JSON; errors use HTTPException.
@@ -131,48 +131,31 @@ log = logging.getLogger("api")
 model_objects: Optional[Dict[str, Any]] = None
 dataset_df: Optional[pd.DataFrame] = None
 
-from fastapi import FastAPI
+# backend/main.py
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-import os
+import os, re
 
-app = FastAPI(title="NFL Predict API")
-
-# Pull from env in prod; fall back to a safe list for dev
 def _origins_from_env():
-    raw = os.getenv("ALLOWED_ORIGINS", "*")
+    raw = os.getenv("ALLOWED_ORIGINS", "")
     return [o.strip() for o in raw.split(",") if o.strip()]
 
 ALLOWED_ORIGINS = _origins_from_env() or [
-    "localhost:3000",
+    "http://localhost:3000",
     "http://127.0.0.1:3000",
-    "https://localhost:3000",
-    "http://localhost:3000"
-    # Vercel preview + prod (add yours)
     "https://nfl-ml-predictions.vercel.app",
     "https://nfl-ml-predictions-pr5uahmqx-christopher-jordons-projects.vercel.app",
     "https://nfl-predict-6fghcp7sx-christopher-jordons-projects.vercel.app",
-    # Custom domains
     "https://new-nfl-predict.vercel.app",
     "https://www.nfl-predict.vercel.app",
-    "https://new-nfl-predict.com",
-    "https://www.nfl-predict.com",
 ]
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
-    # allow any *.vercel.app subdomain without listing each preview URL:
-    allow_origin_regex=r"https://.*\.vercel\.app$",
-    allow_credentials=True,  # if you use cookies/sessions; keep True for most auth setups
-    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["*"],  # or list explicitly: ["Authorization", "Content-Type"]
-    expose_headers=["Content-Disposition"],  # e.g., if you return files
-    max_age=86400,  # cache preflight for 1 day
-)
+# ⚠️ Add ANY custom middlewares BEFORE this line (auth/logging/sentry/etc)
 
-log.info("ADD_LOCALHOST_ORIGINS enabled: appended local dev origins toALLOWED_ORIGINS")
 
-log.debug("ALLOWALLOWED_ORIGINS=%s ALLOWED_ORIGINS=%s", ALLOWED_ORIGINS)
+log.info("ADD_LOCALHOST_ORIGINS enabled: appended local dev origins to ALLOWED_ORIGINS")
+
+log.debug("ALLOWED_ORIGINS=%s", ALLOWED_ORIGINS)
 
 # Teams
 TEAM_ABBREVIATIONS = {
@@ -494,7 +477,7 @@ app = FastAPI(title="NFL Game Prediction API", version="2.1.0", lifespan=lifespa
 
 # If the regex is an empty string / None, pass None to the middleware so that
 # only explicit origins (or '*' in the list) are used.
-_allow_origin_regex = ALLOWED_ORIGINS if ALLOWED_ORIGINS else "*"
+_allow_origin_regex = r"https://.*\.vercel\.app$"
 
 app.add_middleware(
     CORSMiddleware,
@@ -751,8 +734,8 @@ def _build_future_row(
                 feature_row[f"home_minus_away_{stat_suffix}"] = h_val - a_val
     
     # Add betting/rest features with neutral defaults
-    feature_row["home_moneyline_prob"] = 0.5  # Neutral betting line
-    feature_row["away_moneyline_prob"] = 0.5
+    feature_row["home_moneyline_prob"] = 0.6  # Neutral betting line
+    feature_row["away_moneyline_prob"] = 0.4
     feature_row["moneyline_prob_diff"] = 0.0
     feature_row["spread_line"] = 0.0  # Pick'em
     feature_row["total_line"] = 45.0  # Average NFL total
@@ -795,9 +778,7 @@ def debug_info() -> Dict[str, Any]:
     out: Dict[str, Any] = {
         "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "status": "active",
-        "ALLOWALLOWED_ORIGINS":ALLOWED_ORIGINS,
         "ALLOWED_ORIGINS": ALLOWED_ORIGINS,
-
     }
     try:
         mpath = MODELS_DIR / "metadata.json"
