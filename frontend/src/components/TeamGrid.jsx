@@ -1,155 +1,139 @@
+// @ts-nocheck
+// TeamGrid.jsx
+import React, {useState, useEffect} from 'react';
+import {getNextWeekSchedule, predictGame} from '../api/client.js';
+import PredictionResult from './PredictionResult';
+
+const kickoffFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'America/Los_Angeles',
+  weekday: 'short',
+  month: 'short',
+  day: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+  hour12: true,
+});
+
+/**
+ * @param {Object} row
+ * @returns {string}
+ */
+// Attempts to format the kickoff time using several possible fields; 
+// if the date is malformed or missing, returns the raw value as a fallback.
+const formatKickoffTime = (row) => {
+  const iso = row.kickoff_ts_utc || row.kickoff_iso || row.kickoff || null;
+  try {return kickoffFormatter.format(new Date(iso));} catch {return String(iso);}
+
+};
+
+/**
+ * @param {string} csvText
+ * @returns {Object}
+ */
+const parseTeamCsv = (csvText) =>
+  csvText.trim().split('\n').slice(1).reduce((acc, line) => {
+    const [teamName, abbr, logoUrl] = line.split(',').map((v) => v.trim());
+    if (abbr) acc[abbr] = {name: teamName, abbr, logoUrl};
+    return acc;
+  }, {});
+
+
+const isActionKey = (key) => key === 'Enter' || key === ' ';
+
+const makeKey = (g) => `${g.season}-${g.week}-${g.home_abbr}-${g.away_abbr}`;
+
 /**
  * TeamGrid Component
  * ------------------
- * Renders a grid of NFL teams for selection. Fetches the upcoming week's schedule
- * to determine which teams are playing and provides context for predictions.
- *
- * Key Logic:
- * - Fetches team metadata and weekly schedule on component mount.
- * - Uses a `useEffect` hook with an empty dependency array `[]` to ensure
- *   API calls happen only once, preventing re-renders from causing duplicate requests.
- * - Manages loading and error states for a robust user experience.
+ * Renders a grid of upcoming NFL matchups for the next week, allowing users to view team details and request machine learning-based game predictions.
+ * - Loads team metadata from a CSV file and schedule data from the backend API.
+ * - Handles prediction requests for each matchup, displaying scores and win probabilities.
+ * - Manages loading and error states for robust user experience.
+ * Dependencies: React, getNextWeekSchedule, predictGame (API client).
  */
-import React, {useState, useEffect} from 'react';
-import {getNextWeekSchedule, predictGame} from '../api/client.js';
-
-
-import {usePredictions, toEntry} from '../PredictionContext.js';
-
-/**
- * TeamGrid Component - Displays NFL matchups for next week with prediction capabilities
- * (Visual-only updates: removed inline styles, added CSS utility classes, preserved behavior)
- */
-function TeamGrid() {
-  const {actions} = usePredictions();
+export default function TeamGrid() {
   const [teams, setTeams] = useState({});
   const [schedule, setSchedule] = useState([]);
   const [predictions, setPredictions] = useState({});
+  const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState({});
   const [error, setError] = useState(null);
 
-  // Load team metadata from CSV
   useEffect(() => {
-    const loadTeams = async () => {
+    (async () => {
       try {
-        const response = await fetch('/data/myteamdescriptions.csv');
-        if (!response.ok) {
-          throw new Error('Failed to load team data');
-        }
-        const csvText = await response.text();
-        const lines = csvText.trim().split('\n');
-        const headers = lines[0].split(',').map(h => h.trim());
-
-        const teamData = {};
-        for (let i = 1; i < lines.length; i++) {
-          const values = lines[i].split(',').map(v => v.trim());
-          if (values.length >= 3) {
-            const [teamName, abbr, logoUrl] = values;
-            teamData[abbr] = {name: teamName, abbr, logoUrl};
-          }
-        }
-        setTeams(teamData);
+        const res = await fetch('/data/myteamdescriptions.csv');
+        if (!res.ok) throw new Error('Failed to load team data');
+        setTeams(parseTeamCsv(await res.text()));
       } catch (err) {
-        console.error('[TeamGrid] Failed to load teams:', err);
+        console.error('[TeamGrid] loadTeams:', err);
         setError('Failed to load team data');
       }
-    };
-    loadTeams();
+    })();
   }, []);
 
-  // Load next week's schedule from API
+  // Load persisted history from localStorage on mount
   useEffect(() => {
-    const loadSchedule = async () => {
-      try {
-        const scheduleData = await getNextWeekSchedule();
-        // Normalize the response to always be an array, guarding against malformed API data.
-        const normalizedSchedule = Array.isArray(scheduleData)
-          ? scheduleData
-          : scheduleData?.games ?? [];
-        if (!Array.isArray(normalizedSchedule)) {
-          throw new Error('Schedule payload is malformed.');
-        }
-        setSchedule(normalizedSchedule);
-      } catch (err) {
-        console.error('[TeamGrid] Failed to load schedule:', err);
-        setError('Failed to load schedule');
-        setSchedule([]); // Ensure schedule is always an array on error
+    try {
+      const raw = localStorage.getItem("prediction_history");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) setHistory(parsed.slice(-100));
       }
-    };
-
-    loadSchedule();
-    // By using an empty dependency array [], this effect runs only ONCE when the component mounts.
-    // This is the correct pattern for one-time data fetching and prevents the multiple API calls
-    // seen in the logs. The previous dependency `[teams]` caused re-fetches on every re-render.
+    } catch (err) {
+      console.debug("Failed to load prediction history from localStorage", err);
+    }
   }, []);
 
-  // Predict a matchup
-  const handlePredict = async (game) => {
-    const gameKey = `${game.home_abbr}-${game.away_abbr}`;
-    if (loading[gameKey] || predictions[gameKey]) return;
+  useEffect(() => {
+    (async () => {
+      try {
+        setSchedule(await getNextWeekSchedule());
+        console.log(JSON.stringify(schedule))
+      } catch (err) {
+        console.error('[TeamGrid] loadSchedule:', err);
+        setError('Failed to load schedule');
+        setSchedule([]);
+      }
+    })();
+  }, []);
 
-    setLoading(prev => ({...prev, [gameKey]: true}));
+  const handlePredict = async (game) => {
+  
+    const key = makeKey(game);
+    console.log('key: -->',key)
+    if (loading[key]) return;
+    setLoading((s) => ({...s, [key]: true}));
     setError(null);
 
     try {
-      if (!game.home_abbr || !game.away_abbr) {
-        console.warn('[TeamGrid] Missing abbreviations for game:', game);
-        throw new Error('Missing team abbreviations.');
-      }
-
       const payload = {
-        home_team: game.home_abbr,
-        away_team: game.away_abbr,
-        season: game.season,
-        week: game.week,
+        // Send both abbreviation (preferred) and fallback full name. Backend will normalize.
+        // Also include raw fields some backend builds expect (rest days) so the
+        // prediction endpoint can construct features if available.
+        home_abbr: game.home_abbr || game.home_team,
+        away_abbr: game.away_abbr || game.away_team,
+        season: Number(game.season),
+        week: Number(game.week),
       };
-
-      const result = await predictGame(payload);
-      setPredictions(prev => ({...prev, [gameKey]: result}));
-
-      // Create a normalized entry and update context
-      const entry = toEntry({
-        ...game,
-        ...result,
-        home_abbr: game.home_abbr,
-        away_abbr: game.away_abbr,
-      });
-      actions.setCurrent(entry);
-      actions.pushHistory(entry);
-
-    } catch (err) {
-      console.error('[TeamGrid] Prediction failed:', err);
-      const message = err instanceof Error ? err.message : 'Unknown error.';
-      setError(`Failed to predict ${game.home_abbr} vs ${game.away_abbr}: ${message}`);
+      let {home_score, away_score, home_win_probability, away_win_probability, point_diff} = await predictGame(payload);
+      const result = {
+        home_score: Number(home_score),
+        away_score: Number(away_score),
+        point_diff: Number(point_diff),
+        home_win_probability: Number(home_win_probability),
+        away_win_probability: Number(away_win_probability),
+      };
+      setPredictions((p) => ({...p, [key]: result}));
+      console.log(predictions)
+    } catch (e) {
+      console.error('[TeamGrid] predictGame:', e);
+      setError('Failed to get prediction');
     } finally {
-      setLoading(prev => ({...prev, [gameKey]: false}));
+      setLoading((s) => ({...s, [key]: false}));
     }
   };
 
-  /**
-   * Format kickoff time to local timezone (America/Los_Angeles)
-   * @param {string} isoString - ISO timestamp string
-   * @returns {string} Formatted local time
-   */
-  const formatKickoffTime = (isoString) => {
-    try {
-      const date = new Date(isoString);
-      return date.toLocaleString('en-US', {
-        timeZone: 'America/Los_Angeles',
-        weekday: 'short',
-        month: 'short',
-        day: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true,
-      });
-    } catch (err) {
-      console.warn('[TeamGrid] Failed to format time:', err);
-      return isoString;
-    }
-  };
-
-  // Render team block (visual-only updates: class-based fallback toggle)
   const renderTeam = (abbr, isHome) => {
     const team = teams[abbr];
     if (!team) {
@@ -167,16 +151,13 @@ function TeamGrid() {
           src={team.logoUrl}
           alt={`${team.name} logo`}
           className="team-logo"
-          /* Enhancement 6: class-based fallback toggle (no inline style) */
           onError={(e) => {
             e.currentTarget.classList.add('is-hidden');
             const fallback = e.currentTarget.nextElementSibling;
             if (fallback) fallback.classList.remove('is-hidden');
           }}
         />
-        <div className="team-logo-placeholder is-hidden">
-          {team.abbr}
-        </div>
+        <div className="team-logo-placeholder is-hidden">{team.abbr}</div>
         <div className="team-info">
           <span className="team-name">{team.name}</span>
           <span className="team-abbr">{team.abbr}</span>
@@ -191,9 +172,7 @@ function TeamGrid() {
       <div className="team-grid-error">
         <h3>Error Loading Data</h3>
         <p>{error}</p>
-        <button onClick={() => window.location.reload()}>
-          Retry
-        </button>
+        <button onClick={() => window.location.reload()}>Retry</button>
       </div>
     );
   }
@@ -206,45 +185,38 @@ function TeamGrid() {
       </div>
     );
   }
+ 
 
   return (
     <div className="team-grid-section">
-      <div className="team-grid-cards">
+      <div className="team-grid-cards a-shine">
         {schedule.map((game, index) => {
-          const gameKey = `${game.home_abbr}-${game.away_abbr}`;
-          const prediction = predictions[gameKey];
-          const isLoading = loading[gameKey];
+          const key = makeKey(game);
+          const prediction = predictions[key];
+          const isLoading = !!loading[key];
 
           return (
-            <div
-              key={`${game.season}-${game.week}-${index}`}
-              style={{'--i': index}}
-            >
+            <div key={key} style={{'--i': index}}>
               <div
                 className={`matchup-card inner-card sb3__content ${prediction ? 'has-prediction' : ''} ${isLoading ? 'loading' : ''}`}
                 onClick={() => handlePredict(game)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
+                  if (isActionKey(e.key)) {
                     e.preventDefault();
                     handlePredict(game);
                   }
                 }}
-                tabIndex={0} role="button"
+                tabIndex={0}
+                role="button"
                 aria-label={`Predict ${game.away_abbr} at ${game.home_abbr}`}
               >
                 <div className="matchup-teams inner-card">
-                  <div className="away-team">
-                    {renderTeam(game.away_abbr, false)}
-                  </div>
-                  <div className="vs-indicator inner-card">@</div>
-                  <div className="home-team inner-card">
-                    {renderTeam(game.home_abbr, true)}
-                  </div>
+                  <div className="away-team">{renderTeam(game.away_abbr || game.away_team, false)}</div>
+                  <div className="vs-indicator inner-card"><strong>VS</strong></div>
+                  <div className="home-team inner-card">{renderTeam(game.home_abbr || game.home_team, true)}</div>
                 </div>
 
-                <div className="matchup-time inner-card">
-                  {formatKickoffTime(game.kickoff_iso)}
-                </div>
+                <div className="matchup-time inner-card">{formatKickoffTime(game)}</div>
 
                 {isLoading && (
                   <div className="prediction-loading">
@@ -255,24 +227,84 @@ function TeamGrid() {
 
                 {prediction && (
                   <div className="prediction-result inner-card">
-                    <div className="predicted-scores inner-card">
+                    <div className="predicted-scores inner-card a-shine">
+                      <span className="away-team-abbr">{game.away_abbr}</span>
                       <span className="score away-score inner-card">{prediction.away_score.toFixed(1)}</span>
-                      <span className="score-separator inner-card"> {'<->'} </span>
+                      <span className="score-separator inner-card">{'VS'}</span>
+                      <span className="home-team-abbr inner-card">{game.home_abbr || game.home_team}</span>
                       <span className="score home-score inner-card">{prediction.home_score.toFixed(1)}</span>
+                      <br />
                     </div>
-                    <div className="point-diff">
-                      Spread: {prediction.point_diff > 0 ? '+' : ''}{prediction.point_diff.toFixed(1)}
+                    
+                      <div className="point-diff">
+                        Spread: {prediction.point_diff > 0 ? '+' : ''}{prediction.point_diff.toFixed(1)}<br />
+                      </div>
+                
+                      <div className="point-prob">
+                        Home Win Probability: {prediction.home_win_probability.toFixed(2)}
+                      </div>
+
+                    {/* Render PredictionResult with a normalized entry shape */}
+                  <div className="hidden">
+                    <PredictionResult entry={{ game, prediction }} />
+                  </div>
+
+                    <div className="save-history">
+                      <button
+                        type="button"
+                        onClick={(ev) => {
+                          ev.stopPropagation();
+                          const entry = {
+                            game,
+                            metrics: {
+                              home_score: prediction.home_score,
+                              away_score: prediction.away_score,
+                              point_diff: prediction.point_diff,
+                            },
+                            probs: {
+                              home: prediction.home_win_probability,
+                              away: prediction.away_win_probability,
+                            },
+                          };
+                          // Persist with dedupe and cap
+                          const makeKey = (e) => `${e.game.season}-${e.game.week}-${e.game.home_abbr || e.game.home_team}-${e.game.away_abbr || e.game.away_team}`;
+                          setHistory((h) => {
+                            const key = makeKey(entry);
+                            const filtered = h.filter((x) => makeKey(x) !== key);
+                            const next = [...filtered, entry].slice(-100);
+                            try {
+                              localStorage.setItem("prediction_history", JSON.stringify(next));
+                            } catch (err) {
+                              console.debug("Failed to save prediction history", err);
+                            }
+                            return next;
+                          });
+                        }}
+                      >
+                        Save to History
+                      </button>
                     </div>
                   </div>
                 )}
               </div>
-
             </div>
           );
         })}
       </div>
+
+      {/* Saved prediction history */}
+      {history.length > 0 && (
+        <div className="prediction-history">
+          <h3>Saved Predictions</h3>
+          <div className="history-list">
+            {history.map((entry, i) => (
+              <div key={`history-${i}`} className="history-entry">
+                <PredictionResult entry={entry} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-
-export default TeamGrid;

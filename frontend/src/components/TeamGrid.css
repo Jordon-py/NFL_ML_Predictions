@@ -20,17 +20,17 @@
   --c-text-muted-on-dark: #c9d3e0;
   /* Enhancement 8 */
 
-  --glass: rgba(255, 255, 255, 0.12);
+  --glass: rgba(59, 144, 255, 0.176);
 
   --r-md: 12px;
   --r-sm: 8px;
 
-  --shadow-1: 0 1px 2px rgba(0, 0, 0, .08);
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, .28);
   /* Enhancement 9 */
-  --shadow-2: 0 6px 18px rgba(0, 0, 0, .18);
+  --shadow-2: 0 6px 18px rgba(0, 0, 0, .38);
   /* Enhancement 9 */
 
-  --grad-primary: linear-gradient(90deg, #1e90ff, #00bfff);
+  --grad-primary: linear-gradient(90deg, lch(85.42% 34.11 221.38 / 0.486), lch(51.53% 81.02 290.09 / 0.492), lch(32.42% 133.68 306.35 / 0.349));
   /* Enhancement 10 */
 }
 
@@ -46,7 +46,7 @@
 /* Utility to apply common animation props cleanly */
 .anim {
   animation-duration: var(--a-dur);
-  animation-timing-function: var(--a-ease);
+  animation-timing-function: var(--a-ease-in-ease-out);
   animation-delay: var(--a-delay);
   animation-iteration-count: var(--a-iter);
   animation-fill-mode: both;
@@ -165,7 +165,7 @@
 
 /* Stagger helper for lists/grids */
 .stagger>* {
-  --a-delay: calc(var(--i, 0) * 80ms);
+  --a-delay: calc(var(--i, 0) * 180ms);
 }
 
 /* Base (Enhancement 2 + 3 + 8) */
@@ -192,15 +192,17 @@ body {
   overflow-x: hidden;
 }
 
-h2 .nfl-matchups {
+h2 .nfl-matchups,
+  p .nfl-matchups {
   display: flex;
   flex-direction: row;
+  justify-content: space-evenly;
   font-family: 'Orbitron', sans-serif;
   font-weight: 800;
 }
 
 main.app-main {
-  padding: 2rem 0;
+  padding: .4rem 0;
   min-height: 100vh;
   width: 100%;
 }
@@ -208,30 +210,37 @@ main.app-main {
 /* Dashboard container - ensure it doesn't interfere with sticky nav */
 .dashboard {
   position: relative;
+  
   width: 100%;
   min-height: 100vh;
   overflow-y: visible;
-  padding-top: 2rem;
 }
 
 /* Containers (Enhancement 3) */
 .container {
-  max-width: 1200px;
+  max-width: 1500px;
   width: 100%;
   margin: 0 auto;
-  padding: clamp(16px, 3vw, 28px);
 }
 
 .team-grid-header {
-  display: flex ;
+  display: flex;
   flex-direction: row;
   flex-wrap: wrap;
   align-content: center;
   padding-left: 2rem;
-  gap: 2rem;
-  text-align: center;
-  margin-bottom: 1.5rem;
+  gap: 60%;
+  text-align: space-between;
+  margin-bottom: .5rem;
 }
+div.probability.home-win-prob.inner-card.a-shine {
+  display: flex;
+  font-size: 1rem;
+  font-optical-sizing: auto;
+  color:lch(100% 0.01 296.81);
+
+}
+
 /* Grid (Enhancement 3) */
 .team-grid-section {
   padding-inline: clamp(12px, 2vw, 24px);
@@ -239,38 +248,48 @@ main.app-main {
 
 .team-grid-cards {
   display: grid;
-  background-color: #00326431;
+  background-color: #00000000;
+     
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 2rem;
-  border-radius: 1%;
+  gap: 1rem;
+  border-radius: 1.5%;
   border-color: whitesmoke;
 }
 
-.matchup-time.inner-card{
+.matchup-time.inner-card {
   display: flex;
   flex-direction: row;
-  gap: 4rem;
+  gap: 2rem;
 }
-.predicted-scores.inner-card {
+
+.predicted-scores.inner-card.a-shine {
   display: flex;
-  flex-direction: column;
-  padding: 15px;
-  gap: 4rem;
-  font-weight: 900;
-  font-size: 2.5rem;
-  align-content: space-around;
-  color: black;
+  flex-direction: row;
+  gap: .3rem;
+  font-weight: 500;
+  font-size: 1.4rem;
+  align-content: space-between;
+  color: lch(100% 0.01 296.81 / 0.95);
+  background-color: lch(0% 0 0 / 0.726);
+  font-family: 'Inter', sans-serif;
+  position: fixed;
+  border-radius: 5%;
+  top: 1px;
+  right: .5%;
+
 
 }
+
 /* Cards (Enhancement 4 + 5 + 10) */
-.matchup-card {
+.matchup-card.inner-card {
   display: flex;
   flex-direction: row;
-
-  background-color: rgba(0, 65, 187, 0.226);
+  -webkit-backdrop-filter: blur(10px); /* normalized prefix form */
+  backdrop-filter: blur(10px);         /* standard property for compatibility */
+  background-color: var(a-shine);
   border-radius: 18px;
   box-shadow: 0 6px 18px 1px rgba(17, 0, 0, 0.712);
-  padding: 20px;
+  padding: 10px;
   margin-bottom: 20px;
   display: flex;
   align-items: center;
@@ -279,7 +298,7 @@ main.app-main {
   position: relative;
   max-height: 450px;
   height: 100%;
-  max-width: 300px;
+  max-width: 320px;
   transition: transformY(-9px);
   width: 100%;
   color: #cbe4ff;
@@ -290,26 +309,74 @@ main.app-main {
 }
 
 .inner-card {
-  border-radius: inherit;
+  border-radius: 1%;
+
 }
 
+div .point-diff {
+  display: flex;
+  flex-direction: column;
+  gap: 5rem;
+}
+
+.point-diff.inner-card.a-shine {
+  display: flex;
+  flex-direction: row;
+  position: fixed;
+  top: 25%;
+  right: 3%;
+  gap: .3rem;
+  font-weight: 300;
+  font-size: 1rem;
+  color: #ffffffd8;
+  font-family: 'Inter', sans-serif;
+  transition: all transform(a-glow);
+}
+
+.point-prob {
+  position: fixed;
+  font-size: 1rem;
+  top: 8%;
+  left: 50%;
+  display: flex;
+  flex-direction: row;
+  color: var(a-shine);
+  background-color: var(--grad-primary);
+  width: 20px;
+}
+
+div .prediction-result.inner-card.a-glow {
+  display: flex;
+  flex-direction: column;
+  padding: 1px;
+  gap: .3rem;
+  font-weight: 400;
+  font-size: 1rem;
+  color: #ffffff;
+  font-family: 'Inter', sans-serif;
+  transition: all transform(a-glow);
+}
 .matchup-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+  transform: translateY(-7px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.524);
   cursor: pointer;
 }
 
 .matchup-card:focus-visible {
-  outline: 3px solid var(--c-brand-1, #0080ff);
+  outline: 3px solid var(--c-brand-1, #1389ff);
   /* Enhancement 5 + 7 */
   outline-offset: 3px;
 }
 
 .matchup-card.has-prediction {
-  border: 1px solid transparent;
+  border: 2px solid transparent;
   /* Enhancement 10 */
   border-image: var(--grad-primary) 1;
   /* Enhancement 10 */
+}
+
+.hidden {
+  display: none;
 }
 
 /* Loading / results */
@@ -357,15 +424,17 @@ button:focus-visible,
   }
 }
 
-.matchup-card:hover {
+.matchup-card.a-shine:hover {
   cursor: pointer;
-  transform: none;
-  box-shadow: var(--shadow-1);
+  transition: transform 0.3s, box-shadow 0.3s;
+  transform: scale(1.02);
+  animation: shine 1s infinite;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
 }
 
 img.team-logo {
-  max-width: 180px;
-  max-height: 180px;
+  max-width: 160px;
+  max-height: 160px;
   width: 100%;
   height: 100%;
   transition: transform 0.3s ease, filter 0.3s ease;
@@ -373,6 +442,6 @@ img.team-logo {
 
 /* Add shine effect on logo hover */
 img.team-logo:hover {
-  transform: scale(1.00);
+  transform: scale(1.00) rotate(360deg 3s infinite);
   filter: brightness(1.4);
 }
