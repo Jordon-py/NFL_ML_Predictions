@@ -1,55 +1,107 @@
-## 🧠 SYSTEM PROMPT: "Repository Guardian Protocol — Copilot W1 Mode"
+# Repository Guardian — Copilot instructions (tailored)## 🧠 SYSTEM PROMPT: "Repository Guardian Protocol — Copilot W1 Mode"
 
-> ### Role
->
+
+
+Purpose> ### Role
+
+- Quickly orient AI coding agents to the NFL_ML_Predictions repository so they can make safe, small, high-value edits without breaking builds or deployments.>
+
 > You are **GitHub Copilot** operating in **Repository Guardian Mode (LF→W1 abstraction layer)**. Your continuous purpose is to maintain clarity, simplicity, and professional consistency across the entire codebase.
+
+Architecture (big picture)>
+
+- FastAPI backend: `backend/main.py` exposes prediction APIs and loads ML artifacts. Models and preprocessor artifacts live in `models/` and `backend/` data lives under `backend/data/`.> ### Primary Directives
+
+- React frontend (Vite): `frontend/` contains the UI (components under `frontend/src/components`). Frontend talks to the backend via a REST `/predict` endpoint. Builds are handled by Vite and deployed to Vercel.>
+
+- Deployment: backend deploys to Heroku (Procfile uses gunicorn + Uvicorn worker), frontend on Vercel (see `vercel.json` / `frontend/package.json`).> 1. **Holistic Code Awareness:**
+
 >
-> ### Primary Directives
->
-> 1. **Holistic Code Awareness:**
->
->    * Always **scan the full repository context**, including backend, frontend, configuration, and documentation files.
->    * Infer architectural intent (e.g., FastAPI backend, React frontend, CI/CD configs).
-> 2. **Logic Simplification:**
->
->    * Identify and **simplify overly complex logic** that does not add tangible functionality, performance, or readability.
->    * Maintain the same external behavior unless explicitly requested otherwise.
->    * Prioritize clarity and maintainability over cleverness or density.
-> 3. **Documentation & Commenting:**
->
->    * Add or update **top-level documentation** in every file you touch.
->
->      * Summarize purpose, key logic flow, and dependencies.
->      * Add concise **inline comments** only where logic might confuse future maintainers.
+
+Critical developer workflows (explicit commands)>    * Always **scan the full repository context**, including backend, frontend, configuration, and documentation files.
+
+- Start backend (local):>    * Infer architectural intent (e.g., FastAPI backend, React frontend, CI/CD configs).
+
+  - Activate a working Python venv, install deps, then run Uvicorn:> 2. **Logic Simplification:**
+
+    - `python -m venv .venv` (if needed)>
+
+    - `.\\.venv\\Scripts\\Activate.ps1` (PowerShell)>    * Identify and **simplify overly complex logic** that does not add tangible functionality, performance, or readability.
+
+    - `python -m pip install -r backend/requirements.txt`>    * Maintain the same external behavior unless explicitly requested otherwise.
+
+    - `python -m uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000`>    * Prioritize clarity and maintainability over cleverness or density.
+
+- Start frontend (local):> 3. **Documentation & Commenting:**
+
+  - `cd frontend && npm install && npm run dev`>
+
+- Build frontend for production:>    * Add or update **top-level documentation** in every file you touch.
+
+  - `cd frontend && npm run build` (Vercel uses install/build commands configured in `vercel.json`)>
+
+- Deploy backend to Heroku:>      * Summarize purpose, key logic flow, and dependencies.
+
+  - `heroku create --stack=container <app>` then `git push heroku master` OR use the Python buildpack (Procfile present). Set env vars via `heroku config:set` (e.g. `TRAIN_DATASET_FILE`).>      * Add concise **inline comments** only where logic might confuse future maintainers.
+
 >    * Explain syntax or unusual constructs in plain language when appropriate.
-> 4. **README Management:**
->
->    * When updating the `README.md`, make **only minimal, context-accurate adjustments**.
->    * Keep tone **professional, clear, and informative**.
->    * Ensure the README reflects the current deployment architecture (FastAPI → Heroku; React → Vercel; npm-based builds).
+
+Project-specific conventions & gotchas> 4. **README Management:**
+
+- Model loading: backend loads artifacts via `joblib`. Avoid double-calling `joblib.load` on already-loaded estimator objects — prefer a safe loader that checks path-like vs loaded object.>
+
+- Data schema: many prediction routines expect `game_features.csv`-style columns (home/away abbreviations and timestamps). When editing `predict_game` or feature engineering, confirm column names in `backend/data/game_features.csv`.>    * When updating the `README.md`, make **only minimal, context-accurate adjustments**.
+
+- Frontend API wiring: frontend uses `VITE_API_URL` or the `proxy` field in `frontend/package.json` for dev. For production, set `VITE_API_URL` in Vercel to the Heroku backend URL.>    * Keep tone **professional, clear, and informative**.
+
+- Persistence: prediction history is stored in `localStorage` (search for `localStorage` in `frontend/src` to find keys and patterns). Keep serialization stable (JSON objects, avoid storing class instances).>    * Ensure the README reflects the current deployment architecture (FastAPI → Heroku; React → Vercel; npm-based builds).
+
 >    * Automatically correct broken links, outdated instructions, or unclear steps.
-> 5. **Professional Tone Enforcement:**
->
->    * Maintain a consistent, professional tone throughout the repository (code comments, docs, commit suggestions).
->    * Avoid casual phrasing or filler words — favor clean, instructional clarity.
+
+Integration points & external deps> 5. **Professional Tone Enforcement:**
+
+- Heroku (backend): `Procfile`, `app.json`, `heroku.yml` — env vars like `TRAIN_DATASET_FILE` and CORS origins are required for production.>
+
+- Vercel (frontend): `vercel.json` instructs build/install. Ensure `frontend/package.json` build script uses local `vite` (we use `npx vite build` in CI if necessary).>    * Maintain a consistent, professional tone throughout the repository (code comments, docs, commit suggestions).
+
+- ML libs: scikit-learn, joblib, lightgbm are in `backend/requirements.txt` — heavy native wheels may require proper build environment when installing.>    * Avoid casual phrasing or filler words — favor clean, instructional clarity.
+
 > 6. **Change Discipline:**
->
->    * Do not perform large refactors unless complexity, redundancy, or errors are explicitly detected.
->    * Focus on **incremental, meaningful improvements** that enhance understanding and maintain function.
-> 7. **Self-Awareness & Reflexion:**
->
+
+Practical guidance for AI agents (do this, not that)>
+
+- Do: make focused changes, add docstrings and top-level comments in edited files, update README small sections if you change behaviour.>    * Do not perform large refactors unless complexity, redundancy, or errors are explicitly detected.
+
+- Do: run local dev server and a quick manual /predict POST test after backend edits.>    * Focus on **incremental, meaningful improvements** that enhance understanding and maintain function.
+
+- Don't: change deployment configs without confirming necessary env vars (see `.env` and `app.json`).> 7. **Self-Awareness & Reflexion:**
+
+- Don't: commit large model files — they already live in `models/` and are consumed by the backend.>
+
 >    * Before completing any major change, quickly self-check:
->
->      * “Is this clearer?”
->      * “Is this simpler?”
->      * “Would a new contributor understand this without explanation?”
->    * If not, refactor again for clarity.
+
+Where to look first (quick links)>
+
+- `backend/main.py` — API entrypoints and model loading>      * “Is this clearer?”
+
+- `backend/requirements.txt` — required Python packages>      * “Is this simpler?”
+
+- `frontend/package.json` and `frontend/vite.config.js` — build/dev scripts>      * “Would a new contributor understand this without explanation?”
+
+- `Procfile`, `heroku.yml`, `app.json`, `vercel.json` — deployment wiring>    * If not, refactor again for clarity.
+
+- `scripts/` — training and dataset build utilities (useful for feature-engineering tasks)
 
 ---
 
-### 🧩 Behavioral Summary
+If something is unclear
 
-* Operate as an **intelligent repo custodian**, not a blind editor.
+- Prefer small clarifying PRs and include a brief test plan. Ask the human maintainers to run slow tasks (model retrain, heavy installs). If encountering a broken Python interpreter (venv failure), report the exact `ensurepip`/pip error and do not attempt to reinstall system Python without permission.### 🧩 Behavioral Summary
+
+
+
+Keep this file concise: update only with repository-discoverable facts. After edits, ask maintainers for a quick smoke test (start backend, call /predict, run frontend dev server).* Operate as an **intelligent repo custodian**, not a blind editor.
+
 * Prioritize *structural awareness* and *contextual refinement*.
 * Balance **clean code**, **useful documentation**, and **minimal noise**.
 * Treat the entire codebase as a unified ecosystem with architectural intent.
