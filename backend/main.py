@@ -68,7 +68,12 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 # Load .env
-load_dotenv(Path(__file__).parent / ".env")
+# Load .env from backend directory or repository root for consistent environment variable loading
+backend_dir = Path(__file__).parent
+repo_root = backend_dir.parent
+dotenv_loaded = load_dotenv(backend_dir / ".env")
+if not dotenv_loaded:
+    load_dotenv(repo_root / ".env")
 
 # -----------------------
 # Paths and constants
@@ -128,14 +133,15 @@ dataset_df: Optional[pd.DataFrame] = None
 
 # CORS
 DEFAULT_CORS_ORIGINS = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
+    "*" or ["https://localhost:3000",
+    "https://127.0.0.1:3000",
     "https://nfl-ml-predictions.vercel.app",
     "https://nfl-predict-frontend.vercel.app",
     "https://www.nfl-predict.com",
     "https://nfl-predict.com",
-    "https://new-nfl-predict.com",
+    "https://new-nfl-predict.com"]
 ]
+
 raw_cors = os.getenv("CORS_ORIGINS", "")
 CORS_ORIGINS = [
     o.strip() for o in raw_cors.split(",") if o.strip()
@@ -445,8 +451,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         # Re-raise so startup fails visibly
         raise
     dataset_df = df
-    # Run a lightweight startup sanity check to exercise model deserialization
-    # Temporarily disabled due to unfitted models
+    # Run a lightweight startup sanity check to exercise model deserialization and pipeline integrity
     _sanity_predict(model_objects, df)
 
     log.info("Loaded dataset rows=%d cols=%d", len(df), df.shape[1])
@@ -885,12 +890,12 @@ def predict_game(payload: PredictionRequest) -> PredictionResponse:
     for missing data, completed games, or prediction failures.
     """
     if model_objects is None or dataset_df is None:
-        raise HTTPException(500, "Models or dataset not loaded: from predict_game() function LINE 852 IN MAIN.PY")
+        raise HTTPException(500, "Models or dataset not loaded. Please ensure the backend is properly initialized.")
 
     try:
         h = get_abbr(payload.home_team)
         a = get_abbr(payload.away_team)
-        print(f'MAIN.PY LINE 865 h: and a: h={h} and a={a}')
+        log.debug(f"predict_game: home_team={h}, away_team={a}")
         season, week = int(payload.season), int(payload.week)
         mask = build_game_mask(dataset_df, season, week, h, a)
         rows = dataset_df.loc[mask]
@@ -941,15 +946,15 @@ def predict_game(payload: PredictionRequest) -> PredictionResponse:
             if col in {"home_rest", "away_rest"}:
                 return np.nan
 
-            '''# Moneyline/lines: neutral defaults if training included them but our row lacks them
-            if col in {"home_moneyline_prob", "away_moneyline_prob", "moneyline_prob_diff"}:
-                return {"home_moneyline_prob": 0.5,
-                        "away_moneyline_prob": 0.5,
-                        "moneyline_prob_diff": 0.0}[col]
-            if col == "spread_line":
-                return 0.0
-            if col == "total_line":
-                return 45.0'''
+            # Moneyline/lines: neutral defaults if training included them but our row lacks them
+            # if col in {"home_moneyline_prob", "away_moneyline_prob", "moneyline_prob_diff"}:
+            #     return {"home_moneyline_prob": 0.5,
+            #             "away_moneyline_prob": 0.5,
+            #             "moneyline_prob_diff": 0.0}[col]
+            # if col == "spread_line":
+            #     return 0.0
+            # if col == "total_line":
+            #     return 45.0
 
             # Anything else: NaN (numeric imputer) or empty string (most_frequent for cats) — but we don't know dtype here,
             # so return NaN and let imputers handle it; OHE has handle_unknown='ignore' for unseen cats.
@@ -980,9 +985,9 @@ def predict_game(payload: PredictionRequest) -> PredictionResponse:
                 if {"hgbr", "ridge", "weight"}.issubset(bundle):
                     weight = float(bundle["weight"])
                     preds_hgbr = bundle["hgbr"].predict(X)
-                    print(f'PREDS_HGBR LINE: 970: {preds_hgbr}')
+                    log.debug(f'PREDS_HGBR LINE: 970: {preds_hgbr}')
                     preds_ridge = bundle["ridge"].predict(X)
-                    print(f'preds_ridge: {preds_ridge}')
+                    log.debug(f'preds_ridge: {preds_ridge}')
                     
                     return weight * preds_hgbr + (1.0 - weight) * preds_ridge
                 
@@ -999,6 +1004,7 @@ def predict_game(payload: PredictionRequest) -> PredictionResponse:
             raise AttributeError(f"Score model lacks predict method. Type: {type(bundle)}")
         
         '''HOME_SCORE'''
+        # HOME_SCORE
         home_score = float(
             np.clip(
                 _reg_predict(model_objects["home_model"], X)[0],
@@ -1008,7 +1014,7 @@ def predict_game(payload: PredictionRequest) -> PredictionResponse:
         )
         print('home_score: ', home_score)
         
-        '''AWAY_SCORE'''
+        # AWAY_SCORE
         away_score = float(
             np.clip(
                 _reg_predict(model_objects["away_model"], X)[0],
@@ -1017,7 +1023,6 @@ def predict_game(payload: PredictionRequest) -> PredictionResponse:
             )
         )
         point_diff = round(home_score - away_score, 1)
-
         # Win probability from calibrated classifier if present, else sigmoid on margin
         try:
             # Safely obtain the raw "win_model" entry from model_objects. It may be:
