@@ -75,7 +75,7 @@ async function api(path, options = {}) {
       headers,
       body,
       signal: controller.signal,
-      credentials: "include", // play nice with CORS credentials
+      credentials: "omit", // play nice with CORS credentials
     };
     // Dev-time trace
     if (import.meta.env?.DEV) {
