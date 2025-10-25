@@ -37,11 +37,6 @@ const parseTeamCsv = (csvText) =>
     return acc;
   }, {});
 
-const normalizeSchedulePayload = (data) => {
-  if (Array.isArray(data)) return data;
-  if (Array.isArray(data?.games)) return data.games;
-  throw new Error('Schedule payload is malformed.');
-};
 
 const isActionKey = (key) => key === 'Enter' || key === ' ';
 
@@ -93,7 +88,8 @@ export default function TeamGrid() {
   useEffect(() => {
     (async () => {
       try {
-        setSchedule(normalizeSchedulePayload(await getNextWeekSchedule()));
+        setSchedule(await getNextWeekSchedule());
+        console.log(JSON.stringify(schedule))
       } catch (err) {
         console.error('[TeamGrid] loadSchedule:', err);
         setError('Failed to load schedule');
