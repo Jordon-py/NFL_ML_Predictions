@@ -1,8 +1,11 @@
 
 import {getNextWeekSchedule, predictGame} from '../api/client.js';
-import React, {useState, useEffect, useCallback} from 'react';
+import React, {useState, useEffect} from 'react';
 
-const makeKey = useCallback((g) => `${g.season}-${g.week}-${g.home_abbr}-${g.away_abbr}`, []);
+// NOTE: hooks (like useCallback) must only be called inside React function
+// components or custom hooks. Creating a memoized callback at module scope
+// causes runtime errors. Use a plain utility function here instead.
+const makeKey = (g) => `${g.season}-${g.week}-${g.home_abbr}-${g.away_abbr}`;
 
 const isActionKey = (key) => key === 'Enter' || key === ' ';
 
