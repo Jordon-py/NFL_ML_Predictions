@@ -7,13 +7,11 @@
 /* Tokens (Enhancement 9 + 10 + 8) */
 :root {
   --c-brand-1: #0080ff;
-  --c-brand-1-70: #0080ffb3;
   --c-brand-2: #003264;
   --c-ink: #0f0f0f;
   --c-ink-muted: #2c3e50;
   --c-danger: #e74c3c;
   --c-accent: #3498db;
-  --c-bg-soft: #ffffffd1;
   --c-card: rgba(0, 106, 255, 0.12);
   --c-text-on-dark: #e8edf4;
   /* Enhancement 8 */
@@ -32,10 +30,8 @@
 
   --grad-primary: linear-gradient(90deg, lch(85.42% 34.11 221.38 / 0.486), lch(51.53% 81.02 290.09 / 0.492), lch(32.42% 133.68 306.35 / 0.349));
   /* Enhancement 10 */
-}
 
-/* ---------- Animation defaults via CSS variables ---------- */
-:root {
+  /* Animation defaults */
   --a-dur: 600ms;
   --a-ease: cubic-bezier(.22, .61, .36, 1);
   /* smooth, snappy */
@@ -46,7 +42,7 @@
 /* Utility to apply common animation props cleanly */
 .anim {
   animation-duration: var(--a-dur);
-  animation-timing-function: var(--a-ease-in-ease-out);
+  animation-timing-function: var(--a-ease);
   animation-delay: var(--a-delay);
   animation-iteration-count: var(--a-iter);
   animation-fill-mode: both;
@@ -193,7 +189,7 @@ body {
 }
 
 h2 .nfl-matchups,
-  p .nfl-matchups {
+p .nfl-matchups {
   display: flex;
   flex-direction: row;
   justify-content: space-evenly;
@@ -210,7 +206,7 @@ main.app-main {
 /* Dashboard container - ensure it doesn't interfere with sticky nav */
 .dashboard {
   position: relative;
-  
+
   width: 100%;
   min-height: 100vh;
   overflow-y: visible;
@@ -233,11 +229,12 @@ main.app-main {
   text-align: space-between;
   margin-bottom: .5rem;
 }
+
 div.probability.home-win-prob.inner-card.a-shine {
   display: flex;
   font-size: 1rem;
   font-optical-sizing: auto;
-  color:lch(100% 0.01 296.81);
+  color: lch(100% 0.01 296.81);
 
 }
 
@@ -249,7 +246,7 @@ div.probability.home-win-prob.inner-card.a-shine {
 .team-grid-cards {
   display: grid;
   background-color: #00000000;
-     
+
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 1rem;
   border-radius: 1.5%;
@@ -284,9 +281,10 @@ div.probability.home-win-prob.inner-card.a-shine {
 .matchup-card.inner-card {
   display: flex;
   flex-direction: row;
-  -webkit-backdrop-filter: blur(10px); /* normalized prefix form */
-  backdrop-filter: blur(10px);         /* standard property for compatibility */
-  background-color: var(a-shine);
+  -webkit-backdrop-filter: blur(10px);
+  /* normalized prefix form */
+  backdrop-filter: blur(10px);
+  /* standard property for compatibility */
   border-radius: 18px;
   box-shadow: 0 6px 18px 1px rgba(17, 0, 0, 0.712);
   padding: 10px;
@@ -340,7 +338,6 @@ div .point-diff {
   left: 50%;
   display: flex;
   flex-direction: row;
-  color: var(a-shine);
   background-color: var(--grad-primary);
   width: 20px;
 }
@@ -356,6 +353,7 @@ div .prediction-result.inner-card.a-glow {
   font-family: 'Inter', sans-serif;
   transition: all transform(a-glow);
 }
+
 .matchup-card:hover {
   transform: translateY(-7px);
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.524);

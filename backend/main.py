@@ -136,11 +136,6 @@ log = logging.getLogger("api")
 model_objects: Optional[Dict[str, Any]] = None
 dataset_df: Optional[pd.DataFrame] = None
 
-# backend/main.py
-from fastapi import FastAPI, Request, Response
-from fastapi.middleware.cors import CORSMiddleware
-import os, re
-
 # CORS configuration
 # By default allow all origins (useful for Heroku deployments). To restrict CORS,
 # set the environment variable RESTRICT_CORS=true and provide a comma-separated
@@ -440,6 +435,10 @@ def _ensure_home_away(df: pd.DataFrame) -> pd.DataFrame:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    """
+    FastAPI lifespan context manager for loading ML models and datasets at startup,
+    and logging shutdown events for the NFL prediction API backend.
+    """
     global model_objects, dataset_df
     log.info("Startup: loading models and dataset")
     # Load models; make startup resilient by catching and logging errors so the
@@ -448,14 +447,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         model_objects = load_objects()
     except Exception as e:
         log.exception("Failed to load model objects at startup; continuing without models: %s", e)
-        # Use an empty dict to indicate models are not available but allow the
+        # Set to None to indicate models are not available but allow the
         # web process to start so health/debug endpoints are reachable.
-        model_objects = {}
+        model_objects = None
 
     ds_path = Path(os.getenv("DATASET_PATH", str(DEFAULT_DATASET)))
     if not ds_path.exists():
         log.warning("Dataset not found at %s; continuing with empty dataset", ds_path)
-        dataset_df = pd.DataFrame()
+        dataset_df = None
     else:
         try:
             df = pd.read_csv(ds_path)
@@ -477,7 +476,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 except Exception as e:
                     log.warning("Startup sanity prediction failed: %s; continuing", e)
                 log.info("Loaded dataset rows=%d cols=%d", len(df), df.shape[1])
+        except Exception as e:
+            log.warning("Failed to load dataset at startup; continuing with empty dataset: %s", e)
+            dataset_df = pd.DataFrame()
     try:
+        # Yield control to FastAPI's lifespan protocol; required for proper startup/shutdown handling.
         yield
     finally:
         log.info("Shutdown complete")
@@ -485,7 +488,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 # -----------------------
 # FastAPI app + CORS + static
-# -----------------------
+"""
+FastAPI application instance for the NFL Game Prediction API.
+
+This app serves as the main entrypoint for all backend endpoints, including prediction, health, reporting, and schedule APIs.
+Configured with CORS, static frontend serving (if enabled), and a custom lifespan for model/dataset loading.
+"""
 app = FastAPI(title="NFL Game Prediction API", version="2.1.0", lifespan=lifespan)
 
 # If the regex is an empty string / None, pass None to the middleware so that
@@ -1168,7 +1176,6 @@ def predict_game(payload: PredictionRequest) -> PredictionResponse:
             mode=mode_val,
             prediction_source=pred_source,
         )
-
     except HTTPException:
         raise
     except Exception as e:
