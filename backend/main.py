@@ -141,11 +141,11 @@ dataset_df: Optional[pd.DataFrame] = None
 # set the environment variable RESTRICT_CORS=true and provide a comma-separated
 # list in ALLOWED_ORIGINS.
 def _origins_from_env():
-    raw = os.getenv("ALLOWED_ORIGINS", "")
+    raw = os.getenv(key="ALLOWED_ORIGINS", default=["*"])
     return [o.strip() for o in raw.split(",") if o.strip()]
 
 if os.getenv("RESTRICT_CORS", "false").strip().lower() in TRUTHY:
-    ALLOWED_ORIGINS = _origins_from_env() or ["http://localhost:3000"]
+    ALLOWED_ORIGINS = _origins_from_env() or ["*"]
     log.info("CORS restricted to ALLOWED_ORIGINS: %s", ALLOWED_ORIGINS)
 else:
     ALLOWED_ORIGINS = ["*"]  # allow all origins by default on Heroku
@@ -481,7 +481,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             dataset_df = pd.DataFrame()
     try:
         # Yield control to FastAPI's lifespan protocol; required for proper startup/shutdown handling.
-        yield
+        yield dataset_df, model_objects
     finally:
         log.info("Shutdown complete")
 
@@ -498,13 +498,12 @@ app = FastAPI(title="NFL Game Prediction API", version="2.1.0", lifespan=lifespa
 
 # If the regex is an empty string / None, pass None to the middleware so that
 # only explicit origins (or '*' in the list) are used.
-_allow_origin_regex = r"https://.*\.vercel\.app$"
+
 
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_origin_regex=_allow_origin_regex,
+    allow_origins=ALLOWED_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -803,9 +802,9 @@ def _build_future_row(
                 feature_row[f"home_minus_away_{stat_suffix}"] = h_val - a_val
     
     # Add betting/rest features with neutral defaults
-    feature_row["home_moneyline_prob"] = 0.6  # Neutral betting line
-    feature_row["away_moneyline_prob"] = 0.4
-    feature_row["moneyline_prob_diff"] = 0.0
+    feature_row["home_moneyline_prob"] = h_val["home_moneyline"].fillna(method='ffill') # Neutral betting line
+    feature_row["away_moneyline_prob"] = a_val["away_moneyline"].fillna(method='ffill') # Neutral betting line
+    feature_row["moneyline_prob_diff"] = h_val["home_moneyline_prob"] - a_val["away_moneyline_prob"]
     feature_row["spread_line"] = 0.0  # Pick'em
     feature_row["total_line"] = 45.0  # Average NFL total
     feature_row["home_rest"] = 7  # Standard week rest
@@ -814,26 +813,22 @@ def _build_future_row(
     feature_row["home_game_date"] = f"{season}-W{week:02d}"  # Categorical feature
     
     # Ensure we never raise here; wrap final assembly in a defensive block.
-    try:
-        log.debug("Built future row for %s vs %s: %d features", home, away, len(feature_row))
-        return pd.Series(feature_row)
-    except Exception as exc:
-        # As a last-resort fallback, return an empty Series with the
-        # lightweight default fields filled so prediction path can continue.
-        log.error("Failed to coerce feature_row to Series for %s vs %s: %s", home, away, exc, exc_info=True)
-        fallback = {
-            "home_moneyline_prob": 0.6,
-            "away_moneyline_prob": 0.4,
-            "moneyline_prob_diff": 0.0,
-            "spread_line": 0.0,
-            "total_line": 45.0,
-            "home_rest": 7,
-            "away_rest": 7,
-            "rest_diff": 0,
-            "home_game_date": f"{season}-W{week:02d}",
-        }
-        return pd.Series(fallback)
-
+    log.debug("Built future row for %s vs %s: %d features", home, away, len(feature_row))
+    # Always return a Series with explicit safe defaults for all fallback fields.
+    safe_defaults = {
+        "home_moneyline_prob": feature_row.get("home_moneyline_prob", 0.5),
+        "away_moneyline_prob": feature_row.get("away_moneyline_prob", 0.5),
+        "moneyline_prob_diff": feature_row.get("moneyline_prob_diff", 0.0),
+        "spread_line": feature_row.get("spread_line", 0.0),
+        "total_line": feature_row.get("total_line", 45.0),
+        "home_rest": feature_row.get("home_rest", 7),
+        "away_rest": feature_row.get("away_rest", 7),
+        "rest_diff": feature_row.get("rest_diff", 0),
+        "home_game_date": feature_row.get("home_game_date", f"{season}-W{week:02d}"),
+    }
+    # Merge all computed features, but ensure all required fallback fields are present.
+    safe_feature_row = {**safe_defaults, **feature_row}
+    return pd.Series(safe_feature_row)
 
 # -----------------------
 # Routes
