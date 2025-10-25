@@ -136,10 +136,8 @@ from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 import os, re
 
-app = FastAPI(title="NFL Predict API")
-
 def _origins_from_env():
-    raw = os.getenv("CORS_ORIGINS", "")
+    raw = os.getenv("ALLOWED_ORIGINS", "")
     return [o.strip() for o in raw.split(",") if o.strip()]
 
 ALLOWED_ORIGINS = _origins_from_env() or [
@@ -150,38 +148,14 @@ ALLOWED_ORIGINS = _origins_from_env() or [
     "https://nfl-predict-6fghcp7sx-christopher-jordons-projects.vercel.app",
     "https://new-nfl-predict.vercel.app",
     "https://www.nfl-predict.vercel.app",
-    "localhost:3000",
-    "http://127.0.0.1:3000",
-    "https://localhost:3000",
-    "http://localhost:3000"
-    # Vercel preview + prod (add yours)
-    "https://nfl-ml-predictions.vercel.app",
-    "https://nfl-ml-predictions-pr5uahmqx-christopher-jordons-projects.vercel.app",
-    "https://nfl-predict-6fghcp7sx-christopher-jordons-projects.vercel.app",
-    # Custom domains
-    "https://new-nfl-predict.vercel.app",
-    "https://www.nfl-predict.vercel.app",
-    "https://new-nfl-predict.vercel.app",
-
 ]
 
 # ⚠️ Add ANY custom middlewares BEFORE this line (auth/logging/sentry/etc)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
-    allow_origin_regex=r"https://.*\.vercel\.app$",
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-    expose_headers=["Content-Disposition"],
-    max_age=86400,
-)
 
+log.info("ADD_LOCALHOST_ORIGINS enabled: appended local dev origins to ALLOWED_ORIGINS")
 
-log.info("ADD_LOCALHOST_ORIGINS enabled: appended local dev origins toALLOWED_ORIGINS")
-
-log.debug("ALLOWALLOWED_ORIGINS=%s ALLOWED_ORIGINS=%s", ALLOWED_ORIGINS)
+log.debug("ALLOWED_ORIGINS=%s", ALLOWED_ORIGINS)
 
 # Teams
 TEAM_ABBREVIATIONS = {
@@ -503,7 +477,7 @@ app = FastAPI(title="NFL Game Prediction API", version="2.1.0", lifespan=lifespa
 
 # If the regex is an empty string / None, pass None to the middleware so that
 # only explicit origins (or '*' in the list) are used.
-_allow_origin_regex = ALLOWED_ORIGINS if ALLOWED_ORIGINS else "*"
+_allow_origin_regex = r"https://.*\.vercel\.app$"
 
 app.add_middleware(
     CORSMiddleware,
@@ -804,9 +778,7 @@ def debug_info() -> Dict[str, Any]:
     out: Dict[str, Any] = {
         "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "status": "active",
-        "ALLOWALLOWED_ORIGINS":ALLOWED_ORIGINS,
         "ALLOWED_ORIGINS": ALLOWED_ORIGINS,
-
     }
     try:
         mpath = MODELS_DIR / "metadata.json"
