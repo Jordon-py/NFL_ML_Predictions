@@ -21,7 +21,7 @@ Dependencies:
     - Engineered features in backend/data/game_features.csv
 
     Run:
-        uvicorn backend.main:app --reload --port 8000
+        uvicorn backend.main:app --reload --port 5000
 
     Maintainer Notes:
         - All endpoints return JSON; errors use HTTPException.
@@ -734,8 +734,8 @@ def _build_future_row(
                 feature_row[f"home_minus_away_{stat_suffix}"] = h_val - a_val
     
     # Add betting/rest features with neutral defaults
-    feature_row["home_moneyline_prob"] = 0.5  # Neutral betting line
-    feature_row["away_moneyline_prob"] = 0.5
+    feature_row["home_moneyline_prob"] = 0.6  # Neutral betting line
+    feature_row["away_moneyline_prob"] = 0.4
     feature_row["moneyline_prob_diff"] = 0.0
     feature_row["spread_line"] = 0.0  # Pick'em
     feature_row["total_line"] = 45.0  # Average NFL total

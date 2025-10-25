@@ -76,7 +76,7 @@ export const getCalibrationReport = () => api("/report/calibration");
 
 export const getNextWeekSchedule = () => {
   console.log('CLIENT.JS: Fetching schedule from URL:', `${API_BASE}schedule/next-week`);
-  return api("schedule/next-week");
+  return api("/schedule/next-week");
 };
 
 /**
