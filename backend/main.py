@@ -103,7 +103,7 @@ SERVE_FRONTEND = os.getenv("SERVE_FRONTEND", "false").strip().lower() in TRUTHY
 # Configuration: whether to allow fallback/dummy predictions when features or
 # win-models are missing. Set to 'false' to reject predictions that rely on
 # fallbacks and force clients to only accept predictions produced by trained models.
-ALLOW_FALLBACK_PREDICTIONS = os.getenv("ALLOW_FALLBACK_PREDICTIONS", "true").strip().lower() in TRUTHY
+ALLOW_FALLBACK_PREDICTIONS = os.getenv("ALLOW_FALLBACK_PREDICTIONS", "false").strip().lower() in TRUTHY
 
 # Logging
 logging.config.dictConfig(
@@ -484,9 +484,10 @@ app = FastAPI(title="NFL Game Prediction API", version="2.1.0", lifespan=lifespa
 # only explicit origins (or '*' in the list) are used.
 _allow_origin_regex = r"https://.*\.vercel\.app$"
 
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
+    allow_origins=["*"],
     allow_origin_regex=_allow_origin_regex,
     allow_methods=["*"],
     allow_headers=["*"],
