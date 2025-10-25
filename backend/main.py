@@ -131,18 +131,25 @@ log = logging.getLogger("api")
 model_objects: Optional[Dict[str, Any]] = None
 dataset_df: Optional[pd.DataFrame] = None
 
-from fastapi import FastAPI
+# backend/main.py
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-import os
+import os, re
 
 app = FastAPI(title="NFL Predict API")
 
-# Pull from env in prod; fall back to a safe list for dev
 def _origins_from_env():
-    raw = os.getenv("ALLOWED_ORIGINS", "*")
+    raw = os.getenv("CORS_ORIGINS", "")
     return [o.strip() for o in raw.split(",") if o.strip()]
 
 ALLOWED_ORIGINS = _origins_from_env() or [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://nfl-ml-predictions.vercel.app",
+    "https://nfl-ml-predictions-pr5uahmqx-christopher-jordons-projects.vercel.app",
+    "https://nfl-predict-6fghcp7sx-christopher-jordons-projects.vercel.app",
+    "https://new-nfl-predict.vercel.app",
+    "https://www.nfl-predict.vercel.app",
     "localhost:3000",
     "http://127.0.0.1:3000",
     "https://localhost:3000",
@@ -154,21 +161,23 @@ ALLOWED_ORIGINS = _origins_from_env() or [
     # Custom domains
     "https://new-nfl-predict.vercel.app",
     "https://www.nfl-predict.vercel.app",
-    "https://new-nfl-predict.com",
-    "https://www.nfl-predict.com",
+    "https://new-nfl-predict.vercel.app",
+
 ]
+
+# ⚠️ Add ANY custom middlewares BEFORE this line (auth/logging/sentry/etc)
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
-    # allow any *.vercel.app subdomain without listing each preview URL:
     allow_origin_regex=r"https://.*\.vercel\.app$",
-    allow_credentials=True,  # if you use cookies/sessions; keep True for most auth setups
-    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["*"],  # or list explicitly: ["Authorization", "Content-Type"]
-    expose_headers=["Content-Disposition"],  # e.g., if you return files
-    max_age=86400,  # cache preflight for 1 day
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["Content-Disposition"],
+    max_age=86400,
 )
+
 
 log.info("ADD_LOCALHOST_ORIGINS enabled: appended local dev origins toALLOWED_ORIGINS")
 
