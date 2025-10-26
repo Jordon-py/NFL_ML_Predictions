@@ -22,12 +22,11 @@ import TeamGrid from './TeamGrid.jsx';
 import PredictionResult from './PredictionResult.jsx';
 import HistoryChart from './HistoryChart.jsx';
 import NavBar from './NavBar/NavBar.jsx';
-import './TeamGrid.css';
 
 export default function DashBoard() {
   // `state` exposes { current, history } for the entire app.
   const {state} = usePredictions();
-
+  let data = JSON.stringify(state);
   return (
     <>
       <NavBar state={state} />
@@ -38,8 +37,10 @@ export default function DashBoard() {
             <p>Click any matchup to see predicted scores</p>
           </div>
         </header>
-        <section>
+        
+        <section className='team-main'>
           <TeamGrid state={state} />
+          <HistoryChart className="history-chart" history={state.history} />
         </section>
 
         <section aria-live="polite">
@@ -47,10 +48,7 @@ export default function DashBoard() {
           <PredictionResult entry={state.current} />
         </section>
 
-        <section>
-          {/* Historical predictions show trend data to the user. */}
-          <HistoryChart history={state.history} />
-        </section>
+        
       </main>
     </>
   );
