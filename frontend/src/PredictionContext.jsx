@@ -1,144 +1,113 @@
 /**
  * PredictionContext.jsx
- * -----------------
- * 
- * Purpose
- * ------
- * - Centralized state for prediction results & history via React Context + useReducer.
- * - Expose a simple hook (usePredictions) to read/update from any component.
- * - Keep UI in sync without prop drilling; enable testable, explicit updates.
- * 
- * How to use
- * ---------
- * 1) Wrap your app once:
- *    ```jsx
- * import { PredictionProvider } from './PredictionContext';
- * export default function Root() {
- *    return <PredictionProvider><App/></PredictionProvider>;
- *    }
- *    ```
- * 2) Read & write from anywhere:
- *    ```js
- *   import { usePredictions } from './PredictionContext';
- *    function Button({game, result}) {
- *      const { current, history, setCurrent, pushHistory, resetHistory } = usePredictions();
- *      const save = () => {
- *        setCurrent(result);          // sets the latest result
- *        pushHistory(game, result);    // adds an entry to history
- *      };
- *      return <button onClick={save}>Save</button>;
- *    }
- *    ```
- * 
- * Logic & Concepts
- * -----------
- * - `useReducer` centralizes allowed state transitions; action types make changes explicit.
- * - Provider value is memoized with useMemo/useCallback so consumers don't re-render unnecessarily.
- * - `toEntry(payload)` normalizes backend responses to a stable UI shape (defensive coding).
- * - State shape: {current: Prediction|null, history: PredictionEntry[] } (reverse-chronological).
- * - Persistence: history can optionally be hydrated from localStorage (see footer suggestions).
- * 
- * Gotchas & Notes
- * --------------
- * - Context must be created outside render paths; define Provider once at app root.
- * - Updates are async in React; when deriving next state from previous, use reducer or functional updates.
- * - When adding fields to state, update the reducer default case to preserve unknown keys.
+ * --------------------
+ * Component Purpose:
+ *   Provide a shared prediction store (current result + historical list)
+ *   using React Context + Reducer so all views stay in sync.
+ *
+ * Core Logic Overview:
+ *   - `initialState` tracks the most recent prediction (`current`) and a
+ *     reverse-chronological `history` array.
+ *   - `reducer` responds to explicit action types so updates are predictable
+ *     and testable.
+ *   - Action creators (`setCurrent`, `pushHistory`, `resetHistory`) are
+ *     memoised callbacks exposed through context consumers.
+ *   - `toEntry` normalises any backend payload into the shape the UI expects.
+ *
+ * Modification Guide:
+ *   - Add new action types inside the reducer, then expose a matching
+ *     callback in the provider so components never call `dispatch` directly.
+ *   - Extend `history` trimming/deduping here instead of inside components to
+ *     keep presentation logic simple.
+ *   - When adding fields to entries, update `toEntry` so downstream renderers
+ *     see the new data in a predictable structure.
  */
 
-import React from 'react';
+import React, {
+  createContext, useContext, useMemo,
+  useReducer, useCallback, useEffect
+} from 'react';
 
-// Helpers -----------
-// Normalise backend payload to the shape the UI expects.
-// Keep this stable so components can rely on these keys.
-function toEntry(game, payload) {
-  const now = new Date().etioString();
+const KEY = "prediction_history";
+const MAX_HISTORY = 100;
+
+// Action types
+const SET_CURRENT = 'SET_CURRENT';
+const PUSH_HISTORY = 'PUSH_HISTORY';
+const RESET_HISTORY = 'RESET_HISTORY';
+
+const initialState = { current: null, history: [] };
+
+function reducer(state, action) {
+  switch (action.type) {
+    case SET_CURRENT:
+      return { ...state, current: action.payload };
+    case PUSH_HISTORY:
+      return { ...state, history: [action.payload, ...state.history].slice(0, MAX_HISTORY) };
+    case RESET_HISTORY:
+      return { ...state, history: [] };
+    default:
+      return state;
+  }
+}
+
+// Safe hydration from localStorage
+function loadHistory() {
+  try { const raw = localStorage.getItem(KEY); return Array.isArray(JSON.parse(raw)) ? JSON.parse(raw) : []; }
+  catch { return []; }
+}
+
+export function toEntry({ source='teamgrid', season, week, home_abbr, away_abbr,
+  home_score, away_score, point_diff, home_win_probability, away_win_probability, ensemble_probability }) {
   return {
-    game: {
-      season: game?.season !== undefined ? game.season : payload?.season ?? null,
-      week: game?.week !== undefined ? game.week : payload?.week ?? null,
-      home_abbr: game?.home_abbr !== undefined ? game.home_abbr : payload?.home_team ?? payload?.home_abbr ?? null,
-      away_abbr: game?.away_abbr !== undefined ? game.away_abbr : payload?.away_team ?? payload?.away_abbr ?? null,
-    },
-    // Standardised numbers for UI
-    home_score: Number(payload?.home_score ?? 0),
-    away_score: Number(payload?.away_score ?? 0),
-    home_prob: Number(payload?.home_win_probability ?? payload?.home_prob ?? 0),
-    away_prob: Number(payload?.away_win_probability ?? payload?.away_prob ?? 0),
-    point_diff: Number((payload?.point_diff ?? (payload?.home_score - payload?.away_score) ?? 0)),
-    created_at: now,
-    raw: payload ?? null,
+    ts: new Date().toISOString(),
+    source,
+    game: { season, week, home_abbr, away_abbr },
+    metrics: { home_score, away_score, point_diff },
+    probs: {
+      home: home_win_probability,
+      away: away_win_probability,
+      ensemble: ensemble_probability ?? home_win_probability
+    }
   };
 }
 
-// State ---------------
-const initialState = {
-  current: null,    // the last prediction made
-  history: [],      // newest-first
-};
+const Ctx = createContext(null);
 
-// Reducer keeps transitions explicit & testable
-function reducer(state, action) {
-  switch (action.type) {
-    case 'set_current':
-      return { ...state, current: action.payload };
-    case 'push_history':
-      return { ...state, history: [action.payload, ...state.history] };
-    case 'reset_history':
-      return { ...state, history: [] };
-    default:
-      return state; // preserve future keys if state expands
-  }
-}
-
-// Context ---------------
-const PredictionContext = React.createContext(null);
-
-// Provider ---------------
 export function PredictionProvider({ children }) {
-  const [state, dispatch] = React.useReducer(reducer, initialState);
+  const [state, dispatch] = useReducer(reducer, initialState, (s) => ({
+    ...s, history: loadHistory()
+  }));
 
-  // Memoise callbacks so consumers don't re-render unnecessarily
-  const setCurrent = React.useCallback((prediction) => {
-    dispatch({ type: 'set_current', payload: prediction });
-  }, []);
+  // Actions
+  const setCurrent   = useCallback((e) => dispatch({ type: SET_CURRENT,  payload: e }), []);
+  const pushHistory  = useCallback((e) => dispatch({ type: PUSH_HISTORY, payload: e }), []);
+  const resetHistory = useCallback(()  => dispatch({ type: RESET_HISTORY }), []);
 
-  const pushHistory = React.useCallback((game, payload) => {
-    dispatch({ type: 'push_history', payload: toEntry(game, payload) });
-  }, []);
+  // Persist
+  useEffect(() => { try {
+    localStorage.setItem(KEY, JSON.stringify(state.history));
+  } catch {} }, [state.history]);
 
-  const resetHistory = React.useCallback(() => {
-    dispatch({ type: 'reset_history' });
-  }, []);
+  // Tiny dev logger
+  useEffect(() => {
+    if (import.meta.env?.DEV) console.debug("[PredictionContext] state:", state);
+  }, [state]);
 
-  const value = React.useMemo(() => ({|ncurrent: state.current,
-    history: state.history,
-    setCurrent,
-    pushHistory,
-    resetHistory}), [state.current,state.history, setCurrent,pushHistory,resetHistory]);
+  // Selectors
+  const count = state.history.length;
+  const latest = state.history[0] ?? null;
 
-  return (
-    <PredictionContext.Provider value={value}>
-      {children}
-    </PredictionContext.Provider>
-  );
+  const value = useMemo(() => ({
+    state, actions: { setCurrent, pushHistory, resetHistory },
+    selectors: { count, latest }
+  }), [state, setCurrent, pushHistory, resetHistory, count, latest]);
+
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
-// Hook ---------------
-export function usePredictions() {
-  const ctx = React.useContext(PredictionContext);
-  if (!ctx) {
-    throw new Error('usePredictions must be used within <PredictionProvider>');
-  }
+export const usePredictions = () => {
+  const ctx = useContext(Ctx);
+  if (!ctx) throw new Error("usePredictions must be used within PredictionProvider");
   return ctx;
-}
-
-/*
-Suggested Enhancements (non-breaking)
-----------------------
-1) Persistence: Save `history` to localStorage with a versioned key; hydrate on mount.
-  - Pattern: useEffect(() => localStorage.setItem(KEY, JSON.stringify(state.history)), [state.history]).
-2) Typing: Add TypeScript types for Prediction, Entry, and action payloads for safer refactors.
-X) Capacity: Limit history to N entries (e.g., 50) and drop the oldest to prevent unbounded growth.
-4) DevTools: Expose a debug action to clear history and log last action type in development.
-5) Testing: Export `reducer` and `initialState` for unit tests without mounting React components.
-/*/
+};

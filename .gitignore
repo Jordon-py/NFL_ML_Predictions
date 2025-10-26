@@ -107,6 +107,10 @@ data/
 *.pkl
 *.model
 
+# Allow committing trained models and engineered datasets for Heroku deploys
+!backend/models/
+!backend/data/
+
 # Node modules
 /node_modules
 npm-debug.log*

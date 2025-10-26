@@ -47,6 +47,8 @@ $origins = @(
   'http://localhost:3000',
   'https://localhost:3000',
   'https://nfl-predict-frontend.vercel.app',
+  'https://nfl-ml-predictions.vercel.app',
+  'https://www.nfl-predict.com',
   $VercelProdDomain
 ) -join ','
 heroku config:set CORS_ORIGINS="$origins" -a $HerokuApp | Out-Host
@@ -67,10 +69,10 @@ try {
 
 Write-Host "[6/8] Pushing to GitHub (main -> origin, and mirror to master)..." -ForegroundColor Cyan
 git push origin main | Out-Host
-git push origin main:master | Out-Host
+git push origin main:master --force | Out-Host
 
 Write-Host "[7/8] Deploying backend to Heroku..." -ForegroundColor Cyan
-git push heroku main | Out-Host
+git push heroku main --force | Out-Host
 
 Write-Host "[8/8] Deploying frontend to Vercel..." -ForegroundColor Cyan
 # Use repo root vercel.json; suppress prompts

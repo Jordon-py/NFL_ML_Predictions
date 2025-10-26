@@ -1,19 +1,13 @@
 {
   "version": 2,
-  "framework": "create-react-app",
-  "buildCommand": "npm install --prefix frontend && npm run build --prefix frontend",
   "installCommand": "npm install --prefix frontend",
-  "devCommand": "npm start --prefix frontend",
-  "outputDirectory": "frontend/build",
+  "buildCommand": "npm run build --prefix frontend",
+  "outputDirectory": "frontend/dist",
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "env": {
     "VITE_API_URL": "https://nfl-predict-ecf5a5bd34fe.herokuapp.com",
     "REACT_APP_API_URL": "https://nfl-predict-ecf5a5bd34fe.herokuapp.com"
-    ,
-    "PUPPETEER_SKIP_CHROMIUM_DOWNLOAD": "true",
-    "PUPPETEER_SKIP_DOWNLOAD": "true",
-    "PUPPETEER_PRODUCT": "firefox"
   }
 }

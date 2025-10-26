@@ -1,14 +1,13 @@
 {
     "terminal.integrated.scrollback": 200000,
-    "editor.fontSize": 17,
+    "editor.fontSize": 16,
     "editor.formatOnSave": true,
     "files.autoSave": "afterDelay",
     "editor.defaultFormatter": "ms-python.vscode-pylance",
     "dataWrangler.enabledFileTypes": {
-        "jsonl": true
+        "jsonl": true,
+        "csv": true
     },
-    "peacock.affectPanelBorder": true,
-    "peacock.affectStatusAndTitleBorders": true,
     "terminal.integrated.profiles.windows": {
         "NFL venv": {
             "source": "PowerShell",
@@ -24,17 +23,17 @@
     "terminal.integrated.env.windows": {
         "VIRTUAL_ENV": "${workspaceFolder}\\venv",
         "PATH": "${workspaceFolder}\\venv\\Scripts;${env:PATH}"
-<<<<<<< HEAD
-<<<<<<< HEAD
     },
     "[python]": {
         "editor.defaultFormatter": "charliermarsh.ruff"
     },
     "[jsonc]": {
         "editor.defaultFormatter": "vscode.json-language-features"
-=======
->>>>>>> main
-=======
->>>>>>> 9dcc198ee49ca6bd9f3bdbc57b1660740b2c15b5
+    },
+    "[json]": {
+        "editor.defaultFormatter": "vscode.json-language-features"
+    },
+    "[markdown]": {
+        "editor.defaultFormatter": "DavidAnson.vscode-markdownlint"
     }
 }

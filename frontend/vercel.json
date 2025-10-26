@@ -1,32 +1,17 @@
 {
-  "buildCommand": "npm run build",
-  "outputDirectory": "build",
-  "devCommand": "npm start",
-  "installCommand": "npm install",
-  "framework": "create-react-app",
-  "rewrites": [
+    "version": 2,
+    "framework": "vite",
+    "outputDirectory": "dist",
+    "devCommand": "npm run dev",
+    "installCommand": "npm install",
+    "rewrites": [
     {
       "source": "/(.*)",
-      "destination": "/"
+      "destination": "/index.html"
     }
-  ],
-  "headers": [
-    {
-      "source": "/api/(.*)",
-      "headers": [
-        {
-          "key": "Access-Control-Allow-Origin",
-          "value": "https://nfl-predict-ecf5a5bd34fe.herokuapp.com"
-        },
-        {
-          "key": "Access-Control-Allow-Methods",
-          "value": "GET, POST, PUT, DELETE, OPTIONS"
-        },
-        {
-          "key": "Access-Control-Allow-Headers",
-          "value": "Content-Type, Authorization"
-        }
-      ]
+    ],
+    "env": {
+      "VITE_API_URL": "https://nfl-predict-ecf5a5bd34fe.herokuapp.com",
+      "REACT_APP_API_URL": "https://nfl-predict-ecf5a5bd34fe.herokuapp.com"
     }
-  ]
-}
+  }

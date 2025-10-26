@@ -45,13 +45,13 @@ git clone https://github.com/your-username/NFL_ML_Predictions.git
 cd NFL_ML_Predictions
 ```
 
-2. Install Python dependencies:
+** 2. Install Python dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-3. Install frontend dependencies:
+** 3. Install frontend dependencies:
 
 ```bash
 cd frontend
@@ -67,25 +67,25 @@ cd ..
 python backend/build_csv_datasets.py --start 2014 --end 2025 --out-dir backend/data
 ```
 
-2. **Create predictive dataset** (NEW):
+** 2. **Create predictive dataset** (NEW):
 
 ```bash
 python build_predictive_dataset.py --data-dir data --output-dir data
 ```
 
-3. **Train the models**:
+** 3. **Train the models**:
 
 ```bash
 python backend/train_models.py
 ```
 
-4. **Start the API server**:
+** 4. **Start the API server**:
 
 ```bash
 uvicorn backend.main:app --reload --port 8000
 ```
 
-5. **Start the frontend** (in a new terminal):
+** 5. **Start the frontend** (in a new terminal):
 
 ```bash
 cd frontend
@@ -306,7 +306,7 @@ The predictive dataset should show improved performance due to the additional pl
 
 ## Project Structure
 
-```
+```GRAPHTD
 NFL_ML_Predictions/
 ├── backend/
 │   ├── data/           # Data files and datasets
@@ -338,6 +338,74 @@ backend/data/             # CSV artifacts
 
 Please read our contributing guidelines before submitting pull requests.
 
+## Deployment
+
+### Architecture
+
+This project uses a split deployment architecture:
+
+- **Backend (FastAPI)**: Deployed on Heroku at `https://nfl-predict-ecf5a5bd34fe.herokuapp.com`
+- **Frontend (React)**: Deployed on Vercel at `https://nfl-ml-predictions.vercel.app`
+
+### CORS Configuration
+
+The backend and frontend are properly configured for cross-origin requests:
+
+1. **Backend CORS**: Set `CORS_ORIGINS` environment variable on Heroku:
+
+   ```bash
+   heroku config:set CORS_ORIGINS="http://localhost:3000,https://localhost:3000,https://nfl-ml-predictions.vercel.app,https://nfl-predict-frontend.vercel.app" -a nfl-predict
+   ```
+
+2. **Frontend API URL**: Set `VITE_API_URL` in Vercel project settings or `frontend/.env.production`
+
+For detailed CORS and API configuration guide, see [docs/CORS_API_CONFIGURATION.md](docs/CORS_API_CONFIGURATION.md)
+
+### Deploy Backend to Heroku
+
+```bash
+# Login to Heroku
+heroku login
+
+# Deploy backend
+git push heroku main
+
+# Verify deployment
+heroku logs --tail -a nfl-predict
+curl https://nfl-predict-ecf5a5bd34fe.herokuapp.com/health
+```
+
+### Deploy Frontend to Vercel
+
+```bash
+# Login to Vercel
+vercel login
+
+# Deploy frontend
+cd frontend
+npm run build
+vercel --prod
+```
+
+### Deployment Scripts
+
+For automated deployment, use the PowerShell deployment script:
+
+```powershell
+pwsh -File scripts/deploy.ps1
+```
+
+This script handles:
+
+- CORS configuration on Heroku
+- Frontend dependency installation and build
+- Git commits and pushes
+- Backend deployment to Heroku
+- Frontend deployment to Vercel
+- Health check verification
+
+See [DEPLOYMENT_FIXED.md](DEPLOYMENT_FIXED.md) for detailed deployment troubleshooting.
+
 ## License
 
 =======
@@ -349,6 +417,3 @@ backend/scripts/
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 This project is licensed under the MIT License - see the LICENSE file for details.
-
-
-[architectureDiagram]: https://github.com/user-attachments/assets/826bfed3-ad7e-4c32-bfc7-e3b12cde826f

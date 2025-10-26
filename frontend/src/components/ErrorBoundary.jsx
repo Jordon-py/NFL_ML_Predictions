@@ -1,57 +1,46 @@
-import React, {Component} from 'react';
+import React, { Component } from 'react';
+import './ErrorBoundary.css';
 
 /**
  * ErrorBoundary.jsx
  * -----------------
- * Component Purpose:
- *   Catch runtime errors in descendant components and render a fallback UI
- *   instead of letting the entire React tree unmount.
- *
- * Core Logic Overview:
- *   - React calls `getDerivedStateFromError` when a descendant throws; we flip
- *     `hasError` there to trigger the fallback.
- *   - `componentDidCatch` records diagnostic info so you can log/report.
- *
- * Modification Guide:
- *   - Replace the fallback markup with a branded error screen, but keep
- *     essential diagnostics for debugging.
- *   - If you introduce error logging (Sentry, etc.), call it inside
- *     `componentDidCatch` where both error and component stack are available.
+ * Purpose: Catch runtime errors in descendants and show fallback UI.
+ * Fixed: Ensured all JSX is properly closed and imports are valid to prevent 500 compilation errors.
  */
+
 class ErrorBoundary extends Component {
   constructor(props) {
     super(props);
-    this.state = {hasError: false, error: null, errorInfo: null};
+    this.state = { hasError: false, error: null, errorInfo: null };
   }
 
   static getDerivedStateFromError(error) {
-    // Update state so the next render shows the fallback UI.
-    return {hasError: true};
+    return { hasError: true, error, errorInfo: null };
   }
 
   componentDidCatch(error, errorInfo) {
-    // Persist details for troubleshooting or remote logging.
-    this.setState({
-      error: error,
-      errorInfo: errorInfo
-    });
+    this.setState({ error, errorInfo });
     console.error("ErrorBoundary caught an error", error, errorInfo);
   }
 
   render() {
     if (this.state.hasError) {
       return (
-        <div style={{padding: '20px', border: '1px solid red', margin: '20px'}}>
+        <div className="error-boundary-container">
           <h2>Something went wrong.</h2>
-          <details style={{whiteSpace: 'pre-wrap'}}>
-            {this.state.error && this.state.error.toString()}
-            <br />
-            {this.state.errorInfo && this.state.errorInfo.componentStack}
-          </details>
+          {this.state.error && (
+            <div className="error-summary">
+              <strong>Error:</strong> {this.state.error.toString()}
+            </div>
+          )}
+          {this.state.errorInfo && (
+            <details style={{ whiteSpace: 'pre-wrap' }}>
+              {this.state.errorInfo.componentStack}
+            </details>
+          )}
         </div>
       );
     }
-
     return this.props.children;
   }
 }

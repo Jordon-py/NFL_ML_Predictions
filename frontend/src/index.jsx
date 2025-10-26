@@ -18,11 +18,14 @@
  *   - Preserve `<ErrorBoundary>` wrapper or replace it with your custom boundary
  *     to avoid uncaught errors crashing the whole page.
  */
-
+import App from './App';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import App from './App';
 import ErrorBoundary from './components/ErrorBoundary';
+import { PredictionProvider } from './PredictionContext';
+import './styles/base.css';        // ← load first
+import './styles/theme-grid.css';  // ← load second
+
 
 // Grab the static DOM node that Vite injects for us.
 const rootElement = document.getElementById('root');
@@ -36,7 +39,9 @@ const root = ReactDOM.createRoot(rootElement);
 root.render(
   <React.StrictMode>
     <ErrorBoundary>
-      <App />
+      <PredictionProvider>
+        <App />
+      </PredictionProvider>
     </ErrorBoundary>
   </React.StrictMode>
 );
