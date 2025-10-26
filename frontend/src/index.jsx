@@ -23,6 +23,8 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import ErrorBoundary from './components/ErrorBoundary';
 import { PredictionProvider } from './PredictionContext';
+import './styles/base.css';        // ← load first
+import './styles/theme-grid.css';  // ← load second
 
 
 // Grab the static DOM node that Vite injects for us.
