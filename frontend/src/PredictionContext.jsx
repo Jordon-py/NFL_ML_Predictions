@@ -22,8 +22,7 @@
  *   - When adding fields to entries, update `toEntry` so downstream renderers
  *     see the new data in a predictable structure.
  */
-// frontend/src/PredictionContext.js
-// /frontend/src/state/PredictionContext.jsx
+
 import React, {
   createContext, useContext, useMemo,
   useReducer, useCallback, useEffect

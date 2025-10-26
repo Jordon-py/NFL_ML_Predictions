@@ -481,7 +481,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             dataset_df = pd.DataFrame()
     try:
         # Yield control to FastAPI's lifespan protocol; required for proper startup/shutdown handling.
-        yield dataset_df, model_objects
+        yield
     finally:
         log.info("Shutdown complete")
 
@@ -802,9 +802,9 @@ def _build_future_row(
                 feature_row[f"home_minus_away_{stat_suffix}"] = h_val - a_val
     
     # Add betting/rest features with neutral defaults
-    feature_row["home_moneyline_prob"] = h_val["home_moneyline"].fillna(method='ffill') # Neutral betting line
-    feature_row["away_moneyline_prob"] = a_val["away_moneyline"].fillna(method='ffill') # Neutral betting line
-    feature_row["moneyline_prob_diff"] = h_val["home_moneyline_prob"] - a_val["away_moneyline_prob"]
+    feature_row["home_moneyline_prob"] = 0.6  # Neutral betting line
+    feature_row["away_moneyline_prob"] = 0.4
+    feature_row["moneyline_prob_diff"] = 0.0
     feature_row["spread_line"] = 0.0  # Pick'em
     feature_row["total_line"] = 45.0  # Average NFL total
     feature_row["home_rest"] = 7  # Standard week rest
@@ -816,15 +816,15 @@ def _build_future_row(
     log.debug("Built future row for %s vs %s: %d features", home, away, len(feature_row))
     # Always return a Series with explicit safe defaults for all fallback fields.
     safe_defaults = {
-        "home_moneyline_prob": feature_row.get("home_moneyline_prob", 0.5),
-        "away_moneyline_prob": feature_row.get("away_moneyline_prob", 0.5),
-        "moneyline_prob_diff": feature_row.get("moneyline_prob_diff", 0.0),
-        "spread_line": feature_row.get("spread_line", 0.0),
-        "total_line": feature_row.get("total_line", 45.0),
-        "home_rest": feature_row.get("home_rest", 7),
-        "away_rest": feature_row.get("away_rest", 7),
-        "rest_diff": feature_row.get("rest_diff", 0),
-        "home_game_date": feature_row.get("home_game_date", f"{season}-W{week:02d}"),
+        "home_moneyline_prob": 0.6,
+        "away_moneyline_prob": 0.4,
+        "moneyline_prob_diff": 0.0,
+        "spread_line": 0.0,
+        "total_line": 45.0,
+        "home_rest": 7,
+        "away_rest": 7,
+        "rest_diff": 0,
+        "home_game_date": f"{season}-W{week:02d}",
     }
     # Merge all computed features, but ensure all required fallback fields are present.
     safe_feature_row = {**safe_defaults, **feature_row}

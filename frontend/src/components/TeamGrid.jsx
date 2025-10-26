@@ -10,7 +10,7 @@ const makeKey = (g) => `${g.season}-${g.week}-${g.home_abbr}-${g.away_abbr}`;
 const isActionKey = (key) => key === 'Enter' || key === ' ';
 
 const kickoffFormatter = new Intl.DateTimeFormat('en-US', {
-  timeZone: 'America/Los_Angeles', weekday: 'short', month: 'short',
+  weekday: 'short', month: 'short',
   day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true,
 });
 
@@ -128,7 +128,27 @@ export default function TeamGrid() {
                 aria-label={`Predict ${game.away_abbr} at ${game.home_abbr}`}
               >
                 <header className="matchup-head">
-                  <strong>{game.away_abbr}</strong> @ <strong>{game.home_abbr}</strong>
+                  <div className="teams-row">
+                    <div className="team-info away">
+                      <img 
+                        src={teams[game.away_abbr]?.logoUrl} 
+                        alt={`${game.away_abbr} logo`} 
+                        className="team-logo" 
+                        onError={(e) => { e.target.style.display = 'none'; }}
+                      />
+                      <strong>{game.away_abbr}</strong>
+                    </div>
+                    <span className="at-symbol">@</span>
+                    <div className="team-info home">
+                      <img 
+                        src={teams[game.home_abbr]?.logoUrl} 
+                        alt={`${game.home_abbr} logo`} 
+                        className="team-logo" 
+                        onError={(e) => { e.target.style.display = 'none'; }}
+                      />
+                      <strong>{game.home_abbr}</strong>
+                    </div>
+                  </div>
                   <span className="kickoff">{formatKickoffTime(game)}</span>
                 </header>
                 {prediction ? (
