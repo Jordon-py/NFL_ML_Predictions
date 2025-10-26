@@ -1,52 +1,62 @@
-/**
- * HistoryChart.jsx
- * ----------------
- * Component Purpose:
- *   Consume the shared history entries and render a minimal trend list.
- *
- * Core Logic Overview:
- *   - Derive `points` with `useMemo` so we only recompute when history updates.
- *   - Safely pick the best probability value (`ensemble` ➜ `home`) and convert
- *     it to a human-readable percentage.
- *   - Provide a text-based fallback list you can later replace with a chart lib.
- *
- * Modification Guide:
- *   - Swap the `<ul>` for your favourite chart component; just plug in `points`.
- *   - If you need more metrics, extend the map function and keep null checks so
- *     missing data never crashes the render.
- */
+// /frontend/src/components/HistoryChart.jsx
+// @ts-nocheck
+import React, { useMemo } from 'react';
 
-import React, {useMemo} from 'react';
+export default function HistoryChart({ history = [] }) {
+  const items = Array.isArray(history) ? history : [];
 
-export default function HistoryChart({history}) {
-  // Transform history entries into chart-friendly tuples.
   const points = useMemo(() => {
-    return (history ?? []).map((e) => {
-      const y = (e?.probs?.ensemble ?? e?.probs?.home ?? null);
+    return items.map((e, i) => {
+      const ts = e.ts || e.time || null;
+      const label = e?.game
+        ? `${e.game.season} W${e.game.week} ${e.game.away_abbr}@${e.game.home_abbr}`
+        : `Entry ${i + 1}`;
+      const homeProb = e?.probs?.home ?? e?.probs?.ensemble ?? e?.home_win_probability ?? null;
       return {
-        x: e?.ts ?? '',
-        y: y != null ? Math.round(y * 100) : null,
-        label: `${e?.game?.away_abbr} @ ${e?.game?.home_abbr}`,
+        x: ts ? new Date(ts) : null,
+        y: homeProb != null ? Math.round(homeProb * 100) : null,
+        label,
+        idx: i
       };
     });
-  }, [history]);
+  }, [items]);
 
-  // Empty states should still return semantic markup for screen readers.
-  if (!points.length) return <div className="history-chart">No history yet.</div>;
+  const summary = useMemo(() => {
+    const ys = points.map(p => p.y).filter(v => typeof v === "number");
+    const avg = ys.length ? (ys.reduce((a, b) => a + b, 0) / ys.length) : null;
+    return {
+      count: items.length,
+      last: items[0]?.ts || null,
+      avgHomeWinPct: avg != null ? Math.round(avg) : null
+    };
+  }, [points, items]);
 
-  // Minimal textual fallback. Swap for a chart library in your stack.
   return (
-    <div className="history-chart">
-      <h3>History (prob %)</h3>
-      <ul>
-        {points.map((p, i) => (
-          <li key={i}>
-            <code>{p.x}</code> — <strong>{p.y ?? 'n/a'}%</strong> <em>({p.label})</em>
-          </li>
-        ))}
-      </ul>
-    </div>
+    <section className="history-chart">
+      <header>
+        <h3>Prediction History</h3>
+        <small>
+          {summary.count} item(s)
+          {summary.last ? <> • last: {new Date(summary.last).toLocaleString()}</> : null}
+          {summary.avgHomeWinPct != null ? <> • avg home win: {summary.avgHomeWinPct}%</> : null}
+        </small>
+      </header>
+
+      {points.length === 0 ? (
+        <p>No history yet. Make some predictions to populate this view.</p>
+      ) : (
+        <ol className="history-points">
+          {points.map((p) => (
+            <li key={p.idx} title={p.label}>
+              <code>{p.x ? p.x.toLocaleString() : "—"}</code>
+              {" — "}
+              <strong>{p.y != null ? `${p.y}%` : "n/a"}</strong>
+              {" "}
+              <em>({p.label})</em>
+            </li>
+          ))}
+        </ol>
+      )}
+    </section>
   );
 }
-
-// PropTypes removed: types are managed by upstream context or TypeScript where applicable.
