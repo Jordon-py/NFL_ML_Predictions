@@ -81,7 +81,7 @@ function MyComponent() {
 
 ## Interaction Diagram
 
-```
+```mermaid
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
 │   Components    │────│ usePredictions   │────│ PredictionContext│
 │                 │    │                  │    │                 │
@@ -152,5 +152,4 @@ actions.resetHistory();
 - **Immutability**: All updates create new state objects for React's reconciliation
 - **Memoization**: Actions and selectors are memoized to prevent unnecessary re-renders
 - **Hydration**: Safe localStorage loading prevents crashes on malformed data
-- **Type Safety**: Runtime checks ensure proper usage within provider tree</content>
-<parameter name="filePath">c:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\frontend\src\usePredictions.md
+- **Type Safety**: Runtime checks ensure proper usage within provider tree

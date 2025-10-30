@@ -4,6 +4,37 @@
    Load order: 2 of 2 (after base.css)
    ========================================================================== */
 
+
+.rain-drops {
+  display: contents;
+  position: absolute;
+  top: 10%;
+  height: 120px;
+  width: 6px;
+  border-right: OutLine;
+  background: linear-gradient(70deg, lch(69.13% 48.85 282.55 / 0.765), transparent 70%);
+  transform: rotate(-35deg);
+  border-radius: 50%;
+  translate: -450px 1px ;
+  animation: fallingRain 2s linear forwards;
+}
+@keyframes fallingRain {
+  0% {
+    opacity: .9;
+    transform: translateY(0) rotate(-35deg);
+  }
+  50% {
+    opacity: 0.5;
+    transform: translateY(150px) rotate(-35deg);
+    animation: outlineGlow;
+    transition: filter(brightness(1.03) ease-in-out);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(300px) rotate(-35deg);
+  }
+}
+
 /* --- Headers / Section framing ------------------------------------------ */
 .team-grid-header {
   display: flex;
@@ -11,27 +42,59 @@
   flex-wrap: wrap;
   align-content: center;
   padding-left: 2rem;
-  gap: 10%;
-  margin-bottom: .5rem;
+  font-size: 2rem;
+  color: lch(0% 0 0);
+}
+h2  { 
+      backdrop-filter: blur(3px);
+      display: flex;
+      text-shadow: 4px 4px 14px 4px rgba(0% 0 0 / 0.818);
+      font-size: 6rem;
+      font-family: "Cinzel", serif;
+      font-optical-sizing: auto;
+      font-weight: 800;
+      font-style: normal;
 }
 
-h2 .nfl-matchups,
-p .nfl-matchups {
+.hamburger-menu {
+    image-rendering: optimizeQuality;
+    position: fixed;
+    right: 9rem;
+    display: flex;
+    width: 40px;
+    height: 40px;
+    cursor: pointer;
+  }
+
+
+p {
   display: flex;
-  flex-direction: row;
-  justify-content: space-evenly;
-  font-family: var(--font-tech);
-  font-weight: 800;
+  justify-content: center;
+  margin-top: 0px;
+  color: aliceblue v;
+}
+h2.nfl-matchups,
+p.nfl-matchups {
+  display: flex;
+  flex-wrap: wrap;
+  flex-direction: column;
+  justify-content: center;
+  margin-top: 1px;
+
 }
 
 /* --- Lists used by History/Insights ------------------------------------- */
-ol.history-points {
+.history-chart {
   display: flex;
   flex-direction: column;
+  background-color: rgba(0, 0, 0, 0.257);
   gap: 12px;
   font-size: 20px;
-  justify-items: left;
-  border-left: 2px solid lch(33.24% 44.08 281.04 / 0.95);
+  justify-items: right;
+  border-left: 2px solid lch(78.57% 33.06 264.62 / 0.659);
+  flex-wrap: wrap;
+
+
 }
 
 /* --- Team grid layout ---------------------------------------------------- */
@@ -271,6 +334,8 @@ div .point-diff {
   /* FIX: gradient token used as background layer, not background-color */
   background: var(--grad-primary);
   width: 20px;
+  backdrop-filter: inherit;
+  background-clip: initial;
 }
 
 /* Prediction result block */
@@ -280,10 +345,10 @@ div .prediction-result.inner-card.a-glow {
   padding: 1px;
   gap: .3rem;
   font-weight: 400;
-  font-size: 1rem;
-  color: #ffffff;
+  font-size: 1.2rem;
+  color: lch(100% 0.01 296.81);
   font-family: var(--font-sans);
-  transition: transform 0.3s ease;
+  transition: transform 0.2s 0.3s ease-in-out;
 }
 
 /* --- States & motion safety --------------------------------------------- */
@@ -293,6 +358,8 @@ div .prediction-result.inner-card.a-glow {
   gap: 8px;
   /* pulsing while loading */
   animation: pulseSoft 1.5s ease-in-out infinite;
+  filter: brightness(1.03);
+
 }
 
 @media (prefers-reduced-motion: reduce) {

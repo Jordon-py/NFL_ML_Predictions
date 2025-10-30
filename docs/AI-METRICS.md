@@ -110,3 +110,6 @@
 - Updated Vite proxy configuration to target localhost:5000 for dev API calls
 - Modified _sanity_predict function to handle unfitted preprocessor during startup
 - Enabled dataset schema validation and sanity checks in lifespan function
+- Enhanced TeamGrid matchup cards with team logos, improved visual layout, fade-in animations, outline glows, and enhanced standout effects for predicted cards
+- Implemented responsive flexbox layout for TeamGrid cards and structured card content with proper spacing and no overlapping stats
+- Fixed kickoff time display to use user's local timezone instead of Pacific Time

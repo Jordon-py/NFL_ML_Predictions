@@ -1,0 +1,12 @@
+2025-10-07 19:23:11,339 INFO Logger initialized. Writing to data\build_csv_datasets.log
+2025-10-07 19:23:11,434 INFO Production dataset build - Current NFL state: 2025W18
+2025-10-07 19:23:11,435 INFO Building dataset for seasons=[2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026] (include_future=True)
+2025-10-07 19:23:13,576 INFO Raw schedules loaded: 2748 games
+2025-10-07 19:23:13,597 INFO Loaded 2554 completed games + 194 future games
+2025-10-07 19:23:13,602 INFO Loading play-by-play via nflreadpy for seasons [2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025]
+2025-10-07 19:23:41,852 INFO Loaded 448971 play-by-play rows from nflreadpy
+2025-10-07 19:23:51,177 INFO Loading player stats via nflreadpy for seasons [2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026]
+2025-10-07 19:23:54,936 WARNING Failed to load player stats (Failed to download https://github.com/nflverse/nflverse-data/releases/download/stats_player/stats_player_week_2026.parquet: 404 Client Error: Not Found for url: https://github.com/nflverse/nflverse-data/releases/download/stats_player/stats_player_week_2026.parquet); player features disabled
+2025-10-07 19:23:54,943 INFO Loading team stats via nflreadpy for seasons [2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026]
+2025-10-07 19:23:58,175 WARNING Failed to load team stats (Failed to download https://github.com/nflverse/nflverse-data/releases/download/stats_team/stats_team_week_2026.parquet: 404 Client Error: Not Found for url: https://github.com/nflverse/nflverse-data/releases/download/stats_team/stats_team_week_2026.parquet); team features disabled
+2025-10-07 19:23:58,698 INFO Kept future games - dropped only rows missing feature data

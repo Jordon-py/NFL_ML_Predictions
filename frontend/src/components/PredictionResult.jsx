@@ -43,7 +43,7 @@ export default function PredictionResult({entry}) {
 
   return (
     <>
-      <HistoryChart {...entry} />
+      
       <div className="prediction-result" aria-live="polite">
         <h3>Prediction</h3>
         <div className="meta">
