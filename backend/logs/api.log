@@ -3301,3 +3301,84 @@ fl_prediction_system\NFL_ML_Predictionsackend\data\game_features.csv; continuin
 2025-10-28 04:39:50,298 INFO api Schedule week 9 games=14
 2025-10-28 04:42:12,941 INFO api Schedule week 9 games=14
 2025-10-28 04:42:12,968 INFO api Schedule week 9 games=14
+2025-10-29 22:00:56,373 INFO api CORS configured to allow all origins (ALLOWED_ORIGINS='*')
+2025-10-29 22:00:56,390 INFO api Startup: loading models and dataset
+2025-10-29 22:00:56,391 DEBUG api Loading model metadata from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\metadata.json
+2025-10-29 22:00:57,238 WARNING api Preprocessor not detected as fitted; skipping transform in sanity check
+2025-10-29 22:00:59,186 INFO api Loaded dataset rows=2748 cols=208
+2025-10-29 22:01:32,399 INFO api Schedule week 9 games=14
+2025-10-29 22:01:32,419 INFO api Schedule week 9 games=14
+2025-10-29 22:01:42,479 INFO api Schedule week 9 games=14
+2025-10-29 22:01:42,560 INFO api Schedule week 9 games=14
+2025-10-29 22:02:47,011 DEBUG api predict_game: home_team=MIA, away_team=BAL, season=2025, week=9
+2025-10-29 22:02:47,018 DEBUG api Model bundle type: <class 'sklearn.pipeline.Pipeline'>, hasattr predict: True
+2025-10-29 22:02:47,030 DEBUG api Model bundle type: <class 'sklearn.pipeline.Pipeline'>, hasattr predict: True
+2025-10-29 22:02:58,507 DEBUG api predict_game: home_team=CIN, away_team=CHI, season=2025, week=9
+2025-10-29 22:02:58,530 DEBUG api Model bundle type: <class 'sklearn.pipeline.Pipeline'>, hasattr predict: True
+2025-10-29 22:02:58,571 DEBUG api Model bundle type: <class 'sklearn.pipeline.Pipeline'>, hasattr predict: True
+2025-10-29 22:03:11,431 DEBUG api predict_game: home_team=DET, away_team=MIN, season=2025, week=9
+2025-10-29 22:03:11,460 DEBUG api Model bundle type: <class 'sklearn.pipeline.Pipeline'>, hasattr predict: True
+2025-10-29 22:03:11,488 DEBUG api Model bundle type: <class 'sklearn.pipeline.Pipeline'>, hasattr predict: True
+2025-10-29 22:03:17,280 DEBUG api predict_game: home_team=GB, away_team=CAR, season=2025, week=9
+2025-10-29 22:03:17,304 DEBUG api Model bundle type: <class 'sklearn.pipeline.Pipeline'>, hasattr predict: True
+2025-10-29 22:03:17,334 DEBUG api Model bundle type: <class 'sklearn.pipeline.Pipeline'>, hasattr predict: True
+2025-10-29 22:03:26,475 DEBUG api predict_game: home_team=HOU, away_team=DEN, season=2025, week=9
+2025-10-29 22:03:26,496 DEBUG api Model bundle type: <class 'sklearn.pipeline.Pipeline'>, hasattr predict: True
+2025-10-29 22:03:26,524 DEBUG api Model bundle type: <class 'sklearn.pipeline.Pipeline'>, hasattr predict: True
+2025-10-29 22:17:29,775 INFO api Schedule week 9 games=14
+2025-10-29 22:17:29,891 INFO api Schedule week 9 games=14
+2025-10-29 22:18:13,523 DEBUG api predict_game: home_team=MIA, away_team=BAL, season=2025, week=9
+2025-10-29 22:18:13,533 DEBUG api Model bundle type: <class 'sklearn.pipeline.Pipeline'>, hasattr predict: True
+2025-10-29 22:18:13,549 DEBUG api Model bundle type: <class 'sklearn.pipeline.Pipeline'>, hasattr predict: True
+2025-10-29 22:33:53,033 DEBUG api predict_game: home_team=CIN, away_team=CHI, season=2025, week=9
+2025-10-29 22:33:53,064 DEBUG api Model bundle type: <class 'sklearn.pipeline.Pipeline'>, hasattr predict: True
+2025-10-29 22:33:53,092 DEBUG api Model bundle type: <class 'sklearn.pipeline.Pipeline'>, hasattr predict: True
+2025-10-29 22:34:06,281 DEBUG api predict_game: home_team=DET, away_team=MIN, season=2025, week=9
+2025-10-29 22:34:06,306 DEBUG api Model bundle type: <class 'sklearn.pipeline.Pipeline'>, hasattr predict: True
+2025-10-29 22:34:06,330 DEBUG api Model bundle type: <class 'sklearn.pipeline.Pipeline'>, hasattr predict: True
+2025-10-29 22:45:41,287 INFO api Schedule week 9 games=14
+2025-10-29 22:45:41,548 INFO api Schedule week 9 games=14
+2025-10-29 22:45:55,918 DEBUG api predict_game: home_team=PIT, away_team=IND, season=2025, week=9
+2025-10-29 22:45:55,942 DEBUG api Model bundle type: <class 'sklearn.pipeline.Pipeline'>, hasattr predict: True
+2025-10-29 22:45:55,967 DEBUG api Model bundle type: <class 'sklearn.pipeline.Pipeline'>, hasattr predict: True
+2025-10-29 22:46:51,777 INFO api Schedule week 9 games=14
+2025-10-29 22:46:53,215 INFO api Schedule week 9 games=14
+2025-10-29 22:46:54,354 INFO api Schedule week 9 games=14
+2025-10-29 22:46:56,275 INFO api Schedule week 9 games=14
+2025-10-29 22:46:57,344 INFO api Schedule week 9 games=14
+2025-10-29 22:46:58,267 INFO api Schedule week 9 games=14
+2025-10-29 22:47:00,469 DEBUG api predict_game: home_team=TEN, away_team=LAC, season=2025, week=9
+2025-10-29 22:47:00,501 DEBUG api Model bundle type: <class 'sklearn.pipeline.Pipeline'>, hasattr predict: True
+2025-10-29 22:47:00,548 DEBUG api Model bundle type: <class 'sklearn.pipeline.Pipeline'>, hasattr predict: True
+2025-10-29 22:49:39,580 INFO api Schedule week 9 games=14
+2025-10-29 22:49:39,626 INFO api Schedule week 9 games=14
+2025-10-29 22:53:39,709 DEBUG api predict_game: home_team=CIN, away_team=CHI, season=2025, week=9
+2025-10-29 22:53:39,732 DEBUG api Model bundle type: <class 'sklearn.pipeline.Pipeline'>, hasattr predict: True
+2025-10-29 22:53:39,765 DEBUG api Model bundle type: <class 'sklearn.pipeline.Pipeline'>, hasattr predict: True
+2025-10-29 22:53:42,380 DEBUG api predict_game: home_team=MIA, away_team=BAL, season=2025, week=9
+2025-10-29 22:53:42,450 DEBUG api Model bundle type: <class 'sklearn.pipeline.Pipeline'>, hasattr predict: True
+2025-10-29 22:53:42,503 DEBUG api Model bundle type: <class 'sklearn.pipeline.Pipeline'>, hasattr predict: True
+2025-10-29 23:17:05,510 INFO api Shutdown complete
+2025-10-29 23:17:08,214 INFO api CORS configured to allow all origins (ALLOWED_ORIGINS='*')
+2025-10-29 23:17:08,219 INFO api Startup: loading models and dataset
+2025-10-29 23:17:08,221 DEBUG api Loading model metadata from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\metadata.json
+2025-10-29 23:17:08,591 WARNING api Preprocessor not detected as fitted; skipping transform in sanity check
+2025-10-29 23:17:10,199 INFO api Loaded dataset rows=2748 cols=208
+2025-10-30 00:28:16,340 INFO api Schedule week 9 games=14
+2025-10-30 00:28:16,393 INFO api Schedule week 9 games=14
+2025-10-30 00:28:16,432 INFO api Schedule week 9 games=14
+2025-10-30 00:28:16,483 INFO api Schedule week 9 games=14
+2025-10-30 02:23:06,979 INFO api Schedule week 9 games=14
+2025-10-30 02:23:07,016 INFO api Schedule week 9 games=14
+2025-10-30 02:23:07,066 INFO api Schedule week 9 games=14
+2025-10-30 02:23:07,119 INFO api Schedule week 9 games=14
+2025-10-30 07:54:22,114 INFO api CORS configured to allow all origins (ALLOWED_ORIGINS='*')
+2025-10-30 07:54:22,121 INFO api Startup: loading models and dataset
+2025-10-30 07:54:22,121 DEBUG api Loading model metadata from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\metadata.json
+2025-10-30 07:54:23,740 WARNING api Preprocessor not detected as fitted; skipping transform in sanity check
+2025-10-30 07:54:25,813 INFO api Loaded dataset rows=2748 cols=208
+2025-10-30 07:55:25,325 INFO api Schedule week 9 games=14
+2025-10-30 07:55:25,385 INFO api Schedule week 9 games=14
+2025-10-30 07:55:59,427 DEBUG api predict_game: home_team=MIA, away_team=BAL, season=2025, week=9
+2025-10-30 07:55:59,444 DEBUG api Model bundle type: <class 'sklearn.pipeline.Pipeline'>, hasattr predict: True
+2025-10-30 07:55:59,466 DEBUG api Model bundle type: <class 'sklearn.pipeline.Pipeline'>, hasattr predict: True
