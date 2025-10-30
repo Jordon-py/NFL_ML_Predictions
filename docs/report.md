@@ -6,6 +6,16 @@ This report documents incremental changes to the NFL_ML_Predictions repository, 
 
 ## Recent Changes
 
+- **Date/Time**: 2025-10-29 / 17:00 UTC.
+- **Files Modified**: `frontend/src/styles/base.css`, `frontend/src/styles/theme-grid.css`.
+- **Change Description**: Enhanced UI animations. Created a new `@keyframes cardPop` for a dynamic entrance effect and applied it to matchup cards with a staggered delay. Refactored `theme-grid.css` for clarity, improved responsive behavior, and applied existing animations (`a-text-fade-slide`, `a-shine`) to headers, text, and interactive elements for a more polished user experience. Modernized color syntax to use `oklch`.
+- **Why Made**: To improve the visual appeal and interactivity of the UI by adding more dynamic and meaningful animations, ensuring a professional and polished look and feel.
+- **Impact**: The application frontend now has a more engaging and modern user interface. Animations provide better feedback and guide the user's attention. Code is cleaner and more maintainable.
+- **Metrics Post-Change**:
+  - UI Responsiveness: Animations are smooth and staggered for a clean loading sequence.
+  - Code Quality: CSS is more organized, readable, and uses modern standards.
+  - User Experience: Enhanced visual feedback and a more premium feel.
+
 - **Date/Time**: 2025-10-29 / 16:00 UTC.
 - **Files Modified**: All repository files (backend, frontend, docs).
 - **Change Description**: Pushed complete codebase to GitHub; deployed backend to Heroku (v224) at <https://nfl-predict-ecf5a5bd34fe.herokuapp.com/>; frontend deployment to Vercel pending manual trigger.

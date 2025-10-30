@@ -20,20 +20,20 @@
   --c-ink-muted: #2c3e50;
   --c-danger: #e74c3c;
   --c-accent: #3498db;
-  --c-card: rgba(0, 106, 255, 0.12);
+  --c-card: lch(0, 106, 255, 0.12);
   --c-text-on-dark: #e8edf4;
   --c-text-muted-on-dark: #c9d3e0;
 
   /* Special */
-  --glass: rgba(59, 144, 255, 0.176);
+  --glass: lch(59, 144, 255, 0.176);
 
   /* Radii */
   --r-md: 12px;
   --r-sm: 8px;
 
   /* Elevation */
-  --shadow-1: 0 1px 2px 4px rgba(0, 0, 0, .28);
-  --shadow-2: 0 6px 18px 1px rgba(0, 0, 0, .38);
+  --shadow-1: 0 1px 2px 4px lch(0, 0, 0, .28);
+  --shadow-2: 0 6px 18px 1px lch(0, 0, 0, .38);
 
   /* Primary gradient */
   --grad-primary: linear-gradient(90deg,
@@ -268,17 +268,17 @@ button:focus-visible,
 
   0%,
   100% {
-    outline: 2px solid lch(35.98% 123.41 304.5 / 0.475);
+    outline: 2px solid lch(40.92% 110.75 302.43 / 0.307);
     box-shadow:
-      0 0 0 0 lch(28.54% 35.5 274.92 / 0.402),
-      0 0 0 1 lch(68.84% 44.29 262.77 / 0.55) inset;
+      0 0 13px 1px lch(28.54% 35.5 274.92 / 0.402),
+      0 3px 1px 1px lch(65.22% 54.06 269.16 / 0.402) inset;
   }
 
   50% {
-    outline: 2px solid lch(34.52% 40.79 275.48 / 0.8);
+    outline: 2px solid lch(38.37% 44.95 276.48 / 0.457);
     box-shadow:
-      0 0 14px 4px rgba(255, 255, 255, 0.658),
-      0 0 0 1px lch(70.63% 45.8 263.03 / 0.75) inset;
+      0 0 10px 4px lch(30.75% 93.38 300.89 / 0.349),
+      0 0 0 1px lch(70.63% 45.8 263.03 / 0.606) inset;
   }
 }
 
@@ -288,30 +288,108 @@ button:focus-visible,
   0%,
   100% {
     box-shadow:
-      0 8px 25px rgba(0, 0, 0, 0.6),
+      0 8px 25px lch(93.48% 35.26 176.56 / 0.766),
       0 0 20px var(--c-brand-1),
-      inset 0 0 0 1px rgba(1, 124, 255, 0.285);
+      inset 0 0 0 1px lch(1, 124, 255, 0.285);
   }
 
   50% {
     box-shadow:
-      0 8px 25px rgba(0, 0, 0, 0.6),
+      0 8px 25px lch(0, 0, 0, 0.6),
       0 0 30px var(--c-accent),
-      inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+      inset 0 0 0 1px lch(255, 255, 255, 0.2);
   }
 }
 
 /* NEW 6) Card float (hover-friendly, subtle parallax vibe) */
-@keyframes cardFloat {
+/* ============================
+Float Animation — Production
+============================ */
 
-  0%,
-  100% {
-    transform: translateY(0);
+:root {
+  /* Tuning knobs /
+--float-y: 8px; / vertical travel amplitude /
+--float-dur: 3.2s; / cycle duration /
+--float-rot: 0.8deg; / subtle tilt at apex /
+--float-scale: 1.01; / slight breathing scale /
+--float-ease: cubic-bezier(.37,.01,.22,1); / natural ease /
+--float-delay: 0s; / allow staggering */
+  --shadow-low: 25%;
+  --shadow-high: 35%;
+}
+
+/* Optional: add perspective for a touch of depth on the wrapper */
+.card-wrap {
+  perspective: 1000px;
+}
+
+.card {
+  /* Baseline 3D feel and smoothness */
+  transform-style: preserve-3d;
+  will-change: transform, box-shadow;
+
+  /* Animation stack */
+  animation:
+    cardFloat var(--float-dur) var(--float-ease) infinite,
+    cardShadowPulse var(--float-dur) linear infinite;
+  animation-delay: var(--float-delay);
+}
+
+/* Core motion: buoyant bob + micro-tilt + micro-scale */
+@keyframes cardFloat {
+  0% {
+    transform: translate3d(0, 0, 0) rotateZ(0) scale(1);
   }
 
   50% {
-    transform: translateY(-6px);
+    transform:
+      translate3d(0, calc(var(--float-y) * -1), 0) rotateZ(calc(var(--float-rot) * -1)) scale(var(--float-scale));
   }
+
+  100% {
+    transform: translate3d(0, 0, 0) rotateZ(0) scale(1);
+  }
+}
+
+/* Depth cue: shadow grows slightly as the card rises */
+@keyframes cardShadowPulse {
+
+  0%,
+  100% {
+    box-shadow: 0 12px 24px -16px oklch(0% 0 0 / var(--shadow-low));
+  }
+
+  50% {
+    box-shadow: 0 24px 36px -18px oklch(0% 0 0 / var(--shadow-high));
+  }
+}
+
+/* NEW 7) Card Pop-in for initial load */
+@keyframes cardPop {
+  0% {
+    opacity: 0;
+    transform: scale(0.95) translateY(20px);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Accessibility: honor reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .card {
+    animation: none;
+  }
+}
+
+/* Nice interactive tweak: a little more energy on hover/focus */
+.card:hover,
+.card:focus-within {
+  --float-dur: 2.4s;
+  --float-y: 10px;
+  --float-rot: 1deg;
 }
 
 /* NEW 7) Text fade-slide (micro copy entrances) */
