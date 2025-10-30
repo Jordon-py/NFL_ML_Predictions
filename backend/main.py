@@ -61,6 +61,12 @@ from typing import Any, AsyncGenerator, Dict, List, Optional
 import joblib
 import numpy as np
 import pandas as pd
+try:
+    from sklearn.utils.validation import check_is_fitted
+    SKLEARN_CHECK_AVAILABLE = True
+except Exception:
+    check_is_fitted = None
+    SKLEARN_CHECK_AVAILABLE = False
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -140,12 +146,16 @@ dataset_df: Optional[pd.DataFrame] = None
 # By default allow all origins (useful for Heroku deployments). To restrict CORS,
 # set the environment variable RESTRICT_CORS=true and provide a comma-separated
 # list in ALLOWED_ORIGINS.
-def _origins_from_env():
-    raw = os.getenv(key="ALLOWED_ORIGINS", default=["*"])
-    return [o.strip() for o in raw.split(",") if o.strip()]
+def parse_allowed_origins() -> list[str]:
+    """
+    Parse ALLOWED_ORIGINS from env as a comma-separated string.
+    Returns ["*"] if not set. Never raises if unset/malformed.
+    """
+    raw = os.getenv("ALLOWED_ORIGINS", "*")
+    return [o.strip() for o in str(raw).split(",") if o.strip()]
 
 if os.getenv("RESTRICT_CORS", "false").strip().lower() in TRUTHY:
-    ALLOWED_ORIGINS = _origins_from_env() or ["*"]
+    ALLOWED_ORIGINS = parse_allowed_origins() or ["*"]
     log.info("CORS restricted to ALLOWED_ORIGINS: %s", ALLOWED_ORIGINS)
 else:
     ALLOWED_ORIGINS = ["*"]  # allow all origins by default on Heroku
@@ -195,32 +205,28 @@ def _normalize_feature_cols(cols: Dict[str, List[str]]) -> List[str]:
     return cols.get("numeric", []) + cols.get("categorical", [])
 
 
-def get_abbr(name: str) -> str:
+def to_team_abbr(name: str) -> str:
     """
-    Normalize a team name or abbreviation to its canonical 2- or 3-letter code.
+    Convert a team name/legacy code/abbreviation to its canonical 2–3 letter code.
 
-    Logic:
-        - Accepts full team names, legacy codes, or abbreviations.
-        - Applies TEAM_CODE_FIX for legacy/relocated teams.
-        - Maps official names via TEAM_ABBREVIATIONS.
-        - Raises ValueError if input is not recognized.
-
-    Args:
-        name (str): Team name, abbreviation, or legacy code.
-
-    Returns:
-        str: Canonical team abbreviation.
+    Resolution order:
+      1) Legacy/relocation fixes (TEAM_CODE_FIX: e.g., 'SD'->'LAC', 'STL'->'LAR')
+      2) Official full names (TEAM_ABBREVIATIONS: e.g., 'Seattle Seahawks'->'SEA')
+      3) Already-canonical abbreviations (e.g., 'SEA'->'SEA')
 
     Raises:
-        ValueError: If the team name/code is not recognized.
+        ValueError if the team is unknown.
     """
     n = str(name).strip()
-    if n in VALID_ABBRS:
-        return TEAM_CODE_FIX.get(n, n)
+    # 1) Legacy/relocation codes
     if n in TEAM_CODE_FIX:
         return TEAM_CODE_FIX[n]
+    # 2) Official full names -> abbr
     if n in TEAM_ABBREVIATIONS:
         return TEAM_ABBREVIATIONS[n]
+    # 3) Already canonical abbr
+    if n in VALID_ABBRS:
+        return TEAM_CODE_FIX.get(n, n)
     raise ValueError(f"Unknown team: {name}")
 
 
@@ -257,10 +263,12 @@ def load_objects() -> Dict[str, Any]:
         return candidate if candidate.is_absolute() else MODELS_DIR / candidate
 
     preprocessor = joblib.load(resolve_model_path("preprocessor", "preprocessor.joblib"))
+    
     home_model = joblib.load(resolve_model_path("home_model", "home_model.joblib"))
+    
     away_model = joblib.load(resolve_model_path("away_model", "away_model.joblib"))
-    win_model_path = resolve_model_path("win_model", "win_clf_calibrated.joblib")
-    win_model = joblib.load(win_model_path) if win_model_path.exists() else None
+    
+    win_model = joblib.load(resolve_model_path("win_model", "win_clf_calibrated.joblib"))
 
     return {
         "mode": meta.get("mode", "production"),
@@ -332,11 +340,24 @@ def _sanity_predict(model_objects: Dict[str, Any], df: pd.DataFrame) -> None:
     transformed = None
     if pre is not None:
         try:
-            # Check if preprocessor is fitted before trying to transform
-            if hasattr(pre, '_is_fitted') and pre._is_fitted:
+            # Prefer sklearn's check_is_fitted when available; otherwise fall back
+            # to the legacy _is_fitted heuristic used historically.
+            is_fitted = False
+            if SKLEARN_CHECK_AVAILABLE and check_is_fitted is not None:
+                try:
+                    # check_is_fitted raises if estimator isn't fitted
+                    check_is_fitted(pre)
+                    is_fitted = True
+                except Exception:
+                    is_fitted = False
+            else:
+                # Fallback heuristic for custom transformers that expose _is_fitted
+                is_fitted = hasattr(pre, '_is_fitted') and getattr(pre, '_is_fitted')
+
+            if is_fitted:
                 transformed = pre.transform(x)
             else:
-                log.warning("Preprocessor not fitted, skipping transform in sanity check")
+                log.warning("Preprocessor not detected as fitted; skipping transform in sanity check")
         except Exception as e:
             failures.append(f"preprocessor.transform failed: {type(e).__name__}: {e}")
             log.debug("Sanity predict: preprocessor.transform failed during startup check", exc_info=True)
@@ -965,8 +986,8 @@ def get_next_week_schedule() -> List[ScheduleGame]:
     for _, r in week_games.iterrows():
         try:
             # Normalize team abbreviations safely; skip game if unknown
-            h = get_abbr(r["home_team"])
-            a = get_abbr(r["away_team"])
+            h = to_team_abbr(r["home_team"])
+            a = to_team_abbr(r["away_team"])
 
             # Convert pandas Timestamp to native datetime for Pydantic
             kickoff_val = r.get("kickoff_ts_utc")
@@ -1013,8 +1034,8 @@ def predict_game(payload: PredictionRequest) -> PredictionResponse:
 
     try:
         # ---- Normalize inputs
-        h = get_abbr(payload.home_team)
-        a = get_abbr(payload.away_team)
+        h = to_team_abbr(payload.home_team)
+        a = to_team_abbr(payload.away_team)
         season, week = int(payload.season), int(payload.week)
         log.debug("predict_game: home_team=%s, away_team=%s, season=%s, week=%s", h, a, season, week)
 

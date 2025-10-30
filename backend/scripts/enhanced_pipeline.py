@@ -56,14 +56,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 
-try:
-    from backend.scripts.build_csv_datasetslegacy import make_time_key
-except Exception:
-    def make_time_key(df: pd.DataFrame) -> pd.Series:
-        season = pd.to_numeric(df.get("season", df.get("season_home")), errors="coerce").fillna(0).astype(int)
-        week = pd.to_numeric(df.get("week", df.filter(like="week").iloc[:,0]), errors="coerce").fillna(0).astype(int)
-        return season * 100 + week
-
+from backend.scripts.build_csv_datasetslegacy import make_time_key
 
 
 FEATURE_METADATA_PATH = Path(__file__).resolve().parent / "models" / "feature_metadata.json"
@@ -263,11 +256,7 @@ def build_dataset(data_path: str, expected_columns: Optional[List[str]] = None) 
     df["group_idx"] = make_time_key(df)
     # Extract or derive target label
     if "home_win" in df.columns:
-        y = df["home_win"]
-        # Filter out rows with NaN home_win (e.g., future games) to prevent astype(int) failure
-        valid_mask = y.notna()
-        df = df[valid_mask].reset_index(drop=True)
-        y = y[valid_mask].reset_index(drop=True).astype(int)
+        y = df["home_win"].astype(int)
     elif {"winner", "home_team"}.issubset(df.columns):
         y = (df["winner"].astype(str).str.strip() == df["home_team"].astype(str).str.strip()).astype(int)
         df["home_win"] = y
@@ -576,17 +565,14 @@ def run_experiment(
     elif data_path:
         X, y, groups, df = build_dataset(data_path)
         if holdout_season is None:
-            # Production mode: train on full dataset (no hold-out)
-            X_train, y_train, groups_train, df_train = X, y, groups, df.copy()
-            X_test, y_test, df_test = X.iloc[0:0], y.iloc[0:0], df.iloc[0:0].copy()
-        else:
-            train_mask = df["season"] < holdout_season
-            test_mask = df["season"] == holdout_season
-            X_train, X_test = X.loc[train_mask], X.loc[test_mask]
-            y_train, y_test = y.loc[train_mask], y.loc[test_mask]
-            groups_train = groups.loc[train_mask]
-            df_train = df.loc[train_mask].copy()
-            df_test = df.loc[test_mask].copy()
+            holdout_season = int(df["season"].max())
+        train_mask = df["season"] < holdout_season
+        test_mask = df["season"] == holdout_season
+        X_train, X_test = X.loc[train_mask], X.loc[test_mask]
+        y_train, y_test = y.loc[train_mask], y.loc[test_mask]
+        groups_train = groups.loc[train_mask]
+        df_train = df.loc[train_mask].copy()
+        df_test = df.loc[test_mask].copy()
     else:
         raise ValueError("Provide either `data_path` or both `train_path` and `test_path`.")
     # Persist feature metadata for documentation
@@ -601,6 +587,13 @@ def run_experiment(
         baseline_rate_train = float(y_train.mean())
     # Define cross‑validator
     cv = PurgedGroupTimeSeriesSplit(n_splits=5, embargo_groups=1)
+    # Persist feature metadata for documentation
+    feature_summary = summarize_features(X_train)
+    export_feature_metadata(feature_summary, FEATURE_METADATA_PATH)
+    # Baseline rate for BSS
+    baseline_rate_train = float(y_train.mean())
+    # Define cross‑validator
+    cv = PurgedGroupTimeSeriesSplit(n_splits=5, embargo_groups=1)
     # Define models
     models: List[Tuple[str, BaseEstimator, bool]] = []
     # Logistic regression (with scaling)
@@ -612,11 +605,11 @@ def run_experiment(
     # Support vector machine
     svc = Pipeline([
         ("scaler", StandardScaler()),
-        ("clf", SVC(C=1.0, kernel="rbf", probability=True, random_state=42)),
+        ("clf", SVC(C=1.0, kernel="rbf", probability=True)),
     ])
     models.append(("SVM", svc, True))
     # Gradient boosting classifier
-    gb = GradientBoostingClassifier(n_estimators=200, learning_rate=0.05, max_depth=3, random_state=42)
+    gb = GradientBoostingClassifier(n_estimators=200, learning_rate=0.05, max_depth=3)
     models.append(("GradientBoosting", gb, False))
     # Monotonic gradient boosting using HistGradientBoostingClassifier if available
     try:
@@ -628,11 +621,9 @@ def run_experiment(
             learning_rate=0.05,
             max_iter=200,
             monotonic_cst=monotonic_cst,
-            random_state=42,
         )
         models.append(("MonotonicHGB", hist_gb, False))
     except Exception:
-
         # Fallback to RandomForestClassifier
         rf = RandomForestClassifier(n_estimators=300, max_depth=6, min_samples_leaf=10, random_state=42)
         models.append(("RandomForest", rf, False))
@@ -654,19 +645,16 @@ def run_experiment(
             sample_weight=sample_weight_train,
         )
         # Evaluate on test
-        if len(X_test) == 0:
-            test_metrics = (None, None, None, None, None, None)
-        else:
-            test_metrics = evaluate_on_test(
-                est,
-                X_train,
-                y_train,
-                X_test,
-                y_test,
-                calibrate=calibrate,
-                baseline_rate=baseline_rate_train,
-                sample_weight=sample_weight_train,
-            )
+        test_metrics = evaluate_on_test(
+            est,
+            X_train,
+            y_train,
+            X_test,
+            y_test,
+            calibrate=calibrate,
+            baseline_rate=baseline_rate_train,
+            sample_weight=sample_weight_train,
+        )
         res.test_brier, res.test_logloss, res.test_roc_auc, res.test_pr_auc, res.test_brier_skill, res.test_brier_decomp = test_metrics
         results.append(res)
         # Fit on full training and record probability predictions for blending on training set
@@ -679,19 +667,13 @@ def run_experiment(
             )
             calibrator_full.fit(X_train, y_train)
             ensemble_train[f"{name}"] = calibrator_full.predict_proba(X_train)[:, 1]
-            if len(X_test) > 0:
-                ensemble_test[f"{name}"] = calibrator_full.predict_proba(X_test)[:, 1]
-            else:
-                ensemble_test[f"{name}"] = pd.Series(dtype=float, index=X_test.index)
+            ensemble_test[f"{name}"] = calibrator_full.predict_proba(X_test)[:, 1]
         else:
             _fit_with_optional_weights(est_full, X_train, y_train, sample_weight_train)
             ensemble_train[f"{name}"] = est_full.predict_proba(X_train)[:, 1]
-            if len(X_test) > 0:
-                ensemble_test[f"{name}"] = est_full.predict_proba(X_test)[:, 1]
-            else:
-                ensemble_test[f"{name}"] = pd.Series(dtype=float, index=X_test.index)
+            ensemble_test[f"{name}"] = est_full.predict_proba(X_test)[:, 1]
     # Build convex blend using two best models (logistic and gradient boosting by default)
-    if "Logistic" in ensemble_train.columns and "GradientBoosting" in ensemble_train.columns and len(X_test) > 0:
+    if "Logistic" in ensemble_train.columns and "GradientBoosting" in ensemble_train.columns:
         pA_train = ensemble_train["Logistic"].to_numpy(dtype=float)
         pB_train = ensemble_train["GradientBoosting"].to_numpy(dtype=float)
         best_w, _ = convex_blend(pA_train, pB_train, y_train.to_numpy(dtype=float))
@@ -800,9 +782,8 @@ if __name__ == "__main__":
     parser.add_argument("--data", required=True, help="Path to enhanced game‑level CSV")
     parser.add_argument("--outdir", default="reports", help="Directory for output report")
     parser.add_argument("--holdout", type=int, default=None, help="Season to hold out (default latest)")
-    parser.add_argument("--production", action="store_true", help="Train on the entire dataset (no hold‑out)")
     args = parser.parse_args()
-    results, _ = run_experiment(args.data, holdout_season=(None if args.production else args.holdout))
+    results, _ = run_experiment(args.data, holdout_season=args.holdout)
     preview_df = pd.read_csv(args.data)
     if "season_home" in preview_df.columns:
         holdout_source = "season_home"

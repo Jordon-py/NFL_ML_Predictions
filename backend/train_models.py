@@ -13,8 +13,11 @@ Train leak-free NFL models with time-aware CV.
 
 # File: backend/train_models.py
 # Purpose: Train ML models for NFL game predictions using time-aware cross-validation to prevent data leakage.
-# Functions: _ensure_columns, _dataset_hash, _drop_leaky_columns, _infer_features, _make_preprocessor, _split_for_calibration, _fit_regression, _fit_classifier, _evaluate_regression, _dataset_sort, main
+
+#  Functions: _ensure_columns, _dataset_hash, _drop_leaky_columns, _infer_features, _make_preprocessor, _split_for_calibration, _fit_regression, _fit_classifier, _evaluate_regression, _dataset_sort, main
+
 # Variables: RANDOM_SEED, N_SPLITS, TARGET_HOME, TARGET_AWAY, CLASS_LABEL, TIME_KEYS, ID_COLS, LEAK_BLOCKLIST, REG_PARAM_DISTS, CLF_PARAM_DISTS, log
+
 # Interacts With: backend/data/game_features.csv (input dataset), backend/models/ (output models and metadata)
 
 import argparse
@@ -47,24 +50,25 @@ from joblib import dump
 # -----------------------
 # Configuration
 # -----------------------
-LOAD_ENV='C:/Users/iProg/OneDrive/Documents/Football_predict/nfl_prediction_system/NFL_ML_Predictions/backend/.venv'
-
-# load .env
-load_dotenv(LOAD_ENV)
+load_dotenv(dotenv_path="backend/.env", verbose=True)
 
 SERVE_FRONTEND=os.getenv('SERVE_FRONTEND')
 CORS_ORIGINS=os.getenv('CORS_ORIGINS')
 NODE_ENV=os.getenv('NODE_ENV')
-HP_NITER=int(os.getenv('HP_NITER', '100'))  # Default to 100 if not set or invalid
+HP_N_ITER=int(os.getenv('HP_N_ITER', '100'))  # Default to 100 if not set or invalid
 CV_SPLITS=int(os.getenv('CV_SPLITS', '5'))  # Default to 5
 RANDOM_SEED=int(os.getenv('RANDOM_SEED', '42'))  # Default to 42
 N_SPLITS=int(os.getenv('N_SPLITS', '5'))  # Default to 5
-DEFAULT_N_JOBS = int(os.getenv('N_JOBS', '1'))  # limit parallelism to avoid memory spikes
+N_JOBS = int(os.getenv('N_JOBS', '-1'))  # limit parallelism to avoid memory spikes
 
+print(N_JOBS, NODE_ENV, SERVE_FRONTEND, CORS_ORIGINS)
 # ----------Developement enviorment -----------
-
 DEV_ORIGINS=os.getenv('DEV_ORIGINS', 'http://localhost:3000')
-TRAIN_DATASET_FILE=os.getenv('TRAIN_DATASET_FILE', 'C:/Users/iProg/OneDrive/Documents/Football_predict/nfl_prediction_system/NFL_ML_Predictions/backend/data/game_features.csv')
+
+TRAIN_DATASET_FILE=os.getenv(
+    'TRAIN_DATASET_FILE',
+    'C:/Users/iProg/OneDrive/Documents/Football_predict/nfl_prediction_system/NFL_ML_Predictions/backend/data/game_features.csv'
+    )
 
 TARGET_HOME = "home_points_for"
 TARGET_AWAY = "away_points_for"
@@ -200,7 +204,7 @@ def _split_for_calibration(tscv: TimeSeriesSplit, X: pd.DataFrame, y: pd.Series)
 
 
 def _fit_regression(
-    X: pd.DataFrame, y: pd.Series, pre: ColumnTransformer, random_state: int, n_jobs: int = DEFAULT_N_JOBS
+    X: pd.DataFrame, y: pd.Series, pre: ColumnTransformer, random_state: int, n_jobs: int = N_JOBS
 ) -> Pipeline:
     rs = RandomizedSearchCV(
         estimator=Pipeline([
@@ -213,7 +217,7 @@ def _fit_regression(
         n_jobs=n_jobs,
         random_state=random_state,
         verbose=2,
-        n_iter=min(HP_NITER, len(list(REG_PARAM_DISTS.values())[0]) * 10),
+        n_iter=min(HP_N_ITER, len(list(REG_PARAM_DISTS.values())[0]) * 10),
         refit=True,
     )
     rs.fit(X, y)
@@ -222,7 +226,7 @@ def _fit_regression(
 
 
 def _fit_classifier(
-    X: pd.DataFrame, y: pd.Series, pre: ColumnTransformer, random_state: int, n_jobs: int = DEFAULT_N_JOBS
+    X: pd.DataFrame, y: pd.Series, pre: ColumnTransformer, random_state: int, n_jobs: int = N_JOBS
 ) -> Tuple[Pipeline, Dict[str, Any]]:
     rs = RandomizedSearchCV(
         estimator=Pipeline([
@@ -235,7 +239,7 @@ def _fit_classifier(
         n_jobs=n_jobs,
         random_state=random_state,
         verbose=2,
-        n_iter=min(HP_NITER, len(list(CLF_PARAM_DISTS.values())[0]) * 5),
+        n_iter=min(HP_N_ITER, len(list(CLF_PARAM_DISTS.values())[0]) * 5),
         refit=True,
     )
     rs.fit(X, y)
@@ -314,7 +318,7 @@ def main(data_path: str, out_dir: str) -> None:
     # Fit models (time-aware CV inside)
     log.info("Fitting home points regressor")
     # Allow user to override parallel jobs via env or CLI
-    n_jobs = DEFAULT_N_JOBS
+    n_jobs = N_JOBS
     home_model = _fit_regression(X, y_home, pre, RANDOM_SEED, n_jobs=n_jobs)
     log.info('%s home_model', home_model)
     log.info("Fitting away points regressor")
@@ -330,9 +334,9 @@ def main(data_path: str, out_dir: str) -> None:
     # Persist artifacts
     os.makedirs(out_dir, exist_ok=True)
     dump(pre, os.path.join(out_dir, "preprocessor.joblib"))
-    dump(home_model, os.path.join(out_dir, "home_model.joblib"))
-    dump(away_model, os.path.join(out_dir, "away_model.joblib"))
-    dump(win_model, os.path.join(out_dir, "win_clf_calibrated.joblib"))
+    dump(home_model, os.path.join(out_dir, f"home_model{datetime.now().strftime('%Y%m%d_%H%M%S')}.joblib"))
+    dump(away_model, os.path.join(out_dir, f"away_model{datetime.now().strftime('%Y%m%d_%H%M%S')}.joblib"))
+    dump(win_model, os.path.join(out_dir, f"win_clf_calibrated{datetime.now().strftime('%Y%m%d_%H%M%S')}.joblib"))
 
     # Reports
     training_timestamp_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S %Z")
@@ -361,7 +365,7 @@ def main(data_path: str, out_dir: str) -> None:
         "quick_mae": {"home": mae_home, "away": mae_away},
     }
 
-    with open(os.path.join(out_dir, "training_report.json"), "w", encoding="utf-8") as f:
+    with open(os.path.join(out_dir, f"training_report{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"), "w", encoding="utf-8") as f:
         json.dump(asdict(summary), f, indent=2)
     with open(os.path.join(out_dir, "metadata.json"), "w", encoding="utf-8") as f:
         json.dump(metadata, f, indent=2)
@@ -375,9 +379,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train leak-free NFL models with time-aware CV.")
     parser.add_argument("--data", type=str, default="./backend/data/game_features.csv", help="Path to features CSV.")
     parser.add_argument("--out", type=str, default="models", help="Output directory for artifacts and reports.")
-    parser.add_argument("--n-jobs", type=int, default=DEFAULT_N_JOBS, help="Number of parallel jobs to use for CV (default from N_JOBS env)")
-    parser.add_argument("--hp-niter", type=int, default=HP_NITER, help="Number of RandomizedSearchCV iterations (overrides HP_NITER env)")
+    parser.add_argument("--n-jobs", type=int, default=N_JOBS, help="Number of parallel jobs to use for CV (default from N_JOBS env)")
+    parser.add_argument("--hp-niter", type=int, default=HP_N_ITER, help="Number of RandomizedSearchCV iterations (overrides HP_N_ITER env)")
     args = parser.parse_args()
-    # Allow quick runs by overriding HP_NITER when provided on CLI
-    HP_NITER = int(args.hp_niter)
+    # Allow quick runs by overriding HP_N_ITER when provided on CLI
+
     main(args.data, args.out)
