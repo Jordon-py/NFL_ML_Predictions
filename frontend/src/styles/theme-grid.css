@@ -4,248 +4,205 @@
    Load order: 2 of 2 (after base.css)
    ========================================================================== */
 
-
-.rain-drops {
-  display: contents;
-  position: absolute;
-  top: 10%;
-  height: 120px;
-  width: 6px;
-  border-right: OutLine;
-  background: linear-gradient(70deg, lch(69.13% 48.85 282.55 / 0.765), transparent 70%);
-  transform: rotate(-35deg);
-  border-radius: 50%;
-  translate: -450px 1px ;
-  animation: fallingRain 2s linear forwards;
-}
-@keyframes fallingRain {
-  0% {
-    opacity: .9;
-    transform: translateY(0) rotate(-35deg);
-  }
-  50% {
-    opacity: 0.5;
-    transform: translateY(150px) rotate(-35deg);
-    animation: outlineGlow;
-    transition: filter(brightness(1.03) ease-in-out);
-  }
-  100% {
-    opacity: 0;
-    transform: translateY(300px) rotate(-35deg);
-  }
-}
-
 /* --- Headers / Section framing ------------------------------------------ */
 .team-grid-header {
   display: flex;
   flex-direction: column;
-  flex-wrap: wrap;
-  align-content: center;
-  padding-left: 2rem;
-  font-size: 2rem;
-  color: lch(0% 0 0);
+  align-items: center;
+  /* Center header content */
+  padding: 2rem 1rem;
+  text-align: center;
 }
-h2  { 
-      backdrop-filter: blur(3px);
-      display: flex;
-      text-shadow: 4px 4px 14px 4px rgba(0% 0 0 / 0.818);
-      font-size: 6rem;
-      font-family: "Cinzel", serif;
-      font-optical-sizing: auto;
-      font-weight: 800;
-      font-style: normal;
+
+h2.nfl-matchups {
+  backdrop-filter: blur(2px);
+  text-shadow: 0 4px 14px oklch(0% 0 0 / 0.5);
+  font-size: clamp(3rem, 8vw + 1rem, 6rem);
+  /* Responsive font size */
+  font-family: "Cinzel", serif;
+  font-weight: 800;
+  color: oklch(95% 0.05 240);
+  /* Slightly off-white for depth */
+  margin: 0;
+  animation: textFadeSlide 1s var(--a-ease) both;
+  /* Apply text intro */
 }
 
 .hamburger-menu {
-    image-rendering: optimizeQuality;
-    position: fixed;
-    right: 9rem;
-    display: flex;
-    width: 40px;
-    height: 40px;
-    cursor: pointer;
-  }
-
-
-p {
+  image-rendering: optimizeQuality;
+  position: fixed;
+  right: 2rem;
+  /* Adjusted for better spacing */
+  top: 2rem;
   display: flex;
-  justify-content: center;
-  margin-top: 0px;
-  color: aliceblue v;
+  width: 40px;
+  height: 40px;
+  cursor: pointer;
+  z-index: 1000;
+  /* Ensure it's on top */
 }
-h2.nfl-matchups,
-p.nfl-matchups {
-  display: flex;
-  flex-wrap: wrap;
-  flex-direction: column;
-  justify-content: center;
-  margin-top: 1px;
 
+
+p.nfl-matchups {
+  font-size: clamp(1rem, 2vw + 0.5rem, 1.25rem);
+  color: oklch(85% 0.05 240 / 0.9);
+  margin-top: 0.5rem;
+  max-width: 60ch;
+  animation: textFadeSlide 1s var(--a-ease) 200ms both;
+  /* Staggered intro */
 }
 
 /* --- Lists used by History/Insights ------------------------------------- */
-.history-chart {
+section.history-chart {
   display: flex;
   flex-direction: column;
-  background-color: rgba(0, 0, 0, 0.257);
+  background-color: oklch(0% 0 0 / 0.7);
   gap: 12px;
-  font-size: 20px;
-  justify-items: right;
-  border-left: 2px solid lch(78.57% 33.06 264.62 / 0.659);
-  flex-wrap: wrap;
-
-
+  font-size: 1rem;
+  /* Adjusted for consistency */
+  border-left: 2px solid oklch(70% 0.15 265 / 0.7);
+  border-radius: var(--r-sm);
+  padding: 1rem;
+  margin: 1rem;
+  max-width: 400px;
+  /* Constrain width */
+  animation: cardPop 0.8s var(--a-ease) both;
+  /* Pop-in animation */
 }
 
 /* --- Team grid layout ---------------------------------------------------- */
 .team-main {
   display: flex;
   flex-wrap: wrap;
-  flex-direction: row;
-  justify-content: space-between;
-  padding: 1%;
+  justify-content: center;
+  /* Center grid items */
+  gap: 2rem;
+  /* Consistent gap */
+  padding: 1rem;
 }
 
 .team-grid-cards {
-  display: flex;
-  flex-direction: column;
-  flex-wrap: wrap;
-  max-width: 35vw;
-  width: 100%;
-  gap: 1rem;
+  display: contents;
+  /* Use parent grid for layout */
 }
 
 /* --- Micro info rows ----------------------------------------------------- */
 .matchup-time.inner-card {
   display: flex;
   flex-direction: row;
-  gap: 2rem;
+  gap: 1rem;
+  /* Reduced gap */
 }
 
 /* Probabilities (top summary strip) */
-div.probability.home-win-prob.inner-card.a-shine {
-  display: flex;
+div.probability.home-win-prob.inner-card {
   font-size: 1rem;
-  font-optical-sizing: auto;
-  color: lch(100% 0.01 296.81);
-  max-width: 500px;
-  width: 100%;
+  color: oklch(98% 0.02 240);
+  animation: a-shine 2s linear infinite;
+  /* Apply shine animation */
 }
 
 /* Predicted score (fixed summary, top-right) */
-.predicted-scores.inner-card.a-shine {
+.predicted-scores.inner-card {
   display: flex;
   flex-direction: row;
-  gap: .3rem;
-  font-weight: 500;
-  font-size: 1.4rem;
-  align-content: space-between;
-  color: lch(100% 0.01 296.81 / 0.95);
-  background-color: lch(0% 0 0 / 0.726);
-  font-family: var(--font-sans);
+  gap: .5rem;
+  font-weight: 600;
+  /* Bolder */
+  font-size: 1.5rem;
+  color: oklch(98% 0.02 240);
+  background-color: oklch(15% 0.05 240 / 0.8);
+  font-family: var(--font-tech);
+  /* Use tech font */
   position: fixed;
-  border-radius: 5%;
-  top: 1px;
-  right: .5%;
+  border-radius: var(--r-sm);
+  top: 1rem;
+  right: 1rem;
+  padding: 0.5rem 1rem;
+  animation: a-shine 2.5s linear infinite;
+  /* Slower shine */
 }
 
 /* --- Cards --------------------------------------------------------------- */
 /* Base card shell for matchups */
-.matchup-card.inner-card {
+.matchup-card {
   display: flex;
   flex-direction: column;
-  -webkit-backdrop-filter: blur(13px);
-  backdrop-filter: blur(13px);
-  border-radius: 18px;
-  box-shadow: 0 8px 18px 0px rgba(17, 0, 0, 0.712);
-  padding: 10px;
-  margin-left: 1.5rem;
-  margin-bottom: 20px;
+  backdrop-filter: blur(16px);
+  border-radius: var(--r-md);
+  box-shadow: 0 8px 24px oklch(0% 0 0 / 0.3);
+  padding: 1rem;
+  background-color: oklch(20% 0.05 240 / 0.6);
   position: relative;
-  max-height: 450px;
-  min-height: 220px;
-  max-width: 380px;
-  height: 100%;
-  width: 100%;
-  flex: 1 1 300px;
-  color: lch(95.64% 6.57 269.25);
+  width: clamp(300px, 100%, 380px);
+  flex: 1 1 320px;
+  color: oklch(95% 0.02 240);
+  border: 1px solid oklch(80% 0.05 240 / 0.2);
 
-  /* Entrance: fade (staggerable via --i) */
-  --a-delay: calc(var(--i, 0) * 100ms);
-  animation-name: fadeInVar;
-  animation-duration: 0.9s;
-  animation-timing-function: cubic-bezier(.22, .61, .36, 1);
-  animation-fill-mode: both;
-  animation-delay: var(--a-delay);
+  /* Entrance Animation */
+  --i: 0;
+  /* Stagger index */
+  animation: cardPop 0.6s var(--a-ease) calc(var(--i) * 80ms) both;
 }
 
 .inner-card {
-  border-radius: 7%;
+  border-radius: var(--r-sm);
+  /* Consistent radius */
 }
 
 .matchup-card:hover {
-  transform: translateY(-7px);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.524);
+  transform: translateY(-8px) scale(1.02);
+  box-shadow: 0 12px 32px oklch(0% 0 0 / 0.4);
   cursor: pointer;
+  transition: transform 0.3s var(--a-ease), box-shadow 0.3s var(--a-ease);
 }
 
 /* Optional aesthetic shine while hovering */
 .matchup-card.a-shine:hover {
-  cursor: pointer;
-  transition: transform 0.3s, box-shadow 0.5s;
-  transform: scale(1.02);
-  /* FIX: was "animation: outLine shine 1s infinite;" (invalid);
-     use our global shimmer sweep for subtle polish */
-  animation: shineSweep 1s linear infinite;
-  box-shadow: 0 8px 20px 1px rgba(0, 0, 0, 0.546);
+  animation: shineSweep 1.2s linear infinite;
 }
 
 .matchup-card:focus-visible {
-  outline: 3px solid var(--c-brand-1, #1389ff);
-  outline-offset: 3px;
+  outline: 3px solid var(--c-brand-1);
+  outline-offset: 4px;
 }
 
 .matchup-card.has-prediction {
-  border: 2px solid transparent;
-  transform: scale(1.02);
+  transform: scale(1.03);
   box-shadow:
-    0 8px 25px rgba(0, 0, 0, 0.6),
-    0 0 20px var(--c-brand-1),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.396);
-  perspective: 200px;
-  animation: outlineGlow 2s ease-in-out infinite, predictionPulse 2s ease-in-out;
-  transform-style: preserve-3d;
+    0 10px 30px oklch(0% 0 0 / 0.5),
+    0 0 25px var(--c-brand-1);
+  border-color: var(--c-brand-1);
+  animation: outlineGlow 2s ease-in-out infinite, predictionPulse 2s ease-in-out, cardPop 0.6s var(--a-ease) both;
 }
 
 .matchup-card.has-prediction:hover {
-  transition: transform 0.4s ease-in-out;
-  transform: scale(1.05) translateZ(60px);
+  transform: scale(1.06) translateZ(10px);
   box-shadow:
-    0 12px 35px rgba(0, 0, 0, 0.7),
-    0 0 30px var(--c-brand-1),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+    0 16px 40px oklch(0% 0 0 / 0.6),
+    0 0 35px var(--c-brand-1);
 }
 
 /* --- Card content composition ------------------------------------------- */
 .matchup-head {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
 }
 
 .teams-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.5rem;
+  gap: 1rem;
 }
 
 .team-info {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.5rem;
   flex: 1;
 }
 
@@ -258,70 +215,79 @@ div.probability.home-win-prob.inner-card.a-shine {
 }
 
 .at-symbol {
-  /* FIX: was "font-weight: 400px;" (invalid) */
-  font-weight: 400;
+  font-weight: 600;
+  /* Bolder */
   color: var(--c-accent);
   font-size: 1.2rem;
+  font-family: var(--font-tech);
+  /* Use tech font */
 }
 
 img.team-logo {
-  width: 7rem;
-  height: 7rem;
+  width: clamp(5rem, 15vw, 7rem);
+  /* Responsive logo size */
+  height: auto;
+  aspect-ratio: 1 / 1;
   object-fit: contain;
-  animation: fadeInVar 0.8s cubic-bezier(.22, .61, .36, 1);
-  border-radius: 8px;
-  background: rgba(0, 0, 0, 0);
-  padding: 4px;
-  transition: transform 0.5s ease, filter 0.5s ease;
+  border-radius: 50%;
+  /* Circular logos */
+  background: oklch(0% 0 0 / 0.2);
+  padding: 8px;
+  transition: transform 0.4s var(--a-ease), filter 0.4s var(--a-ease);
+  animation: a-fade-in 0.8s var(--a-ease) both;
+  /* Apply fade-in */
 }
 
 img.team-logo:hover {
-  transform: scale(1.1);
-  filter: brightness(1.2) drop-shadow(0 0 8px var(--c-brand-1));
+  transform: scale(1.15) rotate(5deg);
+  filter: brightness(1.2) drop-shadow(0 0 12px var(--c-brand-1));
 }
 
 .kickoff {
   font-size: 0.9rem;
   color: var(--c-text-muted-on-dark);
   white-space: nowrap;
+  font-family: var(--font-tech);
+  /* Use tech font */
+  animation: a-text-fade-slide 1s var(--a-ease) 300ms both;
+  /* Apply text intro */
 }
 
 .prediction {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.75rem;
   margin-top: auto;
-  padding-top: 0.5rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 0.75rem;
+  border-top: 1px solid oklch(80% 0.05 240 / 0.2);
 }
 
 .cta {
   margin-top: auto;
-  padding-top: 0.5rem;
+  padding-top: 1rem;
   text-align: center;
-  font-weight: 500;
+  font-weight: 600;
+  font-family: var(--font-tech);
+  /* Use tech font */
+  animation: a-pulse 2s ease-in-out infinite 1s;
+  /* Subtle pulse for attention */
 }
 
 /* --- Side readouts / badges --------------------------------------------- */
-div .point-diff {
+.point-diff.inner-card {
   display: flex;
   flex-direction: column;
-  gap: 5rem;
-}
-
-.point-diff.inner-card.a-shine {
-  display: flex;
-  flex-direction: row;
   position: fixed;
   top: 25%;
-  right: 3%;
-  gap: .3rem;
-  font-weight: 300;
+  right: 2rem;
+  gap: 1rem;
+  font-weight: 400;
   font-size: 1rem;
-  color: #ffffffd8;
-  font-family: var(--font-sans);
-  /* FIX: "transition: all transform(a-glow);" → valid transition */
+  color: oklch(95% 0.02 240);
+  font-family: var(--font-tech);
   transition: transform 0.3s ease;
+  animation: a-fade-in 1s var(--a-ease) 500ms both;
+  /* Fade in */
 }
 
 .point-prob {
@@ -329,26 +295,30 @@ div .point-diff {
   font-size: 1rem;
   top: 8%;
   left: 50%;
+  transform: translateX(-50%);
+  /* Center properly */
   display: flex;
   flex-direction: row;
-  /* FIX: gradient token used as background layer, not background-color */
   background: var(--grad-primary);
-  width: 20px;
-  backdrop-filter: inherit;
-  background-clip: initial;
+  padding: 0.5rem 1rem;
+  border-radius: var(--r-sm);
+  animation: a-fade-in 1s var(--a-ease) 400ms both;
+  /* Fade in */
 }
 
 /* Prediction result block */
-div .prediction-result.inner-card.a-glow {
+.prediction-result.inner-card {
   display: flex;
   flex-direction: column;
-  padding: 1px;
-  gap: .3rem;
-  font-weight: 400;
+  padding: 0.5rem;
+  gap: 0.5rem;
+  font-weight: 500;
   font-size: 1.2rem;
-  color: lch(100% 0.01 296.81);
-  font-family: var(--font-sans);
-  transition: transform 0.2s 0.3s ease-in-out;
+  color: oklch(98% 0.02 240);
+  font-family: var(--font-tech);
+  transition: transform 0.3s ease-in-out;
+  animation: a-glow 2.5s ease-in-out infinite;
+  /* Apply glow */
 }
 
 /* --- States & motion safety --------------------------------------------- */
@@ -356,14 +326,25 @@ div .prediction-result.inner-card.a-glow {
   display: flex;
   align-items: center;
   gap: 8px;
+  font-family: var(--font-tech);
+  /* Use tech font */
   /* pulsing while loading */
-  animation: pulseSoft 1.5s ease-in-out infinite;
-  filter: brightness(1.03);
-
+  animation: pulseOpacity 1.5s ease-in-out infinite;
+  filter: brightness(1.05);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .matchup-card {
+
+  .matchup-card,
+  .team-logo,
+  .kickoff,
+  .cta,
+  .point-diff,
+  .point-prob,
+  .prediction-result,
+  h2.nfl-matchups,
+  p.nfl-matchups {
     transition: none;
+    animation: none;
   }
 }

@@ -270,7 +270,7 @@ export default function TeamGrid() {
             // CSS var --i allows staggered or shimmer animations if desired
             <div key={key} style={{ '--i': index }}>
               <div
-                className={`matchup-card inner-card sb3__content ${prediction ? 'has-prediction' : ''
+                className={`card hover inner-card sb3__content ${prediction ? 'has-prediction' : ''
                   } ${isLoading ? 'loading' : ''}`}
                 onClick={() => handlePredict(game)}
                 onKeyDown={(e) => {
