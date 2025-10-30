@@ -127,3 +127,6 @@ frontend/dist/node_modules
 
 # AI tool directories
 .serena/
+.venv/
+
+backend/.venv/
