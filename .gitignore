@@ -12,7 +12,6 @@ env.bak/
 backend/.venv/
 backend/venv/
 nfl_env/
-nflenv/
 
 ## Node artifacts
 node_modules/
@@ -94,17 +93,9 @@ data/
 *.model
 !requirements.txt
 !README.md
-!backend/data/
-!backend/data/datasets/
-!backend/data/datasets/*
-!backend/data/Nfl_schedule_*.csv
-!backend/data/team_logo*.csv
-!backend/data/team_logos*.csv
-!backend/data/predictive_analysis.json
 !backend/data/prod-models/models/*.joblib
 !backend/data/prod-models/*.csv
-!backend/models/**
-!backend/20260102/models/**
+!backend/models/
 # CHANGED: Allow production model artifacts for Heroku deployment
 
 
@@ -117,9 +108,23 @@ data/
 !vercel.json
 node_modules
 
+<<<<<<< HEAD
+<<<<<<< HEAD
+<<<<<<< HEAD
+=======
+node_modules
+node_modules
+node_modules
+node_modules/
+frontend/node_modules/
+>>>>>>> 385c33653 (Stop tracking node_modules; ignore for future)
+=======
 ## Backup bundles
 *.bundle
 
+>>>>>>> cd97fecac (chore: update .gitignore to include backup bundles and clean up node artifacts)
+=======
 ## Backup bundles
 *.bundle
 
+>>>>>>> e830235acc489dc81436e2a91bd690360a3d1c62
