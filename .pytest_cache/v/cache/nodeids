@@ -1,0 +1,5 @@
+[
+  "backend/tests/test_startup_checks.py::test_sanity_predict_success_with_minimal_engineered_row",
+  "backend/tests/test_startup_checks.py::test_validate_dataset_schema_fails_when_missing",
+  "scripts/api_test.py::test_api_endpoint"
+]

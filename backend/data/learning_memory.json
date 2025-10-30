@@ -1,0 +1,1182 @@
+{
+  "schema_aliases": {},
+  "feature_scores": {
+    "home_prior_pf_avg_3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_prior_pa_avg_3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_prior_win_pct_3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_prior_off_epa_per_play_3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_prior_off_success_rate_3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_prior_off_explosive_rate_3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_prior_off_third_down_pct_3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_prior_off_pass_over_expected_3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_prior_def_success_rate_allowed_3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_prior_def_explosive_rate_allowed_3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_prior_def_epa_per_play_3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_prior_def_takeaway_rate_3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_prior_off_total_plays_3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_prior_off_turnover_rate_3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_prior_pf_avg_5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_prior_pa_avg_5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_prior_win_pct_5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_prior_off_epa_per_play_5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_prior_off_success_rate_5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_prior_off_explosive_rate_5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_prior_off_third_down_pct_5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_prior_off_pass_over_expected_5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_prior_def_success_rate_allowed_5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_prior_def_explosive_rate_allowed_5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_prior_def_epa_per_play_5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_prior_def_takeaway_rate_5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_prior_off_total_plays_5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_prior_off_turnover_rate_5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_pf_avg_3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_pa_avg_3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_win_pct_3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_off_epa_per_play_3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_off_success_rate_3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_off_explosive_rate_3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_off_third_down_pct_3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_off_pass_over_expected_3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_def_success_rate_allowed_3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_def_explosive_rate_allowed_3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_def_epa_per_play_3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_def_takeaway_rate_3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_off_total_plays_3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_off_turnover_rate_3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_pf_avg_5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_pa_avg_5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_win_pct_5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_off_epa_per_play_5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_off_success_rate_5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_off_explosive_rate_5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_off_third_down_pct_5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_off_pass_over_expected_5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_def_success_rate_allowed_5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_def_explosive_rate_allowed_5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_def_epa_per_play_5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_def_takeaway_rate_5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_off_total_plays_5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_off_turnover_rate_5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_minus_away_pf_avg_3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_minus_away_pa_avg_3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_minus_away_win_pct_3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_minus_away_off_epa_per_play_3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_minus_away_off_success_rate_3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_minus_away_off_explosive_rate_3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_minus_away_off_third_down_pct_3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_minus_away_off_pass_over_expected_3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_minus_away_def_success_rate_allowed_3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_minus_away_def_explosive_rate_allowed_3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_minus_away_def_epa_per_play_3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_minus_away_def_takeaway_rate_3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_minus_away_off_total_plays_3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_minus_away_off_turnover_rate_3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_minus_away_pf_avg_5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_minus_away_pa_avg_5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_minus_away_win_pct_5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_minus_away_off_epa_per_play_5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_minus_away_off_success_rate_5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_minus_away_off_explosive_rate_5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_minus_away_off_third_down_pct_5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_minus_away_off_pass_over_expected_5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_minus_away_def_success_rate_allowed_5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_minus_away_def_explosive_rate_allowed_5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_minus_away_def_epa_per_play_5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_minus_away_def_takeaway_rate_5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_minus_away_off_total_plays_5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_minus_away_off_turnover_rate_5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_prior_pf_avg_3_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_prior_pa_avg_3_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_prior_win_pct_3_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_prior_off_epa_per_play_3_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_prior_off_success_rate_3_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_prior_off_explosive_rate_3_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_prior_off_third_down_pct_3_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_prior_off_pass_over_expected_3_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_prior_def_success_rate_allowed_3_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_prior_def_explosive_rate_allowed_3_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_prior_def_epa_per_play_3_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_prior_def_takeaway_rate_3_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_prior_off_total_plays_3_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_prior_off_turnover_rate_3_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_prior_pf_avg_5_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_prior_pa_avg_5_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_prior_win_pct_5_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_prior_off_epa_per_play_5_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_prior_off_success_rate_5_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_prior_off_explosive_rate_5_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_prior_off_third_down_pct_5_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_prior_off_pass_over_expected_5_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_prior_def_success_rate_allowed_5_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_prior_def_explosive_rate_allowed_5_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_prior_def_epa_per_play_5_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_prior_def_takeaway_rate_5_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_prior_off_total_plays_5_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "home_prior_off_turnover_rate_5_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_pf_avg_3_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_pa_avg_3_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_win_pct_3_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_off_epa_per_play_3_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_off_success_rate_3_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_off_explosive_rate_3_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_off_third_down_pct_3_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_off_pass_over_expected_3_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_def_success_rate_allowed_3_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_def_explosive_rate_allowed_3_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_def_epa_per_play_3_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_def_takeaway_rate_3_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_off_total_plays_3_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_off_turnover_rate_3_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_pf_avg_5_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_pa_avg_5_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_win_pct_5_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_off_epa_per_play_5_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_off_success_rate_5_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_off_explosive_rate_5_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_off_third_down_pct_5_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_off_pass_over_expected_5_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_def_success_rate_allowed_5_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_def_explosive_rate_allowed_5_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_def_epa_per_play_5_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_def_takeaway_rate_5_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_off_total_plays_5_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "away_prior_off_turnover_rate_5_z": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "trend_home_minus_away_win_pct_3_w2": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "trend_home_minus_away_off_epa_per_play_3_w2": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "trend_home_minus_away_off_success_rate_3_w2": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "trend_home_minus_away_off_explosive_rate_3_w2": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "trend_home_minus_away_def_success_rate_allowed_3_w2": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "trend_home_minus_away_def_explosive_rate_allowed_3_w2": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "trend_home_minus_away_def_epa_per_play_3_w2": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "trend_home_minus_away_off_turnover_rate_3_w2": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "trend_home_minus_away_win_pct_5_w2": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "trend_home_minus_away_off_epa_per_play_5_w2": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "trend_home_minus_away_off_success_rate_5_w2": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "trend_home_minus_away_off_explosive_rate_5_w2": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "trend_home_minus_away_def_success_rate_allowed_5_w2": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "trend_home_minus_away_def_explosive_rate_allowed_5_w2": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "trend_home_minus_away_def_epa_per_play_5_w2": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "trend_home_minus_away_off_turnover_rate_5_w2": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "trend_home_minus_away_win_pct_3_w3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "trend_home_minus_away_off_epa_per_play_3_w3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "trend_home_minus_away_off_success_rate_3_w3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "trend_home_minus_away_off_explosive_rate_3_w3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "trend_home_minus_away_def_success_rate_allowed_3_w3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "trend_home_minus_away_def_explosive_rate_allowed_3_w3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "trend_home_minus_away_def_epa_per_play_3_w3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "trend_home_minus_away_off_turnover_rate_3_w3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "trend_home_minus_away_win_pct_5_w3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "trend_home_minus_away_off_epa_per_play_5_w3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "trend_home_minus_away_off_success_rate_5_w3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "trend_home_minus_away_off_explosive_rate_5_w3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "trend_home_minus_away_def_success_rate_allowed_5_w3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "trend_home_minus_away_def_explosive_rate_allowed_5_w3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "trend_home_minus_away_def_epa_per_play_5_w3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "trend_home_minus_away_off_turnover_rate_5_w3": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "trend_home_minus_away_win_pct_3_w5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "trend_home_minus_away_off_epa_per_play_3_w5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "trend_home_minus_away_off_success_rate_3_w5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "trend_home_minus_away_off_explosive_rate_3_w5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "trend_home_minus_away_def_success_rate_allowed_3_w5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "trend_home_minus_away_def_explosive_rate_allowed_3_w5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "trend_home_minus_away_def_epa_per_play_3_w5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "trend_home_minus_away_off_turnover_rate_3_w5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "trend_home_minus_away_win_pct_5_w5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "trend_home_minus_away_off_epa_per_play_5_w5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "trend_home_minus_away_off_success_rate_5_w5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "trend_home_minus_away_off_explosive_rate_5_w5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "trend_home_minus_away_def_success_rate_allowed_5_w5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "trend_home_minus_away_def_explosive_rate_allowed_5_w5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "trend_home_minus_away_def_epa_per_play_5_w5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "trend_home_minus_away_off_turnover_rate_5_w5": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "oas_index": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "moneyline_prob_diff": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "spread_line": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "total_line": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    },
+    "rest_diff": {
+      "auc_gain": 0.018844246428445177,
+      "brier_gain": 0.0,
+      "count": 1
+    }
+  },
+  "best_windows": [
+    2,
+    3,
+    5
+  ],
+  "merge_rules": {},
+  "run_history": [
+    {
+      "season_end": 2025,
+      "metrics": {
+        "model_auc": 0.7419870786652794,
+        "market_auc": 0.7231428322368342,
+        "brier": 0.20400364038821597,
+        "mae_point_diff": 9.601327056453849
+      },
+      "kept_features": [
+        "away_prior_def_epa_per_play_3",
+        "away_prior_def_epa_per_play_3_z",
+        "away_prior_def_epa_per_play_5",
+        "away_prior_def_epa_per_play_5_z",
+        "away_prior_def_explosive_rate_allowed_3",
+        "away_prior_def_explosive_rate_allowed_3_z",
+        "away_prior_def_explosive_rate_allowed_5",
+        "away_prior_def_explosive_rate_allowed_5_z",
+        "away_prior_def_success_rate_allowed_3",
+        "away_prior_def_success_rate_allowed_3_z",
+        "away_prior_def_success_rate_allowed_5",
+        "away_prior_def_success_rate_allowed_5_z",
+        "away_prior_def_takeaway_rate_3",
+        "away_prior_def_takeaway_rate_3_z",
+        "away_prior_def_takeaway_rate_5",
+        "away_prior_def_takeaway_rate_5_z",
+        "away_prior_off_epa_per_play_3",
+        "away_prior_off_epa_per_play_3_z",
+        "away_prior_off_epa_per_play_5",
+        "away_prior_off_epa_per_play_5_z",
+        "away_prior_off_explosive_rate_3",
+        "away_prior_off_explosive_rate_3_z",
+        "away_prior_off_explosive_rate_5",
+        "away_prior_off_explosive_rate_5_z",
+        "away_prior_off_pass_over_expected_3",
+        "away_prior_off_pass_over_expected_3_z",
+        "away_prior_off_pass_over_expected_5",
+        "away_prior_off_pass_over_expected_5_z",
+        "away_prior_off_success_rate_3",
+        "away_prior_off_success_rate_3_z",
+        "away_prior_off_success_rate_5",
+        "away_prior_off_success_rate_5_z",
+        "away_prior_off_third_down_pct_3",
+        "away_prior_off_third_down_pct_3_z",
+        "away_prior_off_third_down_pct_5",
+        "away_prior_off_third_down_pct_5_z",
+        "away_prior_off_total_plays_3",
+        "away_prior_off_total_plays_3_z",
+        "away_prior_off_total_plays_5",
+        "away_prior_off_total_plays_5_z",
+        "away_prior_off_turnover_rate_3",
+        "away_prior_off_turnover_rate_3_z",
+        "away_prior_off_turnover_rate_5",
+        "away_prior_off_turnover_rate_5_z",
+        "away_prior_pa_avg_3",
+        "away_prior_pa_avg_3_z",
+        "away_prior_pa_avg_5",
+        "away_prior_pa_avg_5_z",
+        "away_prior_pf_avg_3",
+        "away_prior_pf_avg_3_z",
+        "away_prior_pf_avg_5",
+        "away_prior_pf_avg_5_z",
+        "away_prior_win_pct_3",
+        "away_prior_win_pct_3_z",
+        "away_prior_win_pct_5",
+        "away_prior_win_pct_5_z",
+        "home_minus_away_def_epa_per_play_3",
+        "home_minus_away_def_epa_per_play_5",
+        "home_minus_away_def_explosive_rate_allowed_3",
+        "home_minus_away_def_explosive_rate_allowed_5",
+        "home_minus_away_def_success_rate_allowed_3",
+        "home_minus_away_def_success_rate_allowed_5",
+        "home_minus_away_def_takeaway_rate_3",
+        "home_minus_away_def_takeaway_rate_5",
+        "home_minus_away_off_epa_per_play_3",
+        "home_minus_away_off_epa_per_play_5",
+        "home_minus_away_off_explosive_rate_3",
+        "home_minus_away_off_explosive_rate_5",
+        "home_minus_away_off_pass_over_expected_3",
+        "home_minus_away_off_pass_over_expected_5",
+        "home_minus_away_off_success_rate_3",
+        "home_minus_away_off_success_rate_5",
+        "home_minus_away_off_third_down_pct_3",
+        "home_minus_away_off_third_down_pct_5",
+        "home_minus_away_off_total_plays_3",
+        "home_minus_away_off_total_plays_5",
+        "home_minus_away_off_turnover_rate_3",
+        "home_minus_away_off_turnover_rate_5",
+        "home_minus_away_pa_avg_3",
+        "home_minus_away_pa_avg_5",
+        "home_minus_away_pf_avg_3",
+        "home_minus_away_pf_avg_5",
+        "home_minus_away_win_pct_3",
+        "home_minus_away_win_pct_5",
+        "home_prior_def_epa_per_play_3",
+        "home_prior_def_epa_per_play_3_z",
+        "home_prior_def_epa_per_play_5",
+        "home_prior_def_epa_per_play_5_z",
+        "home_prior_def_explosive_rate_allowed_3",
+        "home_prior_def_explosive_rate_allowed_3_z",
+        "home_prior_def_explosive_rate_allowed_5",
+        "home_prior_def_explosive_rate_allowed_5_z",
+        "home_prior_def_success_rate_allowed_3",
+        "home_prior_def_success_rate_allowed_3_z",
+        "home_prior_def_success_rate_allowed_5",
+        "home_prior_def_success_rate_allowed_5_z",
+        "home_prior_def_takeaway_rate_3",
+        "home_prior_def_takeaway_rate_3_z",
+        "home_prior_def_takeaway_rate_5",
+        "home_prior_def_takeaway_rate_5_z",
+        "home_prior_off_epa_per_play_3",
+        "home_prior_off_epa_per_play_3_z",
+        "home_prior_off_epa_per_play_5",
+        "home_prior_off_epa_per_play_5_z",
+        "home_prior_off_explosive_rate_3",
+        "home_prior_off_explosive_rate_3_z",
+        "home_prior_off_explosive_rate_5",
+        "home_prior_off_explosive_rate_5_z",
+        "home_prior_off_pass_over_expected_3",
+        "home_prior_off_pass_over_expected_3_z",
+        "home_prior_off_pass_over_expected_5",
+        "home_prior_off_pass_over_expected_5_z",
+        "home_prior_off_success_rate_3",
+        "home_prior_off_success_rate_3_z",
+        "home_prior_off_success_rate_5",
+        "home_prior_off_success_rate_5_z",
+        "home_prior_off_third_down_pct_3",
+        "home_prior_off_third_down_pct_3_z",
+        "home_prior_off_third_down_pct_5",
+        "home_prior_off_third_down_pct_5_z",
+        "home_prior_off_total_plays_3",
+        "home_prior_off_total_plays_3_z",
+        "home_prior_off_total_plays_5",
+        "home_prior_off_total_plays_5_z",
+        "home_prior_off_turnover_rate_3",
+        "home_prior_off_turnover_rate_3_z",
+        "home_prior_off_turnover_rate_5",
+        "home_prior_off_turnover_rate_5_z",
+        "home_prior_pa_avg_3",
+        "home_prior_pa_avg_3_z",
+        "home_prior_pa_avg_5",
+        "home_prior_pa_avg_5_z",
+        "home_prior_pf_avg_3",
+        "home_prior_pf_avg_3_z",
+        "home_prior_pf_avg_5",
+        "home_prior_pf_avg_5_z",
+        "home_prior_win_pct_3",
+        "home_prior_win_pct_3_z",
+        "home_prior_win_pct_5",
+        "home_prior_win_pct_5_z",
+        "moneyline_prob_diff",
+        "oas_index",
+        "rest_diff",
+        "spread_line",
+        "total_line",
+        "trend_home_minus_away_def_epa_per_play_3_w2",
+        "trend_home_minus_away_def_epa_per_play_3_w3",
+        "trend_home_minus_away_def_epa_per_play_3_w5",
+        "trend_home_minus_away_def_epa_per_play_5_w2",
+        "trend_home_minus_away_def_epa_per_play_5_w3",
+        "trend_home_minus_away_def_epa_per_play_5_w5",
+        "trend_home_minus_away_def_explosive_rate_allowed_3_w2",
+        "trend_home_minus_away_def_explosive_rate_allowed_3_w3",
+        "trend_home_minus_away_def_explosive_rate_allowed_3_w5",
+        "trend_home_minus_away_def_explosive_rate_allowed_5_w2",
+        "trend_home_minus_away_def_explosive_rate_allowed_5_w3",
+        "trend_home_minus_away_def_explosive_rate_allowed_5_w5",
+        "trend_home_minus_away_def_success_rate_allowed_3_w2",
+        "trend_home_minus_away_def_success_rate_allowed_3_w3",
+        "trend_home_minus_away_def_success_rate_allowed_3_w5",
+        "trend_home_minus_away_def_success_rate_allowed_5_w2",
+        "trend_home_minus_away_def_success_rate_allowed_5_w3",
+        "trend_home_minus_away_def_success_rate_allowed_5_w5",
+        "trend_home_minus_away_off_epa_per_play_3_w2",
+        "trend_home_minus_away_off_epa_per_play_3_w3",
+        "trend_home_minus_away_off_epa_per_play_3_w5",
+        "trend_home_minus_away_off_epa_per_play_5_w2",
+        "trend_home_minus_away_off_epa_per_play_5_w3",
+        "trend_home_minus_away_off_epa_per_play_5_w5",
+        "trend_home_minus_away_off_explosive_rate_3_w2",
+        "trend_home_minus_away_off_explosive_rate_3_w3",
+        "trend_home_minus_away_off_explosive_rate_3_w5",
+        "trend_home_minus_away_off_explosive_rate_5_w2",
+        "trend_home_minus_away_off_explosive_rate_5_w3",
+        "trend_home_minus_away_off_explosive_rate_5_w5",
+        "trend_home_minus_away_off_success_rate_3_w2",
+        "trend_home_minus_away_off_success_rate_3_w3",
+        "trend_home_minus_away_off_success_rate_3_w5",
+        "trend_home_minus_away_off_success_rate_5_w2",
+        "trend_home_minus_away_off_success_rate_5_w3",
+        "trend_home_minus_away_off_success_rate_5_w5",
+        "trend_home_minus_away_off_turnover_rate_3_w2",
+        "trend_home_minus_away_off_turnover_rate_3_w3",
+        "trend_home_minus_away_off_turnover_rate_3_w5",
+        "trend_home_minus_away_off_turnover_rate_5_w2",
+        "trend_home_minus_away_off_turnover_rate_5_w3",
+        "trend_home_minus_away_off_turnover_rate_5_w5",
+        "trend_home_minus_away_win_pct_3_w2",
+        "trend_home_minus_away_win_pct_3_w3",
+        "trend_home_minus_away_win_pct_3_w5",
+        "trend_home_minus_away_win_pct_5_w2",
+        "trend_home_minus_away_win_pct_5_w3",
+        "trend_home_minus_away_win_pct_5_w5"
+      ]
+    }
+  ]
+}

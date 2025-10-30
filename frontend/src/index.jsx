@@ -25,6 +25,10 @@ import ErrorBoundary from './components/ErrorBoundary';
 import { PredictionProvider } from './PredictionContext';
 import './styles/base.css';        // ← load first
 import './styles/theme-grid.css';  // ← load second
+// index.jsx
+import '@material/web/button/filled-button.js';
+import '@material/web/button/outlined-button.js';
+import '@material/web/checkbox/checkbox.js';
 
 
 // Grab the static DOM node that Vite injects for us.
@@ -32,10 +36,6 @@ const rootElement = document.getElementById('root');
 
 // React 18's concurrent root API replaces the legacy render function.
 const root = ReactDOM.createRoot(rootElement);
-
-// Render the application tree. StrictMode intentionally double-renders in dev
-// to help find impure render logic. The ErrorBoundary ensures the user still
-// sees a helpful message if a descendant throws.
 root.render(
   <React.StrictMode>
     <ErrorBoundary>

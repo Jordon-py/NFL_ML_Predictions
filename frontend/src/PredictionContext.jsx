@@ -27,6 +27,7 @@ import React, {
   createContext, useContext, useMemo,
   useReducer, useCallback, useEffect
 } from 'react';
+import { toEntry } from './utils/predictionHelpers';
 
 const KEY = "prediction_history";
 const MAX_HISTORY = 100;
@@ -53,23 +54,13 @@ function reducer(state, action) {
 
 // Safe hydration from localStorage
 function loadHistory() {
-  try { const raw = localStorage.getItem(KEY); return Array.isArray(JSON.parse(raw)) ? JSON.parse(raw) : []; }
-  catch { return []; }
-}
-
-export function toEntry({ source='teamgrid', season, week, home_abbr, away_abbr,
-  home_score, away_score, point_diff, home_win_probability, away_win_probability, ensemble_probability }) {
-  return {
-    ts: new Date().toISOString(),
-    source,
-    game: { season, week, home_abbr, away_abbr },
-    metrics: { home_score, away_score, point_diff },
-    probs: {
-      home: home_win_probability,
-      away: away_win_probability,
-      ensemble: ensemble_probability ?? home_win_probability
-    }
-  };
+  try {
+    const raw = localStorage.getItem(KEY);
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
 }
 
 const Ctx = createContext(null);
@@ -80,28 +71,37 @@ export function PredictionProvider({ children }) {
   }));
 
   // Actions
-  const setCurrent   = useCallback((e) => dispatch({ type: SET_CURRENT,  payload: e }), []);
-  const pushHistory  = useCallback((e) => dispatch({ type: PUSH_HISTORY, payload: e }), []);
-  const resetHistory = useCallback(()  => dispatch({ type: RESET_HISTORY }), []);
+  const setCurrent = useCallback((e) => dispatch({ type: SET_CURRENT, payload: e }), []);
+  const pushHistory = useCallback((e) => dispatch({ type: PUSH_HISTORY, payload: e }), []);
+  const resetHistory = useCallback(() => dispatch({ type: RESET_HISTORY }), []);
 
   // Persist
-  useEffect(() => { try {
-    localStorage.setItem(KEY, JSON.stringify(state.history));
-  } catch {} }, [state.history]);
+  useEffect(() => {
+    try {
+      localStorage.setItem(KEY, JSON.stringify(state.history));
+    } catch { }
+  }, [state.history]);
 
   // Tiny dev logger
   useEffect(() => {
-    if (import.meta.env?.DEV) console.debug("[PredictionContext] state:", state);
+    if (typeof window !== "undefined" && import.meta && import.meta.env && import.meta.env.DEV) {
+      console.debug("[PredictionContext] state:", state);
+    }
   }, [state]);
+
 
   // Selectors
   const count = state.history.length;
   const latest = state.history[0] ?? null;
 
   const value = useMemo(() => ({
-    state, actions: { setCurrent, pushHistory, resetHistory },
-    selectors: { count, latest }
-  }), [state, setCurrent, pushHistory, resetHistory, count, latest]);
+    setCurrent,
+    pushHistory,
+    resetHistory,
+    count,
+    latest,
+    current: state.current
+  }), [state]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

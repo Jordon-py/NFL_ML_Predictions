@@ -268,17 +268,17 @@ button:focus-visible,
 
   0%,
   100% {
-    outline: 2px solid rgba(4, 100, 210, 0.3);
+    outline: 2px solid lch(35.98% 123.41 304.5 / 0.475);
     box-shadow:
-      0 0 0 0 rgba(4, 100, 210, 0.00),
-      0 0 0 1px rgba(4, 100, 210, 0.55) inset;
+      0 0 0 0 lch(28.54% 35.5 274.92 / 0.402),
+      0 0 0 1 lch(68.84% 44.29 262.77 / 0.55) inset;
   }
 
   50% {
-    outline: 2px solid rgba(4, 100, 210, 0.8);
+    outline: 2px solid lch(34.52% 40.79 275.48 / 0.8);
     box-shadow:
-      0 0 14px 4px rgba(4, 100, 210, 0.45),
-      0 0 0 1px rgba(4, 100, 210, 0.75) inset;
+      0 0 14px 4px rgba(255, 255, 255, 0.658),
+      0 0 0 1px lch(70.63% 45.8 263.03 / 0.75) inset;
   }
 }
 
