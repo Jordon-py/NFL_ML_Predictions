@@ -11,7 +11,7 @@
  *     • A human-readable label for the game (e.g., "2025 W7 MIA@BUF")
  *
  * Data contract (input):
- *   <HistoryChart history={arrayOfEvents} />
+ *   <HistoryChart history={arrayOfEvents} state={controllerState} />
  *   Each event may come from different parts of the app, so we normalize the fields.
  *
  *   Expected event shape (loose union — missing fields are tolerated):
@@ -59,23 +59,37 @@ const toDateOrNull = (value) => {
 /* ---------- normalization helpers (keep render logic clean) ---------- */
 
 /** Prefer `ts`, then `time`; return a Date or null. */
-const extractTimestamp = (event) => toDateOrNull(firstNonNullish(event?.ts, event?.time, null));
+const extractTimestamp = (event) => toDateOrNull(firstNonNullish(event?.ts, event?.time, event?.game?.ts, null));
 
-/** Prefer `probs.home`, fallback to `probs.ensemble`, then `home_win_probability`; return [0..1] or null. */
+/** Prefer `probs.home`, fallback to other sources; return [0..1] or null. */
 const extractHomeWinProbability = (event) =>
-  firstNonNullish(event?.probs?.home, event?.probs?.ensemble, event?.home_win_probability, null);
+  firstNonNullish(
+    event?.probs?.home,
+    event?.probs?.ensemble,
+    event?.probs?.away,
+    event?.home_win_probability,
+    null,
+  );
 
 /** Build a readable game label, or a generic entry label if no game info exists. */
 const buildGameLabel = (event, index) => {
   const g = event?.game;
-  return g
-    ? `${g.season} W${g.week} ${g.away_abbr}@${g.home_abbr}`
-    : `Entry ${index + 1}`;
+  if (g?.season && g?.week && g?.away_abbr && g?.home_abbr) {
+    return `${g.season} W${g.week} ${g.away_abbr}@${g.home_abbr}`;
+  }
+  if (g?.away_abbr || g?.home_abbr) {
+    return `${g?.away_abbr ?? "Away"} @ ${g?.home_abbr ?? "Home"}`;
+  }
+  return `Entry ${index + 1}`;
 };
 
-export default function HistoryChart({ history }) {
+export default function HistoryChart({ history, state }) {
   // Normalize the input early so the rest of the code can assume an array.
-  const historyItems = Array.isArray(history) ? history : [];
+  const historyItems = useMemo(() => {
+    if (Array.isArray(history)) return history;
+    if (Array.isArray(state?.history)) return state.history;
+    return [];
+  }, [history, state?.history]);
 
   /**
    * chartPoints: normalized, render-ready rows
@@ -124,8 +138,20 @@ export default function HistoryChart({ history }) {
 
   /* ---------- render ---------- */
 
+  if (chartPoints.length === 0) {
+    return (
+      <section className="history-chart" aria-live="polite">
+        <header>
+          <h2>Prediction History</h2>
+          <small>0 item(s)</small>
+        </header>
+        <p>No history yet. Make some predictions to populate this view.</p>
+      </section>
+    );
+  }
+
   return (
-    <section className="history-chart">
+    <section className="history-chart" aria-live="polite">
       <header>
         <h2>Prediction History</h2>
         <small>
@@ -135,24 +161,16 @@ export default function HistoryChart({ history }) {
         </small>
       </header>
 
-      {chartPoints.length === 0 ? (
-        <p>No history yet. Make some predictions to populate this view.</p>
-      ) : (
-          <ol className="history-points a-text-fade-slide">
-          {console.log(`CHARTPOINTS: ${JSON.stringify(chartPoints)}`)}
-          {chartPoints.slice(0, 16).map((row) => (
-            <React.Fragment key={row.index}>
-              <li title={row.label}>
-                <code>{row.timestamp ? row.timestamp.toLocaleString() : "—"}</code>
-                {" — "}
-                <strong>{row.homeWinPercent != null ? `${row.homeWinPercent}%` : "n/a"}</strong>{" "}
-                <em>({row.label})</em>
-              </li>
-              <br />
-            </React.Fragment>
-          ))}
-        </ol>
-      )}
+      <ol className="history-points a-text-fade-slide">
+        {chartPoints.slice(0, 16).map((row) => (
+          <li key={row.index} title={row.label}>
+            <code>{row.timestamp ? row.timestamp.toLocaleString() : "—"}</code>
+            {" — "}
+            <strong>{row.homeWinPercent != null ? `${row.homeWinPercent}%` : "n/a"}</strong>{" "}
+            <em>({row.label})</em>
+          </li>
+        ))}
+      </ol>
     </section>
   );
 }

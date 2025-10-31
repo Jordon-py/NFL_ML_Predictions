@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 2025-10-26 22:37:46,762 INFO Logger initialized. Writing to backend\data\build_csv_datasets.log
 2025-10-26 22:37:46,780 INFO Raw schedules loaded: 2748 games
 2025-10-26 22:37:46,791 INFO Loaded 2596 completed games + 152 future games
@@ -51,3 +52,62 @@ DEN         2   -1   -4   -3    2    0    0    1    3    0    1  -1    0    0   
 [10 rows x 113 columns]
 2025-10-26 22:38:28,944 INFO REL feedback: windows=(2, 3, 5), metrics={'auc': 0.7419870786652794, 'brier': 0.20400364038821597}
 2025-10-26 22:38:29,438 INFO Production dataset ready: backend\data\game_features_new.csv (2748 games)
+=======
+2025-10-16 22:19:37,383 INFO Logger initialized. Writing to backend\data\build_csv_datasets.log
+2025-10-16 22:19:37,385 INFO Production dataset build - Current NFL state: 2025W1
+2025-10-16 22:19:37,386 INFO Building dataset for seasons=[2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025] (include_future=True)
+2025-10-16 22:19:39,444 INFO Raw schedules loaded: 3282 games
+2025-10-16 22:19:39,467 INFO Loaded 3104 completed games + 178 future games
+2025-10-16 22:19:39,473 INFO Loading play-by-play via nflreadpy for seasons [2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025]
+2025-10-16 22:19:53,713 INFO Loaded 451494 play-by-play rows from nflreadpy
+2025-10-16 22:19:58,407 INFO Loading player stats via nflreadpy for seasons [2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025]
+2025-10-16 22:20:02,427 INFO Loaded 204430 player-week records
+2025-10-16 22:20:02,428 WARNING player_stats missing 'recent_team' column; using 'team' if available
+2025-10-16 22:20:02,463 WARNING Failed to load player stats ("Column(s) ['interceptions', 'sacks'] do not exist"); player features disabled
+2025-10-16 22:20:02,483 INFO Loading team stats via nflreadpy for seasons [2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025]
+2025-10-16 22:20:06,085 INFO Loaded 6206 team-week records
+2025-10-16 22:20:06,405 INFO Merged team stats: now 96 columns
+2025-10-16 22:20:06,466 INFO Kept future games - dropped only rows missing feature data
+2025-10-16 22:20:06,564 INFO Pairwise dominance table:
+  team opponent  games  wins  losses   win_pct  dominance  signed_wins_style
+0  ARI      ATL      7     2       5  0.285714         -3                  2
+1  ARI      BAL      3     1       2  0.333333         -1                  1
+2  ARI      BUF      3     1       2  0.333333         -1                  1
+3  ARI      CAR      9     2       7  0.222222         -5                  2
+4  ARI      CHI      5     3       2  0.600000          1                  3
+5  ARI      CIN      4     2       2  0.500000          0                  2
+6  ARI      CLE      4     3       1  0.750000          2                  3
+7  ARI      DAL      6     4       2  0.666667          2                  4
+8  ARI      DEN      3     0       3  0.000000         -3                  0
+9  ARI      DET      8     2       6  0.250000         -4                  2
+2025-10-16 22:20:06,583 INFO Dominance matrix:
+opponent  ARI  ATL  BAL  BUF  CAR  CHI  CIN  CLE  DAL  DEN  DET  GB  ...  MIN  NE  NO  NYG  NYJ  PHI  PIT  SEA  SF  TB  TEN  WAS
+team                                                                 ...                                                        
+ARI         0   -3   -1   -1   -5    1    0    2    2   -3   -4   0  ...   -2  -2   1    3    3    2   -1  -12   4  -1    1   -1
+ATL         1    0   -3   -1    4   -1   -3   -1    0    1   -1   1  ...   -4  -4  -6    3    2   -1   -4   -2   0   0   -1   -1
+BAL         1    3    0    0    1   -1   -1    8    1    3    2  -1  ...   -1  -2   1    0    0    1   -4    1   1   4    1    1
+BUF         1    1    0    0   -1    1   -3    1    3    2    4   1  ...    1  -5   1    1    8   -4    1    1   3   0    3    2
+CAR         5   -6   -1   -1    0   -3   -2   -1    0   -3    2  -3  ...   -4  -1  -7    1    1   -2   -3   -4  -1  -6    1   -1
+CHI        -1    1   -1   -1    3    0    1   -2   -1   -1   -6 -18  ...   -8  -2  -7   -1    1   -6   -1    0  -1   0   -1   -1
+CIN        -2    3   -3    1    0   -3    0    2   -2    0    1  -3  ...    0  -4   1   -1    1   -1  -11    1   0   3    3   -3
+CLE        -2    1  -10   -3    1    0   -4    0   -1   -2   -1  -1  ...   -1  -5  -2   -1   -3   -1  -11   -3   0   1    0    0
+DAL        -4    0   -1   -3    0    1    2    1    0   -3    4  -7  ...    2   0   0   14    0    0    1   -1  -2   1    1    6
+DEN         3   -1   -3   -2    3    1    0    2    1    0    2   0  ...    1  -1   1   -1    3   -1   -2   -2   1   1   -1   -2
+
+[10 rows x 32 columns]
+2025-10-16 22:20:06,629 INFO DataFrame with pregame features:
+   gid home_team away_team  ...  away_vs_home_prior_losses  away_vs_home_prior_dom  away_vs_home_prior_win_pct
+0    0       SEA        GB  ...                          0                       0                         NaN
+1    1       CHI       BUF  ...                          0                       0                         NaN
+2    2       HOU       WAS  ...                          0                       0                         NaN
+3    3        KC       TEN  ...                          0                       0                         NaN
+4    4       DAL        SF  ...                          0                       0                         NaN
+5    5       ATL        NO  ...                          0                       0                         NaN
+6    6       MIA        NE  ...                          0                       0                         NaN
+7    7       NYJ        LV  ...                          0                       0                         NaN
+8    8       PHI       JAX  ...                          0                       0                         NaN
+9    9       DEN       IND  ...                          0                       0                         NaN
+
+[10 rows x 107 columns]
+2025-10-16 22:20:07,404 INFO Production dataset ready: backend\data\game_features.csv (3282 games)
+>>>>>>> c6845983cfbfd1be9afb17b5b47b7331808ca550

@@ -33,8 +33,7 @@ jobs:
         env:
           HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
         run: |
-          heroku auth:token >/dev/null
-          heroku git:remote -a nfl-predict
+          heroku whoami
 
       - name: Vercel Link
         env:
@@ -44,7 +43,7 @@ jobs:
 
       - name: Set Heroku CORS
         run: |
-          heroku config:set CORS_ORIGINS="http://localhost:3000,https://localhost:3000,https://nfl-predict-frontend.vercel.app,https://nfl-ml-predictions.vercel.app" -a nfl-predict
+          heroku config:set CORS_ORIGINS="http://localhost:3000,https://localhost:3000,https://nfl-predict-frontend.vercel.app,https://nfl-ml-predictions.vercel.app" -a ${{ secrets.HEROKU_APP_NAME }}
 
       - name: Install and Build Frontend
         run: |
@@ -55,11 +54,11 @@ jobs:
         env:
           HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
         run: |
-          git push https://heroku:${HEROKU_API_KEY}@git.heroku.com/nfl-predict.git HEAD:main
+          git push https://heroku:${HEROKU_API_KEY}@git.heroku.com/${{ secrets.HEROKU_APP_NAME }}.git HEAD:main
 
       - name: Deploy to Vercel
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VITE_API_URL: https://nfl-predict-ecf5a5bd34fe.herokuapp.com
+          VITE_API_URL: https://${{ secrets.HEROKU_APP_NAME }}.herokuapp.com
         run: |
           vercel --prod --yes --token "$VERCEL_TOKEN"

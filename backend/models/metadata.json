@@ -1,6 +1,11 @@
 {
+<<<<<<< HEAD
   "training_timestamp_utc": "2025-10-27 06:12:25 UTC",
   "dataset_hash": 2258658518095576682,
+=======
+  "training_timestamp_utc": "2025-10-21 13:30:28 UTC",
+  "dataset_hash": 14094679007465161390,
+>>>>>>> c6845983cfbfd1be9afb17b5b47b7331808ca550
   "preprocessor": "preprocessor.joblib",
   "home_model": "home_model.joblib",
   "away_model": "away_model.joblib",
@@ -19,7 +24,10 @@
       "home_prior_def_explosive_rate_allowed_3",
       "home_prior_def_epa_per_play_3",
       "home_prior_def_takeaway_rate_3",
+<<<<<<< HEAD
       "home_prior_off_total_plays_3",
+=======
+>>>>>>> c6845983cfbfd1be9afb17b5b47b7331808ca550
       "home_prior_off_turnover_rate_3",
       "home_prior_pf_avg_5",
       "home_prior_pa_avg_5",
@@ -33,7 +41,10 @@
       "home_prior_def_explosive_rate_allowed_5",
       "home_prior_def_epa_per_play_5",
       "home_prior_def_takeaway_rate_5",
+<<<<<<< HEAD
       "home_prior_off_total_plays_5",
+=======
+>>>>>>> c6845983cfbfd1be9afb17b5b47b7331808ca550
       "home_prior_off_turnover_rate_5",
       "away_prior_pf_avg_3",
       "away_prior_pa_avg_3",
@@ -47,7 +58,10 @@
       "away_prior_def_explosive_rate_allowed_3",
       "away_prior_def_epa_per_play_3",
       "away_prior_def_takeaway_rate_3",
+<<<<<<< HEAD
       "away_prior_off_total_plays_3",
+=======
+>>>>>>> c6845983cfbfd1be9afb17b5b47b7331808ca550
       "away_prior_off_turnover_rate_3",
       "away_prior_pf_avg_5",
       "away_prior_pa_avg_5",
@@ -61,7 +75,10 @@
       "away_prior_def_explosive_rate_allowed_5",
       "away_prior_def_epa_per_play_5",
       "away_prior_def_takeaway_rate_5",
+<<<<<<< HEAD
       "away_prior_off_total_plays_5",
+=======
+>>>>>>> c6845983cfbfd1be9afb17b5b47b7331808ca550
       "away_prior_off_turnover_rate_5",
       "home_minus_away_pf_avg_3",
       "home_minus_away_pa_avg_3",
@@ -75,7 +92,10 @@
       "home_minus_away_def_explosive_rate_allowed_3",
       "home_minus_away_def_epa_per_play_3",
       "home_minus_away_def_takeaway_rate_3",
+<<<<<<< HEAD
       "home_minus_away_off_total_plays_3",
+=======
+>>>>>>> c6845983cfbfd1be9afb17b5b47b7331808ca550
       "home_minus_away_off_turnover_rate_3",
       "home_minus_away_pf_avg_5",
       "home_minus_away_pa_avg_5",
@@ -89,7 +109,10 @@
       "home_minus_away_def_explosive_rate_allowed_5",
       "home_minus_away_def_epa_per_play_5",
       "home_minus_away_def_takeaway_rate_5",
+<<<<<<< HEAD
       "home_minus_away_off_total_plays_5",
+=======
+>>>>>>> c6845983cfbfd1be9afb17b5b47b7331808ca550
       "home_minus_away_off_turnover_rate_5",
       "home_moneyline_prob",
       "away_moneyline_prob",
@@ -98,6 +121,7 @@
       "total_line",
       "home_rest",
       "away_rest",
+<<<<<<< HEAD
       "rest_diff",
       "trend_home_minus_away_win_pct_3_w2",
       "trend_home_minus_away_off_epa_per_play_3_w2",
@@ -204,6 +228,9 @@
       "away_prior_off_total_plays_5_z",
       "away_prior_off_turnover_rate_5_z",
       "oas_index"
+=======
+      "rest_diff"
+>>>>>>> c6845983cfbfd1be9afb17b5b47b7331808ca550
     ],
     "categorical": [
       "home_game_date",
@@ -217,15 +244,26 @@
     "n_splits": 5
   },
   "holdout_metrics_win": {
+<<<<<<< HEAD
     "roc_auc": 0.7741865036034068,
     "brier_score": 0.19473008601713168,
     "log_loss": 0.5744667707038544,
+=======
+    "roc_auc": 0.7523228803716611,
+    "brier_score": 0.1998328891743344,
+    "log_loss": 0.5857700562575975,
+>>>>>>> c6845983cfbfd1be9afb17b5b47b7331808ca550
     "optimal_threshold": 0.5,
     "optimal_threshold_f1": 0.5,
     "optimal_threshold_acc": 0.5
   },
   "quick_mae": {
+<<<<<<< HEAD
     "home": 6.605668847542285,
     "away": 6.5123963260844615
+=======
+    "home": 5.535018752467436,
+    "away": 5.334338211190372
+>>>>>>> c6845983cfbfd1be9afb17b5b47b7331808ca550
   }
 }

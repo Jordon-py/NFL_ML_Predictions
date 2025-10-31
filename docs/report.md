@@ -67,6 +67,25 @@ This report documents incremental changes to the NFL_ML_Predictions repository, 
   - User Experience: Times display in familiar local format.
   - Code Simplicity: Uses browser's default timezone handling.
 
+- **Date/Time**: 2025-10-25 / 14:00 UTC (approximate based on log timestamps).
+- **Files Modified**: `frontend/src/api/client.js` (line ~26), `backend/main.py` (CORS config).
+- **Change Description**: Updated `API_BASE` in `client.js` to use an empty string in development (enables the Vite proxy) and the Heroku URL in production. Verified CORS configuration in `main.py` includes `localhost:3000`. Tested schedule endpoint returns 13 games for Week 8.
+- **Why Made**: Frontend was fetching from Heroku in dev, causing CORS blocks. Using the proxy locally and the hosted URL in production removes "Failed to fetch" errors.
+- **Impact**: CORS issues resolved; schedule loads reliably in dev and production. Backend starts cleanly; frontend proxy works. App completion estimate: 95% at the time of change.
+- **Metrics Post-Change**:
+  - API Response Time: Schedule endpoint returns data instantly.
+  - Code Complexity: Minimal conditional logic guarding API base selection.
+  - Deployment Readiness: Heroku v183 verified; Vercel configured.
+
+- **Date/Time**: 2024-11-06 / 15:30 UTC
+- **Files Modified**: `frontend/src/components/HamburgerMenu.jsx`
+- **Change Description**: Switched to a named `useState` import and clarified dependency notes to resolve the missing React module warning observed during builds.
+- **Why Made**: Ensures the JSX runtime can resolve React hooks consistently while giving maintainers explicit guidance on required packages.
+- **Impact**: Resolved build warnings related to React module resolution. App completion estimate: 68%.
+- **Metrics Post-Change**:
+  - Files touched this session: 1
+  - Outstanding frontend compile blockers: 0 observed after change
+
 ## Function and Variable Inventory
 
 Grouped by file for productivity. Focuses on backend (primary interaction hub); lists key functions/variables, their purposes, and interactions. Excludes trivial getters/setters.
@@ -104,47 +123,61 @@ Grouped by file for productivity. Focuses on backend (primary interaction hub); 
 ### backend/build_csv_datasets.py (Dataset Engineering Pipeline)
 
 - **Functions**:
-  - `load_schedules(start_year, end_year)`: Loads completed and future NFL schedules from CSV; handles dtype alignment for concatenation. Interacts with pandas DataFrames; feeds into feature engineering.
-  - `add_features(df)`: Orchestrates feature creation; calls all create_*_features functions. Transforms raw game data into ML-ready features.
-  - `create_elo_features(df)`: Implements ELO rating system (K=32, starting 1500); calculates pre/post game ratings and differentials. Depends on chronological game ordering.
-  - `create_game_features(df)`: Parses dates, extracts metadata (weekend/playoff indicators, rest differential). Uses datetime parsing; enhances with game context.
-  - `create_rolling_features(df)`: Computes rolling window statistics (3/5/10 games) for points/win percentage; prevents data leakage with shift(1). Interacts with pandas rolling/groupby.
-  - `create_qb_features(df)`: Aggregates QB performance metrics (completion %, YPA, TD/INT ratio) from player stats. Handles missing data gracefully.
-  - `create_target_features(df)`: Creates prediction targets (point_diff, home_win, winner_team). Finalizes dataset for supervised learning.
-  - `build_dataset(start_year, end_year, out_dir)`: Main pipeline orchestrator; loads data, adds features, saves CSV. CLI entry point with argparse.
-  - `save_dataset(df, out_path)`: Exports engineered dataset to CSV with proper formatting.
+  - `load_schedules(start_year, end_year)`: Loads completed and future NFL schedules from CSV; handles dtype alignment for concatenation. Interacts with pandas DataFrames; feeds feature engineering.
+  - `add_features(df)`: Orchestrates feature creation; calls each `create_*_features` helper. Transforms raw game data into ML-ready features.
+  - `create_elo_features(df)`: Implements an ELO rating system (K=32, starting 1500); calculates pre/post game ratings and differentials.
+  - `create_game_features(df)`: Parses dates, derives contextual metadata (weekend/playoff indicators, rest differential).
+  - `create_rolling_features(df)`: Computes 3/5/10 game rolling statistics with `shift(1)` to avoid leakage.
+  - `create_qb_features(df)`: Aggregates QB metrics (completion %, YPA, TD/INT ratio) from player stats, handling gaps gracefully.
+  - `create_target_features(df)`: Builds prediction targets (point_diff, home_win, winner_team) for supervised learning.
+  - `build_dataset(start_year, end_year, out_dir)`: Pipeline entry; loads raw data, applies features, writes CSV via CLI.
+  - `save_dataset(df, out_path)`: Persists engineered dataset with stable formatting.
 - **Variables**:
-  - `PBP_AGG_COLS`: Dict of play-by-play aggregation columns; dynamically filtered for available data.
-  - `ROLLING_WINDOWS`: List of window sizes (3, 5, 10); used for statistical calculations.
-  - `ELO_K_FACTOR`: Rating update constant (32); controls ELO sensitivity.
-- **Interactions**: Loads from `data/legacy_data/` (merged CSV files); uses nfl_data_py for supplemental data; outputs to `metrics/data/`. Feeds into `enhanced_pipeline.py` for model training. No external APIs; relies on local data processing.
+  - `PBP_AGG_COLS`: Mapping of play-by-play aggregations filtered for available data.
+  - `ROLLING_WINDOWS`: Rolling window sizes (3, 5, 10) used for trend detection.
+  - `ELO_K_FACTOR`: Rating update constant controlling ELO sensitivity (32).
+- **Interactions**: Reads from `data/legacy_data/`, supplements with `nfl_data_py`, outputs to `backend/data/` for downstream training.
+- **Metrics for Productivity**:
+  - Dataset generation time: ~30–60s depending on seasons selected.
+  - Output artifacts: `game_features.csv` sized for Heroku slug limits.
+  - Error handling: Guards around NaN targets and missing schedule rows.
 
 ### backend/enhanced_pipeline.py (Model Training Pipeline)
 
 - **Functions**:
-  - [`build_dataset(data_path)`](backend/enhanced_pipeline.py ): Loads CSV, filters NaN home_win, derives features/targets, returns X, y, groups, df for training.
-  - `run_experiment(data_path)`: Orchestrates CV training, calibration, blending; handles production vs holdout modes.
-  - [`evaluate_model(name, estimator, X, y, groups, cv)`](backend/enhanced_pipeline.py ): Cross-validates model with metrics/Brier skill.
-  - [`evaluate_on_test(estimator, X_train, y_train, X_test, y_test)`](backend/enhanced_pipeline.py ): Trains on full data, evaluates on holdout.
-  - [`convex_blend(prob_a, prob_b, y_true)`](backend/enhanced_pipeline.py ): Optimizes blend weights for ensemble.
-  - `generate_markdown_report(results, output_path, holdout_season)`: Creates detailed performance report.
+  - `build_dataset(data_path)`: Loads CSV, filters `home_win`, prepares feature matrix/targets/groups for training.
+  - `run_experiment(data_path)`: Coordinates cross-validation, calibration, and blend experiments across model configs.
+  - `evaluate_model(name, estimator, X, y, groups, cv)`: Computes CV metrics and Brier skill scores.
+  - `evaluate_on_test(estimator, X_train, y_train, X_test, y_test)`: Trains on full data and scores holdout sets.
+  - `convex_blend(prob_a, prob_b, y_true)`: Optimizes ensemble weights to improve calibration.
+  - `generate_markdown_report(results, output_path, holdout_season)`: Produces training report consumed in `backend/reports/`.
 - **Variables**:
-  - [`PROBABILITY_EPS`](backend/enhanced_pipeline.py ): Float 1e-6; prevents log(0) in metrics.
-  - `MODEL_CONFIGS`: List of (name, estimator, calibrate) tuples for training.
-- **Interactions**: build_dataset feeds run_experiment; models saved via joblib; reports to reports/; integrates with backend/main.py for predictions.
+  - `PROBABILITY_EPS`: Numerical stability constant (1e-6) for log operations.
+  - `MODEL_CONFIGS`: Ordered list of `(name, estimator, calibrate)` tuples powering experiments.
+- **Interactions**: Consumes engineered datasets, persists models to `backend/models/`, feeds metadata to FastAPI during startup.
+- **Metrics for Productivity**:
+  - Training duration: ~5–10 minutes on full history (LightGBM + calibration).
+  - Prediction latency: ~0.5s per game when served by FastAPI.
+  - Logging: Structured metrics emitted to console and markdown reports.
+- **Educational Note**: Review `enhanced_pipeline.py` for CV techniques and blending patterns; follow comments for reproducibility.
 
-  - **Metrics for Productivity**:
-    - Total Files: ~35 (backend/ + frontend/ + scripts/ + docs/).
-    - Function Count: ~80 (estimated; grouped above for focus; includes dataset engineering and ML pipeline).
-    - Key Interactions: Data flow: Raw CSV → build_csv_datasets → engineered features → enhanced_pipeline → trained models → backend/main.py API → frontend.
-    - Test Coverage: Partial (pytest); aim for 80% with model validation tests.
-    - Performance: Dataset gen ~30-60s; training ~5-10 min; predictions ~0.5s.
-    - Errors: Resolved NaN/empty set issues; logging via dictConfig.## Enhancements to Implement
+### Additional Backend Files (Scripts/Data)
 
-- **Short-Term**: Integrate trained models into main.py for live predictions; test /predict endpoint with sample games.
-- **Medium-Term**: Add model performance monitoring; implement caching for repeated queries.
-- **Long-Term**: Expand to player props; integrate real-time data feeds for live predictions.
-- **Educational Note**: Full pipeline complete; review enhanced_pipeline.py for CV techniques and model blending. System ready for deployment.
+- `build_csv_datasets.py`: Builds `game_features.csv` from raw/legacy data sources.
+- `enhanced_pipeline.py`: Coordinates transformations and model training pipeline.
+- `DF_getter.py`: Fetches supplemental datasets leveraged by feature engineering scripts.
+- **Metrics for Productivity**:
+  - Backend codebase footprint: ~35 files across modules, scripts, and docs.
+  - Function inventory: ~80 meaningful functions spanning API, data prep, and UI glue.
+  - Test coverage: Partial pytest suite (`backend/tests/`); target 80%+ for production readiness.
+  - Performance baseline: Uvicorn cold start ~5s; predictions consistent sub-second responses.
+- **Educational Note**: Run `python -m pytest` before commits; reference `docs/DATA_FLOW.md` to trace ingestion → inference steps.
+
+## Enhancements to Implement
+
+- **Short-Term**: Integrate trained models into `main.py` sanity checks, add unit tests for CORS parsing and `/predict` payload validation, and verify dev/prod configuration parity.
+- **Medium-Term**: Introduce prediction caching (Redis or in-memory layer), extend monitoring dashboards, and harden frontend error boundaries for API failures.
+- **Long-Term**: Expand metrics dashboards (Grafana/DataDog) tracking model accuracy across seasons and explore real-time NFL data plus player prop extensions.
 
 ## Visuals/Graphs
 

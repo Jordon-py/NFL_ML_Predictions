@@ -13,11 +13,16 @@ Train leak-free NFL models with time-aware CV.
 
 # File: backend/train_models.py
 # Purpose: Train ML models for NFL game predictions using time-aware cross-validation to prevent data leakage.
+<<<<<<< HEAD
 
 #  Functions: _ensure_columns, _dataset_hash, _drop_leaky_columns, _infer_features, _make_preprocessor, _split_for_calibration, _fit_regression, _fit_classifier, _evaluate_regression, _dataset_sort, main
 
 # Variables: RANDOM_SEED, N_SPLITS, TARGET_HOME, TARGET_AWAY, CLASS_LABEL, TIME_KEYS, ID_COLS, LEAK_BLOCKLIST, REG_PARAM_DISTS, CLF_PARAM_DISTS, log
 
+=======
+# Functions: _ensure_columns, _dataset_hash, _drop_leaky_columns, _infer_features, _make_preprocessor, _split_for_calibration, _fit_regression, _fit_classifier, _evaluate_regression, _dataset_sort, main
+# Variables: RANDOM_SEED, N_SPLITS, TARGET_HOME, TARGET_AWAY, CLASS_LABEL, TIME_KEYS, ID_COLS, LEAK_BLOCKLIST, REG_PARAM_DISTS, CLF_PARAM_DISTS, log
+>>>>>>> c6845983cfbfd1be9afb17b5b47b7331808ca550
 # Interacts With: backend/data/game_features.csv (input dataset), backend/models/ (output models and metadata)
 
 import argparse
@@ -46,12 +51,87 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.ensemble import HistGradientBoostingRegressor
 from sklearn.calibration import CalibratedClassifierCV
 from joblib import dump
+<<<<<<< HEAD
+=======
+
+# -----------------------
+# Configuration
+# -----------------------
+LOAD_ENV='C:/Users/iProg/OneDrive/Documents/Football_predict/nfl_prediction_system/NFL_ML_Predictions/backend/.venv'
+
+# load .env
+load_dotenv(LOAD_ENV)
+
+SERVE_FRONTEND=os.getenv('SERVE_FRONTEND')
+CORS_ORIGINS=os.getenv('CORS_ORIGINS')
+NODE_ENV=os.getenv('NODE_ENV')
+HP_NITER=int(os.getenv('HP_NITER', '100'))  # Default to 100 if not set or invalid
+CV_SPLITS=int(os.getenv('CV_SPLITS', '5'))  # Default to 5
+RANDOM_SEED=int(os.getenv('RANDOM_SEED', '42'))  # Default to 42
+N_SPLITS=int(os.getenv('N_SPLITS', '5'))  # Default to 5
+DEFAULT_N_JOBS = int(os.getenv('N_JOBS', '1'))  # limit parallelism to avoid memory spikes
+
+# ----------Developement enviorment -----------
+
+DEV_ORIGINS=os.getenv('DEV_ORIGINS', 'http://localhost:3000')
+TRAIN_DATASET_FILE=os.getenv('TRAIN_DATASET_FILE', 'C:/Users/iProg/OneDrive/Documents/Football_predict/nfl_prediction_system/NFL_ML_Predictions/backend/data/game_features.csv')
+
+TARGET_HOME = "home_points_for"
+TARGET_AWAY = "away_points_for"
+CLASS_LABEL = "home_win"  # must be 0/1
+TIME_KEYS = ["season", "week"]
+
+ID_COLS = {
+    "game_id",
+    # "home_team",
+    # "away_team",
+    "home_team_id",
+    "away_team_id",
+    "stadium",
+}
+
+# Columns that must never enter features (labels or post-game values)
+LEAK_BLOCKLIST = {
+    CLASS_LABEL,
+    "point_diff",
+    "winner",
+    TARGET_HOME.strip().lower(),
+    TARGET_AWAY.strip().lower(),
+    "home_points_against",
+    "away_points_against",
+    "home_score",
+    "away_score",
+    "final_home_score",
+    "final_away_score",
+}
+
+REG_PARAM_DISTS = {
+    "reg__max_depth": [None, 6, 10, 14],
+    "reg__learning_rate": np.linspace(0.02, 0.2, 6),
+    "reg__max_leaf_nodes": [15, 31, 63, 127],
+    "reg__l2_regularization": np.linspace(0.0, 0.2, 5),
+}
+
+CLF_PARAM_DISTS = {
+    "clf__C": np.logspace(-3, 1, 8),
+    "clf__penalty": ["l2"],
+    "clf__solver": ["liblinear", "lbfgs"],
+    "clf__class_weight": [None, "balanced"],
+}
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
+log = logging.getLogger("train_models")
+>>>>>>> c6845983cfbfd1be9afb17b5b47b7331808ca550
 
 # -----------------------
 # Configuration
 # -----------------------
 load_dotenv(dotenv_path="backend/.env", verbose=True)
 
+<<<<<<< HEAD
 SERVE_FRONTEND=os.getenv('SERVE_FRONTEND')
 CORS_ORIGINS=os.getenv('CORS_ORIGINS')
 NODE_ENV=os.getenv('NODE_ENV')
@@ -227,6 +307,115 @@ def _fit_regression(
 
 def _fit_classifier(
     X: pd.DataFrame, y: pd.Series, pre: ColumnTransformer, random_state: int, n_jobs: int = N_JOBS
+=======
+@dataclass
+class TrainSummary:
+    training_timestamp_utc: str
+    rows_total: int
+    n_features_numeric: int
+    n_features_categorical: int
+    cv_n_splits: int
+    random_seed: int
+    production_ready: bool
+    dataset_hash: int
+
+
+def _ensure_columns(df: pd.DataFrame, required: List[str]) -> None:
+    missing = [c for c in required if c not in df.columns]
+    if missing:
+        raise ValueError(f"Missing required columns: {missing}")
+
+
+def _dataset_hash(df: pd.DataFrame) -> int:
+    return int(pd.util.hash_pandas_object(df[TIME_KEYS + ["home_team", "away_team"]], index=False).sum())
+
+
+def _drop_leaky_columns(df: pd.DataFrame) -> pd.DataFrame:
+    present = [c for c in LEAK_BLOCKLIST if c in df.columns]
+    if present:
+        log.warning("Dropping leaky columns: %s", present)
+        df = df.drop(columns=present)
+    return df
+
+
+def _infer_features(df: pd.DataFrame) -> Tuple[List[str], List[str]]:
+    """Return numeric and categorical feature names after removing IDs and blocklisted fields."""
+    ignore = set(ID_COLS) | set(TIME_KEYS) | set(LEAK_BLOCKLIST)
+    numeric: List[str] = []
+    categorical: List[str] = []
+    cat_check = df['home_team'].unique()
+    for c in df.columns:
+        if c in ignore:
+            continue
+        if c in (TARGET_HOME, TARGET_AWAY, CLASS_LABEL):
+            continue
+        if pd.api.types.is_numeric_dtype(df[c]):
+            numeric.append(c)
+        else:
+            categorical.append(c)
+        
+    return numeric, categorical
+
+
+def _make_preprocessor(num_cols: List[str], cat_cols: List[str]) -> ColumnTransformer:
+    num_pipe = Pipeline(
+        steps=[
+            ("imputer", SimpleImputer(strategy="median")),
+            ("scaler", StandardScaler()),
+        ]
+    )
+    cat_pipe = Pipeline(
+        steps=[
+            ("imputer", SimpleImputer(strategy="most_frequent")),
+            # Keep OHE sparse to reduce memory footprint; downstream estimators must accept sparse
+            ("ohe", OneHotEncoder(handle_unknown="ignore", sparse_output=True)),
+        ]
+    )
+    return ColumnTransformer(
+        transformers=[
+            ("num", num_pipe, num_cols),  
+            ("cat", cat_pipe, cat_cols),
+        ],
+        sparse_threshold=0.0,  # Force dense output
+    )
+
+
+def _split_for_calibration(tscv: TimeSeriesSplit, X: pd.DataFrame, y: pd.Series):
+    """Use the last TimeSeriesSplit fold as validation/holdout. Others become the training pool."""
+    splits = list(tscv.split(X, y))
+    train_idx_all: List[int] = []
+    for tr, va in splits[:-1]:
+        train_idx_all.extend(tr.tolist())
+        train_idx_all.extend(va.tolist())
+    calib_tr, calib_va = splits[-1]
+    return np.array(train_idx_all), calib_tr, calib_va
+
+
+def _fit_regression(
+    X: pd.DataFrame, y: pd.Series, pre: ColumnTransformer, random_state: int, n_jobs: int = DEFAULT_N_JOBS
+) -> Pipeline:
+    rs = RandomizedSearchCV(
+        estimator=Pipeline([
+            ('pre', pre),
+            ('reg', HistGradientBoostingRegressor(random_state=random_state))
+        ]),
+        param_distributions=REG_PARAM_DISTS,
+        cv=TimeSeriesSplit(n_splits=N_SPLITS),
+        scoring="neg_mean_absolute_error",
+        n_jobs=n_jobs,
+        random_state=random_state,
+        verbose=2,
+        n_iter=min(HP_NITER, len(list(REG_PARAM_DISTS.values())[0]) * 10),
+        refit=True,
+    )
+    rs.fit(X, y)
+    logging.info('%s rs', rs)
+    return cast(Pipeline, rs.best_estimator_)
+
+
+def _fit_classifier(
+    X: pd.DataFrame, y: pd.Series, pre: ColumnTransformer, random_state: int, n_jobs: int = DEFAULT_N_JOBS
+>>>>>>> c6845983cfbfd1be9afb17b5b47b7331808ca550
 ) -> Tuple[Pipeline, Dict[str, Any]]:
     rs = RandomizedSearchCV(
         estimator=Pipeline([
@@ -239,7 +428,11 @@ def _fit_classifier(
         n_jobs=n_jobs,
         random_state=random_state,
         verbose=2,
+<<<<<<< HEAD
         n_iter=min(HP_N_ITER, len(list(CLF_PARAM_DISTS.values())[0]) * 5),
+=======
+        n_iter=min(HP_NITER, len(list(CLF_PARAM_DISTS.values())[0]) * 5),
+>>>>>>> c6845983cfbfd1be9afb17b5b47b7331808ca550
         refit=True,
     )
     rs.fit(X, y)
@@ -318,7 +511,11 @@ def main(data_path: str, out_dir: str) -> None:
     # Fit models (time-aware CV inside)
     log.info("Fitting home points regressor")
     # Allow user to override parallel jobs via env or CLI
+<<<<<<< HEAD
     n_jobs = N_JOBS
+=======
+    n_jobs = DEFAULT_N_JOBS
+>>>>>>> c6845983cfbfd1be9afb17b5b47b7331808ca550
     home_model = _fit_regression(X, y_home, pre, RANDOM_SEED, n_jobs=n_jobs)
     log.info('%s home_model', home_model)
     log.info("Fitting away points regressor")
@@ -334,9 +531,15 @@ def main(data_path: str, out_dir: str) -> None:
     # Persist artifacts
     os.makedirs(out_dir, exist_ok=True)
     dump(pre, os.path.join(out_dir, "preprocessor.joblib"))
+<<<<<<< HEAD
     dump(home_model, os.path.join(out_dir, f"home_model{datetime.now().strftime('%Y%m%d_%H%M%S')}.joblib"))
     dump(away_model, os.path.join(out_dir, f"away_model{datetime.now().strftime('%Y%m%d_%H%M%S')}.joblib"))
     dump(win_model, os.path.join(out_dir, f"win_clf_calibrated{datetime.now().strftime('%Y%m%d_%H%M%S')}.joblib"))
+=======
+    dump(home_model, os.path.join(out_dir, "home_model.joblib"))
+    dump(away_model, os.path.join(out_dir, "away_model.joblib"))
+    dump(win_model, os.path.join(out_dir, "win_clf_calibrated.joblib"))
+>>>>>>> c6845983cfbfd1be9afb17b5b47b7331808ca550
 
     # Reports
     training_timestamp_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S %Z")
@@ -365,7 +568,11 @@ def main(data_path: str, out_dir: str) -> None:
         "quick_mae": {"home": mae_home, "away": mae_away},
     }
 
+<<<<<<< HEAD
     with open(os.path.join(out_dir, f"training_report{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"), "w", encoding="utf-8") as f:
+=======
+    with open(os.path.join(out_dir, "training_report.json"), "w", encoding="utf-8") as f:
+>>>>>>> c6845983cfbfd1be9afb17b5b47b7331808ca550
         json.dump(asdict(summary), f, indent=2)
     with open(os.path.join(out_dir, "metadata.json"), "w", encoding="utf-8") as f:
         json.dump(metadata, f, indent=2)
@@ -379,9 +586,17 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train leak-free NFL models with time-aware CV.")
     parser.add_argument("--data", type=str, default="./backend/data/game_features.csv", help="Path to features CSV.")
     parser.add_argument("--out", type=str, default="models", help="Output directory for artifacts and reports.")
+<<<<<<< HEAD
     parser.add_argument("--n-jobs", type=int, default=N_JOBS, help="Number of parallel jobs to use for CV (default from N_JOBS env)")
     parser.add_argument("--hp-niter", type=int, default=HP_N_ITER, help="Number of RandomizedSearchCV iterations (overrides HP_N_ITER env)")
     args = parser.parse_args()
     # Allow quick runs by overriding HP_N_ITER when provided on CLI
 
+=======
+    parser.add_argument("--n-jobs", type=int, default=DEFAULT_N_JOBS, help="Number of parallel jobs to use for CV (default from N_JOBS env)")
+    parser.add_argument("--hp-niter", type=int, default=HP_NITER, help="Number of RandomizedSearchCV iterations (overrides HP_NITER env)")
+    args = parser.parse_args()
+    # Allow quick runs by overriding HP_NITER when provided on CLI
+    HP_NITER = int(args.hp_niter)
+>>>>>>> c6845983cfbfd1be9afb17b5b47b7331808ca550
     main(args.data, args.out)
