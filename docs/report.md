@@ -6,6 +6,16 @@ This report documents incremental changes to the NFL_ML_Predictions repository, 
 
 ## Recent Changes
 
+- **Date/Time**: 2025-10-31 / 16:25 UTC.
+- **Files Modified**: Git history (branch `master` rewritten locally), `.gitignore`, repository index (purged tracked venv/build artifacts).
+- **Change Description**: Performed a full history rewrite to remove the tracked virtual environment `.venv/` from all commits, eliminating >100 MB binaries that blocked pushes. Added `backend/logs/` to `.gitignore` to prevent log files from being re-tracked. Prepared a clean branch for remote push and deployment.
+- **Why Made**: GitHub rejected pushes due to a 134.81 MB binary inside historical commits. History rewrite unblocks pushing a clean branch and stabilizes CI/CD.
+- **Impact**: Local branch is clean and pushable; remote branch creation will proceed without large file errors. Prevents future accidental tracking of logs.
+- **Metrics Post-Change**:
+  - Filter duration: ~7 minutes for 395 commits.
+  - Removed: All `.venv/**` paths from history.
+  - Push readiness: PASS (no files >100 MB remaining in history).
+
 - **Date/Time**: 2025-10-31 / 15:38 UTC.
 - **Files Modified**: `backend/models/metadata.json`, `.github/copilot-instructions.md`.
 - **Change Description**: Resolved git merge conflict markers in `metadata.json` and restored valid JSON by keeping the latest (HEAD) training metadata and extended feature lists. Updated Copilot instructions “Changed since last run” to reflect the fix.
