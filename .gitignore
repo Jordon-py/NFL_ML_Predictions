@@ -51,6 +51,7 @@ Thumbs.db
 coverage/
 .pytest_cache/
 *.coverage
+backend/logs/
 
 ## Notebook checkpoints
 .ipynb_checkpoints/
