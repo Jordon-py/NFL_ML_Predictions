@@ -3418,3 +3418,55 @@ fl_prediction_system\NFL_ML_Predictionsackend\data\game_features.csv; continuin
 2025-10-30 09:36:29,694 DEBUG api Loading model metadata from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\metadata.json
 2025-10-30 09:36:30,117 WARNING api Preprocessor not detected as fitted; skipping transform in sanity check
 2025-10-30 09:36:31,465 INFO api Loaded dataset rows=2748 cols=208
+2025-10-30 09:40:05,323 INFO api Shutdown complete
+2025-10-30 09:40:07,432 INFO api CORS configured to allow all origins (ALLOWED_ORIGINS='*')
+2025-10-30 09:40:07,441 INFO api Startup: loading models and dataset
+2025-10-30 09:40:07,441 DEBUG api Loading model metadata from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\metadata.json
+2025-10-30 09:40:07,951 WARNING api Preprocessor not detected as fitted; skipping transform in sanity check
+2025-10-30 09:40:09,393 INFO api Loaded dataset rows=2748 cols=208
+2025-10-30 09:40:09,395 INFO api Shutdown complete
+2025-10-30 09:40:11,276 INFO api CORS configured to allow all origins (ALLOWED_ORIGINS='*')
+2025-10-30 09:40:11,282 INFO api Startup: loading models and dataset
+2025-10-30 09:40:11,282 DEBUG api Loading model metadata from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\metadata.json
+2025-10-30 09:40:11,600 WARNING api Preprocessor not detected as fitted; skipping transform in sanity check
+2025-10-30 09:40:12,906 INFO api Loaded dataset rows=2748 cols=208
+2025-10-30 09:43:24,421 INFO api Schedule week 9 games=14
+2025-10-30 09:43:24,471 INFO api Schedule week 9 games=14
+2025-10-30 09:43:50,099 DEBUG api predict_game: home_team=MIA, away_team=BAL, season=2025, week=9
+2025-10-30 09:43:50,112 DEBUG api Model bundle type: <class 'sklearn.pipeline.Pipeline'>, hasattr predict: True
+2025-10-30 09:43:50,142 DEBUG api Model bundle type: <class 'sklearn.pipeline.Pipeline'>, hasattr predict: True
+2025-10-30 09:43:54,471 DEBUG api predict_game: home_team=CIN, away_team=CHI, season=2025, week=9
+2025-10-30 09:43:54,483 DEBUG api Model bundle type: <class 'sklearn.pipeline.Pipeline'>, hasattr predict: True
+2025-10-30 09:43:54,500 DEBUG api Model bundle type: <class 'sklearn.pipeline.Pipeline'>, hasattr predict: True
+2025-10-30 10:34:24,634 INFO api CORS configured to allow all origins (ALLOWED_ORIGINS='*')
+2025-10-30 10:34:24,640 INFO api Startup: loading models and dataset
+2025-10-30 10:34:24,642 DEBUG api Loading model metadata from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\metadata.json
+2025-10-30 10:34:26,218 WARNING api Preprocessor not detected as fitted; skipping transform in sanity check
+2025-10-30 10:34:27,894 INFO api Loaded dataset rows=2748 cols=208
+2025-10-30 10:34:36,807 INFO api Schedule week 9 games=14
+2025-10-30 10:34:36,837 INFO api Schedule week 9 games=14
+2025-10-30 10:41:25,760 INFO api Schedule week 9 games=14
+2025-10-30 10:41:25,792 INFO api Schedule week 9 games=14
+2025-10-30 10:45:41,974 INFO api Schedule week 9 games=14
+2025-10-30 10:45:42,053 INFO api Schedule week 9 games=14
+2025-10-30 10:46:02,837 INFO api Schedule week 9 games=14
+2025-10-30 10:46:02,989 INFO api Schedule week 9 games=14
+2025-10-30 10:46:19,981 INFO api Schedule week 9 games=14
+2025-10-30 10:46:20,063 INFO api Schedule week 9 games=14
+2025-10-30 10:48:29,110 INFO api Schedule week 9 games=14
+2025-10-30 10:48:29,179 INFO api Schedule week 9 games=14
+2025-10-30 10:49:12,889 INFO api Schedule week 9 games=14
+2025-10-30 10:49:12,935 INFO api Schedule week 9 games=14
+2025-10-30 10:49:54,860 INFO api Schedule week 9 games=14
+2025-10-30 10:49:54,933 INFO api Schedule week 9 games=14
+2025-10-30 11:37:23,204 INFO api Schedule week 9 games=14
+2025-10-30 11:37:23,241 INFO api Schedule week 9 games=14
+2025-10-30 11:58:05,604 INFO api Schedule week 9 games=14
+2025-10-30 11:58:05,649 INFO api Schedule week 9 games=14
+2025-10-30 12:47:32,784 INFO api Schedule week 9 games=14
+2025-10-30 12:47:32,873 INFO api Schedule week 9 games=14
+2025-10-30 18:34:10,644 INFO api CORS configured to allow all origins (ALLOWED_ORIGINS='*')
+2025-10-30 18:34:10,650 INFO api Startup: loading models and dataset
+2025-10-30 18:34:10,653 DEBUG api Loading model metadata from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\metadata.json
+2025-10-30 18:34:11,309 WARNING api Preprocessor not detected as fitted; skipping transform in sanity check
+2025-10-30 18:34:13,286 INFO api Loaded dataset rows=2748 cols=208
