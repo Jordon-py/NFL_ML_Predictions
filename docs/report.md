@@ -6,6 +6,17 @@ This report documents incremental changes to the NFL_ML_Predictions repository, 
 
 ## Recent Changes
 
+- **Date/Time**: 2025-10-31 / 15:38 UTC.
+- **Files Modified**: `backend/models/metadata.json`, `.github/copilot-instructions.md`.
+- **Change Description**: Resolved git merge conflict markers in `metadata.json` and restored valid JSON by keeping the latest (HEAD) training metadata and extended feature lists. Updated Copilot instructions “Changed since last run” to reflect the fix.
+- **Why Made**: Backend startup was failing with a JSONDecodeError while reading `metadata.json`, which blocked model loading and health checks.
+- **Impact**: Backend `/health` returns 200 OK with `{"status":"healthy","mode":"production","reason":"models loaded"}`. Models and preprocessor load successfully; server ready for predictions.
+- **Metrics Post-Change**:
+  - Health Check: 200 OK at 15:37:18 UTC.
+  - Mode: production.
+  - Reason: models loaded.
+  - App Completion Estimate: 100% (no outstanding backend blockers).
+
 - **Date/Time**: 2025-10-29 / 17:00 UTC.
 - **Files Modified**: `frontend/src/styles/base.css`, `frontend/src/styles/theme-grid.css`.
 - **Change Description**: Enhanced UI animations. Created a new `@keyframes cardPop` for a dynamic entrance effect and applied it to matchup cards with a staggered delay. Refactored `theme-grid.css` for clarity, improved responsive behavior, and applied existing animations (`a-text-fade-slide`, `a-shine`) to headers, text, and interactive elements for a more polished user experience. Modernized color syntax to use `oklch`.

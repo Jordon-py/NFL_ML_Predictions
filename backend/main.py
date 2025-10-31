@@ -200,9 +200,17 @@ TEAM_ABBREVIATIONS = {
 }
 TEAM_CODE_FIX = {"LA": "LAR", "STL": "LAR", "SD": "LAC", "OAK": "LV", "WSH": "WAS"}
 VALID_ABBRS = set(TEAM_ABBREVIATIONS.keys()) | set(TEAM_CODE_FIX.keys()) | set(TEAM_ABBREVIATIONS.values())
-def _normalize_feature_cols(cols: Dict[str, List[str]]) -> List[str]:
-    """Normalize feature columns from metadata dict to flat list."""
-    return cols.get("numeric", []) + cols.get("categorical", [])
+def _normalize_feature_cols(cols: Dict[str, List[str]] | List[str]) -> List[str]:
+    """Normalize feature columns to a flat list.
+
+    Accepts either a dict with 'numeric' and 'categorical' lists (preferred)
+    or a legacy flat list of feature names. Returns a single flat list.
+    """
+    if isinstance(cols, dict):
+        return cols.get("numeric", []) + cols.get("categorical", [])
+    if isinstance(cols, list):
+        return cols
+    return []
 
 
 def to_team_abbr(name: str) -> str:
@@ -345,24 +353,8 @@ def _sanity_predict(model_objects: Dict[str, Any], df: pd.DataFrame) -> None:
     transformed = None
     if pre is not None:
         try:
-            # Prefer sklearn's check_is_fitted when available; otherwise fall back
-            # to the legacy _is_fitted heuristic used historically.
-            is_fitted = False
-            if SKLEARN_CHECK_AVAILABLE and check_is_fitted is not None:
-                try:
-                    # check_is_fitted raises if estimator isn't fitted
-                    check_is_fitted(pre)
-                    is_fitted = True
-                except Exception:
-                    is_fitted = False
-            else:
-                # Fallback heuristic for custom transformers that expose _is_fitted
-                is_fitted = hasattr(pre, '_is_fitted') and getattr(pre, '_is_fitted')
-
-            if is_fitted:
-                transformed = pre.transform(x)
-            else:
-                log.warning("Preprocessor not detected as fitted; skipping transform in sanity check")
+            # Always attempt transform in sanity check; tests and mocks rely on this call.
+            transformed = pre.transform(x)
         except Exception as e:
             failures.append(f"preprocessor.transform failed: {type(e).__name__}: {e}")
             log.debug("Sanity predict: preprocessor.transform failed during startup check", exc_info=True)
@@ -636,6 +628,15 @@ def _glob_latest(d: Path, pattern: str) -> Optional[Path]:
     try:
         return max(d.glob(pattern), key=lambda p: p.stat().st_mtime)
     except ValueError:
+        return None
+
+
+# Helper: return newest file matching pattern within directory. Safe and minimal.
+def _glob_latest(dir_path: Path, pattern: str) -> Optional[Path]:
+    try:
+        matches = sorted(dir_path.glob(pattern), key=lambda p: p.stat().st_mtime, reverse=True)
+        return matches[0] if matches else None
+    except Exception:
         return None
 
 
