@@ -32,9 +32,9 @@ import HistoryChart from './HistoryChart';
  *
  * Renders a chart and structured prediction details, handling missing/null data gracefully.
  */
-export default function PredictionResult({entry}) {
+export default function PredictionResult({ entry }) {
   // Safely destructure, defaulting to empty objects if entry is null.
-  const {game = {}, metrics = {}, probs = {}} = entry || {};
+  const { game = {}, metrics = {}, probs = {} } = entry || {};
 
   // Compute display-friendly percentages, rounding if values exist.
   const homePct = probs.home != null ? Math.round(probs.home * 100) : null;
@@ -43,11 +43,7 @@ export default function PredictionResult({entry}) {
 
   return (
     <>
-<<<<<<< HEAD
-      
-=======
-      <HistoryChart {...entry} />
->>>>>>> c6845983cfbfd1be9afb17b5b47b7331808ca550
+
       <div className="prediction-result" aria-live="polite">
         <h3>Prediction</h3>
         <div className="meta">
