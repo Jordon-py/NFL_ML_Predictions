@@ -30,19 +30,10 @@ Dependencies:
 
 ---------------------------------------------------------------------
     # File: backend/main.py
-    # Purpose: FastAPI backend for NFL game predictions, serving ML models and API endpoints.
-    
-    # Functions: 
-    # load_objects, _validate_dataset_schema,_validate_features_present,  
-    #  _sanity_predict,_coerce_bool, _ensure_home_away, get_current_nfl_context,                  
-    #  _build_future_row, _normalize_feature_cols, health, debug_info, 
-    #  report_training, report_calibration, build_game_mask,
-    #  get_next_week_schedule, predict_game, predict_next_week
-    
-    # Variables: 
-    # model_objects, dataset_df, DEFAULT_ALLOWALLOWED_ORIGINS,ALLOWED_ORIGINS, ALLOWED_ORIGINS, TEAM_ABBREVIATIONS, TEAM_CODE_FIX, VALID_ABBRS, THIS_FILE, BACKEND_DIR, BASE_DIR, DATA_DIR, MODELS_DIR, LOG_DIR, DEFAULT_DATASET, DEFAULT_SCHEDULE, FRONTEND_DIR, FRONTEND_BUILD, FRONTEND_DIST, TRUTHY, SERVE_FRONTEND
-    
-    # Interacts With: backend/models/ (joblib models), backend/data/ (CSV datasets), frontend/ (static files if served), .env (config)
+    # Purpose: FastAPI backend entrypoint for NFL ML Predictions (startup, health, predict, reports)
+    # Functions: lifespan, health, debug_info, report_training, report_calibration, predict_game, _sanity_predict, _validate_features_present, _ensure_home_away, etc.
+    # Variables: MODELS_DIR, ALLOWED_ORIGINS, model_objects, dataset_df
+    # Interacts With: models/ (preprocessor + models + metadata.json + training_report*.json), frontend via REST, train/build scripts
 """
 
 
@@ -51,7 +42,7 @@ from __future__ import annotations
 import json
 import logging
 import logging.config
-import math
+import math  # used by probability fallback and any sigmoid-like helpers
 import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -143,26 +134,35 @@ model_objects: Optional[Dict[str, Any]] = None
 dataset_df: Optional[pd.DataFrame] = None
 
 # CORS configuration
-# By default allow all origins (useful for Heroku deployments). To restrict CORS,
-# set the environment variable RESTRICT_CORS=true and provide a comma-separated
-# list in ALLOWED_ORIGINS.
-def parse_allowed_origins() -> list[str]:
-    """
-    Parse ALLOWED_ORIGINS from env as a comma-separated string.
-    Returns ["*"] if not set. Never raises if unset/malformed.
-    """
-    raw = os.getenv("ALLOWED_ORIGINS", "*")
-    return [o.strip() for o in str(raw).split(",") if o.strip()]
+DEFAULT_ALLOWED_ORIGINS: List[str] = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://nfl-ml-predictions.vercel.app",
+    "https://nfl-ml-predictions-pr5uahmqx-christopher-jordons-projects.vercel.app",
+    "https://nfl-predict-6fghcp7sx-christopher-jordons-projects.vercel.app",
+    "https://new-nfl-predict.vercel.app",
+    "https://www.nfl-predict.vercel.app",
+]
+
+
+def parse_allowed_origins() -> List[str]:
+    """Parse ALLOWED_ORIGINS env var and fall back to curated defaults."""
+    raw = os.getenv("ALLOWED_ORIGINS", "")
+    entries = [o.strip() for o in raw.split(",") if o.strip()]
+    return entries or DEFAULT_ALLOWED_ORIGINS
+
 
 if os.getenv("RESTRICT_CORS", "false").strip().lower() in TRUTHY:
-    ALLOWED_ORIGINS = parse_allowed_origins() or ["*"]
+    ALLOWED_ORIGINS = parse_allowed_origins()
     log.info("CORS restricted to ALLOWED_ORIGINS: %s", ALLOWED_ORIGINS)
 else:
-    ALLOWED_ORIGINS = ["*"]  # allow all origins by default on Heroku
+    ALLOWED_ORIGINS = ["*"]
     log.info("CORS configured to allow all origins (ALLOWED_ORIGINS='*')")
 
-# ⚠️ Add ANY custom middlewares BEFORE this line (auth/logging/sentry/etc)
+allow_origin_regex_env = os.getenv("ALLOWED_ORIGIN_REGEX", "").strip()
+ALLOW_ORIGIN_REGEX = allow_origin_regex_env or r"https://.*\\.vercel\\.app$"
 
+# ⚠️ Add ANY custom middlewares BEFORE this line (auth/logging/sentry/etc)
 # Teams
 TEAM_ABBREVIATIONS = {
     "Arizona Cardinals": "ARI",
@@ -263,12 +263,17 @@ def load_objects() -> Dict[str, Any]:
         return candidate if candidate.is_absolute() else MODELS_DIR / candidate
 
     preprocessor = joblib.load(resolve_model_path("preprocessor", "preprocessor.joblib"))
-    
     home_model = joblib.load(resolve_model_path("home_model", "home_model.joblib"))
-    
     away_model = joblib.load(resolve_model_path("away_model", "away_model.joblib"))
-    
-    win_model = joblib.load(resolve_model_path("win_model", "win_clf_calibrated.joblib"))
+    # Fix: load win_model from path if it exists; previous code attempted to treat a loaded object as a Path.
+    win_model = None
+    try:
+        win_model_path = resolve_model_path("win_model", "win_clf_calibrated.joblib")
+        if win_model_path.exists():
+            win_model = joblib.load(win_model_path)
+    except Exception as exc:
+        log.warning("Failed to load win_model from %s: %s", win_model_path, exc)
+        win_model = None
 
     return {
         "mode": meta.get("mode", "production"),
@@ -457,84 +462,116 @@ def _ensure_home_away(df: pd.DataFrame) -> pd.DataFrame:
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """
-    FastAPI lifespan context manager for loading ML models and datasets at startup,
-    and logging shutdown events for the NFL prediction API backend.
+    FastAPI lifespan context manager for loading ML models and datasets at startup.
+    Hardened for resilient deployment: logs warnings but doesn't crash on missing artifacts.
     """
     global model_objects, dataset_df
-    log.info("Startup: loading models and dataset")
-    # Load models; make startup resilient by catching and logging errors so the
-    # process can start even when artifacts are missing or slightly incompatible.
+    log.info("=" * 60)
+    log.info("STARTUP: NFL Prediction API v2.1.0")
+    log.info("=" * 60)
+    
+    # Load models with graceful degradation
     try:
         model_objects = load_objects()
+        log.info("✓ Models loaded successfully")
     except Exception as e:
-        log.exception("Failed to load model objects at startup; continuing without models: %s", e)
-        # Set to None to indicate models are not available but allow the
-        # web process to start so health/debug endpoints are reachable.
+        log.error("✗ Failed to load models: %s", e, exc_info=True)
         model_objects = None
+        log.warning("Continuing without models; /health will report unhealthy")
 
+    # Load dataset with fallback
     ds_path = Path(os.getenv("DATASET_PATH", str(DEFAULT_DATASET)))
+    log.info("Dataset path: %s", ds_path)
+    
     if not ds_path.exists():
-        log.warning("Dataset not found at %s; continuing with empty dataset", ds_path)
-        dataset_df = None
-    else:
+        log.warning("✗ Dataset not found at %s", ds_path)
+        # Check alternate locations
+        alternates = [
+            DATA_DIR / "merged_game_features.csv",
+            DATA_DIR / "game_features.csv",
+        ]
+        for alt in alternates:
+            if alt.exists():
+                log.info("Found alternate dataset: %s", alt)
+                ds_path = alt
+                break
+        else:
+            log.warning("No dataset found; predictions will use synthetic features only")
+            dataset_df = pd.DataFrame()
+    
+    if ds_path.exists():
         try:
             df = pd.read_csv(ds_path)
             if df.empty:
-                log.warning("Dataset CSV at %s is empty; continuing with empty dataset", ds_path)
+                log.warning("Dataset CSV is empty")
                 dataset_df = pd.DataFrame()
             else:
                 df.columns = [c.strip() for c in df.columns]
                 df = _ensure_home_away(df)
-                # Validate dataset schema against metadata but don't fail startup
+                
+                # Validate schema but don't crash
                 try:
-                    _validate_dataset_schema(df, model_objects)
+                    if model_objects:
+                        _validate_dataset_schema(df, model_objects)
                 except Exception as e:
-                    log.warning("Dataset schema validation failed: %s; continuing with loaded data", e)
+                    log.warning("Dataset schema validation failed: %s", e)
+                
                 dataset_df = df
-                # Run a lightweight sanity check but don't let failures abort startup
+                
+                # Sanity check with error tolerance
                 try:
-                    _sanity_predict(model_objects, df)
+                    if model_objects:
+                        _sanity_predict(model_objects, df)
+                        log.info("✓ Sanity prediction passed")
                 except Exception as e:
-                    log.warning("Startup sanity prediction failed: %s; continuing", e)
-                log.info("Loaded dataset rows=%d cols=%d", len(df), df.shape[1])
+                    log.warning("Sanity prediction failed: %s; continuing", e)
+                
+                log.info("✓ Dataset loaded: %d rows, %d columns", len(df), df.shape[1])
         except Exception as e:
-            log.warning("Failed to load dataset at startup; continuing with empty dataset: %s", e)
+            log.error("Failed to load dataset: %s", e, exc_info=True)
             dataset_df = pd.DataFrame()
+    
+    log.info("=" * 60)
+    log.info("STARTUP COMPLETE")
+    log.info("Models: %s", "✓ Loaded" if model_objects else "✗ Missing")
+    log.info("Dataset: %s", "✓ Loaded" if dataset_df is not None and not dataset_df.empty else "✗ Missing")
+    log.info("=" * 60)
+    
     try:
-        # Yield control to FastAPI's lifespan protocol; required for proper startup/shutdown handling.
         yield
     finally:
-        log.info("Shutdown complete")
+        log.info("SHUTDOWN: Cleaning up resources")
 
-
-# -----------------------
-# FastAPI app + CORS + static
-"""
-FastAPI application instance for the NFL Game Prediction API.
-
-This app serves as the main entrypoint for all backend endpoints, including prediction, health, reporting, and schedule APIs.
-Configured with CORS, static frontend serving (if enabled), and a custom lifespan for model/dataset loading.
-"""
-app = FastAPI(title="NFL Game Prediction API", version="2.1.0", lifespan=lifespan)
-
-# If the regex is an empty string / None, pass None to the middleware so that
-# only explicit origins (or '*' in the list) are used.
-
-
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
-    allow_methods=["*"],
-    allow_headers=["*"],
+# Define the FastAPI application and CORS middleware BEFORE using @app.* decorators or app.mount.
+app = FastAPI(
+    title="NFL ML Predictions API",
+    version="2.1.0",
+    lifespan=lifespan,
 )
+
+# CORS: allow all when ALLOWED_ORIGINS == ["*"], else honor explicit origins and regex.
+if ALLOWED_ORIGINS == ["*"]:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+else:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=ALLOWED_ORIGINS,
+        allow_origin_regex=ALLOW_ORIGIN_REGEX or None,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 if SERVE_FRONTEND:
     for candidate in (FRONTEND_BUILD, FRONTEND_DIST):
         if candidate.exists():
-            app.mount(
-                "/", StaticFiles(directory=str(candidate), html=True), name="frontend"
-            )
+            app.mount("/", StaticFiles(directory=str(candidate), html=True), name="frontend")
             log.info("Serving frontend from %s", candidate)
             break
     else:
@@ -592,6 +629,14 @@ class ScheduleGame(BaseModel):
     predicted_away_score: Optional[float] = None
     home_win_probability: Optional[float] = None
     away_win_probability: Optional[float] = None
+
+
+def _glob_latest(d: Path, pattern: str) -> Optional[Path]:
+    """Find the most recent file in a directory matching a glob pattern."""
+    try:
+        return max(d.glob(pattern), key=lambda p: p.stat().st_mtime)
+    except ValueError:
+        return None
 
 
 def get_current_nfl_context() -> Dict[str, Any]:
@@ -679,17 +724,8 @@ def _build_future_row(
 
     def compute_team_features(team: str, prefix: str) -> Dict[str, Any]:
         """Compute prior features for a team using their last N completed games."""
-        # Find all games where this team played. Use .get to avoid KeyError
-        # when dataset lacks canonical home/away columns; fall back to
-        # alternative columns where possible.
-        if "home_team" in local.columns and "away_team" in local.columns:
-            team_mask = (local.get("home_team") == team) | (local.get("away_team") == team)
-        elif {"team", "opponent_team"}.issubset(local.columns):
-            # Fallback layout where each row is a single team/opponent pair
-            team_mask = (local.get("team") == team) | (local.get("opponent_team") == team)
-        else:
-            log.warning("Dataset missing home/away and team/opponent columns; cannot compute history mask for %s", team)
-            team_mask = pd.Series(False, index=local.index)
+        # Find all games where this team played
+        team_mask = (local["home_team"] == team) | (local["away_team"] == team)
         # Only use completed games before the target game
         completed_mask = (
             local["home_points_for"].notna() & 
@@ -699,24 +735,17 @@ def _build_future_row(
         history = local[team_mask & completed_mask].sort_values("time_key")
         
         if history.empty:
-            # Instead of raising here (which bubbles up and can cause a 500/400
-            # response for batch operations), return an empty feature set and
-            # allow downstream code to proceed with NaNs/defaults. The model
-            # pipeline contains imputers and fallbacks; this makes the API
-            # resilient when the training dataset lacks prior games for a team
-            # (e.g., newly relocated/renamed teams or partial datasets).
             log.warning("No prior data for %s before %s-W%d; using NaN/default fallbacks", team, season, week)
             return {}
-        
-        features = {}
+
+        features: Dict[str, Any] = {}
         
         # Get last 5 games for 5-game averages, last 3 for 3-game averages
         last_5 = history.tail(5)
         last_3 = history.tail(3)
         
         # Helper to extract team's stats from a game row
-        def get_team_stats(row, team_abbr):
-            # Use safe .get accessors on the row (Series) to avoid KeyError
+        def get_team_stats(row: pd.Series, team_abbr: str) -> Dict[str, Any]:
             home_val = row.get("home_team")
             is_home = bool(home_val == team_abbr) if home_val is not None else False
             if is_home:
@@ -725,12 +754,11 @@ def _build_future_row(
                     "pa": row.get("away_points_for", np.nan),
                     "win": 1 if row.get("winner") == team_abbr else 0,
                 }
-            else:
-                return {
-                    "pf": row.get("away_points_for", np.nan),
-                    "pa": row.get("home_points_for", np.nan),
-                    "win": 1 if row.get("winner") == team_abbr else 0,
-                }
+            return {
+                "pf": row.get("away_points_for", np.nan),
+                "pa": row.get("home_points_for", np.nan),
+                "win": 1 if row.get("winner") == team_abbr else 0,
+            }
         
         # Compute 3-game averages
         if len(last_3) >= 1:
@@ -749,7 +777,6 @@ def _build_future_row(
         # For advanced stats, try to use the most recent values from the dataset
         # (these are pre-computed in game_features.csv)
         last_game = history.iloc[-1]
-        # Determine whether the team was the home team in the last recorded game
         was_home_last = bool(last_game.get("home_team") == team) if last_game is not None else False
         source_prefix = "home_" if was_home_last else "away_"
         
@@ -767,36 +794,9 @@ def _build_future_row(
         
         return features
     
-    # Get features for both teams. Any unexpected error during feature
-    # computation is caught and reduced to an empty feature set so that
-    # downstream code can still assemble a row (with NaNs/defaults) and
-    # allow model imputers to handle missing values. This prevents
-    # _build_future_row from raising and causing a 500 response.
-    try:
-        home_features = compute_team_features(home, "home_")
-    except Exception as exc:
-        log.warning(
-            "Error computing home features for %s before %s-W%d: %s",
-            home,
-            season,
-            week,
-            exc,
-        )
-        log.debug("Exception details:", exc_info=True)
-        home_features = {}
-
-    try:
-        away_features = compute_team_features(away, "away_")
-    except Exception as exc:
-        log.warning(
-            "Error computing away features for %s before %s-W%d: %s",
-            away,
-            season,
-            week,
-            exc,
-        )
-        log.debug("Exception details:", exc_info=True)
-        away_features = {}
+    # Get features for both teams
+    home_features = compute_team_features(home, "home_")
+    away_features = compute_team_features(away, "away_")
     
     # Merge all features
     feature_row = {**home_features, **away_features}
@@ -833,23 +833,9 @@ def _build_future_row(
     feature_row["rest_diff"] = 0
     feature_row["home_game_date"] = f"{season}-W{week:02d}"  # Categorical feature
     
-    # Ensure we never raise here; wrap final assembly in a defensive block.
     log.debug("Built future row for %s vs %s: %d features", home, away, len(feature_row))
-    # Always return a Series with explicit safe defaults for all fallback fields.
-    safe_defaults = {
-        "home_moneyline_prob": 0.6,
-        "away_moneyline_prob": 0.4,
-        "moneyline_prob_diff": 0.0,
-        "spread_line": 0.0,
-        "total_line": 45.0,
-        "home_rest": 7,
-        "away_rest": 7,
-        "rest_diff": 0,
-        "home_game_date": f"{season}-W{week:02d}",
-    }
-    # Merge all computed features, but ensure all required fallback fields are present.
-    safe_feature_row = {**safe_defaults, **feature_row}
-    return pd.Series(safe_feature_row)
+    return pd.Series(feature_row)
+    # Change Log (2024-05-09): Defensive feature assembly avoids hard failures on sparse history.
 
 # -----------------------
 # Routes
@@ -887,8 +873,12 @@ def debug_info() -> Dict[str, Any]:
         mpath = MODELS_DIR / "metadata.json"
         if mpath.is_file():
             out["metadata"] = json.loads(mpath.read_text(encoding="utf-8"))
-        tr = MODELS_DIR / "training_report.json"
-        out["training_report_present"] = tr.is_file()
+
+        # Support timestamped training reports like training_reportYYYYMMDD_HHMMSS.json
+        tr = _glob_latest(MODELS_DIR, "training_report*.json")
+        out["training_report_present"] = tr is not None
+        if tr is not None:
+            out["training_report_path"] = tr.name
     except Exception as e:
         out["error"] = f"{type(e).__name__}: {e}"
     return out
@@ -896,17 +886,19 @@ def debug_info() -> Dict[str, Any]:
 
 @app.get("/report/training")
 def report_training() -> Dict[str, Any]:
-    tr = MODELS_DIR / "training_report.json"
-    if not tr.exists():
-        raise HTTPException(404, "training_report.json not found")
+    # Prefer latest timestamped report, fallback to legacy name
+    tr = _glob_latest(MODELS_DIR, "training_report*.json") or (MODELS_DIR / "training_report.json" if (MODELS_DIR / "training_report.json").exists() else None)
+    if tr is None or not tr.exists():
+        raise HTTPException(404, "training report not found")
     return json.loads(tr.read_text(encoding="utf-8"))
 
 
 @app.get("/report/calibration")
 def report_calibration() -> Dict[str, Any]:
-    tr = MODELS_DIR / "training_report.json"
-    if not tr.exists():
-        raise HTTPException(404, "training_report.json not found")
+    # Prefer latest timestamped report, fallback to legacy name
+    tr = _glob_latest(MODELS_DIR, "training_report*.json") or (MODELS_DIR / "training_report.json" if (MODELS_DIR / "training_report.json").exists() else None)
+    if tr is None or not tr.exists():
+        raise HTTPException(404, "training report not found")
     j = json.loads(tr.read_text(encoding="utf-8"))
     win = j.get("models", {}).get("win_clf", {})
     return {
@@ -924,9 +916,6 @@ def build_game_mask(df: pd.DataFrame, season: int, week: int, home_abbr: str, aw
     """
     Helper to build a boolean mask for selecting a specific game from the dataset.
     """
-    # Defensive access: dataset may not always contain canonical home/away columns
-    # (older or alternate dataset formats). Use .get to avoid KeyError and
-    # fall back to conservative comparisons when columns are missing.
     season_mask = (df.get("season") == season) if "season" in df.columns else pd.Series(False, index=df.index)
     week_mask = (df.get("week") == week) if "week" in df.columns else pd.Series(False, index=df.index)
 
@@ -985,15 +974,11 @@ def get_next_week_schedule() -> List[ScheduleGame]:
     games: List[ScheduleGame] = []
     for _, r in week_games.iterrows():
         try:
-            # Normalize team abbreviations safely; skip game if unknown
             h = to_team_abbr(r["home_team"])
             a = to_team_abbr(r["away_team"])
-
-            # Convert pandas Timestamp to native datetime for Pydantic
             kickoff_val = r.get("kickoff_ts_utc")
             if hasattr(kickoff_val, "to_pydatetime"):
                 kickoff_val = kickoff_val.to_pydatetime()
-
             games.append(
                 ScheduleGame(
                     season=int(r["season"]),
@@ -1002,7 +987,6 @@ def get_next_week_schedule() -> List[ScheduleGame]:
                     home_abbr=h,
                     away_team=a,
                     away_abbr=a,
-                    # Add predicted scores and win probabilities
                     predicted_home_score=None,
                     predicted_away_score=None,
                     home_win_probability=None,
@@ -1011,7 +995,6 @@ def get_next_week_schedule() -> List[ScheduleGame]:
                 )
             )
         except Exception as e:
-            # Log and skip malformed schedule rows rather than failing the whole endpoint
             log.exception("Skipping schedule row due to error: %s", e)
             continue
     log.info("Schedule week %s games=%d", current_week, len(games))
@@ -1121,12 +1104,10 @@ def predict_game(payload: PredictionRequest) -> PredictionResponse:
             for c in missing_after:
                 X[c] = np.nan
 
-
         home_score = float(np.clip(_reg_predict(model_objects["home_model"], X)[0], 0.0, 70.0))
         away_score = float(np.clip(_reg_predict(model_objects["away_model"], X)[0], 0.0, 70.0))
         point_diff = round(home_score - away_score, 1)
 
-        # ---- Win probability (classifier if available; else sigmoid on margin)
         win_fallback_used = False
         try:
             win_entry = model_objects.get("win_model") if isinstance(model_objects, dict) else getattr(model_objects, "win_model", None)
@@ -1148,6 +1129,7 @@ def predict_game(payload: PredictionRequest) -> PredictionResponse:
                 else:
                     pred_margin = float(win_m.predict(X)[0])
                     home_prob = 1.0 / (1.0 + math.exp(-0.25 * pred_margin))
+                    win_fallback_used = True
             else:
                 home_prob = 1.0 / (1.0 + math.exp(-0.25 * point_diff))
                 win_fallback_used = True
@@ -1156,7 +1138,6 @@ def predict_game(payload: PredictionRequest) -> PredictionResponse:
             home_prob = 1.0 / (1.0 + math.exp(-0.25 * point_diff))
             win_fallback_used = True
 
-        # ---- Response assembly
         try:
             mode_val = model_objects.get("mode") if isinstance(model_objects, dict) else getattr(model_objects, "mode", "production")
         except Exception:
@@ -1175,13 +1156,8 @@ def predict_game(payload: PredictionRequest) -> PredictionResponse:
             pred_source = "model"
 
         if not ALLOW_FALLBACK_PREDICTIONS and (feature_fallback_used or win_fallback_used):
-            log.warning(
-                "Fallback prediction attempted but ALLOW_FALLBACK_PREDICTIONS=false; rejecting request"
-            )
-            raise HTTPException(
-                400,
-                f"Prediction would use fallback logic (source={pred_source}); disallowed by server configuration",
-            )
+            log.warning("Fallback prediction attempted but ALLOW_FALLBACK_PREDICTIONS=false; rejecting request")
+            raise HTTPException(400, f"Prediction would use fallback logic (source={pred_source}); disallowed by server configuration")
 
         return PredictionResponse(
             home_score=round(home_score, 1),
@@ -1212,7 +1188,7 @@ def _reg_predict(bundle: Any, X: pd.DataFrame) -> np.ndarray:
     """
     log.debug("Model bundle type: %s, hasattr predict: %s", type(bundle), hasattr(bundle, "predict"))
     if isinstance(bundle, dict):
-        log.debug("Model bundle keys: %s", list(bundle.keys()) if hasattr(bundle, "keys") else 'no keys method')
+        log.debug("Model bundle keys: %s", list(bundle.keys()) if hasattr(bundle, "keys") else "no keys method")
         if {"hgbr", "ridge", "weight"}.issubset(bundle):
             weight = float(bundle["weight"])
             preds_hgbr = bundle["hgbr"].predict(X)

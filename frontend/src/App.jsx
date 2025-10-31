@@ -15,9 +15,24 @@
  */
 
 import React from 'react';
+<<<<<<< HEAD
 import DashBoard from './components/DashBoard.jsx';
 
 
+=======
+import DashBoard from './components/DashBoard.jsx'; // FIX: default import, not named
+import './components/TeamGrid.css';
+
+
+/**
+ * App
+ * -----
+ * The Vercel Speed Insights component can cause runtime/SSR issues when
+ * imported at module-evaluation time (it may access browser globals). To
+ * avoid the site failing to render (especially on Vercel builds), we
+ * dynamically import and render the component on the client only.
+ */
+>>>>>>> c6845983cfbfd1be9afb17b5b47b7331808ca550
 export default function App() {
   // Keep App focused on composition. All prediction state lives in Context.
   return (

@@ -1,0 +1,447 @@
+/* ==========================================================================
+   TeamGrid.css
+   Enhancements (1–10): fonts, spacing, elevation, focus, contrast, tokens,
+   gradient accent, utilities for removing inline styles
+   ========================================================================== */
+
+/* Tokens (Enhancement 9 + 10 + 8) */
+:root {
+  --c-brand-1: #0080ff;
+  --c-brand-1-70: #0080ffb3;
+  --c-brand-2: #003264;
+  --c-ink: #0f0f0f;
+  --c-ink-muted: #2c3e50;
+  --c-danger: #e74c3c;
+  --c-accent: #3498db;
+  --c-bg-soft: #ffffffd1;
+  --c-card: rgba(0, 106, 255, 0.12);
+  --c-text-on-dark: #e8edf4;
+  /* Enhancement 8 */
+  --c-text-muted-on-dark: #c9d3e0;
+  /* Enhancement 8 */
+
+  --glass: rgba(59, 144, 255, 0.176);
+
+  --r-md: 12px;
+  --r-sm: 8px;
+
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, .28);
+  /* Enhancement 9 */
+  --shadow-2: 0 6px 18px rgba(0, 0, 0, .38);
+  /* Enhancement 9 */
+
+  --grad-primary: linear-gradient(90deg, lch(85.42% 34.11 221.38 / 0.486), lch(51.53% 81.02 290.09 / 0.492), lch(32.42% 133.68 306.35 / 0.349));
+  /* Enhancement 10 */
+}
+
+/* ---------- Animation defaults via CSS variables ---------- */
+:root {
+  --a-dur: 600ms;
+  --a-ease: cubic-bezier(.22, .61, .36, 1);
+  /* smooth, snappy */
+  --a-delay: 0ms;
+  --a-iter: 1;
+}
+
+/* Utility to apply common animation props cleanly */
+.anim {
+  animation-duration: var(--a-dur);
+  animation-timing-function: var(--a-ease-in-ease-out);
+  animation-delay: var(--a-delay);
+  animation-iteration-count: var(--a-iter);
+  animation-fill-mode: both;
+}
+
+/* ---------- 1) Pulse (subtle, GPU-friendly) ---------- */
+@keyframes pulseSoft {
+
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+
+  50% {
+    transform: scale(1.02);
+    opacity: .88;
+  }
+}
+
+/* Optional: pure opacity pulse for text-heavy UIs */
+@keyframes pulseOpacity {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: .5;
+  }
+}
+
+/* ---------- 2) Fade-in with direction controls ---------- */
+/* Control the start via vars: --fade-x, --fade-y, --fade-scale, --fade-blur */
+@keyframes fadeInVar {
+  from {
+    opacity: 0;
+    transform: translate3d(var(--fade-x, 0), var(--fade-y, 10px), 0) scale(var(--fade-scale, 1));
+    filter: blur(var(--fade-blur, 0));
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+    filter: blur(0);
+  }
+}
+
+/* ---------- 3) Shine / shimmer sweep ---------- */
+/* Works with a gradient background (buttons/badges) or with text using background-clip */
+@keyframes shineSweep {
+  0% {
+    background-position-x: 0%;
+  }
+
+  100% {
+    background-position-x: 200%;
+  }
+}
+
+/* ---------- 4) Outline / glow (fixed to use box-shadow) ---------- */
+@keyframes outlineGlow {
+
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 0 rgba(4, 100, 210, 0.00),
+      0 0 0 1px rgba(4, 100, 210, 0.55) inset;
+    /* crisp outline */
+  }
+
+  50% {
+    box-shadow:
+      0 0 14px 4px rgba(4, 100, 210, 0.45),
+      0 0 0 1px rgba(4, 100, 210, 0.75) inset;
+  }
+}
+
+/* ---------- Reduced motion (scoped) ---------- */
+@media (prefers-reduced-motion: reduce) {
+
+  .anim,
+  [data-anim] {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ---------- Ready-to-use helper classes ---------- */
+.a-pulse {
+  animation-name: pulseSoft;
+}
+
+.a-pulse--opacity {
+  animation-name: pulseOpacity;
+}
+
+.a-fade-in {
+  animation-name: fadeInVar;
+}
+
+.a-shine {
+  /* Use on elements with a gradient background; see usage below */
+  animation-name: shineSweep;
+  animation-duration: 1.6s;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  background-size: 200% 100%;
+}
+
+.a-glow {
+  animation-name: outlineGlow;
+}
+
+/* Stagger helper for lists/grids */
+.stagger>* {
+  --a-delay: calc(var(--i, 0) * 180ms);
+}
+
+/* Base (Enhancement 2 + 3 + 8) */
+body {
+  font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  /* Enhancement 2 */
+  font-size: clamp(15.5px, 1.2vw + 0.5rem, 17px);
+  /* Enhancement 2 */
+  line-height: 1.65;
+  /* Enhancement 2 */
+
+  margin: 0 auto;
+  background-color: #041c42e1;
+  color: var(--c-text-on-dark);
+
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  min-height: 100vh;
+  /* Enhancement 3: stable scrolling */
+  max-width: 100vw;
+  width: 100%;
+  overflow-x: hidden;
+}
+
+h2 .nfl-matchups,
+  p .nfl-matchups {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-evenly;
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 800;
+}
+
+main.app-main {
+  padding: .4rem 0;
+  min-height: 100vh;
+  width: 100%;
+}
+
+/* Dashboard container - ensure it doesn't interfere with sticky nav */
+.dashboard {
+  position: relative;
+  
+  width: 100%;
+  min-height: 100vh;
+  overflow-y: visible;
+}
+
+/* Containers (Enhancement 3) */
+.container {
+  max-width: 1500px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.team-grid-header {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-content: center;
+  padding-left: 2rem;
+  gap: 60%;
+  text-align: space-between;
+  margin-bottom: .5rem;
+}
+div.probability.home-win-prob.inner-card.a-shine {
+  display: flex;
+  font-size: 1rem;
+  font-optical-sizing: auto;
+  color:lch(100% 0.01 296.81);
+
+}
+
+/* Grid (Enhancement 3) */
+.team-grid-section {
+  padding-inline: clamp(12px, 2vw, 24px);
+}
+
+.team-grid-cards {
+  display: grid;
+  background-color: #00000000;
+     
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1rem;
+  border-radius: 1.5%;
+  border-color: whitesmoke;
+}
+
+.matchup-time.inner-card {
+  display: flex;
+  flex-direction: row;
+  gap: 2rem;
+}
+
+.predicted-scores.inner-card.a-shine {
+  display: flex;
+  flex-direction: row;
+  gap: .3rem;
+  font-weight: 500;
+  font-size: 1.4rem;
+  align-content: space-between;
+  color: lch(100% 0.01 296.81 / 0.95);
+  background-color: lch(0% 0 0 / 0.726);
+  font-family: 'Inter', sans-serif;
+  position: fixed;
+  border-radius: 5%;
+  top: 1px;
+  right: .5%;
+
+
+}
+
+/* Cards (Enhancement 4 + 5 + 10) */
+.matchup-card.inner-card {
+  display: flex;
+  flex-direction: row;
+  -webkit-backdrop-filter: blur(10px); /* normalized prefix form */
+  backdrop-filter: blur(10px);         /* standard property for compatibility */
+  background-color: var(a-shine);
+  border-radius: 18px;
+  box-shadow: 0 6px 18px 1px rgba(17, 0, 0, 0.712);
+  padding: 10px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: transform 0.7s, box-shadow 0.8s;
+  position: relative;
+  max-height: 450px;
+  height: 100%;
+  max-width: 320px;
+  transition: transformY(-9px);
+  width: 100%;
+  color: #cbe4ff;
+  /* Apply fade-in animation on load */
+  animation: outlineGlow, fadeInVar 0.6s cubic-bezier(.22, .61, .36, 1) ease-in-out;
+  animation-delay: calc(var(--i, 0) * 100ms);
+  /* Stagger animation based on index */
+}
+
+.inner-card {
+  border-radius: 1%;
+
+}
+
+div .point-diff {
+  display: flex;
+  flex-direction: column;
+  gap: 5rem;
+}
+
+.point-diff.inner-card.a-shine {
+  display: flex;
+  flex-direction: row;
+  position: fixed;
+  top: 25%;
+  right: 3%;
+  gap: .3rem;
+  font-weight: 300;
+  font-size: 1rem;
+  color: #ffffffd8;
+  font-family: 'Inter', sans-serif;
+  transition: all transform(a-glow);
+}
+
+.point-prob {
+  position: fixed;
+  font-size: 1rem;
+  top: 8%;
+  left: 50%;
+  display: flex;
+  flex-direction: row;
+  color: var(a-shine);
+  background-color: var(--grad-primary);
+  width: 20px;
+}
+
+div .prediction-result.inner-card.a-glow {
+  display: flex;
+  flex-direction: column;
+  padding: 1px;
+  gap: .3rem;
+  font-weight: 400;
+  font-size: 1rem;
+  color: #ffffff;
+  font-family: 'Inter', sans-serif;
+  transition: all transform(a-glow);
+}
+.matchup-card:hover {
+  transform: translateY(-7px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.524);
+  cursor: pointer;
+}
+
+.matchup-card:focus-visible {
+  outline: 3px solid var(--c-brand-1, #1389ff);
+  /* Enhancement 5 + 7 */
+  outline-offset: 3px;
+}
+
+.matchup-card.has-prediction {
+  border: 2px solid transparent;
+  /* Enhancement 10 */
+  border-image: var(--grad-primary) 1;
+  /* Enhancement 10 */
+}
+
+.hidden {
+  display: none;
+}
+
+/* Loading / results */
+.prediction-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  /* Apply pulse animation while loading */
+  animation: pulseSoft 1.5s ease-in-out infinite;
+}
+
+/* Utilities (Enhancement 6 + 7 + 9) */
+.is-hidden {
+  display: none !important;
+  /* For logo fallback toggling */
+}
+
+.card-shell {
+  border-radius: var(--r-md);
+  /* Replaces inline borderRadius in JSX */
+}
+
+button:focus-visible,
+[role="button"]:focus-visible {
+  outline: 3px solid var(--c-brand-1, #0080ff);
+  /* Enhancement 7 */
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+/* Error/Loading text (Enhancement 8) */
+.team-grid-loading,
+.team-grid-error {
+  color: var(--c-text-on-dark);
+}
+
+.team-grid-error p {
+  color: var(--c-text-muted-on-dark);
+}
+
+/* Motion safety (Enhancement 10) */
+@media (prefers-reduced-motion: reduce) {
+  .matchup-card {
+    transition: none;
+  }
+}
+
+.matchup-card.a-shine:hover {
+  cursor: pointer;
+  transition: transform 0.3s, box-shadow 0.3s;
+  transform: scale(1.02);
+  animation: shine 1s infinite;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+}
+
+img.team-logo {
+  max-width: 160px;
+  max-height: 160px;
+  width: 100%;
+  height: 100%;
+  transition: transform 0.3s ease, filter 0.3s ease;
+}
+
+/* Add shine effect on logo hover */
+img.team-logo:hover {
+  transform: scale(1.00) rotate(360deg 3s infinite);
+  filter: brightness(1.4);
+}

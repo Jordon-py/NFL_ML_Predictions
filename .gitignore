@@ -1,21 +1,18 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-## Repo hygiene: ignore local envs, build outputs, editor junk
-
-# Python caches
+## Language caches
 __pycache__/
 *.py[cod]
 *$py.class
 
-# Virtual environments
-venv/
+## Virtual environments
 .venv/
-backend/venv/
+venv/
+env/
+ENV/
+env.bak/
 backend/.venv/
+backend/venv/
 
-# Node
+## Node artifacts
 node_modules/
 frontend/node_modules/
 npm-debug.log*
@@ -23,45 +20,50 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# Build outputs
-dist/
+## Build outputs
 build/
-.parcel-cache/
+dist/
+frontend/build/
 frontend/dist/
+frontend/dist/node_modules
 frontend/.vite/
+.parcel-cache/
+.vercel
 
-# Environment files
+## Environment configuration
 .env
 .env.*
 backend/.env
 frontend/.env*
 
-# OS/editor
+## IDE & OS noise
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+.idea/
+*.swp
+*.swo
 .DS_Store
 Thumbs.db
-.vscode/*
-!.vscode/tasks.json
-!.vscode/settings.json
 
-# Coverage/test artifacts
+## Logs & coverage
+*.log
 coverage/
 .pytest_cache/
 *.coverage
 
-# Notebooks checkpoints
+## Notebook checkpoints
 .ipynb_checkpoints/
 
-# Heroku slug cache
+## Packaging artifacts
 .slugignore
 *.so
 .Python
-build/
 develop-eggs/
-dist/
 downloads/
 eggs/
 .eggs/
-/lib
+lib/
 lib64/
 parts/
 sdist/
@@ -74,59 +76,22 @@ share/python-wheels/
 *.egg
 MANIFEST
 
-# Virtual environments
-venv/
-env/
-ENV/
-.env/
-.venv/
-env.bak/
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Logs
-*.log
-
-# Data files
+## Data & models (allow curated assets)
+data/
 *.csv
 *.json
 *.txt
-data/
-!requirements.txt
-!README.md
-
-# Model files
 *.joblib
 *.pkl
 *.model
-
-# Allow committing trained models and engineered datasets for Heroku deploys
-!backend/models/
+!requirements.txt
+!README.md
 !backend/data/
+!backend/models/
 
-# Node modules
-/node_modules
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Build outputs
-frontend/build/
-frontend/dist/node_modules
-
-# Allow Vercel config at repo root
-!vercel.json
-.vercel
-
-# AI tool directories
+## AI tooling
 .serena/
-.venv/
 
-backend/.venv/
+## Deployment configs
+!vercel.json
+node_modules

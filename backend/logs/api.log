@@ -3470,3 +3470,10 @@ fl_prediction_system\NFL_ML_Predictionsackend\data\game_features.csv; continuin
 2025-10-30 18:34:10,653 DEBUG api Loading model metadata from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\metadata.json
 2025-10-30 18:34:11,309 WARNING api Preprocessor not detected as fitted; skipping transform in sanity check
 2025-10-30 18:34:13,286 INFO api Loaded dataset rows=2748 cols=208
+2025-10-30 18:39:07,849 INFO api Shutdown complete
+2025-10-30 18:39:10,181 INFO api CORS configured to allow all origins (ALLOWED_ORIGINS='*')
+2025-10-30 18:39:10,188 INFO api Startup: loading models and dataset
+2025-10-30 18:39:10,188 DEBUG api Loading model metadata from C:\Users\iProg\OneDrive\Documents\Football_predict\nfl_prediction_system\NFL_ML_Predictions\backend\models\metadata.json
+2025-10-30 18:39:10,579 WARNING api Preprocessor not detected as fitted; skipping transform in sanity check
+2025-10-30 18:39:11,995 INFO api Loaded dataset rows=2748 cols=208
+2025-10-30 18:39:38,629 INFO api Shutdown complete
