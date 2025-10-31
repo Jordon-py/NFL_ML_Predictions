@@ -81,6 +81,7 @@ def get_current_nfl_context() -> Dict[str, Any]:
 - Enhanced TeamGrid matchup cards with team logos, improved visual layout, fade-in animations, outline glows, and enhanced standout effects for predicted cards.
 - Implemented responsive flexbox layout for TeamGrid cards and structured card content with proper spacing and no overlapping stats.
 - Fixed kickoff time display to use user's local timezone instead of Pacific Time.
+- Resolved merge conflict in `backend/models/metadata.json`; backend `/health` now returns healthy with models loaded.
 
 
 
