@@ -42,7 +42,7 @@ Assert-Cli heroku
 Assert-Cli vercel
 Assert-Cli npm
 
-Write-Host "[2/8] Ensuring Heroku CORS_ORIGINS includes Vercel + localhost..." -ForegroundColor Cyan
+Write-Host "[2/8] Ensuring Heroku ALLOWED_ORIGINS includes Vercel + localhost..." -ForegroundColor Cyan
 $origins = @(
   'http://localhost:3000',
   'https://localhost:3000',
@@ -51,7 +51,8 @@ $origins = @(
   'https://www.nfl-predict.com',
   $VercelProdDomain
 ) -join ','
-heroku config:set CORS_ORIGINS="$origins" -a $HerokuApp | Out-Host
+heroku config:set RESTRICT_CORS=true -a $HerokuApp | Out-Host
+heroku config:set ALLOWED_ORIGINS="$origins" -a $HerokuApp | Out-Host
 
 Write-Host "[3/8] Installing frontend dependencies..." -ForegroundColor Cyan
 npm install --prefix frontend | Out-Host
@@ -122,10 +123,10 @@ try {
   Write-Host $health
 } catch { Write-Host "failed" -ForegroundColor Red }
 
-Write-Host "CORS debug: " -NoNewline
+Write-Host "Debug info: " -NoNewline
 try {
-  $cors = (Invoke-WebRequest -Uri "$ApiBaseUrl/cors-debug" -UseBasicParsing).Content
-  Write-Host $cors
+  $dbg = (Invoke-WebRequest -Uri "$ApiBaseUrl/debug" -UseBasicParsing).Content
+  Write-Host $dbg
 } catch { Write-Host "failed" -ForegroundColor Red }
 
 if ($frontendUrl) {
