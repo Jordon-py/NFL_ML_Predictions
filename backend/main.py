@@ -87,7 +87,7 @@ LOG_DIR.mkdir(parents=True, exist_ok=True)
 # Use game_features.csv which has the engineered features (prior stats, differentials, betting data)
 # merged_game_features.csv only has raw stats and won't work with trained models
 # ---------------------------------------------------------------
-DEFAULT_DATASET = DATA_DIR / "game_features.csv"
+DEFAULT_DATASET = DATA_DIR / "merge_dominance.csv"
 DEFAULT_SCHEDULE = DATA_DIR / "Nfl_schedule_2025_2026.csv"
 
 FRONTEND_DIR = BASE_DIR / "frontend"

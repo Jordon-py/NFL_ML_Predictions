@@ -17,10 +17,7 @@
     "npm": "10.0.0"
   },
   "dependencies": {
-<<<<<<< HEAD
     "@material/web": "^2.4.0",
-=======
->>>>>>> c6845983cfbfd1be9afb17b5b47b7331808ca550
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

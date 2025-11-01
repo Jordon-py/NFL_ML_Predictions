@@ -4,7 +4,6 @@
 build_csv_datasets.py
 =====================
 
-<<<<<<< HEAD
 Production-ready builder for NFL game-level datasets (one row per game).
 
 **PURPOSE: DATASET BUILDING ONLY** - Model training is handled in enhanced_pipeline.py
@@ -33,35 +32,6 @@ Outputs
 • CSV: {out_dir}/game_features_new.csv
 • Log: {out_dir}/build_csv_datasets.log
 • (Optional) dominance_matrix.csv
-=======
-Purpose
--------
-Build a *single*, prediction-ready NFL game-level dataset (one row per game)
-with leak-free rolling features, advanced EPA-derived priors, betting context,
-and normalized team codes.
-
-Key Functions
--------------
-- setup_logger(out_dir): configure file + console logging
-- load_schedules(seasons): fetch schedule/scores per game
-- add_features(sch, windows): add leak-free rolling priors (home_/away_ prefixed)
-- build_dataset(start, end, out_dir): orchestrates load → features → write
-
-External Dependencies
----------------------
-pandas, numpy, nfl_data_py
-
-Usage Notes
------------
-- Output: single chronologically sorted CSV ``game_features.csv`` written to
-    the specified ``out_dir`` (optional legacy root-level copy for compatibility).
-- Rolling stats use ``groupby().rolling(...)`` to prevent future leakage.
-- Team codes are minimally normalized to limit join mismatches (LA→LAR, STL→LAR, ...).
-
-**IMPORTANT** TO RUN:
-python backend/build_csv_datasets.py --start 2016 --end 2026 --out-dir backend/data
-
->>>>>>> c6845983cfbfd1be9afb17b5b47b7331808ca550
 """
 
 from __future__ import annotations
@@ -77,7 +47,6 @@ import argparse
 import json
 import logging
 from pathlib import Path
-<<<<<<< HEAD
 from typing import List, Dict, Tuple, Optional
 import re
 import numbers
@@ -93,35 +62,12 @@ ABBR_FIX: Dict[str, str] = {
     "LA": "LAR", "STL": "LAR",
     "SD": "LAC", "OAK": "LV",
     "WSH": "WAS",
-=======
-
-import numpy as np
-import pandas as pd
-import nflreadpy as nfl
-
-
-# -----------------------------
-# Configuration and constants
-# -----------------------------
-
-ABBR_FIX: Dict[str, str] = {
-    "LA": "LAR",  # Rams short
-    "STL": "LAR",  # Rams legacy
-    "SD": "LAC",  # Chargers legacy
-    "OAK": "LV",  # Raiders legacy
-    "WSH": "WAS",  # Commanders legacy
->>>>>>> c6845983cfbfd1be9afb17b5b47b7331808ca550
 }
 OUTPUT_DATASET_NAME = "game_features.csv"
 
-<<<<<<< HEAD
-OUTPUT_DATASET_NAME = "game_features_new.csv"
-TIME_COLS_IN_ORDER: Optional[List[str]] = None
-=======
 def make_time_key(df: pd.DataFrame) -> pd.Series:
     """Return sortable integer key YYYYWW from 'season' and 'week' (assumes ints)."""
     return (df["season"].astype(int) * 100) + df["week"].astype(int)
->>>>>>> c6845983cfbfd1be9afb17b5b47b7331808ca550
 
 
 # -----------------------------------------------------------------------------
@@ -130,13 +76,9 @@ def make_time_key(df: pd.DataFrame) -> pd.Series:
 
 
 def setup_logger(out_dir: Path) -> None:
-<<<<<<< HEAD
-    """Set up console + file logging for traceability."""
-=======
     """
     Initialize both file and console logging so CLI users get progress feedback.
     """
->>>>>>> c6845983cfbfd1be9afb17b5b47b7331808ca550
     out_dir.mkdir(parents=True, exist_ok=True)
     log_file = out_dir / "build_csv_datasets.log"
     logging.basicConfig(
