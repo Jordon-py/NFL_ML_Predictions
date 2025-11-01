@@ -6,6 +6,34 @@ This report documents incremental changes to the NFL_ML_Predictions repository, 
 
 ## Recent Changes
 
+- **Date/Time**: 2025-11-01 / 21:30 UTC.
+  - **Files Modified**: `frontend/src/components/HamburgerMenu.css`.
+  - **Change Description**: Hamburger menu is now visible only on phones/small screens. Implemented a mobile-first CSS rule to hide the container by default and reveal it under 768px via media query. Cleaned up button styling (hover, border, transition), removed unused line-based icon animation block, and ensured the image icon class is used consistently.
+  - **Why Made**: The hamburger should not appear on desktop layouts where the full navigation is available. This improves UX clarity and reduces visual noise on larger screens.
+  - **Impact**: On desktop/tablet widths (≥768px), the hamburger menu is hidden. On phones (<768px), the menu button appears and functions normally. No JavaScript changes required; purely CSS-driven responsiveness.
+  - **Quality Gates**: Build: PASS (CSS only). Lint/Typecheck: N/A. Tests: N/A.
+
+- **Date/Time**: 2025-11-01 / 21:45 UTC.
+  - **Files Modified**: `frontend/src/components/NavBar/NavBarr.css`, `frontend/src/components/HamburgerMenu.jsx`, `frontend/src/components/HamburgerMenu.css`.
+  - **Change Description**: Hid desktop nav links when the hamburger is visible (≤768px). Added `display:none` to `.navBar__links` under the mobile breakpoint. Ensured collapsed hamburger menu fully hides links with `display:none` on `.menu-panel.closed`; added `aria-hidden` and `inert` to the `<nav>` for accessibility and focus management.
+  - **Why Made**: On small screens, both the full nav and the hamburger were visible, causing duplication. Also, collapsed menus should not allow focus or screen reader access to hidden links.
+  - **Impact**: Mobile shows only the hamburger button; links appear only when the menu opens. Desktop shows the full nav and not the hamburger. Better accessibility and no accidental focus on hidden items.
+  - **Quality Gates**: Build: PASS. Lint/Typecheck: N/A. Tests: N/A.
+
+- **Date/Time**: 2025-11-01 / 22:00 UTC.
+  - **Files Modified**: `frontend/src/components/NavBar/NavBar.css`, `frontend/src/components/NavBar/NavBar.jsx`, `frontend/src/components/NavBar/NavBarr.css` (deprecated shim).
+  - **Change Description**: Merged duplicate NavBar styles into a single `NavBar.css`. Updated `NavBar.jsx` to import `NavBar.css`. Replaced `NavBarr.css` with a deprecation shim that `@import`s `NavBar.css` to avoid duplication while maintaining compatibility.
+  - **Why Made**: Prevent conflicting styles and confusion from two nearly identical CSS files. One canonical stylesheet is easier to maintain.
+  - **Impact**: No visual regressions expected. Any code importing `NavBarr.css` continues to work via the shim, but the project now has a single source of truth for NavBar styles.
+  - **Quality Gates**: Build: PASS. Lint/Typecheck: PASS after fixing a stray brace in the shim. Tests: N/A.
+
+- **Date/Time**: 2025-11-01 / 22:15 UTC.
+  - **Files Modified**: `frontend/src/components/TeamGrid.jsx`, `frontend/src/components/TeamGrid.css`.
+  - **Change Description**: Removed inline styles from `TeamGrid.jsx` (toasts container, toast items, source badge, grid item var) and moved them into `TeamGrid.css`. Replaced image onError style mutation with adding `is-hidden` class. Fixed a logic bug where the teams loader incorrectly set both `teams` and `schedule` to true; now sets `teams: false` after load. Cleaned up console debug logs.
+  - **Why Made**: Enforce separation of concerns (JSX logic vs. CSS), improve maintainability, and correct loading state behavior.
+  - **Impact**: UI unchanged visually; styling now centralized. Toasts and badges use class-based styles. Loading flags behave as intended. Slightly smaller console noise.
+  - **Quality Gates**: Build: PASS. Lint/Typecheck: PASS (CSS rule cleanup). Tests: N/A.
+
 - **Date/Time**: 2025-11-01 / 15:50 UTC.
   - **Files Modified**: `backend/.env`.
   - **Change Description**: Updated `DATASET_PATH` to `backend/data/merge_dominance.csv` so the API uses the engineered dominance dataset for assembling future-game features. This reduces `feature_fallback` cases and produces varied, model-driven predictions.

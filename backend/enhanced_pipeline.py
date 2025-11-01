@@ -42,7 +42,7 @@ from datetime import datetime
 import json
 from inspect import signature
 from pathlib import Path
-from typing import List, Tuple, Dict, Callable, Any, Optional, cast
+from typing import List, Tuple, Dict, Callable, Any, Optional, cast, Iterable
 
 import numpy as np
 import pandas as pd
@@ -135,6 +135,53 @@ def export_feature_metadata(summary: pd.DataFrame, output_path: Path) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     # pandas >= 1.1 supports indent; if older, remove indent param.
     summary.to_json(output_path, orient="records", indent=2)
+
+
+# ==========================
+# Leakage guard definitions
+# ==========================
+def is_leak_feature(name: str, *, allow_prefixes: Iterable[str] = ("prior_", "home_prior_", "away_prior_", "diff_", "home_minus_away_", "trend_")) -> bool:
+    """
+    Return True if a column name is considered leakage-prone for training.
+
+    Rules (conservative):
+    - Any column starting with '_' is reserved/diagnostic (often target-derived) → drop.
+    - Explicit forbidden names known to encode outcomes or empirical win rates derived from labels.
+    - Bare points-for/against without explicit prior/diff/trend context are dropped in build_dataset, not here.
+
+    allow_prefixes exists to avoid flagging legitimate engineered pregame features that may contain
+    strings like 'win_pct' but are computed from prior windows.
+    """
+    if not isinstance(name, str):
+        return False
+    n = name.strip()
+    if not n:
+        return False
+
+    # Allow-list prefixes take precedence
+    if any(n.startswith(p) for p in allow_prefixes):
+        return False
+
+    # 1) Underscore-prefixed diagnostics/targets
+    if n.startswith("_"):
+        return True
+
+    # 2) Explicit known leakage terms
+    forbidden_exact = {
+        "home_win",  # target itself
+        "winner", "winner_team",
+        "home_win_prob", "away_win_prob",
+        "season_home_win_rate",  # risky unless time-sliced; conservatively drop
+        "_home_win_derived", "_dom_delta_emp_home_win", "_dom_delta",
+    }
+    if n in forbidden_exact:
+        return True
+
+    # 3) Patterns indicating empirical outcome mapping
+    if "emp_home_win" in n or "derived_win" in n:
+        return True
+
+    return False
 
 
 def _fit_with_optional_weights(
@@ -333,15 +380,43 @@ def build_dataset(
     if diff_cols:
         X = df[diff_cols].copy()
     else:
+        # Broad numeric selection, then explicitly drop ANY post-game/outcome columns to prevent leakage.
         numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-        drop_cols = {"season", "week", "home_win", "group_idx"}
-        feature_cols = [c for c in numeric_cols if c not in drop_cols]
-        if not feature_cols:
+        drop_cols = {
+            "season", "week", "home_win", "group_idx",
+            # Outcome columns (post-game): must not leak into training features
+            "home_points_for", "away_points_for", "point_diff",
+        }
+        # Drop any numeric columns that strongly imply outcome if present
+        leak_like_prefixes = (
+            # generalized points columns without prior_ guard
+            "points_for", "points_against",
+        )
+        leak_like_exact = {"winner", "winner_team", "home_win_prob", "away_win_prob"}
+        safe_cols: List[str] = []
+        for c in numeric_cols:
+            if c in drop_cols:
+                continue
+            if c in leak_like_exact:
+                continue
+            # Centralized leakage guard (conservative)
+            if is_leak_feature(c):
+                continue
+            # Exclude bare points_* columns unless they are properly prefixed as priors/diffs/trends
+            if any(c.startswith(pref) for pref in ("home_points_for", "away_points_for")) and not (
+                c.startswith("home_prior_") or c.startswith("away_prior_") or c.startswith("diff_") or c.startswith("home_minus_away_")
+            ):
+                continue
+            if any(c.endswith(suf) for suf in ("_points_for", "_points_against")) and not c.startswith("prior_"):
+                continue
+            # keep
+            safe_cols.append(c)
+        if not safe_cols:
             raise ValueError(
-                "Dataset must contain either `diff_` engineered features or other numeric "
-                "predictors after excluding season/week/home_win."
+                "Dataset must contain either `diff_` engineered features or other numeric predictors "
+                "that are pre-game (no outcome leakage)."
             )
-        X = df[feature_cols].copy()
+        X = df[safe_cols].copy()
 
     # Imputation: column means where available, then 0.0 for any remaining NaNs
     X = X.fillna(X.mean(numeric_only=True))
@@ -846,7 +921,7 @@ def run_experiment(
         model_obj=final_model,
         X_train=X_train,
         results=results,
-        holdout_season=int(df_train["season"].max()) if "season" in df_train.columns else None,
+        holdout_season=holdout_season,
     )
 
     return results, ensemble_df

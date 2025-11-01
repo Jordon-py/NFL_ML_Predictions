@@ -1,26 +1,33 @@
 /* HamburgerMenu.css */
 
+/* Hide hamburger by default (desktop); reveal on small screens */
 .hamburger-menu-container {
+  display: none;
   position: relative;
   z-index: 1000;
 }
 
-/* Hamburger Button */
-.hamburger-icon {
-  
-  background-image: url('ham.png');
-  image-rendering: auto;
-  border: none;
+#ham-button {
+  background: transparent;
+  height: 48px;
+  width: 48px;
+  border: 1px solid #007bff33;
+  border-radius: 8px;
   cursor: pointer;
-  padding: 0.5rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: transform 0.5s ease;
+  transition: transform 0.2s ease;
+  z-index: 1000;
+}
+
+/* Hamburger Button */
+.hamburger-button.open {
+  border-color: #007bff;
 }
 
 .hamburger-button:hover {
-  transform: scale(1.2);
+  transform: scale(1.08);
 }
 
 .hamburger-button:focus {
@@ -28,36 +35,9 @@
   outline-offset: 2px;
 }
 
-/* Hamburger Icon (Three Lines) */
-.hamburger-icon {
-  width: 30px;
-  height: 24px;
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-}
-
-.hamburger-icon .line {
+/* Optional image icon tweak */
+.ham-icon {
   display: block;
-  height: 3px;
-  width: 100%;
-  background-color: var(--text-color, #333);
-  border-radius: 2px;
-  transition: all 0.3s ease;
-}
-
-/* Animate to X when open */
-.hamburger-button.open .line:nth-child(1) {
-  transform: translateY(10.5px) rotate(45deg);
-}
-
-.hamburger-button.open .line:nth-child(2) {
-  opacity: 0;
-}
-
-.hamburger-button.open .line:nth-child(3) {
-  transform: translateY(-10.5px) rotate(-45deg);
 }
 
 /* Menu Panel */
@@ -67,14 +47,21 @@
   right: 0;
   background: var(--card-bg, #fff);
   border: 1px solid var(--border-color, #ddd);
-  border-radius: 8px;
+  border-radius: 6px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   min-width: 200px;
   overflow: hidden;
   transition: opacity 0.3s ease, transform 0.3s ease, visibility 0.3s ease;
 }
 
+.ham-icon {
+  display: block;
+  border-radius: 8px;
+}
+
 .menu-panel.closed {
+  display: none;
+  /* fully hide links when menu is collapsed */
   opacity: 0;
   transform: translateY(-10px);
   visibility: hidden;
@@ -82,6 +69,7 @@
 }
 
 .menu-panel.open {
+  display: block;
   opacity: 1;
   transform: translateY(0);
   visibility: visible;
@@ -118,6 +106,10 @@
 
 /* Responsive adjustments */
 @media (max-width: 768px) {
+  .hamburger-menu-container {
+    display: block;
+  }
+
   .menu-panel {
     min-width: 180px;
     right: -10px;

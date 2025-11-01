@@ -21,9 +21,10 @@ A single, reliable training entrypoint that:
 
 CLI
 ---
-python nflex_training_pipeline_enhanced.py --data path/to/enhanced_dataset.csv \
+python pipeline_enhanced.py --data path/to/enhanced_dataset.csv \
     [--production] \
-    [--holdout-season 2025 --holdout-week 6 --holdout-week-end 18]
+    [--holdout-season 2025 --holdout-week 6 --holdout-week-end 18] \
+    [--splits 5 --embargo 1]
 
 Notes
 -----
@@ -47,12 +48,17 @@ from typing import Any, Dict, List, Optional, Tuple
 import joblib
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
+try:
+    import matplotlib.pyplot as plt  # type: ignore
+    HAS_MPL = True
+except Exception:  # pragma: no cover
+    HAS_MPL = False
+    plt = None  # type: ignore
 
 from sklearn.base import BaseEstimator, clone
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.compose import ColumnTransformer
-from sklearn.ensemble import GradientBoostingRegressor, GradientBoostingClassifier
+from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
@@ -70,10 +76,10 @@ from sklearn.preprocessing import StandardScaler
 # ----------------------
 RANDOM_STATE = 42
 HERE = Path(__file__).resolve().parent
-DATA_DIR = HERE / "data"
+DATA_DIR = HERE / "models"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-# Artifact paths (required by user)
+# Artifact paths (required)
 P_HOME = DATA_DIR / "home_model.joblib"
 P_AWAY = DATA_DIR / "away_model.joblib"
 P_PREP = DATA_DIR / "preprocessor.joblib"
@@ -179,7 +185,7 @@ def load_dataset(path: str) -> DataBundle:
     # Build group index (chronological)
     df["group_idx"] = df["season"].astype(int) * 100 + df["week"].astype(int)
 
-    # Derive targets if needed
+    # Targets
     if {"home_points_for", "away_points_for"}.issubset(df.columns):
         y_home = df["home_points_for"].astype(float)
         y_away = df["away_points_for"].astype(float)
@@ -187,7 +193,8 @@ def load_dataset(path: str) -> DataBundle:
         raise KeyError("Dataset must include home_points_for and away_points_for for score models.")
 
     if "home_win" in df.columns:
-        y_win = df["home_win"].astype(int)
+        # Allow NaN labels for future/unlabeled games; cast to int later after filtering
+        y_win = pd.to_numeric(df["home_win"], errors="coerce")
     elif {"winner", "home_team"}.issubset(df.columns):
         y_win = (df["winner"].astype(str).str.strip() == df["home_team"].astype(str).str.strip()).astype(int)
         df["home_win"] = y_win
@@ -208,6 +215,34 @@ def load_dataset(path: str) -> DataBundle:
         if not feature_cols:
             raise ValueError("No usable numeric feature columns found.")
 
+    # --- Leakage guardrails: hard blacklist for post-game / target-equivalent fields
+    FORBIDDEN_TOKENS = (
+        "point_diff", "winner", "home_win", "away_win", "outcome",
+        "final", "score", "points"  # catches many final-score fields
+    )
+    FORBIDDEN_EXACT = {
+        "_home_win_derived",
+        "_dom_delta_emp_home_win",
+        "season_home_win_rate",
+        "tl_home_home_win_rate_when_home",
+        "tl_away_home_win_rate_when_home",
+        "tl_away_away_win_rate_when_away",
+        "tl_home_away_win_rate_when_away",
+    }
+
+    suspects, safe_cols = [], []
+    for c in feature_cols:
+        lc = c.lower()
+        token_hit = any(tok in lc for tok in FORBIDDEN_TOKENS)
+        exact_hit = (c in FORBIDDEN_EXACT)
+        if token_hit or exact_hit:
+            suspects.append(c)
+        else:
+            safe_cols.append(c)
+    if suspects:
+        logging.warning("Dropping potentially leaky columns: %s", sorted(suspects))
+    feature_cols = safe_cols
+
     X = df[feature_cols].copy()
 
     # Simple feature hygiene
@@ -222,13 +257,11 @@ def load_dataset(path: str) -> DataBundle:
 # ----------------------
 # Models / preprocessing
 # ----------------------
-
 def build_preprocessor(feature_names: List[str]) -> ColumnTransformer:
     numeric_transform = Pipeline([
         ("imputer", SimpleImputer(strategy="median")),
         ("scaler", StandardScaler(with_mean=True, with_std=True)),
     ])
-    # All features treated as numeric by construction.
     return ColumnTransformer([
         ("num", numeric_transform, feature_names),
     ], remainder="drop")
@@ -242,11 +275,7 @@ def make_models() -> Dict[str, BaseEstimator]:
         "away_reg": GradientBoostingRegressor(
             random_state=RANDOM_STATE, n_estimators=400, learning_rate=0.05, max_depth=3
         ),
-        # Base classifier (we will calibrate on full-train later for deployment)
-        "win_clf_base": Pipeline([
-            ("scaler", StandardScaler()),
-            ("clf", LogisticRegression(C=1.0, penalty="l2", solver="lbfgs", max_iter=600, random_state=RANDOM_STATE)),
-        ]),
+        # NOTE: For CV we will train LogisticRegression on preprocessed arrays directly (no extra scaler).
     }
     return models
 
@@ -273,8 +302,15 @@ def _rmse(y_true, y_pred):
     return math.sqrt(mean_squared_error(y_true, y_pred))
 
 
-def cross_validate_models(X: pd.DataFrame, y_home: pd.Series, y_away: pd.Series, y_win: pd.Series,
-                          groups: pd.Series, n_splits: int = 5, embargo: int = 1) -> Tuple[EvalBundle, Dict[str, Any]]:
+def cross_validate_models(
+    X: pd.DataFrame,
+    y_home: pd.Series,
+    y_away: pd.Series,
+    y_win: pd.Series,
+    groups: pd.Series,
+    n_splits: int = 5,
+    embargo: int = 1,
+) -> Tuple[EvalBundle, Dict[str, Any]]:
     splitter = PurgedGroupTimeSeriesSplit(n_splits=n_splits, embargo_groups=embargo)
 
     # Prepare collectors
@@ -282,12 +318,12 @@ def cross_validate_models(X: pd.DataFrame, y_home: pd.Series, y_away: pd.Series,
     away_mae_tr, away_mae_va, away_rmse_tr, away_rmse_va = [], [], [], []
     win_brier_tr, win_brier_va, win_ll_tr, win_ll_va, win_acc_tr, win_acc_va = [], [], [], [], [], []
 
-    # Preprocessor is fit per-fold on TRAIN only
     for fold, (tr_idx, va_idx) in enumerate(splitter.split(X, y_win, groups), start=1):
         X_tr, X_va = X.iloc[tr_idx], X.iloc[va_idx]
         yh_tr, yj_tr = y_home.iloc[tr_idx], y_away.iloc[tr_idx]
         yw_tr, yw_va = y_win.iloc[tr_idx], y_win.iloc[va_idx]
 
+        # Fit preprocessor on TRAIN only
         prep = build_preprocessor(list(X.columns))
         Xtr_tf = prep.fit_transform(X_tr)
         Xva_tf = prep.transform(X_va)
@@ -312,26 +348,46 @@ def cross_validate_models(X: pd.DataFrame, y_home: pd.Series, y_away: pd.Series,
         away_rmse_tr.append(_rmse(yj_tr, yj_tr_pred))
         away_rmse_va.append(_rmse(y_away.iloc[va_idx], yj_va_pred))
 
-        # --- WIN classifier (base, per-fold) ---
-        clf = clone(models["win_clf_base"]).fit(Xtr_tf, yw_tr)
-        # Train-fold probs (not used for threshold tuning; just for tracking)
-        p_tr = np.clip(clf.predict_proba(Xtr_tf)[:, 1], 1e-6, 1-1e-6)
-        p_va = np.clip(clf.predict_proba(Xva_tf)[:, 1], 1e-6, 1-1e-6)
+        # --- WIN classifier (consistent with final training: logistic on preprocessed X) ---
+        clf = LogisticRegression(
+            C=1.0, penalty="l2", solver="lbfgs", max_iter=600, random_state=RANDOM_STATE
+        ).fit(Xtr_tf, yw_tr)
 
-        win_brier_tr.append(brier_score_loss(yw_tr, p_tr))
-        win_brier_va.append(brier_score_loss(yw_va, p_va))
-        win_ll_tr.append(log_loss(yw_tr, p_tr, labels=[0,1]))
-        win_ll_va.append(log_loss(yw_va, p_va, labels=[0,1]))
-        win_acc_tr.append(accuracy_score(yw_tr, (p_tr >= 0.5).astype(int)))
-        win_acc_va.append(accuracy_score(yw_va, (p_va >= 0.5).astype(int)))
+        p_tr = np.clip(clf.predict_proba(Xtr_tf)[:, 1], 1e-6, 1 - 1e-6)
+        p_va = np.clip(clf.predict_proba(Xva_tf)[:, 1], 1e-6, 1 - 1e-6)
+
+        brier_tr = brier_score_loss(yw_tr, p_tr)
+        brier_va = brier_score_loss(yw_va, p_va)
+        ll_tr = log_loss(yw_tr, p_tr, labels=[0, 1])
+        ll_va = log_loss(yw_va, p_va, labels=[0, 1])
+        acc_tr = accuracy_score(yw_tr, (p_tr >= 0.5).astype(int))
+        acc_va = accuracy_score(yw_va, (p_va >= 0.5).astype(int))
+
+        win_brier_tr.append(brier_tr)
+        win_brier_va.append(brier_va)
+        win_ll_tr.append(ll_tr)
+        win_ll_va.append(ll_va)
+        win_acc_tr.append(acc_tr)
+        win_acc_va.append(acc_va)
+
+        # Class balance + leak sentinel
+        logging.info(
+            "Fold %d class balance — train p(home=1)=%.3f | val=%.3f",
+            fold, float(yw_tr.mean()), float(yw_va.mean())
+        )
+        if acc_va > 0.995 or brier_va < 1e-4:
+            logging.warning(
+                "Leak sentinel tripped on fold %d: Acc=%.3f Brier=%.6f — check features!",
+                fold, acc_va, brier_va
+            )
 
         logging.info(
             "Fold %d | HOME MAE %.3f/%.3f | AWAY MAE %.3f/%.3f | WIN Brier %.3f/%.3f | Acc %.3f/%.3f",
             fold,
             home_mae_tr[-1], home_mae_va[-1],
             away_mae_tr[-1], away_mae_va[-1],
-            win_brier_tr[-1], win_brier_va[-1],
-            win_acc_tr[-1], win_acc_va[-1],
+            brier_tr, brier_va,
+            acc_tr, acc_va,
         )
 
     eval_bundle = EvalBundle(
@@ -344,15 +400,15 @@ def cross_validate_models(X: pd.DataFrame, y_home: pd.Series, y_away: pd.Series,
         win_accuracy=FoldScores(train=win_acc_tr, valid=win_acc_va),
     )
 
-    # Summary metrics for metadata/report
+    # Summary metrics for metadata/report (FIX: home RMSE now correct)
     summary = {
         "home": {
             "MAE_mean_val": float(np.mean(home_mae_va)),
-            "RMSE_mean_val": float(np.mean(away_rmse_va)),
+            "RMSE_mean_val": float(np.mean(eval_bundle.home_rmse.valid)),
         },
         "away": {
             "MAE_mean_val": float(np.mean(away_mae_va)),
-            "RMSE_mean_val": float(np.mean(away_rmse_va)),
+            "RMSE_mean_val": float(np.mean(eval_bundle.away_rmse.valid)),
         },
         "win": {
             "Brier_mean_val": float(np.mean(win_brier_va)),
@@ -373,7 +429,9 @@ class TrainedModels:
     win_model: CalibratedClassifierCV
 
 
-def train_models(X_train: pd.DataFrame, y_home: pd.Series, y_away: pd.Series, y_win: pd.Series) -> TrainedModels:
+def train_models(
+    X_train: pd.DataFrame, y_home: pd.Series, y_away: pd.Series, y_win: pd.Series
+) -> TrainedModels:
     # Shared preprocessor fit on all training rows
     preprocessor = build_preprocessor(list(X_train.columns))
     Xtf = preprocessor.fit_transform(X_train)
@@ -384,12 +442,10 @@ def train_models(X_train: pd.DataFrame, y_home: pd.Series, y_away: pd.Series, y_
     home = clone(models["home_reg"]).fit(Xtf, y_home)
     away = clone(models["away_reg"]).fit(Xtf, y_away)
 
-    # Classifier: calibrate with internal CV on TRAIN ONLY
-    base = clone(models["win_clf_base"])  # receives raw X; we will wrap a pipeline for deployment
-    # For deployment consistency, we want the win model to accept *preprocessed* arrays.
-    # We'll fit on transformed Xtf using a simple LogisticRegression (without the StandardScaler step),
-    # then calibrate with cv=3. That keeps the preprocessor centralized.
-    win_base = LogisticRegression(C=1.0, penalty="l2", solver="lbfgs", max_iter=600, random_state=RANDOM_STATE)
+    # Classifier: logistic on preprocessed X, then calibrate
+    win_base = LogisticRegression(
+        C=1.0, penalty="l2", solver="lbfgs", max_iter=600, random_state=RANDOM_STATE
+    )
     win_base.fit(Xtf, y_win)
     win_cal = CalibratedClassifierCV(win_base, method="isotonic", cv=3)
     win_cal.fit(Xtf, y_win)
@@ -399,39 +455,41 @@ def train_models(X_train: pd.DataFrame, y_home: pd.Series, y_away: pd.Series, y_
 # ----------------------
 # Plotting
 # ----------------------
-
 def plot_training_curves(evalb: EvalBundle, save_path: Path) -> None:
+    if not HAS_MPL:
+        logging.warning("matplotlib not available; skipping plot generation")
+        return
     folds = range(1, len(evalb.home_mae.valid) + 1)
-    fig = plt.figure(figsize=(12, 9))
+    fig, axes = plt.subplots(3, 1, figsize=(12, 9))
 
     # Panel 1: HOME/AWAY MAE (validation)
-    plt.subplot(3, 1, 1)
-    plt.plot(folds, evalb.home_mae.valid, marker="o", label="HOME MAE (val)")
-    plt.plot(folds, evalb.away_mae.valid, marker="o", label="AWAY MAE (val)")
-    plt.title("Validation Errors per Fold")
-    plt.xlabel("Fold")
-    plt.ylabel("MAE")
-    plt.legend()
-    plt.grid(True, alpha=0.3)
+    ax = axes[0]
+    ax.plot(folds, evalb.home_mae.valid, marker="o", label="HOME MAE (val)")
+    ax.plot(folds, evalb.away_mae.valid, marker="o", label="AWAY MAE (val)")
+    ax.set_title("Validation Errors per Fold")
+    ax.set_xlabel("Fold")
+    ax.set_ylabel("MAE")
+    ax.legend()
+    ax.grid(True, alpha=0.3)
 
     # Panel 2: HOME/AWAY RMSE (validation)
-    plt.subplot(3, 1, 2)
-    plt.plot(folds, evalb.home_rmse.valid, marker="o", label="HOME RMSE (val)")
-    plt.plot(folds, evalb.away_rmse.valid, marker="o", label="AWAY RMSE (val)")
-    plt.xlabel("Fold")
-    plt.ylabel("RMSE")
-    plt.legend()
-    plt.grid(True, alpha=0.3)
+    ax = axes[1]
+    ax.plot(folds, evalb.home_rmse.valid, marker="o", label="HOME RMSE (val)")
+    ax.plot(folds, evalb.away_rmse.valid, marker="o", label="AWAY RMSE (val)")
+    ax.set_xlabel("Fold")
+    ax.set_ylabel("RMSE")
+    ax.legend()
+    ax.grid(True, alpha=0.3)
 
     # Panel 3: WIN metrics (validation)
-    plt.subplot(3, 1, 3)
-    plt.plot(folds, evalb.win_brier.valid, marker="o", label="Brier (val)")
-    plt.plot(folds, evalb.win_logloss.valid, marker="o", label="LogLoss (val)")
-    plt.plot(folds, evalb.win_accuracy.valid, marker="o", label="Accuracy (val)")
-    plt.xlabel("Fold")
-    plt.ylabel("Score")
-    plt.legend()
-    plt.grid(True, alpha=0.3)
+    ax = axes[2]
+    ax.plot(folds, evalb.win_brier.valid, marker="o", label="Brier (val)")
+    ax.plot(folds, evalb.win_logloss.valid, marker="o", label="LogLoss (val)")
+    ax.plot(folds, evalb.win_accuracy.valid, marker="o", label="Accuracy (val)")
+    ax.set_xlabel("Fold")
+    ax.set_ylabel("Score")
+    ax.legend()
+    ax.grid(True, alpha=0.3)
 
     fig.suptitle("Training/Validation Performance (CV)", fontsize=14)
     fig.tight_layout(rect=[0, 0.03, 1, 0.97])
@@ -441,7 +499,6 @@ def plot_training_curves(evalb: EvalBundle, save_path: Path) -> None:
 # ----------------------
 # Persistence / Reports
 # ----------------------
-
 def _save_joblib(obj: Any, path: Path) -> None:
     joblib.dump(obj, path)
     if path.exists() and path.stat().st_size > 0:
@@ -459,19 +516,26 @@ def generate_feature_metadata(X: pd.DataFrame) -> List[Dict[str, Any]]:
     meta = []
     for col in X.columns:
         ser = X[col]
+        is_num = ser.dtype.kind in "if"
         meta.append({
             "feature": col,
             "dtype": str(ser.dtype),
-            "missing_pct": float(ser.isna().mean()),
-            "mean": float(np.nanmean(ser)) if ser.dtype.kind in "if" else None,
-            "std": float(np.nanstd(ser)) if ser.dtype.kind in "if" else None,
+            "missing_pct": float(pd.isna(ser).mean()),
+            "mean": float(np.nanmean(ser)) if is_num else None,
+            "std": float(np.nanstd(ser)) if is_num else None,
         })
     return meta
 
 
-def write_training_report_txt(save_path: Path, *,
-                              dataset_rows: int, dataset_cols: int, features: List[str],
-                              metrics_summary: Dict[str, Any], artifacts: Dict[str, str]) -> None:
+def write_training_report_txt(
+    save_path: Path,
+    *,
+    dataset_rows: int,
+    dataset_cols: int,
+    features: List[str],
+    metrics_summary: Dict[str, Any],
+    artifacts: Dict[str, str]
+) -> None:
     lines = []
     lines.append("# Training Report\n")
     lines.append(f"Timestamp: {datetime.utcnow().isoformat()}Z\n")
@@ -534,9 +598,15 @@ def save_artifacts(models: TrainedModels, X_train: pd.DataFrame, eval_summary: D
 # ----------------------
 # Orchestration
 # ----------------------
-
-def evaluate_models(X: pd.DataFrame, y_home: pd.Series, y_away: pd.Series, y_win: pd.Series,
-                    groups: pd.Series, n_splits: int = 5, embargo: int = 1) -> Tuple[EvalBundle, Dict[str, Any]]:
+def evaluate_models(
+    X: pd.DataFrame,
+    y_home: pd.Series,
+    y_away: pd.Series,
+    y_win: pd.Series,
+    groups: pd.Series,
+    n_splits: int = 5,
+    embargo: int = 1
+) -> Tuple[EvalBundle, Dict[str, Any]]:
     with Block("Evaluating Models"):
         eval_bundle, summary = cross_validate_models(
             X, y_home, y_away, y_win, groups, n_splits=n_splits, embargo=embargo
@@ -591,8 +661,19 @@ def main():
         yw_tr = bundle.y_win.loc[train_mask]
         groups_tr = bundle.groups.loc[train_mask]
 
+        # Filter unlabeled rows (NaNs in any target) to avoid NaN->int cast errors later
+        labeled_mask = (~yh_tr.isna()) & (~yj_tr.isna()) & (~yw_tr.isna())
+        if not bool(labeled_mask.all()):
+            X_train = X_train.loc[labeled_mask]
+            yh_tr = yh_tr.loc[labeled_mask]
+            yj_tr = yj_tr.loc[labeled_mask]
+            yw_tr = yw_tr.loc[labeled_mask]
+            groups_tr = groups_tr.loc[labeled_mask]
+        # Ensure classifier labels are integers (0/1)
+        yw_tr = yw_tr.astype(int)
+
         X_test = bundle.X.loc[test_mask]
-        yw_te = bundle.y_win.loc[test_mask]
+        yw_te = bundle.y_win.loc[test_mask]  # currently unused; preserved for future eval
 
         logging.info("Data shape (train): %s | (test): %s", X_train.shape, X_test.shape)
         logging.info("Features used: %d", X_train.shape[1])

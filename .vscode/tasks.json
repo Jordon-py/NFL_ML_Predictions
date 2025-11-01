@@ -24,6 +24,70 @@
 			"label": "Check npm version",
 			"type": "shell",
 			"command": "npm --version"
+		},
+		{
+			"label": "Start Backend (uvicorn)",
+			"type": "shell",
+			"command": "${workspaceFolder}\\\\backend\\\\.venv\\\\Scripts\\\\python.exe",
+			"args": [
+				"-m",
+				"uvicorn",
+				"backend.main:app",
+				"--host",
+				"127.0.0.1",
+				"--port",
+				"8000"
+			],
+			"isBackground": true,
+			"group": "build"
+		},
+		{
+			"label": "Start Backend (uvicorn)",
+			"type": "shell",
+			"command": "c:\\Users\\iProg\\OneDrive\\Documents\\Football_predict\\nfl_prediction_system\\NFL_ML_Predictions\\backend\\.venv\\Scripts\\python.exe",
+			"args": [
+				"-m",
+				"uvicorn",
+				"backend.main:app",
+				"--host",
+				"127.0.0.1",
+				"--port",
+				"8000"
+			],
+			"isBackground": true,
+			"group": "build"
+		},
+		{
+			"label": "Start Backend (uvicorn)",
+			"type": "shell",
+			"command": "${workspaceFolder}\\backend\\.venv\\Scripts\\python.exe",
+			"args": [
+				"-m",
+				"uvicorn",
+				"backend.main:app",
+				"--host",
+				"127.0.0.1",
+				"--port",
+				"8000"
+			],
+			"isBackground": true,
+			"group": "build"
+		},
+		{
+			"label": "Start Backend (uvicorn)",
+			"type": "shell",
+			"command": "c:\\Users\\iProg\\OneDrive\\Documents\\Football_predict\\nfl_prediction_system\\NFL_ML_Predictions\\backend\\.venv\\Scripts\\python.exe",
+			"args": [
+				"-m",
+				"uvicorn",
+				"backend.main:app",
+				"--host",
+				"127.0.0.1",
+				"--port",
+				"8000"
+			],
+			"isBackground": true,
+			"group": "build"
 		}
 	]
 }
