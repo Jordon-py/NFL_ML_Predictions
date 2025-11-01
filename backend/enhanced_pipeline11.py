@@ -606,7 +606,7 @@ def run_experiment(
     *,
     train_path: Optional[str] = None,
     test_path: Optional[str] = None,
-    holdout_season: Optional[int] = None,
+    holdout_season: Optional[int] = None, 
     holdout_week: Optional[int] = None,
     holdout_week_end: Optional[int] = None,
 ) -> Tuple[List[ModelResult], pd.DataFrame]:
@@ -971,12 +971,12 @@ def save_artifacts(
 def generate_markdown_report(results: List[ModelResult], output_path: str, holdout_season: int) -> None:
     """Write a human-readable report for cross-val and hold-out metrics."""
     lines: List[str] = []
-    lines.append("# NFLEX v6 Predictive Pipeline Report\n")
+    lines.append("# NFLEX v6 Predictive Pipeline Report/n")
     lines.append(
-        f"This report summarises the performance of base models and a convex blend on NFL game data up to {holdout_season}.\n"
+        f"This report summarises the performance of base models and a convex blend on NFL game data up to {holdout_season}./n"
     )
 
-    lines.append("## Cross-validated results (training seasons)\n")
+    lines.append("## Cross-validated results (training seasons)/n")
     header = ["Model", "Brier", "Brier CI", "Log-loss", "LL CI", "ROC AUC", "PR AUC", "Brier Skill"]
     lines.append("| " + " | ".join(header) + " |")
     lines.append("|" + "|".join([" --- " for _ in header]) + "|")
@@ -989,7 +989,7 @@ def generate_markdown_report(results: List[ModelResult], output_path: str, holdo
             f"{res.mean_roc_auc:.4f} | {res.mean_pr_auc:.4f} | {res.brier_skill:.3f} |"
         )
 
-    lines.append("\n## Hold-out season results (\"never_seen\" season)\n")
+    lines.append("/n## Hold-out season results (/"never_seen/" season)/n")
     header = ["Model", "Brier", "Log-loss", "ROC AUC", "PR AUC", "Brier Skill"]
     lines.append("| " + " | ".join(header) + " |")
     lines.append("|" + "|".join([" --- " for _ in header]) + "|")
@@ -1001,7 +1001,7 @@ def generate_markdown_report(results: List[ModelResult], output_path: str, holdo
             f"{res.test_pr_auc:.4f} | {res.test_brier_skill:.3f} |"
         )
 
-    lines.append("\n## Brier decomposition (hold-out season)\n")
+    lines.append("/n## Brier decomposition (hold-out season)/n")
     lines.append("| Model | Brier | Reliability | Resolution | Uncertainty |")
     lines.append("| --- | ---: | ---: | ---: | ---: |")
     for res in results:
@@ -1011,7 +1011,7 @@ def generate_markdown_report(results: List[ModelResult], output_path: str, holdo
                 f"| {res.name} | {d['brier']:.4f} | {d['reliability']:.4f} | {d['resolution']:.4f} | {d['uncertainty']:.4f} |"
             )
 
-    lines.append("\n**Notes**:")
+    lines.append("/n**Notes**:")
     lines.append("- Purged walk-forward CV uses one-group embargo and five folds.")
     lines.append("- Hold-out season models are trained strictly on prior seasons.")
     lines.append("- Brier Skill Score baseline = weighted mean home-win rate on train.")
@@ -1020,7 +1020,7 @@ def generate_markdown_report(results: List[ModelResult], output_path: str, holdo
 
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w", encoding="utf-8") as f:
-        f.write("\n".join(lines))
+        f.write("/n".join(lines))
 
 
 # =========
@@ -1057,13 +1057,13 @@ if __name__ == "__main__":
         if args.holdout_season is not None:
             holdout_season = int(args.holdout_season)
             holdout_week = args.holdout_week
-            holdout_week_end = args.holdout_week_end
+            holdout_week_end = 8
         elif args.holdout is not None:
             holdout_season = int(args.holdout)
             holdout_week = None
             holdout_week_end = None
         else:
-            preview_df = pd.read_csv(args.data)
+            preview_df = pd.read_csv(r"backend/data/merge_dominance.csv")
             src = "season" if "season" in preview_df.columns else (
                 "season_home" if "season_home" in preview_df.columns else None
             )
@@ -1074,7 +1074,7 @@ if __name__ == "__main__":
             holdout_week_end = None
 
     results, _ = run_experiment(
-        data_path=args.data,
+        data_path=r"backend/data/merge_dominance.csv",
         holdout_season=holdout_season,
         holdout_week=holdout_week,
         holdout_week_end=holdout_week_end,

@@ -69,7 +69,7 @@ body {
   background-color: #041c42e1;
 
   /* Background image + subtle parallax */
-  background-image: url('nfl_pic.png');
+  background-image: url('/nfl_pic.png');
   background-repeat: no-repeat;
   background-position: center center;
   background-size: cover;

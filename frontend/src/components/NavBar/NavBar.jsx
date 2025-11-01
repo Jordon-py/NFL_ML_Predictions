@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import HamburgerMenu from '../HamburgerMenu';
-import './NavBarr.css';
+import './NavBar.css';
 
 /**
  * NavBar.jsx

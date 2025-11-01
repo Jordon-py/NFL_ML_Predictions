@@ -1,22 +1,22 @@
-// /frontend/src/api/client.js
-// @ts-nocheck
-
+// /src/api/client.js
 /**
- * NFL-ML Client API wrapper (hardened)
- * - Correct PROD detection
- * - Safe base handling (no double slashes)
- * - Timeout + retries for flaky networks
- * - JSON helpers and typed errors
+ * NFL-ML API Client (Robust)
+ * - Safe base resolution (local dev vs hosted)
+ * - Typed errors, retries, and timeouts
+ * - Clean schema mapping for /predict
+ * - Batch-friendly helpers for weekly flows
  */
 
 const DEFAULT_TIMEOUT_MS = 15000;
-const RETRY_ATTEMPTS = 2;   // total tries = 1 + RETRY_ATTEMPTS
-const RETRY_BASE_MS = 300;  // backoff base
+const RETRY_ATTEMPTS = 2;    // total tries = 1 + RETRY_ATTEMPTS
+const RETRY_BASE_MS = 300;   // backoff base
+
+// ---------- URL helpers ----------
 
 function normalizeBase(base) {
   if (!base) return "";
   let b = String(base).trim();
-  // allow comma-joined .env mistakes; keep first non-empty
+  // allow comma-joined mistakes; keep first non-empty
   if (b.includes(",")) b = b.split(",").map(s => s.trim()).find(Boolean) || "";
   // remove trailing slashes
   return b.replace(/\/+$/, "");
@@ -28,132 +28,128 @@ function joinUrl(base, path) {
   return b ? `${b}/${p}` : `/${p}`;
 }
 
-// DEV uses Vite proxy ("" base) → server.proxy
-export const API_BASE = import.meta.env?.DEV
-  ? ""
-  : normalizeBase(import.meta.env?.VITE_API_BASE || "https://nfl-predict-ecf5a5bd34fe.herokuapp.com");
+// Base URL resolution:
+// - Local dev (localhost/127.*): use relative URLs (Vite proxy handles forwarding)
+// - Hosted (Vercel/Netlify/etc.): prefer VITE_API_BASE; else fallback to known Heroku URL if you have one.
+function resolveApiBase() {
+  const herokuFallback = "https://nfl-predict-ecf5a5bd34fe.herokuapp.com"; // <- replace if needed
+  const fromEnv = normalizeBase(import.meta?.env?.VITE_API_BASE);
+  const host = (typeof window !== "undefined" && window.location && window.location.hostname) || "";
+  const isLocalHost = /^(localhost|127\.0\.0\.1)$/i.test(host);
+  return isLocalHost ? "" : (fromEnv || herokuFallback);
+}
 
-/** Lightweight typed API error */
+export const API_BASE = resolveApiBase();
+
+// ---------- Error type ----------
+
 export class ApiError extends Error {
-  constructor(message, { status, url, details } = {}) {
+  constructor(status, message, payload, url) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.payload = payload;
     this.url = url;
-    this.details = details;
   }
 }
 
+// ---------- Core fetch with timeout + retry ----------
+
 function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-/**
- * Internal fetch with JSON defaults, timeout, and retries.
- * @param {string} path
- * @param {Object} [options]
- * @param {number} [options.timeout]
- * @param {number} [options.retries]
- * @returns {Promise<any>}
- */
-async function api(path, options = {}) {
-  const {
-    method = "GET",
-    headers = {},
-    body,
-    timeout = DEFAULT_TIMEOUT_MS,
-    retries = RETRY_ATTEMPTS,
-  } = options;
-
+async function api(path, init = {}, { timeoutMs = DEFAULT_TIMEOUT_MS, retries = RETRY_ATTEMPTS } = {}) {
   const url = joinUrl(API_BASE, path);
-  const requestId = Math.random().toString(36).slice(2, 10);
-
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeout);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-  const fetchOnce = async () => {
-    const init = {
-      method,
-      headers,
-      body,
+  const doFetch = async () => {
+    const res = await fetch(url, {
+      credentials: "omit", // CORS: backend allows "*" in dev; no cookies
+      ...init,
+      headers: { "Content-Type": "application/json", ...(init.headers || {}) },
       signal: controller.signal,
-      credentials: "omit", // play nice with CORS credentials
-    };
-    // Dev-time trace
-    if (import.meta.env?.DEV) {
-      console.debug(`[api:${requestId}] ${method} ${url}`, init);
-    }
-    const res = await fetch(url, init);
-    const ctype = res.headers.get("content-type") || "";
+    });
+
+    const ctype = String(res.headers.get("Content-Type") || "");
+    const parseJson = async () => { try { return await res.json(); } catch { return null; } };
+    const parseText = async () => { try { return await res.text(); } catch { return null; } };
 
     if (!res.ok) {
-      let details;
-      if (ctype.includes("application/json")) {
-        try { details = await res.json(); } catch { }
-      } else {
-        try { details = await res.text(); } catch { }
-      }
-      throw new ApiError(`Request failed (${res.status})`, { status: res.status, url, details });
+      const payload = ctype.includes("application/json") ? await parseJson() : await parseText();
+      const msg = (payload && (payload.detail || payload.message)) || res.statusText || "Request failed";
+      throw new ApiError(res.status, msg, payload, url);
     }
-
-    if (ctype.includes("application/json")) {
-      return res.json();
-    }
-    // allow CSV/text passthrough for reports when needed
-    return res.text();
+    return ctype.includes("application/json") ? await parseJson() : await parseText();
   };
 
   try {
-    let attempt = 0, lastErr;
-    while (attempt <= retries) {
+    let attempt = 0;
+    while (true) {
       try {
-        const out = await fetchOnce();
-        clearTimeout(timer);
+        const out = await doFetch();
         return out;
       } catch (err) {
-        lastErr = err;
-        // only retry for network/timeout/5xx
         const retriable =
-          (err.name === "AbortError") ||
-          (err instanceof TypeError) ||
-          (err.status >= 500);
-        if (!retriable || attempt === retries) break;
-        await delay(RETRY_BASE_MS * Math.pow(2, attempt)); // simple backoff
+          err?.name === "AbortError" ||
+          err instanceof TypeError ||          // network
+          (typeof err.status === "number" && err.status >= 500);
+        if (!retriable || attempt >= retries) throw err;
+        await delay(RETRY_BASE_MS * Math.pow(2, attempt));
         attempt += 1;
       }
     }
-    throw lastErr;
   } finally {
     clearTimeout(timer);
   }
 }
 
-/** JSON helpers */
-function get(path, opts = {}) {
-  return api(path, { ...opts, method: "GET" });
-}
-function postJson(path, payload, opts = {}) {
-  return api(path, {
-    ...opts,
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...(opts.headers || {}) },
-    body: JSON.stringify(payload ?? {}),
-  });
-}
+const get = (path, opts = {}) => api(path, { ...opts, method: "GET" });
+const postJson = (path, body, opts = {}) => api(path, { ...opts, method: "POST", body: JSON.stringify(body) });
 
-/** Shape normalizer for /predict input */
-export function toPredictionRequest(game) {
+// ---------- Schema mappers ----------
+
+/**
+ * Normalize UI params → backend PredictionRequest.
+ * Accepts either explicit fields or schedule objects with home/away_abbr.
+ */
+function toPredictionRequest({ homeTeam, awayTeam, season, week, home_abbr, away_abbr, home_team, away_team }) {
   return {
-    home_team: game.home_abbr || game.home_team,
-    away_team: game.away_abbr || game.away_team,
-    season: Number(game.season),
-    week: Number(game.week),
+    home_team: (home_abbr || home_team || homeTeam),
+    away_team: (away_abbr || away_team || awayTeam),
+    season: Number(season),
+    week: Number(week),
   };
 }
 
-/** Public endpoints */
-export const getNextWeekSchedule = () => get("/schedule/next-week");
-export const predictGame = (game) => postJson("/predict", toPredictionRequest(game));
-export const predictNextWeek = () => get("/predict/next-week");
-export const getTrainingReport = () => get("/report/training");
-export const getCalibrationReport = () => get("/report/calibration");
-export const health = () => get("/health");
-export const retrain = () => postJson("/retrain", {});
+// ---------- Public API ----------
+
+export function createApi(base = API_BASE) {
+  // You can pass an explicit base to talk to a different instance
+  const _get = (p, o) => api(joinUrl(base, p), { ...o, method: "GET" });
+  const _post = (p, b, o) => api(joinUrl(base, p), { ...o, method: "POST", body: JSON.stringify(b) });
+
+  return {
+    // Health & reports
+    getHealth: () => _get("/health"),
+    getTrainingReport: () => _get("/report/training"),
+    getCalibrationReport: () => _get("/report/calibration"),
+
+    // Schedule & batch predictions
+    getNextWeekSchedule: () => _get("/schedule/next-week"),
+    predictNextWeek: () => _get("/predict/next-week"),
+
+    // Single-game prediction
+    predictGame: (params) => _post("/predict", toPredictionRequest(params)),
+  };
+}
+
+// For convenience default instance (uses resolved API_BASE)
+export const apiClient = createApi();
+
+// Named exports for direct import
+export const getNextWeekSchedule = apiClient.getNextWeekSchedule;
+export const predictGame = apiClient.predictGame;
+export const predictNextWeek = apiClient.predictNextWeek;
+export const getHealth = apiClient.getHealth;
+export const getTrainingReport = apiClient.getTrainingReport;
+export const getCalibrationReport = apiClient.getCalibrationReport;

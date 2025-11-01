@@ -39,16 +39,13 @@
 //   - If CSV might contain commas inside names, consider a robust CSV parser.
 // -----------------------------------------------------------------------------
 
-import { getNextWeekSchedule, predictGame } from '../api/client.js';
+import { getNextWeekSchedule, predictGame, ApiError } from '../api/client.js';
+import { addLog } from '../api/debugLog.js';
 import React, { useState, useEffect, useCallback } from 'react';
 import PredictionResult from './PredictionResult.jsx';
+import './TeamGrid.css';
 
 // ---- Small stateless utilities (safe at module scope) -----------------------
-
-const kickoffFormatter = new Intl.DateTimeFormat(undefined, {
-  dateStyle: 'medium',
-  timeStyle: 'short',
-});
 
 // Stable game key: used for maps (loading/predictions) and history joins.
 const makeKey = (g) => `${g.season}-${g.week}-${g.home_abbr}-${g.away_abbr}`;
@@ -98,7 +95,19 @@ export default function TeamGrid() {
   const [teams, setTeams] = useState({});
   const [schedule, setSchedule] = useState([]);
   const [predictions, setPredictions] = useState({});
+  const [predictErrors, setPredictErrors] = useState({}); // per-game prediction errors (do not nuke the whole grid)
   const [history, setHistory] = useState([]);
+  // Lightweight toast notifications (stack top-right)
+  const [toasts, setToasts] = useState([]);
+
+  // Auto-dismiss toasts after ~5.5s
+  useEffect(() => {
+    const id = setInterval(() => {
+      const now = Date.now();
+      setToasts((ts) => ts.filter((t) => now - t.createdAt < 5500));
+    }, 1000);
+    return () => clearInterval(id);
+  }, []);
 
   // Loading flags:
   // - "teams"/"schedule" for bootstrap steps
@@ -163,7 +172,6 @@ export default function TeamGrid() {
   const handlePredict = useCallback(
     async (game) => {
       const key = makeKey(game);
-
       // If this game is already in-flight, ignore subsequent triggers.
       if (loading[key]) return;
 
@@ -179,6 +187,16 @@ export default function TeamGrid() {
           season: Number(game.season),
           week: Number(game.week),
         };
+        // Client-side validation to avoid obvious 400s
+        if (!payload.home_team || !payload.away_team) {
+          throw new ApiError('Missing team abbreviations', { status: 400 });
+        }
+        if (payload.home_team === payload.away_team) {
+          throw new ApiError('Home and away teams must differ', { status: 400 });
+        }
+        if (!Number.isFinite(payload.season) || !Number.isFinite(payload.week)) {
+          throw new ApiError('Season and week must be numbers', { status: 400 });
+        }
 
         // Call the model API and coerce numeric fields defensively.
         const res = await predictGame(payload);
@@ -188,8 +206,15 @@ export default function TeamGrid() {
           point_diff: Number(res.point_diff),
           home_win_probability: Number(res.home_win_probability),
           away_win_probability: Number(res.away_win_probability),
+          mode: String(res.mode || ''),
+          prediction_source: String(res.prediction_source || ''),
         };
 
+        // Clear any prior error for this game on success and update prediction map.
+        setPredictErrors((errs) => {
+          const { [key]: _old, ...rest } = errs;
+          return rest;
+        });
         // Update in-memory predictions map.
         setPredictions((p) => ({ ...p, [key]: result }));
 
@@ -220,7 +245,33 @@ export default function TeamGrid() {
         });
       } catch (e) {
         console.error('[TeamGrid] predictGame:', e);
-        setError('Failed to get prediction');
+        // Do not set the global page error for per-card prediction failures; show inline card error instead.
+        let msg = 'Failed to get prediction';
+        if (e instanceof ApiError) {
+          if (e.details && typeof e.details === 'object' && e.details.detail) msg = String(e.details.detail);
+          else if (typeof e.details === 'string' && e.details.trim()) msg = e.details;
+          else if (e.status === 400) msg = 'Bad request — please check teams, season, and week.';
+          if (/fallback/i.test(msg)) {
+            msg = 'Prediction requires server fallback and is currently disabled.';
+          }
+        } else if (e && typeof e.message === 'string' && e.message.trim()) {
+          msg = e.message;
+        }
+        setPredictErrors((m) => ({ ...m, [key]: msg }));
+        try {
+          addLog({
+            level: 'error',
+            where: 'TeamGrid.handlePredict',
+            key,
+            payload,
+            message: msg,
+          });
+        } catch { }
+        // Toast (auto-dismiss)
+        setToasts((t) => [
+          ...t,
+          { id: `${Date.now()}-${Math.random()}`, type: 'error', message: msg, createdAt: Date.now() },
+        ]);
       } finally {
         // Clear per-game loading flag.
         setLoading((s) => ({ ...s, [key]: false }));
@@ -264,6 +315,18 @@ export default function TeamGrid() {
 
   return (
     <div className="team-grid-section">
+      {/* Toasts container (top-right) */}
+      <div className="toast-container">
+        {toasts.map((t) => (
+          <div
+            key={t.id}
+            role="status"
+            className={`toast ${t.type === 'error' ? 'toast--error' : 'toast--info'}`}
+          >
+            {t.message}
+          </div>
+        ))}
+      </div>
       <div className="team-grid-cards a-shine">
         {schedule.map((game, index) => {
           const key = makeKey(game);
@@ -272,7 +335,7 @@ export default function TeamGrid() {
 
           return (
             // CSS var --i allows staggered or shimmer animations if desired
-            <div key={key} style={{ '--i': index }}>
+            <div key={key} className="grid-item">
               <div
                 className={`card hover inner-card sb3__content ${prediction ? 'has-prediction' : ''
                   } ${isLoading ? 'loading' : ''}`}
@@ -298,7 +361,7 @@ export default function TeamGrid() {
                         alt={`${game.away_abbr} logo`}
                         className="team-logo"
                         onError={(e) => {
-                          e.currentTarget.style.display = 'none';
+                          try { e.currentTarget.classList.add('is-hidden'); } catch { }
                         }}
                       />
                       <strong>{game.away_abbr}</strong>
@@ -313,7 +376,7 @@ export default function TeamGrid() {
                         alt={`${game.home_abbr} logo`}
                         className="team-logo"
                         onError={(e) => {
-                          e.currentTarget.style.display = 'none';
+                          try { e.currentTarget.classList.add('is-hidden'); } catch { }
                         }}
                       />
                       <strong>{game.home_abbr}</strong>
@@ -328,6 +391,15 @@ export default function TeamGrid() {
                   <div className="prediction loading-line">Predicting…</div>
                 ) : prediction ? (
                   <div className="prediction">
+                    {/* tiny source badge for transparency */}
+                    {prediction.prediction_source ? (
+                      <div
+                        className="source-badge"
+                        title={`Mode: ${prediction.mode || 'production'}`}
+                      >
+                        {prediction.prediction_source}
+                      </div>
+                    ) : null}
                     <div>
                       Home win: {(prediction.home_win_probability * 100).toFixed(0)}%
                     </div>
@@ -335,6 +407,16 @@ export default function TeamGrid() {
                     <div>
                       Score: {prediction.home_score}–{prediction.away_score}
                     </div>
+                  </div>
+                ) : predictErrors[key] ? (
+                  <div className="prediction error" role="status" aria-live="polite">
+                    <div style={{ color: '#b00020' }}>{predictErrors[key]}</div>
+                    <button
+                      className="retry-btn"
+                      onClick={(e) => { e.stopPropagation(); handlePredict(game); }}
+                    >
+                      Retry
+                    </button>
                   </div>
                 ) : (
                   <div className="cta">Click to predict</div>

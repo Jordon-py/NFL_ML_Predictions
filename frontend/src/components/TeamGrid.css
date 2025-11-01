@@ -121,7 +121,7 @@
 
   50% {
     box-shadow:
-      0 0 14px 4px rgba(4, 100, 210, 0.45),
+      0 0 14px 4px rgba(4, 100, 210, 0.349),
       0 0 0 1px rgba(4, 100, 210, 0.75) inset;
   }
 }
@@ -157,6 +157,8 @@
   animation-timing-function: linear;
   animation-iteration-count: infinite;
   background-size: 200% 100%;
+  border-bottom-left-radius: 1px solid;
+  border-color: lch(100% 0.01 296.81 / 0.884);
 }
 
 .a-glow {
@@ -192,8 +194,8 @@ body {
   overflow-x: hidden;
 }
 
-h2 .nfl-matchups,
-  p .nfl-matchups {
+h2 .nfl-matchups.a-shine,
+p .nfl-matchups {
   display: flex;
   flex-direction: row;
   justify-content: space-evenly;
@@ -210,7 +212,7 @@ main.app-main {
 /* Dashboard container - ensure it doesn't interfere with sticky nav */
 .dashboard {
   position: relative;
-  
+
   width: 100%;
   min-height: 100vh;
   overflow-y: visible;
@@ -233,11 +235,12 @@ main.app-main {
   text-align: space-between;
   margin-bottom: .5rem;
 }
+
 div.probability.home-win-prob.inner-card.a-shine {
   display: flex;
   font-size: 1rem;
   font-optical-sizing: auto;
-  color:lch(100% 0.01 296.81);
+  color: lch(100% 0.01 296.81);
 
 }
 
@@ -249,7 +252,7 @@ div.probability.home-win-prob.inner-card.a-shine {
 .team-grid-cards {
   display: grid;
   background-color: #00000000;
-     
+
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 1rem;
   border-radius: 1.5%;
@@ -284,8 +287,10 @@ div.probability.home-win-prob.inner-card.a-shine {
 .matchup-card.inner-card {
   display: flex;
   flex-direction: row;
-  -webkit-backdrop-filter: blur(10px); /* normalized prefix form */
-  backdrop-filter: blur(10px);         /* standard property for compatibility */
+  -webkit-backdrop-filter: blur(10px);
+  /* normalized prefix form */
+  backdrop-filter: blur(10px);
+  /* standard property for compatibility */
   background-color: var(a-shine);
   border-radius: 18px;
   box-shadow: 0 6px 18px 1px rgba(17, 0, 0, 0.712);
@@ -356,6 +361,7 @@ div .prediction-result.inner-card.a-glow {
   font-family: 'Inter', sans-serif;
   transition: all transform(a-glow);
 }
+
 .matchup-card:hover {
   transform: translateY(-7px);
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.524);
@@ -444,4 +450,49 @@ img.team-logo {
 img.team-logo:hover {
   transform: scale(1.00) rotate(360deg 3s infinite);
   filter: brightness(1.4);
+}
+
+/* ---- Toasts (moved from inline styles) ---- */
+.toast-container {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.toast {
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  font-size: 13px;
+  max-width: 360px;
+}
+
+.toast--error {
+  background: oklch(52% 0.12 25);
+}
+
+.toast--info {
+  background: oklch(62% 0.08 160);
+}
+
+/* ---- Source badge (moved from inline styles) ---- */
+.source-badge {
+  align-self: flex-start;
+  font-size: 11px;
+  background: oklch(82% 0.06 250 / 0.8);
+  color: #111;
+  padding: 2px 6px;
+  border-radius: 6px;
+  margin-bottom: 6px;
+}
+
+/* Optional grid item wrapper if needed */
+/* Wrapper for each grid cell (replaces inline style var usage) */
+.grid-item {
+  display: block;
 }

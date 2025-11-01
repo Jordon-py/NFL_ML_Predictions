@@ -9,9 +9,10 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  /* Center header content */
-  padding: 2rem 1rem;
   text-align: center;
+}
+h1 {
+  font-family: 'Cinzel', 'Lucida Sans Unicode', 'Lucida Grande', 'Lucida Sans', Arial, sans-serif;
 }
 
 h2.nfl-matchups {
@@ -28,27 +29,13 @@ h2.nfl-matchups {
   /* Apply text intro */
 }
 
-.hamburger-menu {
-  image-rendering: optimizeQuality;
-  position: fixed;
-  right: 2rem;
-  /* Adjusted for better spacing */
-  top: 2rem;
-  display: flex;
-  width: 40px;
-  height: 40px;
-  cursor: pointer;
-  z-index: 1000;
-  /* Ensure it's on top */
-}
-
 
 p.nfl-matchups {
   font-size: clamp(1rem, 2vw + 0.5rem, 1.25rem);
   color: oklch(85% 0.05 240 / 0.9);
   margin-top: 0.5rem;
   max-width: 60ch;
-  animation: textFadeSlide 1s var(--a-ease) 200ms both;
+  animation: textFadeSlide 3s var(--a-ease) 200ms both;
   /* Staggered intro */
 }
 
@@ -57,26 +44,28 @@ section.history-chart {
   display: flex;
   flex-direction: column;
   background-color: oklch(0% 0 0 / 0.7);
-  gap: 12px;
+  gap: 20px;
   font-size: 1rem;
   /* Adjusted for consistency */
   border-left: 2px solid oklch(70% 0.15 265 / 0.7);
+  border-top: 1px solid oklch(70% 0.17 269 / 0.5);
   border-radius: var(--r-sm);
   padding: 1rem;
   margin: 1rem;
   max-width: 400px;
   /* Constrain width */
-  animation: cardPop 0.8s var(--a-ease) both;
+  animation: cardPop 1.8s var(--a-ease) both;
   /* Pop-in animation */
 }
 
 /* --- Team grid layout ---------------------------------------------------- */
-.team-main {
+section.team-main {
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
+  flex-direction: row;
+  justify-content: space-between;
   /* Center grid items */
-  gap: 2rem;
+  
   /* Consistent gap */
   padding: 1rem;
 }
@@ -97,8 +86,8 @@ section.history-chart {
 /* Probabilities (top summary strip) */
 div.probability.home-win-prob.inner-card {
   font-size: 1rem;
-  color: oklch(98% 0.02 240);
-  animation: a-shine 2s linear infinite;
+  color: oklch(94.104% 0.04575 215.5);
+  animation: a-shine 3s linear infinite;
   /* Apply shine animation */
 }
 
