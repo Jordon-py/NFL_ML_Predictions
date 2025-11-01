@@ -1,17 +1,12 @@
 {
-  "training_timestamp_utc": "2025-10-27 06:12:25 UTC",
-  "training_timestamp": "2025-10-27 06:12:25 UTC",
-  "dataset_hash": 2258658518095576682,
-  "training_samples": 6854,
+  "training_timestamp_utc": "2025-11-01 07:07:59 UTC",
+  "dataset_hash": 7970437072635788619,
   "preprocessor": "preprocessor.joblib",
   "home_model": "home_model.joblib",
   "away_model": "away_model.joblib",
   "win_model": "win_clf_calibrated.joblib",
   "raw_feature_columns": {
     "numeric": [
-      "home_points_for",
-      "away_points_for",
-      "point_diff",
       "home_prior_pf_avg_3",
       "home_prior_pa_avg_3",
       "home_prior_win_pct_3",
@@ -79,10 +74,6 @@
       "dom_away_losses",
       "dom_away_ties",
       "dom_away_win_pct",
-      "_home_win_derived",
-      "_dom_delta",
-      "_dom_delta_emp_home_win",
-      "season_home_win_rate",
       "tl_home_home_games",
       "tl_home_away_games",
       "tl_home_total_games_listed",
@@ -91,7 +82,6 @@
       "tl_away_away_games",
       "tl_away_total_games_listed",
       "tl_away_home_win_rate_when_home",
-      "_row_id",
       "tl_away_away_win_rate_when_away",
       "tl_home_away_win_rate_when_away",
       "pre_home_games_cum",
@@ -113,16 +103,16 @@
     "n_splits": 5
   },
   "holdout_metrics_win": {
-    "roc_auc": 0.7741865036034068,
-    "brier_score": 0.19473008601713168,
-    "log_loss": 0.5744667707038544,
+    "roc_auc": 1.0,
+    "brier_score": 1.1032457516858631e-07,
+    "log_loss": 0.00030401177200101186,
     "optimal_threshold": 0.5,
     "optimal_threshold_f1": 0.5,
     "optimal_threshold_acc": 0.5
   },
   "quick_mae": {
-    "home": 6.605668847542285,
-    "away": 6.5123963260844615
+    "home": 5.833813735424824,
+    "away": 5.728828129775621
   },
   "mode": "production",
   "win_threshold_optimal": 0.5
