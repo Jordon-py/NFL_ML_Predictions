@@ -36,7 +36,16 @@ function resolveApiBase() {
   const fromEnv = normalizeBase(import.meta?.env?.VITE_API_BASE);
   const host = (typeof window !== "undefined" && window.location && window.location.hostname) || "";
   const isLocalHost = /^(localhost|127\.0\.0\.1)$/i.test(host);
-  return isLocalHost ? "" : (fromEnv || herokuFallback);
+  const base = isLocalHost ? "" : (fromEnv || herokuFallback);
+  // One-time diagnostic: if hosted and no explicit VITE_API_BASE provided, warn about fallback
+  if (!isLocalHost && !fromEnv && typeof window !== "undefined" && !window.__NFL_API_BASE_WARNED__) {
+    try {
+      // eslint-disable-next-line no-console
+      console.warn("[NFL-ML] Using Heroku API fallback. Set Vercel env VITE_API_BASE to your backend URL to remove this warning.");
+      window.__NFL_API_BASE_WARNED__ = true;
+    } catch (_) { /* noop */ }
+  }
+  return base;
 }
 
 export const API_BASE = resolveApiBase();

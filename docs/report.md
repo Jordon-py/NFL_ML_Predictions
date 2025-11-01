@@ -6,6 +6,36 @@ This report documents incremental changes to the NFL_ML_Predictions repository, 
 
 ## Recent Changes
 
+- Date/Time: 2025-11-01 / 22:55 UTC.
+  - Files Modified: `frontend/package.json`, `frontend/src/api/client.js`.
+  - Change Description:
+    - engines: Relaxed `npm` constraint from `"10.0.0"` to `">=10.0.0 <11"` to silence EBADENGINE warnings on Vercel (which commonly runs npm 10.8.x). `node` remains `20.x`.
+    - API client: Added a one-time console warning in hosted environments when `VITE_API_BASE` is not set and the client falls back to the Heroku URL, guiding maintainers to configure `VITE_API_BASE` in Vercel.
+  - Why Made: Vercel build logs showed EBADENGINE warnings due to a too-strict npm pin. Some production 404s stem from frontend hitting the same-origin path; the client now nudges maintainers to set `VITE_API_BASE` explicitly.
+  - Impact: Clean build logs on Vercel; clearer runtime diagnostics for API base configuration in production. No behavior change in dev (Vite proxy still used).
+  - Quality Gates: Build: PASS. Lint/Typecheck: PASS. Tests: N/A.
+
+- Date/Time: 2025-11-01 / 23:10 UTC.
+  - Files Modified: `scripts/deploy.ps1`, `vercel.json` (root), `frontend/vercel.json`.
+  - Change Description:
+    - Deployment script now aligns with backend CORS behavior: sets `RESTRICT_CORS=true` and `ALLOWED_ORIGINS=...` (instead of unused `CORS_ORIGINS`), and verifies via `/debug`.
+    - Added `VITE_API_BASE` env key to both Vercel configs to match the frontend client; retained `VITE_API_URL` and `REACT_APP_API_URL` for backward compatibility.
+  - Why Made: Backend only honors `ALLOWED_ORIGINS` when `RESTRICT_CORS=true`; the previous script set `CORS_ORIGINS`, which was ignored. Frontend client expects `VITE_API_BASE` in production.
+  - Impact: Successful CORS configuration on Heroku and correct API base injection on Vercel builds. Fewer production 404s/misroutes.
+  - Quality Gates: Build: PASS. Lint/Typecheck: PASS. Tests: N/A.
+
+## Deployment Notes (Heroku & Vercel)
+
+- Heroku (Python buildpack):
+  - Required files: `Procfile`, `requirements.txt` (delegates to `backend/requirements.txt`), `runtime.txt` (Python 3.11), optional `heroku.yml` (container stack).
+  - Web command: `gunicorn -w 4 -k uvicorn.workers.UvicornWorker backend.main:app`.
+  - Config vars for CORS: set `RESTRICT_CORS=true` and `ALLOWED_ORIGINS` to a comma-separated list of origins (script handles this).
+- Vercel (Vite SPA):
+  - Root `vercel.json` builds `frontend` and outputs to `frontend/dist`, with SPA rewrites to `/index.html`.
+  - Set `VITE_API_BASE` in Vercel Project Settings to your Heroku backend URL for production deployments.
+
+References: Heroku CLI install/use, container stack via `heroku.yml`, Vite on Vercel and Environment Variables (links captured via docs fetch).
+
 - **Date/Time**: 2025-11-01 / 21:30 UTC.
   - **Files Modified**: `frontend/src/components/HamburgerMenu.css`.
   - **Change Description**: Hamburger menu is now visible only on phones/small screens. Implemented a mobile-first CSS rule to hide the container by default and reveal it under 768px via media query. Cleaned up button styling (hover, border, transition), removed unused line-based icon animation block, and ensured the image icon class is used consistently.
