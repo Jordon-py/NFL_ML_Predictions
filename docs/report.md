@@ -34,6 +34,14 @@ This report documents incremental changes to the NFL_ML_Predictions repository, 
   - **Impact**: UI unchanged visually; styling now centralized. Toasts and badges use class-based styles. Loading flags behave as intended. Slightly smaller console noise.
   - **Quality Gates**: Build: PASS. Lint/Typecheck: PASS (CSS rule cleanup). Tests: N/A.
 
+- **Date/Time**: 2025-11-01 / 22:28 UTC.
+  - **Files Modified**: `frontend/src/components/TeamGrid.css`.
+  - **Change Description**: CSS hygiene fixes — corrected invalid tokens and properties:
+    - border-bottom-left-radius syntax fixed; removed invalid transformY transition; split compound animation into two explicit entries; replaced undefined `var(a-shine)` references; added `@keyframes logoSpin` and applied with proper `animation` to logos on hover; corrected animation-timing-function variable.
+  - **Why Made**: Prevent CSS parsing quirks and ensure styles apply as intended; establish clean, maintainable style rules.
+  - **Impact**: Visual parity with fixes to hover spin behavior; fewer console/style warnings; improved reliability of animations.
+  - **Quality Gates**: Build: PASS. Lint: PASS. Tests: N/A.
+
 - **Date/Time**: 2025-11-01 / 15:50 UTC.
   - **Files Modified**: `backend/.env`.
   - **Change Description**: Updated `DATASET_PATH` to `backend/data/merge_dominance.csv` so the API uses the engineered dominance dataset for assembling future-game features. This reduces `feature_fallback` cases and produces varied, model-driven predictions.

@@ -46,7 +46,7 @@
 /* Utility to apply common animation props cleanly */
 .anim {
   animation-duration: var(--a-dur);
-  animation-timing-function: var(--a-ease-in-ease-out);
+  animation-timing-function: var(--a-ease);
   animation-delay: var(--a-delay);
   animation-iteration-count: var(--a-iter);
   animation-fill-mode: both;
@@ -157,7 +157,7 @@
   animation-timing-function: linear;
   animation-iteration-count: infinite;
   background-size: 200% 100%;
-  border-bottom-left-radius: 1px solid;
+  border-bottom-left-radius: 1px;
   border-color: lch(100% 0.01 296.81 / 0.884);
 }
 
@@ -291,7 +291,7 @@ div.probability.home-win-prob.inner-card.a-shine {
   /* normalized prefix form */
   backdrop-filter: blur(10px);
   /* standard property for compatibility */
-  background-color: var(a-shine);
+  background-color: var(--c-card);
   border-radius: 18px;
   box-shadow: 0 6px 18px 1px rgba(17, 0, 0, 0.712);
   padding: 10px;
@@ -304,11 +304,11 @@ div.probability.home-win-prob.inner-card.a-shine {
   max-height: 450px;
   height: 100%;
   max-width: 320px;
-  transition: transformY(-9px);
+
   width: 100%;
   color: #cbe4ff;
   /* Apply fade-in animation on load */
-  animation: outlineGlow, fadeInVar 0.6s cubic-bezier(.22, .61, .36, 1) ease-in-out;
+  animation: fadeInVar 0.6s cubic-bezier(.22, .61, .36, 1) both, outlineGlow 1.2s ease-in-out both;
   animation-delay: calc(var(--i, 0) * 100ms);
   /* Stagger animation based on index */
 }
@@ -345,7 +345,7 @@ div .point-diff {
   left: 50%;
   display: flex;
   flex-direction: row;
-  color: var(a-shine);
+  color: var(--c-text-on-dark);
   background-color: var(--grad-primary);
   width: 20px;
 }
@@ -447,9 +447,15 @@ img.team-logo {
 }
 
 /* Add shine effect on logo hover */
+@keyframes logoSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 img.team-logo:hover {
-  transform: scale(1.00) rotate(360deg 3s infinite);
   filter: brightness(1.4);
+  animation: logoSpin 3s linear infinite;
 }
 
 /* ---- Toasts (moved from inline styles) ---- */
