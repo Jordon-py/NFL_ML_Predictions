@@ -87,8 +87,8 @@ LOG_DIR.mkdir(parents=True, exist_ok=True)
 # Use game_features.csv which has the engineered features (prior stats, differentials, betting data)
 # merged_game_features.csv only has raw stats and won't work with trained models
 # ---------------------------------------------------------------
-DEFAULT_DATASET = DATA_DIR / "merge_dominance.csv"
-DEFAULT_SCHEDULE = DATA_DIR / "Nfl_schedule_2025_2026.csv"
+DEFAULT_DATASET = DATA_DIR / "/data/merge_dominance.csv"
+DEFAULT_SCHEDULE = DATA_DIR / "/data/Nfl_schedule_2025_2026.csv"
 
 FRONTEND_DIR = BASE_DIR / "frontend"
 FRONTEND_BUILD = FRONTEND_DIR / "build"
@@ -141,26 +141,26 @@ DEFAULT_ALLOWED_ORIGINS: List[str] = [
     "https://nfl-ml-predictions-pr5uahmqx-christopher-jordons-projects.vercel.app",
     "https://nfl-predict-6fghcp7sx-christopher-jordons-projects.vercel.app",
     "https://new-nfl-predict.vercel.app",
-    "https://www.nfl-predict.vercel.app",
+    "http://www.nfl-predict.vercel.app",
 ]
 
 
 def parse_allowed_origins() -> List[str]:
     """Parse ALLOWED_ORIGINS env var and fall back to curated defaults."""
-    raw = os.getenv("ALLOWED_ORIGINS", "")
+    raw = os.getenv("ALLOWED_ORIGINS", "nfl-ml-predictions.vercel.app/").strip()
     entries = [o.strip() for o in raw.split(",") if o.strip()]
     return entries or DEFAULT_ALLOWED_ORIGINS
 
 
-if os.getenv("RESTRICT_CORS", "false").strip().lower() in TRUTHY:
+if os.getenv("RESTRICT_CORS", "False").strip().lower() in TRUTHY:
     ALLOWED_ORIGINS = parse_allowed_origins()
     log.info("CORS restricted to ALLOWED_ORIGINS: %s", ALLOWED_ORIGINS)
 else:
-    ALLOWED_ORIGINS = ["*"]
-    log.info("CORS configured to allow all origins (ALLOWED_ORIGINS='*')")
+    ALLOWED_ORIGINS = ["nfl-ml-predictions.vercel.app/"]
+    log.info("CORS configured to allow all origins (ALLOWED_ORIGINS='nfl-ml-predictions.vercel.app/')")
 
 allow_origin_regex_env = os.getenv("ALLOWED_ORIGIN_REGEX", "").strip()
-ALLOW_ORIGIN_REGEX = allow_origin_regex_env or r"https://.*\\.vercel\\.app$"
+ALLOW_ORIGIN_REGEX = allow_origin_regex_env or r"https://.*//.vercel//.app$"
 
 # ⚠️ Add ANY custom middlewares BEFORE this line (auth/logging/sentry/etc)
 # Teams
@@ -284,7 +284,7 @@ def load_objects() -> Dict[str, Any]:
             - raw_feature_columns: dict of feature columns
             - win_threshold_optimal: float, optimal win threshold
     """
-    meta_path = MODELS_DIR / "metadata.json"
+    meta_path = MODELS_DIR / "/metadata.json"
     log.debug("Loading model metadata from %s", meta_path)
     if not meta_path.exists():
         raise FileNotFoundError(f"Missing {meta_path}")
@@ -366,9 +366,11 @@ def _sanity_predict(model_objects: Dict[str, Any], df: pd.DataFrame) -> None:
         for c in cols:
             features[c] = sample.get(c, 0)
     else:
+        df = pd.read_csv('/data/merge_dominance.csv')
+        print(df.head())
         features = {c: 0 for c in model_objects.get("raw_feature_columns", {}).get("numeric", [])}
 
-    x = pd.DataFrame([features])
+    x = df[features]
 
     pre = model_objects.get("preprocessor")
     home_m = model_objects.get("home_model")
@@ -504,10 +506,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     if not ds_path.exists():
         log.warning("✗ Dataset not found at %s", ds_path)
         # Check alternate locations
-        alternates = [
-            DATA_DIR / "merged_game_features.csv",
-            DATA_DIR / "game_features.csv",
-        ]
+        alternates = DATA_DIR / "merge_dominance.csv",
+
+
+    
         for alt in alternates:
             if alt.exists():
                 log.info("Found alternate dataset: %s", alt)
@@ -775,7 +777,26 @@ def _build_future_row(
     """
     global model_objects
     local = df.copy()
-    local["time_key"] = local["season"].astype(int) * 100 + local["week"].astype(int)
+
+    
+    required_cols = [
+        "season",
+        "week",
+        "home_points_for",
+        "away_points_for",
+        "winner",
+        "home_team",
+        "away_team",
+    ]
+    for col in required_cols:
+        if col not in local.columns:
+            # create a column of NaN with proper length
+            local[col] = pd.Series([np.nan] * len(local), index=local.index)
+
+    # Build a stable numeric time key; coerce non-numeric to 0 to keep ordering stable
+    season_num = pd.to_numeric(local["season"], errors="coerce").fillna(0).astype(int)
+    week_num = pd.to_numeric(local["week"], errors="coerce").fillna(0).astype(int)
+    local["time_key"] = season_num * 100 + week_num
     cutoff = season * 100 + week
 
     # Dataset helpers
@@ -800,8 +821,8 @@ def _build_future_row(
         return float(default)
 
     def team_history(team: str) -> pd.DataFrame:
-        m = ((local["home_team"] == team) | (local["away_team"] == team)) & \
-            local["home_points_for"].notna() & local["away_points_for"].notna() & \
+        m = ((local["home_team"] == team) | (local["away_team"] == team)) & /
+            local["home_points_for"].notna() & local["away_points_for"].notna() & /
             (local["time_key"] < cutoff)
         return local.loc[m].sort_values("time_key")
 
