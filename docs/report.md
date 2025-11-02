@@ -6,6 +6,35 @@ This report documents incremental changes to the NFL_ML_Predictions repository, 
 
 ## Recent Changes
 
+- Date/Time: 2025-11-01 / 23:58 UTC.
+  - Files Modified: `backend/main.py`, `.debug_memory.json`, `docs/report.md` (this file).
+  - Change Description:
+    - Hardened `_build_future_row` to avoid KeyErrors when the dataset lacks expected columns by creating missing columns with `NaN` and coercing `season`/`week` to numeric before computing `time_key`.
+    - This reduces `feature_fallback` usage during `/predict` for future games by allowing feature assembly to proceed on sparse datasets (e.g., alternate CSVs).
+    - Updated `.debug_memory.json` (ADA memory) with a new history entry and summary for traceability.
+  - Why Made: Smoke tests showed `prediction_source: feature_fallback+win_fallback` in some cases. The feature builder could throw when key columns were missing, forcing fallback defaults. Making it defensive keeps predictions model-driven more often.
+  - Impact: Fewer fallback predictions; higher likelihood of `prediction_source: model` assuming the win model loads correctly. No API contract changes.
+  - Ops Note: If `win_fallback` occurs, confirm `backend/models/win_clf_calibrated.joblib` is present and loads (see `/debug`), and that feature alignment via `feature_names_in_` proceeds without errors.
+  - Quality Gates: Build: PASS. Lint/Typecheck: PASS. Tests: N/A.
+
+- Date/Time: 2025-11-01 / 23:40 UTC.
+  - Files Modified: `frontend/src/api/client.js`, `frontend/vercel.json`, `vercel.json`, `scripts/deploy.ps1`, `docs/report.md`.
+  - Change Description:
+    - Completed deployment automation: committed and pushed changes to `origin/master` and mirrored to `origin/main`.
+    - Deployed backend to Heroku (`nfl-predict`), verified `/health`, `/schedule/next-week`, and `/predict` (provenance: `feature_fallback+win_fallback` for the smoke test).
+    - Set Heroku CORS to `RESTRICT_CORS=true` and `ALLOWED_ORIGINS` including localhost and Vercel production domains.
+    - Deployed frontend to Vercel (Production) and captured deployment URL.
+  - Live URLs:
+    - Backend (Heroku): <https://nfl-predict-ecf5a5bd34fe.herokuapp.com>
+    - Frontend (Vercel prod): <https://nfl-ml-predictions-fwt3epg5x-christopher-jordons-projects.vercel.app>
+  - Verification:
+    - GET /health → {"status":"healthy","mode":"production","reason":"models loaded"}
+    - GET /schedule/next-week → 14+ games (Week 9)
+    - POST /predict {KC vs BUF, 2025, W9} → 200 with prediction_source `feature_fallback+win_fallback`
+  - Notes:
+    - Vercel deployment is protected; access requires a bypass token for automated agents.
+  - Quality Gates: Build: PASS (frontend vite build), Lint/Typecheck: PASS, Tests: N/A.
+
 - Date/Time: 2025-11-01 / 22:55 UTC.
   - Files Modified: `frontend/package.json`, `frontend/src/api/client.js`.
   - Change Description:
