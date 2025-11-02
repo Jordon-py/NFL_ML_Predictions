@@ -821,8 +821,8 @@ def _build_future_row(
         return float(default)
 
     def team_history(team: str) -> pd.DataFrame:
-        m = ((local["home_team"] == team) | (local["away_team"] == team)) & /
-            local["home_points_for"].notna() & local["away_points_for"].notna() & /
+        m = ((local["home_team"] == team) | (local["away_team"] == team)) & \
+            local["home_points_for"].notna() & local["away_points_for"].notna() & \
             (local["time_key"] < cutoff)
         return local.loc[m].sort_values("time_key")
 
