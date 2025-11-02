@@ -144,6 +144,8 @@ export function createApi(base = API_BASE) {
   return {
     // Health & reports
     getHealth: () => _get("/health"),
+    // Alias for hooks/useTrainingStatus.js compatibility
+    getHealthStatus: () => _get("/health"),
     getTrainingReport: () => _get("/report/training"),
     getCalibrationReport: () => _get("/report/calibration"),
 
@@ -153,6 +155,9 @@ export function createApi(base = API_BASE) {
 
     // Single-game prediction
     predictGame: (params) => _post("/predict", toPredictionRequest(params)),
+
+    // Training control (backend provides lightweight /retrain endpoint)
+    startTraining: () => _post("/retrain", {}),
   };
 }
 
@@ -164,5 +169,7 @@ export const getNextWeekSchedule = apiClient.getNextWeekSchedule;
 export const predictGame = apiClient.predictGame;
 export const predictNextWeek = apiClient.predictNextWeek;
 export const getHealth = apiClient.getHealth;
+export const getHealthStatus = apiClient.getHealthStatus;
 export const getTrainingReport = apiClient.getTrainingReport;
 export const getCalibrationReport = apiClient.getCalibrationReport;
+export const startTraining = apiClient.startTraining;

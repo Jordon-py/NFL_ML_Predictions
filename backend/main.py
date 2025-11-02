@@ -146,19 +146,31 @@ DEFAULT_ALLOWED_ORIGINS: List[str] = [
 ]
 
 
-def parse_allowed_origins() -> List[str]:
-    """Parse ALLOWED_ORIGINS env var and fall back to curated defaults."""
-    raw = os.getenv("ALLOWED_ORIGINS", "nfl-ml-predictions.vercel.app/").strip()
-    entries = [o.strip() for o in raw.split(",") if o.strip()]
-    return entries or DEFAULT_ALLOWED_ORIGINS
+def _parse_cors_origins() -> List[str]:
+    """
+    Parse CORS_ORIGINS from environment with fallback to defaults.
+    Handles comma-separated strings and strips whitespace robustly.
+    
+    Returns:
+        List of validated origin URLs
+    """
+    env_origins = os.getenv("ALLOWED_ORIGINS", "").strip()
+    if env_origins:
+        origins = [origin.strip() for origin in env_origins.split(",") if origin.strip()]
+        if origins:
+            log.info("CORS origins from env: %s", origins)
+            return origins
+    
+    log.info("CORS origins (default): %s", DEFAULT_ALLOWED_ORIGINS)
+    return DEFAULT_ALLOWED_ORIGINS
 
 
 if os.getenv("RESTRICT_CORS", "False").strip().lower() in TRUTHY:
-    ALLOWED_ORIGINS = parse_allowed_origins()
-    log.info("CORS restricted to ALLOWED_ORIGINS: %s", ALLOWED_ORIGINS)
+    ALLOWED_ORIGINS = _parse_cors_origins()
+    log.info("CORS restricted mode enabled")
 else:
-    ALLOWED_ORIGINS = ["nfl-ml-predictions.vercel.app/"]
-    log.info("CORS configured to allow all origins (ALLOWED_ORIGINS='nfl-ml-predictions.vercel.app/')")
+    ALLOWED_ORIGINS = ["*"]
+    log.info("CORS configured to allow all origins")
 
 allow_origin_regex_env = os.getenv("ALLOWED_ORIGIN_REGEX", "").strip()
 ALLOW_ORIGIN_REGEX = allow_origin_regex_env or r"https://.*//.vercel//.app$"
@@ -321,6 +333,44 @@ def load_objects() -> Dict[str, Any]:
     }
 
 
+def _validate_model_features(model_objects: Dict[str, Any]) -> None:
+    """
+    Validate loaded models match expected feature counts from metadata.
+    
+    Args:
+        model_objects: Dictionary containing loaded models and metadata
+        
+    Raises:
+        ValueError: If feature count mismatch detected between preprocessor and metadata
+    """
+    raw_cols = model_objects.get("raw_feature_columns", {})
+    if not raw_cols:
+        log.warning("No raw_feature_columns in metadata; skipping feature validation")
+        return
+    
+    # Count expected features from metadata
+    if isinstance(raw_cols, dict):
+        expected_count = len(raw_cols.get("numeric", [])) + len(raw_cols.get("categorical", []))
+    elif isinstance(raw_cols, list):
+        expected_count = len(raw_cols)
+    else:
+        log.warning("Unexpected raw_feature_columns format; skipping validation")
+        return
+    
+    # Check preprocessor feature count
+    preprocessor = model_objects.get("preprocessor")
+    if preprocessor and hasattr(preprocessor, "n_features_in_"):
+        actual = preprocessor.n_features_in_
+        if actual != expected_count:
+            raise ValueError(
+                f"Feature count mismatch: preprocessor expects {actual}, "
+                f"metadata declares {expected_count}"
+            )
+        log.info(f"✓ Model feature validation passed: {expected_count} features")
+    else:
+        log.debug("Preprocessor lacks n_features_in_; skipping feature count validation")
+
+
 def _validate_dataset_schema(df: pd.DataFrame, model_objects: Dict[str, Any]) -> None:
     """Fail-fast check that dataset contains required engineered features.
 
@@ -341,64 +391,60 @@ def _validate_dataset_schema(df: pd.DataFrame, model_objects: Dict[str, Any]) ->
 
 def _sanity_predict(model_objects: Dict[str, Any], df: pd.DataFrame) -> None:
     """
-    Perform a tiny sanity prediction to exercise model deserialization and pipeline
-    behavior at startup. This builds a minimal synthetic feature row using the first
-    row in `df` (or constructs defaults) and runs home/away predictions and the
-    win probability model if present.
-
-    This function logs warnings but does not raise exceptions; failures are
-    surfaced in logs to avoid bringing down the service after a non-fatal
-    prediction error. The primary purpose is to detect deserialization errors
-    or unexpected model interface changes early.
+    Perform a quick prediction on a sample row to catch obvious model/data mismatches at startup.
+    This is a fail-fast mechanism. If this fails, the app will not start.
     """
-    # Build a representative feature row: prefer a real engineered row if available
-    failures: List[str] = []
-    if not df.empty:
-        sample = df.iloc[0]
-        # Ensure the sample contains numeric features expected by preprocessor
-        features = {}
-        raw_cols = model_objects.get("raw_feature_columns", {})
-        # raw_cols may be a dict with numeric/categorical lists
-        cols = []
-        if isinstance(raw_cols, dict):
-            cols = raw_cols.get("numeric", []) + raw_cols.get("categorical", [])
-        elif isinstance(raw_cols, list):
-            cols = raw_cols
-        for c in cols:
-            features[c] = sample.get(c, 0)
-    else:
-        # Avoid absolute-root paths; fall back to DEFAULT_DATASET if available
-        fallback_path = Path(os.getenv("DATASET_PATH", str(DEFAULT_DATASET)))
-        df = pd.read_csv(fallback_path) if fallback_path.exists() else pd.DataFrame()
-        print(df.head())
-        features = {c: 0 for c in model_objects.get("raw_feature_columns", {}).get("numeric", [])}
+    if df is None or df.empty:
+        log.warning("Sanity predict: skipping, no dataset loaded")
+        return
 
-    # Build a single-row DataFrame for sanity transform
-    try:
-        x = pd.DataFrame([{k: features[k] for k in features.keys()}])
-    except Exception:
-        x = pd.DataFrame()
-
-    pre = model_objects.get("preprocessor")
+    sample = df.sample(1, random_state=42).copy()
+    preprocessor = model_objects.get("preprocessor")
     home_m = model_objects.get("home_model")
     away_m = model_objects.get("away_model")
     win_m = model_objects.get("win_model")
+    failures = []
 
-    # Attempt to transform and predict; collect failures and raise at end to fail-fast
-    transformed = None
-    if pre is not None:
-        try:
-            # Always attempt transform in sanity check; tests and mocks rely on this call.
-            transformed = pre.transform(x)
-        except Exception as e:
-            failures.append(f"preprocessor.transform failed: {type(e).__name__}: {e}")
-            log.debug("Sanity predict: preprocessor.transform failed during startup check", exc_info=True)
+    if preprocessor is None:
+        failures.append("preprocessor not found in model objects")
+    if not all((home_m, away_m, win_m)):
+        failures.append("one or more models are missing")
 
-    def try_predict(m, label: str):
+    # Ensure required columns for the sample are present
+    required_cols = model_objects.get("raw_feature_columns", {})
+    if required_cols:
+        numeric = required_cols.get("numeric", [])
+        categorical = required_cols.get("categorical", [])
+        missing = [c for c in numeric + categorical if c not in sample.columns]
+        if missing:
+            failures.append(f"sample data missing columns: {missing[:5]}")
+
+    if failures:
+        raise RuntimeError(f"Startup sanity-predict failed pre-flight checks: {'; '.join(failures)}")
+
+    # Use the loaded preprocessor to transform the sample data
+    try:
+        if SKLEARN_CHECK_AVAILABLE:
+            check_is_fitted(preprocessor)
+        
+        # Drop target columns that are not features
+        x = sample.drop(columns=["home_points_for", "away_points_for", "home_win"], errors="ignore")
+        
+        transformed = preprocessor.transform(x)
+        log.info("Sanity check: preprocessor transformed sample data successfully.")
+    except Exception as e:
+        failures.append(f"preprocessor.transform failed: {type(e).__name__}: {e}")
+        log.debug("Sanity predict: preprocessor.transform failed", exc_info=True)
+        transformed = None
+
+    def try_predict(m: Any, label: str) -> None:
+        """Helper to run prediction and capture failures."""
+        if transformed is None:
+            failures.append(f"{label} predict skipped: preprocessor failed")
+            return
         try:
-            inp = x if transformed is None else transformed
             if hasattr(m, "predict"):
-                _ = m.predict(inp)
+                _ = m.predict(transformed)
             else:
                 failures.append(f"{label} missing predict method")
         except Exception as e:
@@ -415,8 +461,8 @@ def _sanity_predict(model_objects: Dict[str, Any], df: pd.DataFrame) -> None:
         failures.append("away_model not present")
     if win_m is not None and hasattr(win_m, "predict_proba"):
         try:
-            inp = x if transformed is None else transformed
-            _ = win_m.predict_proba(inp)
+            if transformed is not None:
+                _ = win_m.predict_proba(transformed)
         except Exception as e:
             failures.append(f"win_model.predict_proba failed: {type(e).__name__}: {e}")
             log.debug("Sanity predict: win_model.predict_proba failed", exc_info=True)
@@ -491,16 +537,18 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """
     FastAPI lifespan context manager for loading ML models and datasets at startup.
     Hardened for resilient deployment: logs warnings but doesn't crash on missing artifacts.
+    Enhanced with model validation and dataset schema checks.
     """
     global model_objects, dataset_df
     log.info("=" * 60)
     log.info("STARTUP: NFL Prediction API v2.1.0")
     log.info("=" * 60)
     
-    # Load models with graceful degradation
+    # Load models with validation
     try:
         model_objects = load_objects()
-        log.info("✓ Models loaded successfully")
+        _validate_model_features(model_objects)
+        log.info("✓ Models loaded and validated")
     except Exception as e:
         log.error("✗ Failed to load models: %s", e, exc_info=True)
         model_objects = None
@@ -993,10 +1041,9 @@ def _build_future_row(
     # Pre cumulative metrics (wins/games to date)
     def pre_cum(team: str, side: str) -> Dict[str, Any]:
         hist = team_history(team)
-        wins = int((hist["winner"] == team).sum()) if not hist.empty else 0
-        games = int(len(hist))
+        games = len(hist)
+        wins = int((hist["winner"] == team).sum())
         rate = (wins / games) if games else 0.5
-        # Rolling last 3/5 win rates
         r3 = 0.5
         r5 = 0.5
         if games:
@@ -1006,10 +1053,13 @@ def _build_future_row(
             r5 = float(last5.mean()) if len(last5) else 0.5
         return {
             f"pre_{side}_games_cum": games,
+           
+        return {
+            f"pre_{side}_games_cum": games,
             f"pre_{side}_wins_cum": wins,
             f"pre_{side}_win_rate_cum": rate,
-            f"pre_{side}_win_rate_r3": r3,
-            f"pre_{side}_win_rate_r5": r5,
+            f"pre_{side}_win_rate_l3_cum": r3,
+            f"pre_{side}_win_rate_l5_cum": r5,
         }
 
     features.update(pre_cum(home, "home"))
