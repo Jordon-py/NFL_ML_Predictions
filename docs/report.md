@@ -2,9 +2,49 @@
 
 ## Executive Summary
 
-This report documents incremental changes to the NFL_ML_Predictions repository, focusing on bug fixes, code clarity, and architectural integrity. Changes are made with a "Repository Guardian" mindset: holistic awareness, logic simplification, and professional documentation. Current app completion estimate: 100% (full ML pipeline functional; models trained on engineered features; predictions ready for integration).
+This report documents incremental changes to the NFL_ML_Predictions repository, focusing on bug fixes, code clarity, and architectural integrity. Changes are made with a "Repository Guardian" mindset: holistic awareness, logic simplification, and professional documentation. **Current app completion estimate: 98%** (production-ready; pending final deployment verification).
 
 ## Recent Changes
+
+- **Date/Time**: 2025-11-02 / 18:00 UTC
+- **Files Modified**: `backend/main.py`, `.debug_memory.json`, `docs/report.md`
+- **Change Description**:
+  - **Production Enhancements Implemented:**
+    - Enhanced `_parse_cors_origins()` with robust comma-separated parsing and better logging
+    - Added `_validate_model_features()` to verify preprocessor feature counts match metadata at startup
+    - Updated `lifespan()` to call feature validation after model loading
+    - Fixed CORS fallback when `RESTRICT_CORS=false` to use `["*"]` instead of malformed origin
+  - **Already Present (Verified):**
+    - `_resolve_schedule_path()` with production-safe fallbacks (SCHEDULE_PATH env → backend/data → pattern match)
+    - NaN handling in `enhanced_pipeline.py` build_dataset() filters nulls before `.astype(int)` conversion
+    - Leak guard active in training pipeline with conservative feature filtering
+- **Why Made**: Ensure production reliability with startup validation, eliminate CORS misconfig edge cases, prevent feature count mismatches between training and inference
+- **Impact**:
+  - Models validated at startup; fail-fast on feature count mismatch
+  - CORS configuration more resilient to env var formatting
+  - Schedule path resolution works across all environments
+  - Training pipeline handles incomplete games gracefully
+- **Quality Gates**: Build: PASS. Lint: PASS. Ready for deployment testing.
+
+- Date/Time: 2025-11-02 / 17:20 UTC.
+  - Files Modified: `frontend/src/api/client.js`, `.debug_memory.json`, `docs/report.md` (this file).
+  - Change Description:
+    - Fixed a frontend integration mismatch: `hooks/useTrainingStatus.js` imported `startTraining` and `getHealthStatus` that were not exported by `api/client.js`. Added `startTraining()` (POST `/retrain`) and `getHealthStatus()` (alias of GET `/health`) to the API client and exposed named exports.
+    - Repaired `.debug_memory.json` which had become syntactically invalid due to a bad merge. Rewrote it to a compact, valid structure preserving key recent history (classifier input sanitization, Heroku 503 resolution) and a concise project overview/metrics section.
+  - Why Made: Prevent runtime errors when the training hook is used and restore ADA memory continuity for iterative debugging context.
+  - Impact: Hooks can now trigger retraining flows without import errors. Repo-level debug memory is valid JSON again and ready for future runs.
+  - Quality Gates: Build: PASS. Lint/Typecheck: PASS. Tests: N/A.
+
+- Date/Time: 2025-11-02 / 16:50 UTC.
+  - Files Modified: `Procfile`, `backend/data/Nfl_data_sorted.csv` (added), `.debug_memory.json` (added), `docs/report.md` (this file).
+  - Change Description:
+    - Resolved production 503 on Heroku caused by a legacy startup check expecting a dataset at `backend/data/Nfl_data_sorted.csv` and failing fast when missing. Added a small fallback CSV at that path to satisfy older slugs and redeployed. Updated Procfile to explicitly run `backend.main:app`.
+    - Current codebase already tolerates missing datasets at startup (logs a warning and continues). After redeploy, app boots cleanly with models loaded even if dataset is absent.
+  - Why Made: Heroku logs showed `RuntimeError: Dataset not found: backend/data/Nfl_data_sorted.csv` during lifespan startup, crashing workers and returning 503 for `/health` and `/debug`.
+  - Impact: Backend is now healthy in production. Verified:
+    - GET /health → {"status":"healthy","mode":"production","reason":"models loaded"}
+    - GET /debug → metadata present; CORS origins restricted as configured. Dataset currently reported as missing; predictions will synthesize features when needed.
+  - Quality Gates: Build: PASS. Lint/Typecheck: PASS. Smoke: PASS (Heroku healthy; endpoints respond).
 
 - Date/Time: 2025-11-02 / 00:05 UTC.
   - Files Modified: `frontend/src/components/HamburgerMenu.jsx`, `.debug_memory.json`, `docs/report.md` (this file).
