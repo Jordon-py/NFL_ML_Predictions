@@ -55,7 +55,9 @@ export default function HamburgerMenu() {
         id="ham-menu"
         className={`menu-panel ${isOpen ? 'open' : 'closed'}`}
         aria-hidden={!isOpen}
-        inert={!isOpen}
+        aria-disabled={!isOpen}
+        tabIndex={isOpen ? 0 : -1}
+        style={{ pointerEvents: isOpen ? 'auto' : 'none', userSelect: isOpen ? 'auto' : 'none' }}
       >
         <div className="menu-item">
           <a href="/">Dashboard</a>

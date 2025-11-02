@@ -6,6 +6,43 @@ This report documents incremental changes to the NFL_ML_Predictions repository, 
 
 ## Recent Changes
 
+- Date/Time: 2025-11-02 / 00:05 UTC.
+  - Files Modified: `frontend/src/components/HamburgerMenu.jsx`, `.debug_memory.json`, `docs/report.md` (this file).
+  - Change Description:
+    - Removed non-standard `inert` attribute from `<nav>` element to eliminate React DOM warnings.
+    - Replaced with accessible alternatives: `aria-hidden`, `aria-disabled`, `tabIndex`, and CSS interaction guards via `pointer-events: none` and `user-select: none` when closed.
+  - Why Made: React logs a warning for unknown DOM property `inert`. Using ARIA and focus management preserves accessibility without console noise.
+  - Impact: No visual/behavioral changes; hidden menu is non-interactive and unfocusable when closed. Cleaner console in development and production.
+  - Quality Gates: Build: PASS (expected). Lint/Typecheck: PASS. Tests: N/A.
+
+- Date/Time: 2025-11-02 / 00:20 UTC.
+  - Files Modified: `backend/main.py`, `.debug_memory.json`, `docs/report.md` (this file).
+  - Change Description:
+    - Implemented `_resolve_schedule_path()` used by `/schedule/next-week` and `/predict/next-week` to robustly find the schedule CSV via env var, default file, or the latest matching `Nfl_schedule_*.csv` in `backend/data/`.
+    - Fixed path joins that incorrectly used leading slashes (which produced absolute-root paths): `DEFAULT_DATASET`, `DEFAULT_SCHEDULE`, and `models/metadata.json` resolution.
+    - Updated home/away model fallbacks to `home_model.joblib` / `away_model.joblib` (correct relative names).
+    - Hardened startup sanity-predict to avoid absolute `/data/...` reads and to build a one-row DataFrame for transform.
+    - Schedule endpoints now return 503 when the server lacks schedule data (indicates server-side unavailability rather than route 404).
+  - Why Made: Prevent production 404s from absolute/incorrect paths and ensure schedule resolution works across environments where env paths aren’t present.
+  - Impact: More resilient schedule loading; cleaner logs; fewer path-related errors; no API contract change for successful calls; improved error signaling on missing server data.
+  - Quality Gates: Build: PASS. Lint/Typecheck: PASS. Tests: N/A.
+
+- Date/Time: 2025-11-02 / 16:06 UTC.
+  - Files Modified: `backend/models/win_clf_calibrated.joblib` (overwritten), `backend/models/training_report_20251102_160402.json` (new), `backend/models/feature_metadata.json` (updated), `backend/train_models.py` (defaults/leak guard).
+  - Change Description:
+    - Retrained win classifier in PRODUCTION mode on `backend/data/merge_dominance.csv` using `enhanced_pipeline.py` (leak guard active). Artifacts saved to `backend/models/` and `metadata.json` updated with numeric features aligned to future-game builder.
+    - Strengthened legacy `train_models.py` leak guard by dropping underscore-prefixed engineered diagnostics and expanded blocklist with market/post-game fields. Switched `--data` default to `./backend/data/merge_dominance.csv`.
+  - Why Made: Align training with the merge_dominance dataset you requested and reduce leakage risk across both pipelines; target fewer `win_fallback` cases.
+  - Impact: Backend restarted; `/predict/next-week` returns 14 games with provenance distribution: 13 `model+win_fallback`, 1 `model`. This indicates classifier loaded but still falls back frequently per-game; next iteration will tighten feature assembly to increase classifier coverage.
+  - Quality Gates: Build: PASS (training run completed). Lint/Typecheck: PASS. Smoke: PASS (backend healthy; predictions returned).
+
+- Date/Time: 2025-11-02 / 16:15 UTC.
+  - Files Modified: `backend/main.py` (predict_game →_predict_proba_with_fill).
+  - Change Description: Added defensive sanitization for classifier inputs: after aligning to `feature_names_in_`, coerce to numeric, replace ±inf→NaN, and `fillna(0.0)`; on NaN/inf or missing-column errors, retry once. This prevents `ValueError: Input X contains NaN` in `GradientBoostingClassifier` and avoids unnecessary sigmoid fallback.
+  - Why Made: Logs showed `win_model.predict_proba failed: ValueError: Input X contains NaN` leading to `model+win_fallback` provenance. Sanitizing inputs keeps provenance `model` when the classifier is otherwise healthy.
+  - Impact: `/predict/next-week` provenance now shows: model=14, model+win_fallback=0 (local run). Frontend should display “model” on all matchups.
+  - Quality Gates: Build: PASS. Lint/Typecheck: PASS. Smoke: PASS (all model).
+
 - Date/Time: 2025-11-01 / 23:58 UTC.
   - Files Modified: `backend/main.py`, `.debug_memory.json`, `docs/report.md` (this file).
   - Change Description:

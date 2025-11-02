@@ -67,13 +67,17 @@ export class ApiError extends Error {
 function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 async function api(path, init = {}, { timeoutMs = DEFAULT_TIMEOUT_MS, retries = RETRY_ATTEMPTS } = {}) {
-  const url = joinUrl(API_BASE, path);
+  // If caller already provided an absolute URL, use it as-is to avoid double-prefixing API_BASE
+  const url = /^https?:\/\//i.test(String(path))
+    ? String(path)
+    : joinUrl(API_BASE, path);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   const doFetch = async () => {
     const res = await fetch(url, {
-      credentials: "omit", // CORS: backend allows "*" in dev; no cookies
+      // Do not send cookies; backend is stateless and allows "*" in dev
+      credentials: "omit",
       ...init,
       headers: { "Content-Type": "application/json", ...(init.headers || {}) },
       signal: controller.signal,
