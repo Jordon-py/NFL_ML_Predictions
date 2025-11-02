@@ -1053,6 +1053,7 @@ def _build_future_row(
             r5 = float(last5.mean()) if len(last5) else 0.5
         return {
             f"pre_{side}_games_cum": games,
+            }
            
         return {
             f"pre_{side}_games_cum": games,
