@@ -87,8 +87,9 @@ LOG_DIR.mkdir(parents=True, exist_ok=True)
 # Use game_features.csv which has the engineered features (prior stats, differentials, betting data)
 # merged_game_features.csv only has raw stats and won't work with trained models
 # ---------------------------------------------------------------
-DEFAULT_DATASET = DATA_DIR / "/data/merge_dominance.csv"
-DEFAULT_SCHEDULE = DATA_DIR / "/data/Nfl_schedule_2025_2026.csv"
+# Default dataset/schedule paths (relative to backend/data). Avoid leading slashes to prevent absolute-root resolution.
+DEFAULT_DATASET = DATA_DIR / "merge_dominance.csv"
+DEFAULT_SCHEDULE = DATA_DIR / "Nfl_schedule_2025_2026.csv"
 
 FRONTEND_DIR = BASE_DIR / "frontend"
 FRONTEND_BUILD = FRONTEND_DIR / "build"
@@ -284,7 +285,7 @@ def load_objects() -> Dict[str, Any]:
             - raw_feature_columns: dict of feature columns
             - win_threshold_optimal: float, optimal win threshold
     """
-    meta_path = MODELS_DIR / "/metadata.json"
+    meta_path = MODELS_DIR / "metadata.json"
     log.debug("Loading model metadata from %s", meta_path)
     if not meta_path.exists():
         raise FileNotFoundError(f"Missing {meta_path}")
@@ -297,8 +298,8 @@ def load_objects() -> Dict[str, Any]:
         return _resolve_case_insensitive(candidate)
 
     preprocessor = joblib.load(resolve_model_path("preprocessor", "preprocessor.joblib"))
-    home_model = joblib.load(resolve_model_path("home_model", "data/home_model.joblib"))
-    away_model = joblib.load(resolve_model_path("away_model", "data/away_model.joblib"))
+    home_model = joblib.load(resolve_model_path("home_model", "home_model.joblib"))
+    away_model = joblib.load(resolve_model_path("away_model", "away_model.joblib"))
     # Fix: load win_model from path if it exists; previous code attempted to treat a loaded object as a Path.
     win_model = None
     try:
@@ -366,11 +367,17 @@ def _sanity_predict(model_objects: Dict[str, Any], df: pd.DataFrame) -> None:
         for c in cols:
             features[c] = sample.get(c, 0)
     else:
-        df = pd.read_csv('/data/merge_dominance.csv')
+        # Avoid absolute-root paths; fall back to DEFAULT_DATASET if available
+        fallback_path = Path(os.getenv("DATASET_PATH", str(DEFAULT_DATASET)))
+        df = pd.read_csv(fallback_path) if fallback_path.exists() else pd.DataFrame()
         print(df.head())
         features = {c: 0 for c in model_objects.get("raw_feature_columns", {}).get("numeric", [])}
 
-    x = df[features]
+    # Build a single-row DataFrame for sanity transform
+    try:
+        x = pd.DataFrame([{k: features[k] for k in features.keys()}])
+    except Exception:
+        x = pd.DataFrame()
 
     pre = model_objects.get("preprocessor")
     home_m = model_objects.get("home_model")
@@ -568,25 +575,17 @@ app = FastAPI(
     version="2.1.0",
     lifespan=lifespan,
 )
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS or "https://nfl-ml-predictions.vercel.app/",
+    # If you sometimes spin up preview deployments on Vercel:
+    allow_origin_regex=ALLOW_ORIGIN_REGEX or r"https://.*\.vercel\.app",
+    allow_credentials=False,                   # if you send cookies/auth
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allow_headers=["*"],                      # or list explicitly if you prefer
+    expose_headers=["*"],                     # optional: if you need to read custom headers
+)
 
-# CORS: allow all when ALLOWED_ORIGINS == ["*"], else honor explicit origins and regex.
-if ALLOWED_ORIGINS == ["*"]:
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=False,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-else:
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=ALLOWED_ORIGINS,
-        allow_origin_regex=ALLOW_ORIGIN_REGEX or None,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
 
 if SERVE_FRONTEND:
     for candidate in (FRONTEND_BUILD, FRONTEND_DIST):
@@ -1040,6 +1039,40 @@ def _build_future_row(
     return pd.Series(features)
     # Change Log (2024-05-09): Defensive feature assembly avoids hard failures on sparse history.
 
+
+def _resolve_schedule_path() -> Path:
+    """Resolve the schedule CSV path with robust fallbacks.
+
+    Resolution order:
+      1) SCHEDULE_PATH env var (if exists on disk)
+      2) DEFAULT_SCHEDULE (backend/data/Nfl_schedule_*.csv)
+      3) Latest matching file in backend/data/ by pattern 'Nfl_schedule_*.csv'
+
+    Returns:
+      Path to an existing file or DEFAULT_SCHEDULE even if not present (caller may 404).
+    """
+    env_val = os.getenv("SCHEDULE_PATH")
+    env_path = Path(env_val.strip()) if env_val and env_val.strip() else None
+    try:
+        if env_path and env_path.exists():
+            log.info("Using schedule from SCHEDULE_PATH=%s", env_path)
+            return env_path
+    except Exception:
+        pass
+
+    if DEFAULT_SCHEDULE.exists():
+        log.info("Using default schedule at %s", DEFAULT_SCHEDULE)
+        return DEFAULT_SCHEDULE
+
+    latest = _glob_latest(DATA_DIR, "Nfl_schedule_*.csv")
+    if latest and latest.exists():
+        log.info("Using latest schedule candidate at %s", latest)
+        return latest
+
+    # As a last resort, return DEFAULT_SCHEDULE (may not exist); caller will handle
+    log.warning("No schedule file found; returning DEFAULT_SCHEDULE path for caller handling: %s", DEFAULT_SCHEDULE)
+    return DEFAULT_SCHEDULE
+
 # -----------------------
 # Routes
 # -----------------------
@@ -1146,10 +1179,14 @@ def get_next_week_schedule() -> List[ScheduleGame]:
     rendering of matchups and prediction requests. Depends on: get_current_nfl_context(),
     SCHEDULE_PATH env var, and team_abbr_map.json for normalization.
     """
-    spath = Path(os.getenv("SCHEDULE_PATH", str(DEFAULT_SCHEDULE)))
-    log.info(f"DEBUG: SCHEDULE_PATH={os.getenv('SCHEDULE_PATH')}, DEFAULT_SCHEDULE={DEFAULT_SCHEDULE}, spath={spath}, exists={spath.exists()}")
+    spath = _resolve_schedule_path()
+    log.info(
+        "DEBUG: SCHEDULE_PATH=%s, DEFAULT_SCHEDULE=%s, resolved=%s, exists=%s",
+        os.getenv('SCHEDULE_PATH'), DEFAULT_SCHEDULE, spath, spath.exists()
+    )
     if not spath.exists():
-        raise HTTPException(status_code=404, detail=f"Schedule not found: {spath}")
+        # Use 503 to indicate server-side data unavailability rather than 404 (route exists)
+        raise HTTPException(status_code=503, detail=f"Schedule not available on server (missing file): {spath}")
     df = pd.read_csv(spath)
 
     for col in ("home_team", "away_team"):
@@ -1416,18 +1453,43 @@ def predict_game(payload: PredictionRequest) -> PredictionResponse:
                 win_m = win_entry
 
             def _predict_proba_with_fill(clf: Any, Xdf: pd.DataFrame) -> float:
+                """Predict win probability with defensive alignment and NaN/inf handling.
+
+                Steps:
+                  1) Align columns to estimator.feature_names_in_ when available.
+                  2) Attempt predict_proba.
+                  3) On missing-columns error, add NaN columns and retry once (handled below).
+                  4) On NaN/inf errors, coerce to numeric, replace +/-inf→NaN, fillna(0.0), and retry once.
+                  5) If estimator lacks predict_proba but has predict, map margin to prob via sigmoid.
+                """
                 try:
                     exp = _get_expected_features(clf)
                     Xuse = Xdf.reindex(columns=exp, fill_value=np.nan) if exp else Xdf
+
                     if hasattr(clf, "predict_proba"):
                         return float(clf.predict_proba(Xuse)[0, 1])
-                    # Allow regression margin-to-prob as a fallback within the model (still 'model')
                     if hasattr(clf, "predict"):
                         margin = float(clf.predict(Xuse)[0])
                         return float(1.0 / (1.0 + math.exp(-0.25 * margin)))
                     raise AttributeError("win_model lacks predict/predict_proba")
                 except ValueError as ve:
                     msg = str(ve)
+                    # Special-case: NaN/inf present — sanitize and retry once
+                    if ("Input X contains NaN" in msg) or ("infinity" in msg) or ("too large" in msg):
+                        try:
+                            expN = _get_expected_features(clf)
+                            Xsan = Xdf.reindex(columns=expN, fill_value=np.nan) if expN else Xdf.copy()
+                            # Coerce to numeric, drop non-numeric to NaN, then replace inf and fill
+                            Xsan = Xsan.apply(pd.to_numeric, errors="coerce")
+                            Xsan = Xsan.replace([np.inf, -np.inf], np.nan).fillna(0.0)
+                            if hasattr(clf, "predict_proba"):
+                                return float(clf.predict_proba(Xsan)[0, 1])
+                            if hasattr(clf, "predict"):
+                                margin = float(clf.predict(Xsan)[0])
+                                return float(1.0 / (1.0 + math.exp(-0.25 * margin)))
+                        except Exception:
+                            # fall through to other recovery paths below
+                            pass
                     if "columns are missing:" in msg:
                         missing_cols: List[str] = []
                         try:
@@ -1447,6 +1509,8 @@ def predict_game(payload: PredictionRequest) -> PredictionResponse:
                         # retry once
                         exp3 = _get_expected_features(clf)
                         Xuse2 = Xdf.reindex(columns=exp3, fill_value=np.nan) if exp3 else Xdf
+                        # sanitize on retry as well, in case imputers were not part of clf
+                        Xuse2 = Xuse2.apply(pd.to_numeric, errors="coerce").replace([np.inf, -np.inf], np.nan).fillna(0.0)
                         if hasattr(clf, "predict_proba"):
                             return float(clf.predict_proba(Xuse2)[0, 1])
                         if hasattr(clf, "predict"):
@@ -1456,6 +1520,7 @@ def predict_game(payload: PredictionRequest) -> PredictionResponse:
                         exp4 = _get_expected_features(clf)
                         if exp4:
                             Xuse3 = Xdf.reindex(columns=exp4, fill_value=np.nan)
+                            Xuse3 = Xuse3.apply(pd.to_numeric, errors="coerce").replace([np.inf, -np.inf], np.nan).fillna(0.0)
                             if hasattr(clf, "predict_proba"):
                                 return float(clf.predict_proba(Xuse3)[0, 1])
                             if hasattr(clf, "predict"):
@@ -1561,9 +1626,9 @@ def predict_next_week() -> Dict[str, Any]:
         raise HTTPException(500, "Models not loaded.")
     try:
         ctx = get_current_nfl_context()
-        spath = Path(os.getenv("SCHEDULE_PATH", str(DEFAULT_SCHEDULE)))
+        spath = _resolve_schedule_path()
         if not spath.exists():
-            raise HTTPException(404, "Schedule data not found")
+            raise HTTPException(503, f"Schedule data not available on server (missing file): {spath}")
         s = pd.read_csv(spath)
         games = s[
             (s["season"] == ctx["next_prediction_season"])

@@ -18,7 +18,7 @@ Train leak-free NFL models with time-aware CV.
 
 # Variables: RANDOM_SEED, N_SPLITS, TARGET_HOME, TARGET_AWAY, CLASS_LABEL, TIME_KEYS, ID_COLS, LEAK_BLOCKLIST, REG_PARAM_DISTS, CLF_PARAM_DISTS, log
 
-# Interacts With: backend/data/game_features.csv (input dataset), backend/models/ (output models and metadata)
+# Interacts With: backend/data/merge_dominance.csv (preferred input dataset), backend/models/ (output models and metadata)
 
 import argparse
 import json
@@ -84,19 +84,31 @@ ID_COLS = {
     "stadium",
 }
 
-# Columns that must never enter features (labels or post-game values)
+# Columns that must never enter features (labels or post-game/market values)
 LEAK_BLOCKLIST = {
+    # Labels and direct targets
     CLASS_LABEL,
-    "point_diff",
-    "winner",
     TARGET_HOME.strip().lower(),
     TARGET_AWAY.strip().lower(),
+    "winner",
+    "point_diff",
+    # Post-game realized values
     "home_points_against",
     "away_points_against",
     "home_score",
     "away_score",
     "final_home_score",
     "final_away_score",
+    "postgame_margin",
+    "post_game_total",
+    "actual_margin",
+    # Market-informed or derived win signals that can leak outcome
+    "home_moneyline",
+    "away_moneyline",
+    "home_win_prob",
+    "away_win_prob",
+    # Aggregated outcome-like rates
+    "season_home_win_rate",
 }
 
 REG_PARAM_DISTS = {
@@ -143,10 +155,19 @@ def _dataset_hash(df: pd.DataFrame) -> int:
 
 
 def _drop_leaky_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Drop known leaky columns and underscore-prefixed engineered hints.
+
+    This complements the stricter leak guard in enhanced_pipeline.py by ensuring
+    the legacy training path avoids obvious label/post-game leaks and internal
+    engineered signals (convention: leading underscore).
+    """
     present = [c for c in LEAK_BLOCKLIST if c in df.columns]
-    if present:
-        log.warning("Dropping leaky columns: %s", present)
-        df = df.drop(columns=present)
+    # Heuristic: drop all columns starting with '_' (often post-merge engineered signals)
+    underscore_cols = [c for c in df.columns if isinstance(c, str) and c.startswith("_")]
+    to_drop = sorted(set(present) | set(underscore_cols))
+    if to_drop:
+        log.warning("Dropping leaky/engineered columns: %s", to_drop)
+        df = df.drop(columns=to_drop)
     return df
 
 
@@ -377,7 +398,7 @@ def main(data_path: str, out_dir: str) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train leak-free NFL models with time-aware CV.")
-    parser.add_argument("--data", type=str, default="./backend/data/game_features.csv", help="Path to features CSV.")
+    parser.add_argument("--data", type=str, default="./backend/data/merge_dominance.csv", help="Path to features CSV (default: merge_dominance.csv).")
     parser.add_argument("--out", type=str, default="models", help="Output directory for artifacts and reports.")
     parser.add_argument("--n-jobs", type=int, default=N_JOBS, help="Number of parallel jobs to use for CV (default from N_JOBS env)")
     parser.add_argument("--hp-niter", type=int, default=HP_N_ITER, help="Number of RandomizedSearchCV iterations (overrides HP_N_ITER env)")
