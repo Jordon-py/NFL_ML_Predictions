@@ -1040,6 +1040,19 @@ def _build_future_row(
 
     # Pre cumulative metrics (wins/games to date)
     def pre_cum(team: str, side: str) -> Dict[str, Any]:
+        """Compute cumulative team metrics prior to the cutoff.
+
+        Returns a dictionary with 5 fields expected by the model schema:
+        - pre_{side}_games_cum
+        - pre_{side}_wins_cum
+        - pre_{side}_win_rate_cum
+        - pre_{side}_win_rate_l3_cum
+        - pre_{side}_win_rate_l5_cum
+
+        Bugfix: Previously this function returned early with only games_cum,
+        leaving other fields missing and causing identical predictions. The two
+        return statements are consolidated into one complete mapping.
+        """
         hist = team_history(team)
         games = len(hist)
         wins = int((hist["winner"] == team).sum())
@@ -1051,10 +1064,6 @@ def _build_future_row(
             last5 = (hist.tail(5)["winner"] == team).astype(int) if len(hist) >= 1 else []
             r3 = float(last3.mean()) if len(last3) else 0.5
             r5 = float(last5.mean()) if len(last5) else 0.5
-        return {
-            f"pre_{side}_games_cum": games,
-            }
-           
         return {
             f"pre_{side}_games_cum": games,
             f"pre_{side}_wins_cum": wins,
