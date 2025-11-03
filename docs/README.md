@@ -4,40 +4,33 @@ This directory contains comprehensive documentation for the NFL ML Predictions p
 
 ## 📚 Quick Navigation
 
-### CORS & API Configuration (NEW - 2025-10-13)
+### Consolidated Overview (Updated 2025-11-02)
 
-| Document | Description | Use Case |
-|----------|-------------|----------|
-| [CORS_CONFIGURATION_SUMMARY.md](CORS_CONFIGURATION_SUMMARY.md) | **Start here!** Complete overview of CORS fixes and architecture | Understanding what was done |
-| [CORS_API_CONFIGURATION.md](CORS_API_CONFIGURATION.md) | Comprehensive CORS and API guide (300+ lines) | Detailed configuration reference |
-| [API_CORS_CHECKLIST.md](API_CORS_CHECKLIST.md) | Verification checklist and deployment steps | Pre-deployment verification |
-| [CORS_QUICK_REFERENCE.md](CORS_QUICK_REFERENCE.md) | Quick reference card with essential commands | Daily development tasks |
+- Start here: [DOCS_CONSOLIDATED.md](DOCS_CONSOLIDATED.md) — single-page overview, contracts, and pointers
+- Runtime metrics and contracts: [AI-METRICS.md](AI-METRICS.md)
 
-### Project Documentation
+### Core Project Docs
 
 | Document | Description | Use Case |
 |----------|-------------|----------|
 | [report.md](report.md) | Comprehensive change log with function reference | Understanding project history |
-| [enhancement_workflow.md](enhancement_workflow.md) | Enhancement workflow documentation | Development process |
-| [session_completion_report.md](session_completion_report.md) | Session completion reports | Project status tracking |
+| [DATA_FLOW.md](DATA_FLOW.md) | Data and control flow across backend/frontend | Orientation & onboarding |
+| [ARCH_MAP.md](ARCH_MAP.md) | Architecture map and responsibilities | High-level design reference |
+| [RUNBOOK.md](RUNBOOK.md) | Operational runbook and quick commands | Day-to-day operations |
+| [session_completion_report.md](session_completion_report.md) | Session completion summaries | Project status tracking |
+
+### Archived (legacy)
+
+Redundant or historical docs have been moved to [legacy/](legacy/) to lighten the index. See the consolidated page for details.
 
 ---
 
 ## 🎯 Common Tasks
 
-### I want to...
+### I want to
 
-**...understand the CORS configuration**  
-→ Read [CORS_CONFIGURATION_SUMMARY.md](CORS_CONFIGURATION_SUMMARY.md)
-
-**...deploy the application**  
-→ Follow [API_CORS_CHECKLIST.md](API_CORS_CHECKLIST.md)
-
-**...quickly fix a CORS issue**  
-→ Use [CORS_QUICK_REFERENCE.md](CORS_QUICK_REFERENCE.md)
-
-**...understand all configuration details**  
-→ Read [CORS_API_CONFIGURATION.md](CORS_API_CONFIGURATION.md)
+**...understand current contracts and where to look**  
+→ Read [DOCS_CONSOLIDATED.md](DOCS_CONSOLIDATED.md) and [AI-METRICS.md](AI-METRICS.md)
 
 **...see what changed recently**  
 → Check [report.md](report.md)
@@ -80,11 +73,13 @@ This directory contains comprehensive documentation for the NFL ML Predictions p
 **Current Status:** ✅ Properly Configured
 
 **Backend CORS_ORIGINS:**
+
 ```bash
 http://localhost:3000,https://localhost:3000,https://nfl-ml-predictions.vercel.app,https://nfl-predict-frontend.vercel.app
 ```
 
 **Frontend VITE_API_URL:**
+
 ```bash
 # Production
 https://nfl-predict-ecf5a5bd34fe.herokuapp.com
@@ -130,14 +125,18 @@ pwsh -File scripts/deploy.ps1
 
 ---
 
-## 📝 Recent Changes (2025-10-13)
+## 📝 Recent Changes
+
+See [report.md](report.md) for a living change log. Notable recent item: fixed uniform predictions by correcting cumulative prior metrics in `_build_future_row` (pre_cum consolidation), improving model-driven coverage.
 
 ### Configuration Fixes
+
 - ✅ Fixed `.env` CORS_ORIGINS (backend URL → frontend URLs)
 - ✅ Created `backend/.env` with proper CORS config
 - ✅ Fixed `frontend/.env.production` (removed comma-separated URL)
 
 ### Documentation Added
+
 - ✅ Complete CORS guide (300+ lines)
 - ✅ Verification checklist (250+ lines)
 - ✅ Quick reference (100+ lines)
@@ -145,6 +144,7 @@ pwsh -File scripts/deploy.ps1
 - ✅ Verification script (350+ lines Python)
 
 ### Total Changes
+
 - **Files Modified:** 3
 - **Files Created:** 5
 - **Documentation Lines:** 1,600+
@@ -155,14 +155,17 @@ pwsh -File scripts/deploy.ps1
 ## 🆘 Troubleshooting
 
 ### CORS Error in Browser?
+
 1. Check backend CORS_ORIGINS: `heroku config:get CORS_ORIGINS -a nfl-predict`
 2. See [CORS_QUICK_REFERENCE.md](CORS_QUICK_REFERENCE.md) for fixes
 
 ### API Not Working?
+
 1. Run verification: `python scripts/verify_api_cors.py`
 2. See [API_CORS_CHECKLIST.md](API_CORS_CHECKLIST.md) for solutions
 
 ### Deployment Issues?
+
 1. See [CORS_API_CONFIGURATION.md](CORS_API_CONFIGURATION.md) troubleshooting section
 2. Check logs: `heroku logs --tail -a nfl-predict`
 
@@ -170,20 +173,21 @@ pwsh -File scripts/deploy.ps1
 
 ## 📞 Getting Help
 
-1. **Start with:** [CORS_CONFIGURATION_SUMMARY.md](CORS_CONFIGURATION_SUMMARY.md) for overview
-2. **Deep dive:** [CORS_API_CONFIGURATION.md](CORS_API_CONFIGURATION.md) for details
-3. **Quick fix:** [CORS_QUICK_REFERENCE.md](CORS_QUICK_REFERENCE.md) for common issues
-4. **Deploy:** [API_CORS_CHECKLIST.md](API_CORS_CHECKLIST.md) for step-by-step guide
+1. Start with: [DOCS_CONSOLIDATED.md](DOCS_CONSOLIDATED.md)
+2. Deep dive: [DATA_FLOW.md](DATA_FLOW.md), [ARCH_MAP.md](ARCH_MAP.md)
+3. Operations: [RUNBOOK.md](RUNBOOK.md)
+4. History: [report.md](report.md)
 
 ---
 
 ## 📈 Project Status
 
 **Completion Metrics:**
+
 - CORS & API Configuration: 90% ✅
 - Documentation: 95% ✅
 - Deployment Readiness: 70% ✅
 - Overall Project: 60% ⬆️
 
-**Last Updated:** 2025-10-13  
-**Documentation Version:** 1.0
+Last Updated: 2025-11-02
+Documentation Version: 2.0 (consolidated)

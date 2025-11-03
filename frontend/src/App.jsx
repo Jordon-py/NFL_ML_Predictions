@@ -15,8 +15,14 @@
  */
 
 import React from 'react';
+import { useState } from 'react';
+import { Link, Route, Routes } from 'react-router-dom';
+import HistoryChart from './components/HistoryChart.jsx';
 import DashBoard from './components/DashBoard.jsx'; // FIX: default import, not named
 import './components/TeamGrid.css';
+import HistoryPage from './components/HistoryPage.jsx';
+import StatsPage from './components/StatsPage.jsx';
+
 
 
 /**
@@ -30,6 +36,12 @@ import './components/TeamGrid.css';
 export default function App() {
   // Keep App focused on composition. All prediction state lives in Context.
   return (
-    <DashBoard />
+    <>
+      <Routes>
+        <Route path="/" element={<DashBoard />} />
+        <Route path="/history" element={<HistoryPage />} />
+        <Route path="/stats" element={<StatsPage />} />
+      </Routes>
+    </>
   );
 }

@@ -85,12 +85,20 @@ body {
   overflow-x: hidden;
 }
 
+@media (max-width: 200px) {
+  body {
+    background-attachment: scroll;
+  }
+  
+}
+
+
 h1,
 h2,
 h3,
 h4 {
   font-family: var(--font-display);
-  letter-spacing: 0.2px;
+  letter-spacing: 1.5px;
 }
 
 /* App-level wrappers */

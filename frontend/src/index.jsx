@@ -23,12 +23,14 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import ErrorBoundary from './components/ErrorBoundary';
 import { PredictionProvider } from './PredictionContext';
+
 import './styles/base.css';        // ← load first
 import './styles/theme-grid.css';  // ← load second
 // index.jsx
 import '@material/web/button/filled-button.js';
 import '@material/web/button/outlined-button.js';
 import '@material/web/checkbox/checkbox.js';
+import { BrowserRouter } from 'react-router-dom';
 
 
 // Grab the static DOM node that Vite injects for us.
@@ -40,7 +42,9 @@ root.render(
   <React.StrictMode>
     <ErrorBoundary>
       <PredictionProvider>
-        <App />
+        <BrowserRouter>
+          <App />
+        </BrowserRouter>
       </PredictionProvider>
     </ErrorBoundary>
   </React.StrictMode>
