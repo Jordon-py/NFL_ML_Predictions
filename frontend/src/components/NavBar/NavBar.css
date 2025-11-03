@@ -66,6 +66,27 @@
   box-sizing: border-box;
 }
 
+/* mobile breakpoint controlled below at 700px */
+/* Removed older 708px breakpoint to avoid overlap with 700px rule */
+
+
+/* Base: hide hamburger by default (desktop), show links */
+.navBar__hamburger {
+  display: none;
+}
+
+/* Mobile breakpoint: <=700px shows hamburger, hides links */
+@media (max-width: 700px) {
+  .navBar__links {
+    display: none;
+  }
+
+  .navBar__hamburger {
+    display: block;
+  }
+}
+
+/* Single mobile breakpoint is defined above at 700px; no duplicate 768px rule */
 
 /* Enhancement 6: Sticking polish; subtle depth and border */
 .navBar.sticking {
@@ -76,6 +97,8 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.408);
   animation: outlineGlow 2s ease-in-out infinite;
 }
+
+
 
 .navBar__links ul {
   display: flex;
@@ -131,9 +154,6 @@
   }
 }
 
-/* Hide desktop nav links when hamburger is visible (mobile breakpoint) */
-@media (max-width: 768px) {
-  .navBar__links {
-    display: none;
-  }
-}
+/* removed duplicate 768px breakpoint */
+
+/* (Removed duplicate 768px rule in favor of a single 700px breakpoint) */

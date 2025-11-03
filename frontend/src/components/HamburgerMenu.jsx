@@ -7,6 +7,7 @@
  */
 
 // @ts-nocheck
+import { NavLink } from 'react-router-dom';
 import { useState } from 'react';
 import './HamburgerMenu.css';
 
@@ -59,14 +60,19 @@ export default function HamburgerMenu() {
         tabIndex={isOpen ? 0 : -1}
         style={{ pointerEvents: isOpen ? 'auto' : 'none', userSelect: isOpen ? 'auto' : 'none' }}
       >
-        <div className="menu-item">
-          <a href="/">Dashboard</a>
-        </div>
-        <div className="menu-item">
-          <a href="/predictions">Predictions</a>
-        </div>
-        <div className="menu-item">
-          <a href="/history">History</a>
+        
+        <div>
+          <div className="menu-item">
+            <NavLink to="/" end>Dashboard</NavLink>
+          </div>
+          
+      
+          <div className="menu-item">
+            <NavLink to="/stats">Stats</NavLink> 
+          </div>
+          <div className="menu-item">
+            <NavLink to="/history">History</NavLink>
+          </div>
         </div>
       </nav>
     </div>

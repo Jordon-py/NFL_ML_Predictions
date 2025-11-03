@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import HamburgerMenu from '../HamburgerMenu';
+import { NavLink } from 'react-router-dom';
 import './NavBar.css';
+import HamburgerMenu from '../HamburgerMenu';
 
 /**
  * NavBar.jsx
@@ -24,7 +25,8 @@ function NavBar() {
     };
 
     useEffect(() => {
-        if (typeof window === 'undefined') return;
+        if (typeof window === 'undefined')
+            return;
 
         // Sync once on mount (covers initial load where user is already scrolled)
         handleScroll();
@@ -39,49 +41,49 @@ function NavBar() {
     }, []); // run once on mount
 
     return (
-        <>
-            <nav className={`navBar ${isSticking}`} style={{ position: 'sticky' }}>
-                {/* SVG defs for the border animation – render once and reuse via ids. */}
-                <svg width="0" height="0" aria-hidden="true" style={{ position: 'inherit' }}>
-                    <defs>
-                        <linearGradient id="sb3Gradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                            <stop offset="0%" stopColor="#9abfffff" />
-                            <stop offset="50%" stopColor="#a16affff" />
-                            <stop offset="85%" stopColor="#8fabdeff" />
-                            <stop offset="100%" stopColor="#2c79ffff" />
-                        </linearGradient>
-                        <filter id="sb3Sparkle" x="-20%" y="-20%" width="140%" height="140%">
-                            <feGaussianBlur in="SourceAlpha" stdDeviation="0.5" result="a" />
-                            <feSpecularLighting
-                                in="a"
-                                surfaceScale="0.4"
-                                specularConstant="0.5"
-                                specularExponent="18"
-                                lightingColor="white"
-                                result="b"
-                            >
-                                <fePointLight x="-60" y="-40" z="80" />
-                            </feSpecularLighting>
-                            <feComposite in="b" in2="SourceAlpha" operator="in" result="spec" />
-                            <feMerge>
-                                <feMergeNode in="spec" />
-                                <feMergeNode in="SourceGraphic" />
-                            </feMerge>
-                        </filter>
-                    </defs>
-                </svg>
+        <nav className={`navBar ${isSticking}`}>
+            {/* SVG defs for the border animation – render once and reuse via ids. */}
+            <svg width="0" height="0" aria-hidden="true">
+                <defs>
+                    <linearGradient id="sb3Gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stopColor="/9abfffff" />
+                        <stop offset="50%" stopColor="/a16affff" />
+                        <stop offset="85%" stopColor="/8fabdeff" />
+                        <stop offset="100%" stopColor="/2c79ffff" />
+                    </linearGradient>
+                    <filter id="sb3Sparkle" x="-20%" y="-20%" width="140%" height="140%">
+                        <feGaussianBlur in="SourceAlpha" stdDeviation="0.5" result="a" />
+                        <feSpecularLighting
+                            in="a"
+                            surfaceScale="0.4"
+                            specularConstant="0.5"
+                            specularExponent="18"
+                            lightingColor="white"
+                            result="b"
+                        >
+                            <fePointLight x="-60" y="-40" z="80" />
+                        </feSpecularLighting>
+                        <feComposite in="b" in2="SourceAlpha" operator="in" result="spec" />
+                        <feMerge>
+                            <feMergeNode in="spec" />
+                            <feMergeNode in="SourceGraphic" />
+                        </feMerge>
+                    </filter>
+                </defs>
+            </svg>
 
-                <h1>NFL Prediction App</h1>
-                <div className="navBar__links">
-                    <ul>
-                        <li><a href="#home">Home</a></li>
-                        <li><a href="#about">About</a></li>
-                        <li><a href="#contact">Contact</a></li>
-                    </ul>
-                </div>
+            <h1>NFL Predict</h1>
+            {/* Desktop links (hidden on small screens via CSS) */}
+            <div className="navBar__links">
+                <NavLink to="/" end>Dashboard</NavLink>
+                <NavLink to="/history">History</NavLink>
+                <NavLink to="/stats">Stats</NavLink>
+            </div>
+            {/* Mobile hamburger (shown on small screens via CSS) */}
+            <div className="navBar__hamburger" aria-label="Navigation menu">
                 <HamburgerMenu />
-            </nav>
-        </>
+            </div>
+        </nav>
     );
 }
 

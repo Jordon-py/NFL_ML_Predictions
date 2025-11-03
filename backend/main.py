@@ -427,6 +427,7 @@ def _sanity_predict(model_objects: Dict[str, Any], df: pd.DataFrame) -> None:
         if SKLEARN_CHECK_AVAILABLE:
             check_is_fitted(preprocessor)
         
+        
         # Drop target columns that are not features
         x = sample.drop(columns=["home_points_for", "away_points_for", "home_win"], errors="ignore")
         

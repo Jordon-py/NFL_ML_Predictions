@@ -47,8 +47,11 @@ import React, { useMemo } from "react";
 const firstNonNullish = (...values) => values.find((v) => v != null);
 
 /** Convert a probability in [0..1] to an integer percentage, or null if invalid. */
-const toWholePercent = (prob) => (typeof prob === "number" ? Math.round(prob * 100) : null);
+const toWholePercent = (prob) => (
+    typeof prob === "number" ? 
+    Math.round(prob * 100) : null);
 
+    
 /** Safely coerce many timestamp shapes to a Date, or null if not present. */
 const toDateOrNull = (value) => {
   if (value == null) return null;

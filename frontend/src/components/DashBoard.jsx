@@ -57,12 +57,13 @@ export default function DashBoard() {
   // Impl (PredictionContext.jsx) exposes: { current, latest, setCurrent, ... }.
   // Docs (usePredictions.md) suggest: { state, actions, selectors }.
   const ctx = usePredictions();
-
+  console.log(`ctx in dashboard line 60`, JSON.stringify(ctx));
+  console.log(`ctx.state: ${ctx.history}`);
   // Resolve "current" in a backward/forward compatible way:
   // - Prefer ctx.current (implementation)
   // - Else ctx.state?.current (doc shape)
   // - Else ctx.latest (selector for newest history entry)
-  const current = ctx.current ?? ctx?.state?.current ?? ctx?.latest ?? null;
+  const current = (ctx ? ctx?.history ?.current ?? ctx?.latest ?? null : null);
 
   // Resolve "history":
   // - Prefer ctx.state?.history if present (doc shape)
@@ -75,10 +76,10 @@ export default function DashBoard() {
   // Minimal "state-like" object for components that expect a combined shape.
   // Keeps coupling low while preserving existing prop contracts.
   const navState = useMemo(
-    () => ({ current, history }),
+    () => ({ current, ...history[history.length[- 1]] }),
     [current, history]
   );
-
+  console.log('navState', navState);
   return (
     <>
       {/* Global nav; gets a compact state snapshot for badges/counters, etc. */}
