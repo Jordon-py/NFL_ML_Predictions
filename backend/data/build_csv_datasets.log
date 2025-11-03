@@ -1,0 +1,53 @@
+2025-10-26 22:37:46,762 INFO Logger initialized. Writing to backend\data\build_csv_datasets.log
+2025-10-26 22:37:46,780 INFO Raw schedules loaded: 2748 games
+2025-10-26 22:37:46,791 INFO Loaded 2596 completed games + 152 future games
+2025-10-26 22:37:46,802 INFO Production dataset build - Current NFL state: 2025W8
+2025-10-26 22:37:46,803 INFO Building dataset for seasons=[2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026] (include_future=True)
+2025-10-26 22:37:46,803 INFO Loading play-by-play for seasons [2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025] via nflreadpy
+2025-10-26 22:37:58,736 INFO Loaded 455929 play-by-play rows
+2025-10-26 22:38:02,041 INFO Loading player stats via nflreadpy for seasons [2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026]
+2025-10-26 22:38:05,740 WARNING Failed to load player stats (Failed to download https://github.com/nflverse/nflverse-data/releases/download/stats_player/stats_player_week_2026.parquet: 404 Client Error: Not Found for url: https://github.com/nflverse/nflverse-data/releases/download/stats_player/stats_player_week_2026.parquet); player features disabled
+2025-10-26 22:38:05,753 INFO Loading team weekly stats via nflreadpy for seasons [2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026]
+2025-10-26 22:38:09,084 WARNING Team stats load failed (Failed to download https://github.com/nflverse/nflverse-data/releases/download/stats_team/stats_team_week_2026.parquet: 404 Client Error: Not Found for url: https://github.com/nflverse/nflverse-data/releases/download/stats_team/stats_team_week_2026.parquet); team features disabled
+2025-10-26 22:38:09,269 INFO Kept future games - dropped only rows missing feature data
+2025-10-26 22:38:09,364 INFO Pairwise dominance table:
+  team opponent  games  wins  losses   win_pct  dominance  signed_wins_style
+0  ARI      ATL      6     2       4  0.333333         -2                  2
+1  ARI      BAL      2     0       2  0.000000         -2                  0
+2  ARI      BUF      3     1       2  0.333333         -1                  1
+3  ARI      CAR      7     2       5  0.285714         -3                  2
+4  ARI      CHI      4     2       2  0.500000          0                  2
+5  ARI      CIN      3     1       2  0.333333         -1                  1
+6  ARI      CLE      3     2       1  0.666667          1                  2
+7  ARI      DAL      5     3       2  0.600000          1                  3
+8  ARI      DEN      2     0       2  0.000000         -2                  0
+9  ARI      DET      6     0       6  0.000000         -6                  0
+2025-10-26 22:38:09,397 INFO Dominance matrix:
+opponent  ARI  ATL  BAL  BUF  CAR  CHI  CIN  CLE  DAL  DEN  DET  GB  HOU  IND  JAX  KC  LAC  LAR  LV  MIA  MIN  NE  NO  NYG  NYJ  PHI  PIT  SEA  SF  TB  TEN  WAS
+team                                                                                                                                                             
+ARI         0   -2   -2   -1   -3    0   -1    1    1   -2   -6  -2   -2   -1    1  -2   -1  -13   0   -1   -3  -2   0    2    3    0    0  -10   2  -1    1   -2
+ATL         0    0   -2   -1    4    0   -2    0   -1    1    0   2    0   -1    1  -3   -4   -1   3   -1   -2  -4  -6    3    2   -2   -3   -2   1   0   -2   -2
+BAL         2    2    0    0    0    1    3    6    1    4    2  -1    5    2    1  -5    3    0  -1    1   -1  -1   0    0    0    1   -7    2   2   3    0    1
+BUF         1    1    0    0    1    0   -2    0    2    3    3   0   -3    1    0  -1    0    2   2   11    0  -3   1    2    4   -3    1    1   3   0    2    3
+CAR         3   -6    0   -1    0   -4   -1   -2   -1   -2    1  -3    3   -2   -1  -3    1   -2  -1    0   -3  -1  -9    0    3   -2   -2   -4  -1 -10    0   -2
+CHI         0    0   -1    0    4    0    1   -2    0    0   -2 -16    0   -3    1  -2   -2   -1   2   -2   -6  -1  -4   -1    0   -6   -1    1  -1  -2   -1    0
+CIN        -1    2   -7    0    1   -3    0    0   -2    0    1  -3   -2    2    2  -1   -4   -1   3    0    0  -3   0   -1    1   -1   -8    0  -1   2    2   -3
+CLE        -1    0   -8   -2    2    0   -2    0   -1   -1   -1  -1    1    1    2  -4   -4   -2  -5   -1   -1  -5  -3   -1   -2   -1   -9   -2  -1   0   -2    0
+DAL        -3    1   -1   -2    1    0    2    1    0   -3    3  -5   -1    0    0  -1    0    0  -1    0    2   1   0   12    1    0    1   -1  -1   2    0    8
+DEN         2   -1   -4   -3    2    0    0    1    3    0    1  -1    0    0    1 -16    0   -2  -8   -1    0  -2   1    1    2   -1   -2   -1   0   1   -1   -2
+2025-10-26 22:38:09,420 INFO DataFrame with pregame features:
+   gid home_team away_team  ...  away_vs_home_prior_losses  away_vs_home_prior_dom  away_vs_home_prior_win_pct
+0    0       DEN       CAR  ...                          0                       0                         NaN
+1    1       BAL       BUF  ...                          0                       0                         NaN
+2    2       ATL        TB  ...                          0                       0                         NaN
+3    3        KC       LAC  ...                          0                       0                         NaN
+4    4        NO        LV  ...                          0                       0                         NaN
+5    5       ARI        NE  ...                          0                       0                         NaN
+6    6       TEN       MIN  ...                          0                       0                         NaN
+7    7       SEA       MIA  ...                          0                       0                         NaN
+8    8       DAL       NYG  ...                          0                       0                         NaN
+9    9       JAX        GB  ...                          0                       0                         NaN
+
+[10 rows x 113 columns]
+2025-10-26 22:38:28,944 INFO REL feedback: windows=(2, 3, 5), metrics={'auc': 0.7419870786652794, 'brier': 0.20400364038821597}
+2025-10-26 22:38:29,438 INFO Production dataset ready: backend\data\game_features_new.csv (2748 games)
