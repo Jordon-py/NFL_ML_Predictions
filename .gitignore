@@ -96,3 +96,7 @@ data/
 ## Deployment configs
 !vercel.json
 node_modules
+backend/.venv/
+.venv/
+**/__pycache__/
+frontend/dist/
