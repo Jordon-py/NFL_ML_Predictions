@@ -45,6 +45,42 @@ import React, { useState, useEffect, useCallback } from 'react';
 import PredictionResult from './PredictionResult.jsx';
 import './TeamGrid.css';
 
+let teamNames = {
+  "ARI": "Arizona Cardinals",
+  "ATL": "Atlanta Falcons",
+  "BAL": "Baltimore Ravens",
+  "BUF": "Buffalo Bills",
+  "CAR": "Carolina Panthers",
+  "CHI": "Chicago Bears",
+  "CIN": "Cincinnati Bengals",
+  "CLE": "Cleveland Browns",
+  "DAL": "Dallas Cowboys",
+  "DEN": "Denver Broncos",
+  "DET": "Detroit Lions",
+  "GB": "Green Bay Packers",
+  "HOU": "Houston Texans",
+  "IND": "Indianapolis Colts",
+  "JAX": "Jacksonville Jaguars",
+  "KC": "Kansas City Chiefs",
+  "LAC": "Los Angeles Chargers",
+  "LAR": "Los Angeles Rams",
+  "LV": "Las Vegas Raiders",
+  "MIA": "Miami Dolphins",
+  "MIN": "Minnesota Vikings",
+  "NE": "New England Patriots",
+  "NO": "New Orleans Saints",
+  "NYG": "New York Giants",
+  "NYJ": "New York Jets",
+  "PHI": "Philadelphia Eagles",
+  "PIT": "Pittsburgh Steelers",
+  "SEA": "Seattle Seahawks",
+  "SF": "San Francisco 49ers",
+  "TB": "Tampa Bay Buccaneers",
+  "TEN": "Tennessee Titans",
+  "WAS": "Washington Commanders"
+}
+
+
 // ---- Small stateless utilities (safe at module scope) -----------------------
 
 // Stable game key: used for maps (loading/predictions) and history joins.
@@ -79,6 +115,20 @@ const parseTeamCsv = (csvText) =>
     return acc;
   }, {});
 
+// Format numeric scores to one decimal place when possible.
+const formatScore = (value) => {
+  const num = Number(value);
+  return Number.isFinite(num) ? num.toFixed(1) : value;
+};
+
+// Add a stable local-time formatter used by formatKickoffTime
+const kickoffFormatter = new Intl.DateTimeFormat(undefined, {
+  weekday: 'short',
+  month: 'short',
+  day: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+});
 
 // -----------------------------------------------------------------------------
 
@@ -179,14 +229,15 @@ export default function TeamGrid() {
       setLoading((s) => ({ ...s, [key]: true }));
       setError(null);
 
+      // Compute payload up-front so we can log it in catch
+      const payload = {
+        home_team: game.home_abbr || game.home_team,
+        away_team: game.away_abbr || game.away_team,
+        season: Number(game.season),
+        week: Number(game.week),
+      };
+
       try {
-        // Normalize payload to API expectations (prefer *_abbr).
-        const payload = {
-          home_team: game.home_abbr || game.home_team,
-          away_team: game.away_abbr || game.away_team,
-          season: Number(game.season),
-          week: Number(game.week),
-        };
         // Client-side validation to avoid obvious 400s
         if (!payload.home_team || !payload.away_team) {
           throw new ApiError('Missing team abbreviations', { status: 400 });
@@ -208,6 +259,10 @@ export default function TeamGrid() {
           away_win_probability: Number(res.away_win_probability),
           mode: String(res.mode || ''),
           prediction_source: String(res.prediction_source || ''),
+          // New: classifier usage telemetry from backend
+          win_classifier_used: typeof res.win_classifier_used === 'boolean' ? res.win_classifier_used : undefined,
+          win_probability_source: typeof res.win_probability_source === 'string' ? res.win_probability_source : '',
+          win_threshold_used: (res.win_threshold_used ?? null) !== null ? Number(res.win_threshold_used) : null,
         };
 
         // Clear any prior error for this game on success and update prediction map.
@@ -228,14 +283,18 @@ export default function TeamGrid() {
             away_abbr: payload.away_team,
           },
           probs: {
+            home_score: result.home_score,
+            away_score: result.away_score,
             home: result.home_win_probability,
             away: result.away_win_probability,
             // Maintain "ensemble" for downstream charts expecting this key.
             ensemble: result.home_win_probability,
           },
         };
-        setHistory((h) => {
-          const next = [...h, entry].slice(-100);
+
+        setHistory((hist) => {
+          // FIX: correct array spread; previously `[hist, ...entry]` caused a runtime error
+          const next = [...hist, entry].slice(-100);
           try {
             localStorage.setItem('prediction_history', JSON.stringify(next));
           } catch {
@@ -263,7 +322,7 @@ export default function TeamGrid() {
             level: 'error',
             where: 'TeamGrid.handlePredict',
             key,
-            payload,
+            payload, // payload is now always in scope
             message: msg,
           });
         } catch { }
@@ -400,12 +459,22 @@ export default function TeamGrid() {
                         {prediction.prediction_source}
                       </div>
                     ) : null}
+                    {/* classifier usage badge: 'clf' when model produced probability, 'legacy' if fallback */}
+                    {typeof prediction.win_classifier_used === 'boolean' ? (
+                      <div
+                        className="source-badge"
+                        title={`Win prob via: ${prediction.win_probability_source || 'unknown'}${typeof prediction.win_threshold_used === 'number' ? ` • thr=${prediction.win_threshold_used.toFixed(2)}` : ''
+                          }`}
+                      >
+                        {prediction.win_classifier_used ? 'clf' : 'legacy'}
+                      </div>
+                    ) : null}
                     <div>
                       Home win: {(prediction.home_win_probability * 100).toFixed(0)}%
                     </div>
                     <div>Point diff: {prediction.point_diff.toFixed(1)}</div>
                     <div>
-                      Score: {prediction.home_score}–{prediction.away_score}
+                      Score: {game.away_abbr} {formatScore(prediction.away_score)} – {formatScore(prediction.home_score)} {game.home_abbr}
                     </div>
                   </div>
                 ) : predictErrors[key] ? (
@@ -428,15 +497,24 @@ export default function TeamGrid() {
       </div>
 
       {/* Saved prediction history */}
-      {history.length > 0 && (
+      {history.length > 0 && history.some((h) => h && Object.keys(h).length > 0) && (
         <div className="prediction-history">
           <h3>Saved Predictions</h3>
           <div className="history-list">
-            {history.map((entry, i) => (
-              <div key={`history-${i}`} className="history-entry">
-                <PredictionResult entry={entry} />
-              </div>
-            ))}
+            {history
+              .filter(
+                (hist) =>
+                  hist &&
+                  typeof hist === 'object' &&
+                  Object.keys(hist).length > 0 &&
+                  hist.game &&
+                  hist.probs
+              )
+              .map((hist, i) => (
+                <div key={`history-${i}`} className="history-entry">
+                  <PredictionResult entry={{ ...hist }} />
+                </div>
+              ))}
           </div>
         </div>
       )}

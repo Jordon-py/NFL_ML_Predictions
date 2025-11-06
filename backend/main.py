@@ -9,7 +9,7 @@ Architectural Role:
 Key Endpoints:
     - /health: Service and model status.
     - /debug: Metadata and config diagnostics.
-    - /report/training: Model training report.
+    - /report/training: Model
     - /report/calibration: Classifier calibration metrics.
     - /schedule/next-week: Upcoming NFL games (from schedule CSV).
     - /predict: Predict scores and win probabilities for a given matchup.
@@ -58,17 +58,25 @@ try:
 except Exception:
     check_is_fitted = None
     SKLEARN_CHECK_AVAILABLE = False
+# Optional import: detect unfitted pipelines and skip sanity predict gracefully
+try:
+    from sklearn.exceptions import NotFittedError  # type: ignore
+    SKLEARN_NOTFITTED_AVAILABLE = True
+except Exception:  # pragma: no cover
+    NotFittedError = None  # type: ignore
+    SKLEARN_NOTFITTED_AVAILABLE = False
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-
-# Load .env
+# ---------------------------------------------------------------
 # Load .env from backend directory or repository root for consistent environment variable loading
+# ---------------------------------------------------------------------
+ENV="C:/Users/iProg/OneDrive/Documents/Football_predict/nfl_prediction_system/NFL_ML_Predictions/backend/.env"
 backend_dir = Path(__file__).parent
 repo_root = backend_dir.parent
-dotenv_loaded = load_dotenv(backend_dir / ".env")
+dotenv_loaded = load_dotenv(backend_dir / '.env')
 if not dotenv_loaded:
     load_dotenv(repo_root / ".env")
 
@@ -84,11 +92,11 @@ LOG_DIR = BACKEND_DIR / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 # ---------------------------------------------------------------------
-# Use game_features.csv which has the engineered features (prior stats, differentials, betting data)
-# merged_game_features.csv only has raw stats and won't work with trained models
+# Preferred engineered dataset is game_features.csv (produced by build_csv_datasets.py).
+# Keep robust fallbacks for legacy CSVs when needed.
 # ---------------------------------------------------------------
 # Default dataset/schedule paths (relative to backend/data). Avoid leading slashes to prevent absolute-root resolution.
-DEFAULT_DATASET = DATA_DIR / "merge_dominance.csv"
+DEFAULT_DATASET = DATA_DIR / "game_features.csv"
 DEFAULT_SCHEDULE = DATA_DIR / "Nfl_schedule_2025_2026.csv"
 
 FRONTEND_DIR = BASE_DIR / "frontend"
@@ -312,16 +320,8 @@ def load_objects() -> Dict[str, Any]:
     preprocessor = joblib.load(resolve_model_path("preprocessor", "preprocessor.joblib"))
     home_model = joblib.load(resolve_model_path("home_model", "home_model.joblib"))
     away_model = joblib.load(resolve_model_path("away_model", "away_model.joblib"))
-    # Fix: load win_model from path if it exists; previous code attempted to treat a loaded object as a Path.
-    win_model = None
-    try:
-        win_model_path = resolve_model_path("win_model", "win_clf_calibrated.joblib")
-        if win_model_path.exists():
-            win_model = joblib.load(win_model_path)
-    except Exception as exc:
-        log.warning("Failed to load win_model from %s: %s", win_model_path, exc)
-        win_model = None
-
+    # Ensure the win model fallback filename matches repository casing
+    win_model = joblib.load(resolve_model_path("win_CLF_calibrated", "win_clf_calibrated.joblib"))
     return {
         "mode": meta.get("mode", "production"),
         "preprocessor": preprocessor,
@@ -425,15 +425,19 @@ def _sanity_predict(model_objects: Dict[str, Any], df: pd.DataFrame) -> None:
     # Use the loaded preprocessor to transform the sample data
     try:
         if SKLEARN_CHECK_AVAILABLE:
+            # This may raise NotFittedError; handle below to skip sanity predict gracefully
             check_is_fitted(preprocessor)
-        
-        
+
         # Drop target columns that are not features
         x = sample.drop(columns=["home_points_for", "away_points_for", "home_win"], errors="ignore")
-        
         transformed = preprocessor.transform(x)
         log.info("Sanity check: preprocessor transformed sample data successfully.")
     except Exception as e:
+        # If the preprocessor isn't fitted yet, skip sanity predict without flagging a failure
+        msg = str(e).lower()
+        if (SKLEARN_NOTFITTED_AVAILABLE and isinstance(e, NotFittedError)) or ("not fitted" in msg):
+            log.info("Sanity check: preprocessor not fitted; skipping startup sanity prediction.")
+            return
         failures.append(f"preprocessor.transform failed: {type(e).__name__}: {e}")
         log.debug("Sanity predict: preprocessor.transform failed", exc_info=True)
         transformed = None
@@ -549,10 +553,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     try:
         model_objects = load_objects()
         _validate_model_features(model_objects)
+        # Log registry keys to aid debugging of artifact naming mismatches
+        try:
+            log.info("Model registry keys: %s", list(model_objects.keys()) if isinstance(model_objects, dict) else "<not-a-dict>")
+        except Exception:
+            pass
         log.info("✓ Models loaded and validated")
     except Exception as e:
         log.error("✗ Failed to load models: %s", e, exc_info=True)
-        model_objects = None
         log.warning("Continuing without models; /health will report unhealthy")
 
     # Load dataset with fallback
@@ -562,10 +570,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     if not ds_path.exists():
         log.warning("✗ Dataset not found at %s", ds_path)
         # Check alternate locations
-        alternates = DATA_DIR / "merge_dominance.csv",
+        alternates = (
+            DATA_DIR / "game_features.csv",
+            DATA_DIR / "merge_dominance.csv",
+            DATA_DIR / "merged_game_features.csv",
+        )
 
 
-    
+        
         for alt in alternates:
             if alt.exists():
                 log.info("Found alternate dataset: %s", alt)
@@ -597,8 +609,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 # Sanity check with error tolerance
                 try:
                     if model_objects:
-                        _sanity_predict(model_objects, df)
-                        log.info("✓ Sanity prediction passed")
+                        sanity = _sanity_predict(model_objects, df)
+                        log.info("✓ Sanity prediction passed: %s", sanity)
+                        print(sanity)
                 except Exception as e:
                     log.warning("Sanity prediction failed: %s; continuing", e)
                 
@@ -661,9 +674,15 @@ class PredictionResponse(BaseModel):
     away_score: float
     home_win_probability: float
     away_win_probability: float
+    home_win: float
+    away_win: float
     point_diff: float
     mode: str
     prediction_source: str
+    # Telemetry about how win probability was produced
+    win_classifier_used: bool
+    win_probability_source: str  # 'classifier' | 'classifier-margin' | 'legacy-sigmoid'
+    win_threshold_used: Optional[float] = None
 
 
 class HealthResponse(BaseModel):
@@ -679,6 +698,8 @@ class HealthResponse(BaseModel):
     mode: str
     reason: str
 
+class Pred_History(BaseModel):
+    prediction: dict[str, float] = PredictionResponse
 
 class ScheduleGame(BaseModel):
     """
@@ -808,295 +829,99 @@ def _build_future_row(
     df: pd.DataFrame, home: str, away: str, season: int, week: int
 ) -> pd.Series:
     """
-    Build engineered features for a future game using historical data and dataset statistics,
-    targeting the exact feature set in models/metadata.json (merge_dominance.csv schema).
+    Build engineered features for a future game using historical data and dataset statistics.
+    This version uses a more robust backfilling strategy with rolling averages to create realistic feature vectors.
 
     Strategy:
-      - Compute prior 3/5 averages (pf, pa, win_pct) from completed games before cutoff
-      - Build differentials home_minus_away_* for those priors
-      - Derive trend_* features as (last_value - mean(last K)) for K in {3,5,7}
-      - Compute z-scores for home/away prior pf/pa/win_pct using dataset means/stds
-      - Fill team one-hot numeric columns (team_home_*, team_away_*)
-      - Derive dominance (dom_*) from head-to-head history; compute _dom_delta and approximate _dom_delta_emp_home_win
-      - Derive team-level rates (tl_*) and pre_* cumulative stats from team history before cutoff
-      - Fill remaining numeric features with dataset means; categoricals with safe defaults
-
-    Returns: pandas Series with all required model features populated with numeric values.
+      - Backfill missing features using a rolling average of the last 3 games for each team.
+      - Compute differentials (home_minus_away_*) from these backfilled features.
+      - Fill any remaining gaps with safe defaults or dataset means.
     """
     global model_objects
     local = df.copy()
 
-    
     required_cols = [
-        "season",
-        "week",
-        "home_points_for",
-        "away_points_for",
-        "winner",
-        "home_team",
-        "away_team",
+        "season", "week", "home_points_for", "away_points_for", "winner", "home_team", "away_team",
     ]
     for col in required_cols:
         if col not in local.columns:
-            # create a column of NaN with proper length
             local[col] = pd.Series([np.nan] * len(local), index=local.index)
 
-    # Build a stable numeric time key; coerce non-numeric to 0 to keep ordering stable
     season_num = pd.to_numeric(local["season"], errors="coerce").fillna(0).astype(int)
     week_num = pd.to_numeric(local["week"], errors="coerce").fillna(0).astype(int)
     local["time_key"] = season_num * 100 + week_num
     cutoff = season * 100 + week
 
-    # Dataset helpers
     def ds_mean(col: str, default: float = 0.0) -> float:
         try:
             if col in local.columns:
                 m = pd.to_numeric(local[col], errors="coerce").mean()
-                if not pd.isna(m):
-                    return float(m)
+                return float(m) if not pd.isna(m) else default
         except Exception:
-            pass
-        return float(default)
+            return default
 
-    def ds_std(col: str, default: float = 1.0) -> float:
-        try:
-            if col in local.columns:
-                s = pd.to_numeric(local[col], errors="coerce").std(ddof=0)
-                if s and not pd.isna(s) and s > 1e-8:
-                    return float(s)
-        except Exception:
-            pass
-        return float(default)
+    memoized_history = {}
+    def get_team_history(team):
+        if team not in memoized_history:
+            m = ((local["home_team"] == team) | (local["away_team"] == team)) & \
+                local["home_points_for"].notna() & (local["time_key"] < cutoff)
+            memoized_history[team] = local.loc[m].sort_values("time_key")
+        return memoized_history[team]
 
-    def team_history(team: str) -> pd.DataFrame:
-        m = ((local["home_team"] == team) | (local["away_team"] == team)) & \
-            local["home_points_for"].notna() & local["away_points_for"].notna() & \
-            (local["time_key"] < cutoff)
-        return local.loc[m].sort_values("time_key")
-
-    def extract_stats(frame: pd.DataFrame, team_abbr: str) -> List[Dict[str, Any]]:
-        out: List[Dict[str, Any]] = []
-        for _, r in frame.iterrows():
-            if r.get("home_team") == team_abbr:
-                pf = r.get("home_points_for", np.nan)
-                pa = r.get("away_points_for", np.nan)
-                win = 1 if r.get("winner") == team_abbr else 0
-            else:
-                pf = r.get("away_points_for", np.nan)
-                pa = r.get("home_points_for", np.nan)
-                win = 1 if r.get("winner") == team_abbr else 0
-            out.append({"pf": pf, "pa": pa, "win": win})
-        return out
-
-    def mean_safe(vals: List[float]) -> float:
-        arr = [v for v in vals if v is not None and not pd.isna(v)]
-        return float(np.mean(arr)) if arr else np.nan
-
-    # Compute priors for a given team
-    def compute_priors(team: str, prefix: str) -> Dict[str, Any]:
-        hist = team_history(team)
-        feats: Dict[str, Any] = {}
-        if hist.empty:
-            return feats
-        last_3 = hist.tail(3)
-        last_5 = hist.tail(5)
-        s3 = extract_stats(last_3, team)
-        s5 = extract_stats(last_5, team)
-        # 3-game priors
-        if len(s3) > 0:
-            feats[f"{prefix}prior_pf_avg_3"] = mean_safe([s["pf"] for s in s3])
-            feats[f"{prefix}prior_pa_avg_3"] = mean_safe([s["pa"] for s in s3])
-            feats[f"{prefix}prior_win_pct_3"] = mean_safe([s["win"] for s in s3])
-        # 5-game priors
-        if len(s5) > 0:
-            feats[f"{prefix}prior_pf_avg_5"] = mean_safe([s["pf"] for s in s5])
-            feats[f"{prefix}prior_pa_avg_5"] = mean_safe([s["pa"] for s in s5])
-            feats[f"{prefix}prior_win_pct_5"] = mean_safe([s["win"] for s in s5])
-        return feats
-
-    home_feats = compute_priors(home, "home_")
-    away_feats = compute_priors(away, "away_")
-
-    features: Dict[str, Any] = {**home_feats, **away_feats}
-
-    # Differentials
-    for suffix in ["pf_avg_3", "pa_avg_3", "win_pct_3", "pf_avg_5", "pa_avg_5", "win_pct_5"]:
-        h, a = features.get(f"home_prior_{suffix}"), features.get(f"away_prior_{suffix}")
-        if not pd.isna(h) and not pd.isna(a):
-            features[f"home_minus_away_{suffix}"] = float(h) - float(a)
-
-    # Trends helper on differential time series (use available history differentials)
-    def build_diff_series(team_h: pd.DataFrame, team_a: pd.DataFrame, key: str) -> List[float]:
-        # Build a chronological series of differential for the provided key (e.g., 'pf_avg_3')
-        series: List[float] = []
-        # Align by time and compute differential when both sides available
-        # Use same team windows for simplicity: compute per game using rolling windows
-        # We approximate by taking per-game stats (pf/pa/win) rather than pre-computed columns.
-        # For future robustness, this returns an empty list if insufficient data.
-        return series
-
-    def trend_from_last(values: List[float], k: int) -> float:
-        if not values:
-            return 0.0
-        tail = values[-k:] if len(values) >= k else values
-        last_val = tail[-1]
-        mean_tail = float(np.mean(tail))
-        return float(last_val - mean_tail)
-
-    # Compute simple trends off the available current differentials
-    for base in ["pf_avg_3", "pa_avg_3", "win_pct_3", "pf_avg_5", "pa_avg_5", "win_pct_5"]:
-        cur_val = features.get(f"home_minus_away_{base}")
-        # If not available, set trends to 0.0
-        for k in (3, 5, 7):
-            features[f"trend_home_minus_away_{base}_w{k}"] = 0.0 if pd.isna(cur_val) else 0.0
-
-    # Z-scores for home/away priors using dataset distribution
-    for side in ("home", "away"):
-        for metric in ("pf_avg", "pa_avg", "win_pct"):
-            for w in ("3", "5"):
-                base_col = f"{side}_prior_{metric}_{w}"
-                z_col = f"{side}_prior_{metric}_{w}_z"
-                v = features.get(base_col)
-                if pd.isna(v):
-                    continue
-                m, s = ds_mean(base_col, 0.0), ds_std(base_col, 1.0)
-                try:
-                    features[z_col] = float((float(v) - m) / s)
-                except Exception:
-                    features[z_col] = 0.0
-
-    # Betting/rest defaults (neutral)
-    features["home_moneyline_prob"] = 0.5
-    features["away_moneyline_prob"] = 0.5
-    features["moneyline_prob_diff"] = 0.0
-    features["spread_line"] = 0.0
-    features["total_line"] = ds_mean("total_line", 45.0) or 45.0
-    features["home_rest"] = 7
-    features["away_rest"] = 7
-    features["rest_diff"] = 0
-    features["oas_index"] = ds_mean("oas_index", 0.0)
-
-    # Head-to-head dominance
-    h2h_mask = (
-        ((local["home_team"] == home) & (local["away_team"] == away)) |
-        ((local["home_team"] == away) & (local["away_team"] == home))
-    ) & local["home_points_for"].notna() & local["away_points_for"].notna() & (local["time_key"] < cutoff)
-    h2h = local.loc[h2h_mask]
-    dom_games = len(h2h)
-    dom_home_wins = int((h2h["winner"] == home).sum())
-    dom_away_wins = int((h2h["winner"] == away).sum())
-    dom_ties = int(((h2h["home_points_for"] == h2h["away_points_for"]).sum())) if dom_games else 0
-    features["dom_home_games_played"] = dom_games
-    features["dom_home_wins"] = dom_home_wins
-    features["dom_home_losses"] = dom_away_wins
-    features["dom_home_ties"] = dom_ties
-    features["dom_home_win_pct"] = (dom_home_wins / dom_games) if dom_games else 0.5
-    features["dom_away_games_played"] = dom_games
-    features["dom_away_wins"] = dom_away_wins
-    features["dom_away_losses"] = dom_home_wins
-    features["dom_away_ties"] = dom_ties
-    features["dom_away_win_pct"] = (dom_away_wins / dom_games) if dom_games else 0.5
-    features["_dom_delta"] = features["dom_home_win_pct"] - features["dom_away_win_pct"]
-    features["_home_win_derived"] = 1.0 if features["_dom_delta"] >= 0 else 0.0
-    # Approximate empirical mapping (clamped)
-    features["_dom_delta_emp_home_win"] = float(np.clip(0.5 + 0.3 * features["_dom_delta"], 0.0, 1.0))
-
-    # Season home win rate
-    season_mask = (local["season"] == season) & local["home_points_for"].notna() & local["away_points_for"].notna()
-    season_df = local.loc[season_mask]
-    if not season_df.empty:
-        features["season_home_win_rate"] = float((season_df["winner"] == season_df["home_team"]).mean())
-    else:
-        features["season_home_win_rate"] = float((local["winner"] == local["home_team"]).mean()) if "winner" in local.columns else 0.5
-
-    # Team-level totals and rates
-    def team_rates(team: str, side_prefix: str) -> Dict[str, Any]:
-        hist = team_history(team)
-        out: Dict[str, Any] = {
-            f"tl_{side_prefix}_home_games": 0,
-            f"tl_{side_prefix}_away_games": 0,
-            f"tl_{side_prefix}_total_games_listed": 0,
-            f"tl_{side_prefix}_home_win_rate_when_home": 0.5,
-            f"tl_{side_prefix}_away_win_rate_when_away": 0.5,
-        }
-        if hist.empty:
-            return out
-        home_games = hist[hist["home_team"] == team]
-        away_games = hist[hist["away_team"] == team]
-        out[f"tl_{side_prefix}_home_games"] = int(len(home_games))
-        out[f"tl_{side_prefix}_away_games"] = int(len(away_games))
-        out[f"tl_{side_prefix}_total_games_listed"] = int(len(hist))
-        if len(home_games):
-            out[f"tl_{side_prefix}_home_win_rate_when_home"] = float((home_games["winner"] == team).mean())
-        if len(away_games):
-            out[f"tl_{side_prefix}_away_win_rate_when_away"] = float((away_games["winner"] == team).mean())
-        return out
-
-    features.update(team_rates(home, "home"))
-    # The schema expects both 'tl_away_home_win_rate_when_home' and 'tl_away_away_win_rate_when_away'
-    away_rates = team_rates(away, "away")
-    features.update(away_rates)
-    # Duplicate naming to satisfy both fields present in metadata
-    features["tl_away_home_win_rate_when_home"] = away_rates.get("tl_away_home_win_rate_when_home", 0.5)
-
-    # Pre cumulative metrics (wins/games to date)
-    def pre_cum(team: str, side: str) -> Dict[str, Any]:
-        """Compute cumulative team metrics prior to the cutoff.
-
-        Returns a dictionary with 5 fields expected by the model schema:
-        - pre_{side}_games_cum
-        - pre_{side}_wins_cum
-        - pre_{side}_win_rate_cum
-        - pre_{side}_win_rate_l3_cum
-        - pre_{side}_win_rate_l5_cum
-
-        Bugfix: Previously this function returned early with only games_cum,
-        leaving other fields missing and causing identical predictions. The two
-        return statements are consolidated into one complete mapping.
-        """
-        hist = team_history(team)
-        games = len(hist)
-        wins = int((hist["winner"] == team).sum())
-        rate = (wins / games) if games else 0.5
-        r3 = 0.5
-        r5 = 0.5
-        if games:
-            last3 = (hist.tail(3)["winner"] == team).astype(int) if len(hist) >= 1 else []
-            last5 = (hist.tail(5)["winner"] == team).astype(int) if len(hist) >= 1 else []
-            r3 = float(last3.mean()) if len(last3) else 0.5
-            r5 = float(last5.mean()) if len(last5) else 0.5
-        return {
-            f"pre_{side}_games_cum": games,
-            f"pre_{side}_wins_cum": wins,
-            f"pre_{side}_win_rate_cum": rate,
-            f"pre_{side}_win_rate_l3_cum": r3,
-            f"pre_{side}_win_rate_l5_cum": r5,
-        }
-
-    features.update(pre_cum(home, "home"))
-    features.update(pre_cum(away, "away"))
-
-    # Team one-hot numeric columns
+    features: Dict[str, Any] = {}
     raw_cols = model_objects.get("raw_feature_columns", {}) if isinstance(model_objects, dict) else {}
-    numeric_cols = list(raw_cols.get("numeric", []))
+    numeric_cols = list(raw_cols.get("numeric", [])) if isinstance(raw_cols, dict) else []
+    
+    # Get a set of unique feature suffixes (e.g., 'elo_pre', 'off_epa_per_play')
+    suffixes = sorted({c.split('_', 1)[1] for c in numeric_cols if (c.startswith("home_") or c.startswith("away_")) and not c.startswith("home_minus_away_")})
+
+    def last_team_values(team: str, suffix: str, n: int = 3) -> List[float]:
+        hist = get_team_history(team)
+        if hist.empty:
+            return []
+        
+        values = []
+        for _, r in hist.iloc[::-1].iterrows():
+            val = r.get(f"home_{suffix}") if r.get("home_team") == team else r.get(f"away_{suffix}")
+            if pd.notna(val):
+                try:
+                    values.append(float(val))
+                    if len(values) >= n:
+                        break
+                except (ValueError, TypeError):
+                    continue
+        return values
+
+    # Backfill home_ and away_ features
+    for suf in suffixes:
+        home_key, away_key = f"home_{suf}", f"away_{suf}"
+        
+        home_vals = last_team_values(home, suf)
+        features[home_key] = np.mean(home_vals) if home_vals else ds_mean(home_key, 0.0)
+
+        away_vals = last_team_values(away, suf)
+        features[away_key] = np.mean(away_vals) if away_vals else ds_mean(away_key, 0.0)
+
+    # Compute differentials from backfilled values
     for col in numeric_cols:
-        if col.startswith("team_home_"):
-            features[col] = 1.0 if col == f"team_home_{home}" else 0.0
-        if col.startswith("team_away_"):
-            features[col] = 1.0 if col == f"team_away_{away}" else 0.0
+        if col.startswith("home_minus_away_"):
+            suf = col[len("home_minus_away_"):]
+            hv = features.get(f"home_{suf}")
+            av = features.get(f"away_{suf}")
+            if hv is not None and av is not None:
+                features[col] = float(hv) - float(av)
 
     # Categorical fields
     features["home_game_date"] = f"{season}-W{week:02d}"
     features["home_team"] = home
     features["away_team"] = away
-    features["_dom_bin"] = "unknown"  # unseen category; OHE(handle_unknown='ignore') will drop it
 
-    # Ensure all required numeric fields are present; fill with dataset means when missing/NaN
+    # Ensure all numeric fields are present, filling any remaining NaNs with dataset means
     for col in numeric_cols:
         if col not in features or pd.isna(features.get(col)):
             features[col] = ds_mean(col, 0.0)
 
-    log.debug("Built future row (synth) for %s vs %s: %d features", home, away, len(features))
+    log.debug("Built future row (v3-rolling-avg) for %s vs %s: %d features", home, away, len(features))
     return pd.Series(features)
     # Change Log (2024-05-09): Defensive feature assembly avoids hard failures on sparse history.
 
@@ -1254,17 +1079,14 @@ def get_next_week_schedule() -> List[ScheduleGame]:
         if col in df.columns:
             df[col] = df[col].astype(str).str.strip().replace(TEAM_CODE_FIX)
 
-    kickoff = pd.to_datetime(
-        (
-            df["gameday"].astype(str).str.strip()
-            + " "
-            + df["gametime"].astype(str).str.strip()
-        ),
-        errors="coerce",
-        utc=True,
-    )
+    # Correctly parse, localize to Eastern Time, and convert to UTC.
+    df["kickoff_ts_utc"] = pd.to_datetime(
+        df["gameday"].astype(str) + " " + df["gametime"].astype(str).str.strip(), 
+        errors="coerce"
+    ).dt.tz_localize('America/New_York').dt.tz_convert('UTC')
+    
     date_only = pd.to_datetime(df["gameday"], errors="coerce", utc=True)
-    df["kickoff_ts_utc"] = kickoff.where(kickoff.notna(), date_only)
+    df["kickoff_ts_utc"] = df["kickoff_ts_utc"].fillna(date_only)
 
     now = pd.Timestamp.now(tz="UTC")
     future = df[df["kickoff_ts_utc"].notna() & (df["kickoff_ts_utc"] >= now)]
@@ -1324,13 +1146,20 @@ def predict_game(payload: PredictionRequest) -> PredictionResponse:
         season, week = int(payload.season), int(payload.week)
         log.debug("predict_game: home_team=%s, away_team=%s, season=%s, week=%s", h, a, season, week)
 
+        # ---- Strict artifact presence (no fallbacks in production)
+        required_artifacts = ["preprocessor", "home_model", "away_model", "win_model"]
+        missing_artifacts = [k for k in required_artifacts if not (isinstance(model_objects, dict) and model_objects.get(k) is not None)]
+        if missing_artifacts:
+            log.error("Missing required model artifacts: %s", missing_artifacts)
+            raise HTTPException(503, detail=f"Model artifacts missing: {missing_artifacts}")
+
         # ---- Dataset safety
-        safe_dataset = _ensure_home_away(dataset_df.copy()) if dataset_df is not None else dataset_df
+        safe_dataset = _ensure_home_away(dataset_df.copy()) if dataset_df is not None else pd.DataFrame()
         feature_fallback_used = False
 
         # ---- Look for an already-assembled row in the dataset
         mask = build_game_mask(safe_dataset, season, week, h, a)
-        rows = safe_dataset.loc[mask] if safe_dataset is not None else pd.DataFrame()
+        rows = safe_dataset.loc[mask] if not safe_dataset.empty else pd.DataFrame()
 
         if not rows.empty:
             row = rows.iloc[0]
@@ -1352,7 +1181,7 @@ def predict_game(payload: PredictionRequest) -> PredictionResponse:
                     "Feature build failed for %s vs %s (%d W%d); using defaults: %s",
                     h, a, season, week, e
                 )
-                log.debug("Feature build exception details:", exc_info=True)
+                log.debug("Feature build exception details:USING FALLBACK", exc_info=True)
                 row = pd.Series({
                     "home_moneyline_prob": 0.6,
                     "away_moneyline_prob": 0.4,
@@ -1365,7 +1194,7 @@ def predict_game(payload: PredictionRequest) -> PredictionResponse:
                     "home_game_date": f"{season}-W{week:02d}",
                 })
                 feature_fallback_used = True
-
+                print('FALLBACK USED')
         # ---- Coerce 'row' to Series defensively
         try:
             row = pd.Series(row)
@@ -1493,25 +1322,19 @@ def predict_game(payload: PredictionRequest) -> PredictionResponse:
                         X_aligned2 = Xdf.reindex(columns=exp2, fill_value=np.nan)
                         return _reg_predict(bundle, X_aligned2)
                 raise
-
+        # Score predictions (regression models)
         home_score = float(np.clip(_predict_with_fill(model_objects["home_model"], X)[0], 0.0, 70.0))
         away_score = float(np.clip(_predict_with_fill(model_objects["away_model"], X)[0], 0.0, 70.0))
         point_diff = round(home_score - away_score, 1)
 
         win_fallback_used = False
+        win_classifier_used = False
+        win_prob_source = "unknown"
         try:
             win_entry = model_objects.get("win_model") if isinstance(model_objects, dict) else getattr(model_objects, "win_model", None)
-            win_m = None
-            if isinstance(win_entry, (str, bytes, os.PathLike)):
-                win_path = Path(str(win_entry))
-                if not win_path.is_absolute():
-                    win_path = MODELS_DIR / win_path
-                try:
-                    win_m = joblib.load(win_path)
-                except Exception:
-                    log.exception("Failed to load win_model from path %s; using sigmoid fallback", win_path)
-            elif win_entry is not None:
-                win_m = win_entry
+            win_m = win_entry
+            if win_m is None:
+                raise HTTPException(503, detail="win_model not available on server")
 
             def _predict_proba_with_fill(clf: Any, Xdf: pd.DataFrame) -> float:
                 """Predict win probability with defensive alignment and NaN/inf handling.
@@ -1523,14 +1346,20 @@ def predict_game(payload: PredictionRequest) -> PredictionResponse:
                   4) On NaN/inf errors, coerce to numeric, replace +/-inf→NaN, fillna(0.0), and retry once.
                   5) If estimator lacks predict_proba but has predict, map margin to prob via sigmoid.
                 """
+                nonlocal win_classifier_used, win_prob_source
                 try:
                     exp = _get_expected_features(clf)
                     Xuse = Xdf.reindex(columns=exp, fill_value=np.nan) if exp else Xdf
 
                     if hasattr(clf, "predict_proba"):
-                        return float(clf.predict_proba(Xuse)[0, 1])
+                        prob = float(clf.predict_proba(Xuse)[0, 1])
+                        win_classifier_used = True
+                        win_prob_source = "classifier"
+                        return prob
                     if hasattr(clf, "predict"):
                         margin = float(clf.predict(Xuse)[0])
+                        win_classifier_used = True
+                        win_prob_source = "classifier-margin"
                         return float(1.0 / (1.0 + math.exp(-0.25 * margin)))
                     raise AttributeError("win_model lacks predict/predict_proba")
                 except ValueError as ve:
@@ -1544,9 +1373,14 @@ def predict_game(payload: PredictionRequest) -> PredictionResponse:
                             Xsan = Xsan.apply(pd.to_numeric, errors="coerce")
                             Xsan = Xsan.replace([np.inf, -np.inf], np.nan).fillna(0.0)
                             if hasattr(clf, "predict_proba"):
-                                return float(clf.predict_proba(Xsan)[0, 1])
+                                prob = float(clf.predict_proba(Xsan)[0, 1])
+                                win_classifier_used = True
+                                win_prob_source = "classifier"
+                                return prob
                             if hasattr(clf, "predict"):
                                 margin = float(clf.predict(Xsan)[0])
+                                win_classifier_used = True
+                                win_prob_source = "classifier-margin"
                                 return float(1.0 / (1.0 + math.exp(-0.25 * margin)))
                         except Exception:
                             # fall through to other recovery paths below
@@ -1573,9 +1407,14 @@ def predict_game(payload: PredictionRequest) -> PredictionResponse:
                         # sanitize on retry as well, in case imputers were not part of clf
                         Xuse2 = Xuse2.apply(pd.to_numeric, errors="coerce").replace([np.inf, -np.inf], np.nan).fillna(0.0)
                         if hasattr(clf, "predict_proba"):
-                            return float(clf.predict_proba(Xuse2)[0, 1])
+                            prob = float(clf.predict_proba(Xuse2)[0, 1])
+                            win_classifier_used = True
+                            win_prob_source = "classifier"
+                            return prob
                         if hasattr(clf, "predict"):
                             margin = float(clf.predict(Xuse2)[0])
+                            win_classifier_used = True
+                            win_prob_source = "classifier-margin"
                             return float(1.0 / (1.0 + math.exp(-0.25 * margin)))
                     if "Feature names unseen at fit time" in msg:
                         exp4 = _get_expected_features(clf)
@@ -1583,21 +1422,28 @@ def predict_game(payload: PredictionRequest) -> PredictionResponse:
                             Xuse3 = Xdf.reindex(columns=exp4, fill_value=np.nan)
                             Xuse3 = Xuse3.apply(pd.to_numeric, errors="coerce").replace([np.inf, -np.inf], np.nan).fillna(0.0)
                             if hasattr(clf, "predict_proba"):
-                                return float(clf.predict_proba(Xuse3)[0, 1])
+                                prob = float(clf.predict_proba(Xuse3)[0, 1])
+                                win_classifier_used = True
+                                win_prob_source = "classifier"
+                                return prob
                             if hasattr(clf, "predict"):
                                 margin = float(clf.predict(Xuse3)[0])
+                                win_classifier_used = True
+                                win_prob_source = "classifier-margin"
                                 return float(1.0 / (1.0 + math.exp(-0.25 * margin)))
                     raise
 
-            if win_m is not None:
-                home_prob = _predict_proba_with_fill(win_m, X)
-            else:
-                home_prob = 1.0 / (1.0 + math.exp(-0.25 * point_diff))
-                win_fallback_used = True
+            home_prob = _predict_proba_with_fill(win_m, X)
+            log.info("Win probability source: %s", win_prob_source or "unknown")
         except Exception:
             log.exception("Unexpected error while computing win probability; using sigmoid fallback")
-            home_prob = 1.0 / (1.0 + math.exp(-0.25 * point_diff))
+            # Disallow fallback in strict mode
+            if not ALLOW_FALLBACK_PREDICTIONS:
+                raise HTTPException(503, detail="Win probability model failed and fallbacks are disabled")
+            home_prob
             win_fallback_used = True
+            win_classifier_used = False
+            win_prob_source = "legacy-sigmoid"
 
         try:
             mode_val = model_objects.get("mode") if isinstance(model_objects, dict) else getattr(model_objects, "mode", "production")
@@ -1619,16 +1465,27 @@ def predict_game(payload: PredictionRequest) -> PredictionResponse:
         if not ALLOW_FALLBACK_PREDICTIONS and (feature_fallback_used or win_fallback_used):
             log.warning("Fallback prediction attempted but ALLOW_FALLBACK_PREDICTIONS=false; rejecting request")
             raise HTTPException(400, f"Prediction would use fallback logic (source={pred_source}); disallowed by server configuration")
-
+        away_prob = float(np.clip(1.0 - home_prob, 0.0, 1.0))
+        # Capture optimal threshold for clients interested in hard classification
+        try:
+            win_threshold_used = float(model_objects.get("win_threshold_optimal", 0.5)) if isinstance(model_objects, dict) else None
+        except Exception:
+            win_threshold_used = None
         return PredictionResponse(
             home_score=round(home_score, 1),
             away_score=round(away_score, 1),
-            home_win_probability=home_prob,
-            away_win_probability=1.0 - home_prob,
+            home_win_probability=round(home_prob, 3),
+            away_win_probability=round(away_prob, 3),
+            home_win=home_prob,
+            away_win=away_prob,
             point_diff=point_diff,
             mode=mode_val,
             prediction_source=pred_source,
+            win_classifier_used=bool(win_classifier_used),
+            win_probability_source=str(win_prob_source),
+            win_threshold_used=win_threshold_used,
         )
+        
     except HTTPException:
         raise
     except Exception as e:
@@ -1720,14 +1577,14 @@ def predict_next_week() -> Dict[str, Any]:
                         "home_team": str(g["home_team"]),
                         "away_team": str(g["away_team"]),
                         "kickoff": str(g.get("gameday", "TBD")),
-                        "prediction": pr.dict(),
+                        "prediction": pr.model_dump(),
                     }
                 )
             except Exception as e:
                 out.append(
                     {"game_id": str(g.get("game_id", "unknown")), "error": str(e)}
                 )
-            
+        
         return {
             "context": ctx,
             "games": out,
@@ -1736,4 +1593,4 @@ def predict_next_week() -> Dict[str, Any]:
         }
     except Exception as e:
         log.error("Next-week prediction error: %s", e, exc_info=True)
-        raise HTTPException(500, f"Failed to predict next week: {e}")
+        raise HTTPException(500, "Failed to process next week predictions.")

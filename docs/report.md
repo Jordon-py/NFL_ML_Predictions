@@ -6,6 +6,56 @@ This report documents incremental changes to the NFL_ML_Predictions repository, 
 
 ## Recent Changes
 
+- Date/Time: 2025-11-05 / 15:20 UTC
+  - Files Modified: `backend/main.py`, `frontend/src/components/TeamGrid.jsx`, `.debug_memory.json`, `docs/report.md`, `alfred.log.md`
+  - Change Description:
+    - Restored numeric `home_score` and `away_score` handling in `predict_game`, ensuring `point_diff` math stays valid and `PredictionResponse` continues to emit floats for downstream consumers.
+    - Refreshed TeamGrid prediction cards to read the schedule’s team abbreviations and display formatted scores as “BUF 24.1 – 27.3 KC”, reducing ambiguity for users comparing matchups.
+    - Logged the update in ADA memory and Alfred activity log for continuity, keeping the knowledge base aligned with the adjusted API/UI contract.
+  - Why Made: The backend had converted score predictions into prefixed strings (e.g., “HOME 24.3”), breaking numeric post-processing and forcing the UI to guess at team associations. Aligning both tiers restores type safety and clarifies the presentation.
+  - Impact: Numeric fields remain math-friendly for analytics, and the frontend now makes the home/away context explicit beside each score. No schema changes required.
+  - Quality Gates: Smoke check via local POST `/predict` confirmed numeric response payload; frontend manual verification pending a rerun of the dev server.
+
+- Date/Time: 2025-11-06 / 01:46 UTC
+  - Files Modified: `backend/train_models.py`, `backend/models/{preprocessor.joblib,home_model.joblib,away_model.joblib,win_clf_calibrated.joblib,metadata.json,training_report.json}`, `.debug_memory.json`, `docs/report.md`, `alfred.log.md`
+  - Change Description:
+    - Expanded the randomized search grids for both HistGradientBoosting regressors and the calibrated logistic classifier, enabling 25-iteration sweeps to explore 70+ classifier combinations and >10k regressor combinations.
+    - Added a macro-F1 threshold sweep (`find_optimal_threshold`) that tuned the production decision cutoff to **0.48** and persisted it into both the training report and `metadata.json` for downstream inference.
+    - Updated the training workflow to log fairness diagnostics (Youden's J, threshold metric) and store the calibrated threshold in ADA memory for future retrains.
+  - Why Made: The prior trainer under-utilised randomized search iterations and always thresholded at 0.50, causing mild away-team bias. Automating search breadth and decision threshold selection gives the pipeline self-tuning bias diagnostics before artifacts ship.
+  - Impact: Holdout metrics nudged upward (Balanced Acc 0.716, ROC AUC 0.741, Brier 0.205, Log-loss 0.595) while the score-model bias declined to a 61.2% home prediction rate. Metadata now advertises the validated threshold, allowing the API to align inference decisions with training.
+  - Quality Gates: Training PASS (artifacts and reports regenerated). Post-run warnings: scikit-learn emitted `ConvergenceWarning` for several saga/liblinear trials (to revisit by raising `max_iter` or pruning solvers). Pending: backend smoke test on `/predict` with the new threshold.
+
+- Date/Time: 2025-11-06 / 01:25 UTC
+  - Files Modified: `backend/train_models.py`, `backend/data/game_features.csv`, `backend/models/{preprocessor.joblib,home_model.joblib,away_model.joblib,win_clf_calibrated.joblib,metadata.json,training_report.json}`, `metrics/dataset/dataset_diagnostics.json`, `.debug_memory.json`, `docs/report.md`
+  - Change Description:
+    - Rebuilt the engineered dataset via `backend/build_dataset.py` (2,748 rows, zero duplicate games) and refreshed diagnostics (home win prior 55.3%, latest completed season 2025).
+    - Updated the bias-aware trainer to use the modern `CalibratedClassifierCV(estimator=...)` signature and clipped probabilities before `log_loss`, ensuring scikit-learn 1.5 compatibility without suppressing numerical stability checks.
+    - Retrained the home/away HistGradientBoosting regressors and the calibrated logistic classifier with deterministic seeds; persisted artifacts and metadata for the FastAPI backend.
+  - Why Made: The previous trainer used deprecated sklearn APIs and produced runtime failures during calibration. The retrain also fulfils the fairness audit requirement by regenerating models on the leakage-screened dataset.
+  - Impact: Holdout metrics now show balanced accuracy 0.713, ROC AUC 0.731, Brier 0.206, and log-loss 0.597; score-proxy bias dropped to a 66.1% home prediction rate (down from prior >70%). Fresh artifacts load successfully at startup.
+  - Quality Gates: Dataset rebuild PASS (logged in `metrics/dataset/dataset_diagnostics.json`). Training PASS (joblib artifacts + `training_report.json` generated). Pending: post-train smoke test of `/predict` using the refreshed models.
+
+- Date/Time: 2025-11-05 / 00:20 UTC
+  - Files Modified: `backend/.env`, `backend/main.py`, `.debug_memory.json`, `docs/report.md` (this file)
+  - Change Description:
+    - Aligned backend dataset to engineered `backend/data/game_features.csv` (used by training). Updated `.env` to a relative path (no leading slash) and set `main.py` default dataset to `game_features.csv` with robust fallbacks: `merge_dominance.csv`, `merged_game_features.csv`.
+    - This resolves startup schema mismatch warnings where the server loaded `merge_dominance.csv` and missed engineered columns expected by the trained models.
+  - Why Made: Smoke tests showed "Dataset schema mismatch: missing engineered features" and sanity predict failures due to the API reading a legacy dataset. Switching to `game_features.csv` restores feature alignment.
+  - Impact: Quieter startup logs; improved success rate for classifier-based predictions; unblock weekly smoke test and conditional deployment.
+  - Quality Gates: Build: PASS. Lint/Typecheck: PASS. Tests: Pending smoke rerun.
+
+- Date/Time: 2025-11-04 / 04:10 UTC
+  - Files Modified: `backend/main.py`, `frontend/src/components/TeamGrid.jsx`, `.debug_memory.json`, `docs/MASTER_REPORT.md`, `docs/report.md` (this file).
+  - Change Description:
+    - Backend: Extended `PredictionResponse` with telemetry fields `win_classifier_used`, `win_probability_source`, and `win_threshold_used`. The prediction path now logs "Win probability source: ..." and sets flags precisely for classifier vs fallback.
+    - Frontend: `TeamGrid.jsx` reads the new telemetry and displays a compact badge: `clf` when the classifier produced probability; `legacy` when a sigmoid fallback was used.
+    - Docs: Added a Dry Run “API Coherence Audit” section to `docs/MASTER_REPORT.md` (integration overview, schema alignment, D-ToT map, Reflexion self-critique, and incremental optimization plan).
+    - ADA Memory: Updated `.debug_memory.json` to include telemetry fields in `PredictionResponse` shape and logged this change in `history_log`.
+  - Why Made: Provide explicit, end-to-end transparency for when the calibrated classifier is used vs legacy fallbacks, and document the system’s front/back integration for the refactor Dry Run.
+  - Impact: UI now shows both provenance (`prediction_source`) and classifier usage status, aiding debugging and trust. Documentation reflects current architecture and contracts.
+  - Quality Gates: Build: PASS. Lint/Typecheck: PASS. Tests: N/A (manual verification via backend logs and UI badges).
+
 - **Date/Time**: 2025-11-02 / 18:00 UTC
 - **Files Modified**: `backend/main.py`, `.debug_memory.json`, `docs/report.md`
 - **Change Description**:
