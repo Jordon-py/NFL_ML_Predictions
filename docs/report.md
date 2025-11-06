@@ -6,6 +6,16 @@ This report documents incremental changes to the NFL_ML_Predictions repository, 
 
 ## Recent Changes
 
+- Date/Time: 2025-11-06 / 03:45 UTC
+  - Files Modified: `frontend/src/pages/StatsPage.jsx`, `frontend/src/pages/StatsPage.css`, `frontend/package.json`, `frontend/package-lock.json`, `docs/report.md`, `alfred.log.md`, `.debug_memory.json`
+  - Change Description:
+    - Replaced the third-party `react-spinners` dependency with a lightweight CSS spinner and tightened StatsPage documentation, keeping NavBar consistent across routes.
+    - Trimmed unused spinner packages from `package.json` and regenerated the lock file so Vercel builds no longer fail on missing modules.
+    - Logged the deployment-blocking issue resolution in the Alfred log and ADA memory for future reference.
+  - Why Made: Vercel production builds broke when `react-spinners` was imported without being shipped; introducing a native spinner removes the dependency and simplifies deployments.
+  - Impact: Frontend builds succeed without additional packages, and the Stats page remains fully interactive with accessible loading feedback.
+  - Quality Gates: `npm install --prefix frontend` (PASS, with engine warning about Node 20.x expectation); Vercel build rerun pending.
+
 - Date/Time: 2025-11-05 / 15:20 UTC
   - Files Modified: `backend/main.py`, `frontend/src/components/TeamGrid.jsx`, `.debug_memory.json`, `docs/report.md`, `alfred.log.md`
   - Change Description:

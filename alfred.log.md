@@ -1,5 +1,11 @@
 # Alfred Activity Log
 
+## 2025-11-06T03:45:00Z
+
+- Removed the `react-spinners` dependency from StatsPage and replaced it with an in-house CSS spinner to stabilize Vercel builds.
+- Cleaned `frontend/package.json` and regenerated the lock file via `npm install --prefix frontend` (engine warning noted: repo prefers Node 20.x).
+- Documented the fix across `docs/report.md` and `.debug_memory.json`; redeploy pending to verify production.
+
 ## 2025-11-06T01:25:52Z
 
 - Rebuilt `backend/data/game_features.csv` (2,748 rows) and refreshed diagnostics.
