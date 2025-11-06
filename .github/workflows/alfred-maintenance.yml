@@ -1,0 +1,246 @@
+name: "ALFRED Maintenance & Reflexion Suite"
+
+on:
+  schedule:
+    - cron: "0 3 * * *"   # daily at 03:00 UTC
+  workflow_dispatch:
+
+concurrency:
+  group: alfred-maintenance
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: read
+  checks: read
+
+env:
+  ALFRED_NAME: "A.L.F.R.E.D. v2.1-R"
+  ALFRED_MOTTO: "Anticipate • Educate • Elevate"
+  PY_VER: "3.11"
+
+jobs:
+  repo-clean:
+    name: "🧹 Repository Guardian — Hygiene, Lint, Audit"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: "Checkout"
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: "Set up Python (${{ env.PY_VER }}) if backend detected"
+        if: ${{ hashFiles('backend/requirements.txt', 'pyproject.toml', 'requirements.txt') != '' }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PY_VER }}
+
+      - name: "Python deps (tools)"
+        if: ${{ hashFiles('backend/requirements.txt', 'pyproject.toml', 'requirements.txt') != '' }}
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff==0.6.9 black==24.8.0 pip-audit==2.7.3 safety==3.2.4
+          if [ -f backend/requirements.txt ]; then pip install -r backend/requirements.txt; fi
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: "Python lint — Ruff"
+        if: ${{ hashFiles('**/*.py') != '' }}
+        run: |
+          echo "🔎 ${ALFRED_NAME}: Commencing Python lint (Ruff)…"
+          ruff check .
+
+      - name: "Python format check — Black (diff only)"
+        if: ${{ hashFiles('**/*.py') != '' }}
+        run: |
+          echo "🎩 ${ALFRED_NAME}: Verifying code style (Black)…"
+          black --check --diff .
+
+      - name: "Python dependency audit"
+        if: ${{ hashFiles('**/*.py') != '' }}
+        run: |
+          echo "🛡  ${ALFRED_NAME}: Auditing Python dependencies…"
+          mkdir -p insights
+          pip-audit -f json -o insights/pip_audit.json || true
+          safety check --full-report || true
+
+      - name: "Set up Node if frontend detected"
+        if: ${{ hashFiles('package-lock.json', 'pnpm-lock.yaml', 'yarn.lock', 'frontend/**/package.json', 'package.json') != '' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: "Install Node deps"
+        if: ${{ hashFiles('package.json') != '' }}
+        run: |
+          npm ci
+
+      - name: "Frontend lint (ESLint) & format check (Prettier)"
+        if: ${{ hashFiles('package.json') != '' }}
+        run: |
+          echo "🔎 ${ALFRED_NAME}: Frontend hygiene (ESLint + Prettier)…"
+          npx --yes eslint . || true
+          npx --yes prettier -c . || true
+
+      - name: "Node dependency audit"
+        if: ${{ hashFiles('package.json') != '' }}
+        run: |
+          echo "🛡  ${ALFRED_NAME}: npm audit (non-blocking)…"
+          mkdir -p insights
+          npm audit --json > insights/npm_audit.json || true
+
+      - name: "Run ALFRED repo audit script (optional)"
+        if: ${{ hashFiles('scripts/alfred_repo_audit.py') != '' }}
+        run: |
+          echo "🕵️ ${ALFRED_NAME}: Repository audit commencing…"
+          mkdir -p insights
+          python scripts/alfred_repo_audit.py --output insights/repo_audit.md || true
+
+      - name: "Generate Developer Insight Snapshot (optional)"
+        if: ${{ hashFiles('scripts/alfred_insight_engine.py') != '' }}
+        run: |
+          mkdir -p insights
+          python scripts/alfred_insight_engine.py --output insights/weekly.md || true
+
+      - name: "Sync README (optional)"
+        if: ${{ hashFiles('scripts/readme_sync.py') != '' }}
+        run: |
+          echo "📘 ${ALFRED_NAME}: README synchronization…"
+          python scripts/readme_sync.py || true
+
+      - name: "Create / update ALFRED reflexion log"
+        run: |
+          mkdir -p insights
+          {
+            echo "## ${ALFRED_NAME} — Reflexion Summary ($(date -u +'%Y-%m-%d %H:%M UTC'))"
+            echo ""
+            echo "- Motto: ${ALFRED_MOTTO}"
+            echo "- Repo: $GITHUB_REPOSITORY"
+            echo "- Run: $GITHUB_RUN_ID"
+            echo ""
+            echo "### Observations"
+            echo "- Python present: $([ -n \"$(git ls-files \"**/*.py\")\" ] && echo yes || echo no)"
+            echo "- Node present: $([ -f package.json ] && echo yes || echo no)"
+            echo "- Recent commit summary:"
+            git log -1 --pretty=format:'  - %h %s (%cr) by %an'
+            echo ""
+            echo "### Suggestions"
+            echo "- Consider addressing any items flagged in insights/pip_audit.json or insights/npm_audit.json."
+            echo "- If repeated lint issues occur, enable autofix in a dedicated PR."
+            echo ""
+            echo "### Next Steps"
+            echo "- Schedule deeper architectural pass if test failures or high churn are detected."
+          } > insights/reflexion_summary.md
+
+      # === Persistent "Memory" file for ALFRED ===
+      - name: "Ensure ALFRED memory file exists"
+        run: |
+          if [ ! -f alfred.log.md ]; then
+            cat > alfred.log.md <<'LOG'
+# ALFRED Memory Log
+
+A persistent record of ALFRED’s reflections, reminders, and running notes.
+
+> Motto: Anticipate • Educate • Elevate
+LOG
+          fi
+
+      - name: "Append reflexion note to ALFRED memory"
+        run: |
+          {
+            echo "## Run ${GITHUB_RUN_ID} — $(date -u +'%Y-%m-%d %H:%M UTC')"
+            echo "- Repo: ${GITHUB_REPOSITORY}"
+            echo "- Insights: \`insights/reflexion_summary.md\`"
+            echo "- Stale branches: \`insights/stale_branches.md\` (if generated)"
+            echo "- Next suggestion: Review audit items; consider enabling autofix via dedicated PR."
+            echo ""
+          } >> alfred.log.md
+      # === End memory section ===
+
+      - name: "List stale branches (>45 days) & open report"
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const cutoff = new Date(Date.now() - 45*24*60*60*1000);
+            const branches = await github.rest.repos.listBranches({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              protected: false,
+              per_page: 100
+            });
+            const stale = [];
+            for (const b of branches.data) {
+              const commit = await github.rest.repos.getCommit({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: b.commit.sha
+              });
+              if (new Date(commit.data.commit.author.date) < cutoff && b.name !== context.ref.replace('refs/heads/','')) {
+                stale.push({ name: b.name, lastCommit: commit.data.commit.author.date });
+              }
+            }
+            const fs = require('fs');
+            fs.mkdirSync('insights', { recursive: true });
+            fs.writeFileSync('insights/stale_branches.json', JSON.stringify(stale, null, 2));
+            fs.writeFileSync('insights/stale_branches.md',
+              `### Stale Branches (>45 days)\n\n` +
+              (stale.length ? stale.map(s => `- ${s.name} — last commit: ${s.lastCommit}`).join('\n') : '_None detected_')
+            );
+            core.setOutput('staleCount', String(stale.length));
+
+      - name: "Upload insight artifacts"
+        uses: actions/upload-artifact@v4
+        with:
+          name: "alfred-insights-${{ github.run_id }}"
+          path: |
+            insights/**
+          if-no-files-found: ignore
+
+      - name: "Create Alfred upkeep PR (changes, reports, memory, formatting)"
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "chore(alfred): maintenance, audits, reflexion & memory log"
+          title: "ALFRED: Weekly Maintenance, Reflexion & Memory Update"
+          body: |
+            Good day. ${ALFRED_NAME} at your service.
+
+            This pull request contains:
+            - Lint/audit adjustments (non-destructive)
+            - Updated insights:
+              - `insights/reflexion_summary.md`
+              - `insights/stale_branches.md` (+ JSON if present)
+            - Persistent memory update:
+              - `alfred.log.md`
+
+            Motto: **${{ env.ALFRED_MOTTO }}**  
+            Please review at your leisure; I remain poised for further refinements.
+          branch: "alfred/maintenance/${{ github.run_number }}"
+          delete-branch: true
+          add-paths: |
+            alfred.log.md
+            insights/**
+            README.md
+            **/*.md
+            **/*.json
+
+  etiquette:
+    name: "🎓 Butlerly Etiquette — Friendly Briefing"
+    runs-on: ubuntu-latest
+    needs: repo-clean
+    steps:
+      - name: "Post concise run note"
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = [
+              `Good day. **${process.env.ALFRED_NAME}** has completed its rounds.`,
+              `- Insights uploaded as artifacts; upkeep PR opened if changes were proposed.`,
+              `- Run: ${runUrl}`,
+              ``,
+              `If you wish me to pause automations: \`alfred --pause-automation\` (figuratively speaking).`,
+              `Motto: _${process.env.ALFRED_MOTTO}_.`
+            ].join('\n');
+            core.notice(body)
