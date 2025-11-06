@@ -1,3 +1,33 @@
+# alfred.log.md — Operational Log
+
+Date: 2025-11-06
+Branch: alfred/deploy-20251105
+
+Activity:
+
+- Deployed frontend to Vercel Production successfully after spinner dependency removal.
+- Prepared repository cleanup DRY RUN to reduce footprint and remove tracked installs.
+
+Proposed Cleanup (awaiting confirmation):
+
+- Keep: backend API code and models; frontend src/public; deployment configs; core docs.
+- Archive/Delete: notebooks, legacy data, training-only scripts (or move to scripts/), tracked node_modules, venv, duplicate docs.
+- Add .gitignore to prevent reintroduction of installed artifacts.
+
+Next Steps on CONFIRM: CLEAN-20251106
+
+1) Create branch `chore/cleanup-2025-11-06`.
+2) Add `.gitignore` and remove tracked `node_modules` and `.venv`.
+3) Move notebooks/legacy data to `archive/` (or delete per confirmation).
+4) Run health checks: pytest, dev server, and Vite build.
+5) Open PR with detailed summary and file list.
+
+Quality Gates (current session):
+
+- Build: PASS (Vercel prod build completed)
+- Lint/Typecheck: N/A (not executed this step)
+- Tests: N/A (not executed this step)
+
 # Alfred Activity Log
 
 ## 2025-11-06T03:45:00Z
