@@ -100,14 +100,17 @@ const StatsPage = () => {
   };
 
   return (
-    <div className="stats-page">
+    <>
       <NavBar />
-      <h1>Next Week Schedule & Predictions</h1>
-      {renderSchedule()}
+      <div className="stats-page">
+        
+        <h1>Next Week Schedule & Predictions</h1>
+        {renderSchedule()}
 
-      <h2>Historical Predictions</h2>
-      <HistoryChart />
-    </div>
+        <h2>Historical Predictions</h2>
+        <HistoryChart />
+      </div>
+    </>
   );
 };
 

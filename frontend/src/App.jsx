@@ -21,7 +21,7 @@ import HistoryChart from './components/HistoryChart.jsx';
 import DashBoard from './components/DashBoard.jsx'; // FIX: default import, not named
 import './components/TeamGrid.css';
 import HistoryPage from './components/HistoryPage.jsx';
-import StatsPage from './components/StatsPage.jsx';
+import StatsPage from './pages/StatsPage.jsx';
 
 
 

@@ -36,7 +36,8 @@ import TeamGrid from './TeamGrid.jsx';
 import PredictionResult from './PredictionResult.jsx';
 import HistoryChart from './HistoryChart.jsx';
 import NavBar from './NavBar/NavBar.jsx';
-import  HamburgerMenu from './HamburgerMenu.jsx';
+import HamburgerMenu from './HamburgerMenu.jsx';
+import D_BUTTON from './D_BUTTON.jsx';
 
 // LocalStorage key aligns with provider for safe hydration fallback.
 const LS_KEY = 'prediction_history';
@@ -57,27 +58,26 @@ export default function DashBoard() {
   // Impl (PredictionContext.jsx) exposes: { current, latest, setCurrent, ... }.
   // Docs (usePredictions.md) suggest: { state, actions, selectors }.
   const ctx = usePredictions();
-  console.log(`ctx in dashboard line 60`, JSON.stringify(ctx));
-  console.log(`ctx.state: ${ctx.history}`);
   // Resolve "current" in a backward/forward compatible way:
   // - Prefer ctx.current (implementation)
   // - Else ctx.state?.current (doc shape)
   // - Else ctx.latest (selector for newest history entry)
-  const current = (ctx ? ctx?.history ?.current ?? ctx?.latest ?? null : null);
+  const current = ctx?.current ?? ctx?.latest ?? null;
 
   // Resolve "history":
   // - Prefer ctx.state?.history if present (doc shape)
   // - Else hydrate directly from localStorage (kept by provider/TeamGrid)
   const history = useMemo(
-    () => ctx?.state?.history ?? loadHistoryLocal(),
-    [ctx?.state?.history]
+    () => loadHistoryLocal(),
+    // Recompute when provider history likely changed (count/latest)
+    [ctx?.count, ctx?.latest]
   );
 
   // Minimal "state-like" object for components that expect a combined shape.
   // Keeps coupling low while preserving existing prop contracts.
   const navState = useMemo(
-    () => ({ current, ...history[history.length[- 1]] }),
-    [current, history]
+    () => ({ current, latest: ctx?.latest, count: ctx?.count }),
+    [current, ctx?.latest, ctx?.count]
   );
   console.log('navState', navState);
   return (
@@ -90,6 +90,7 @@ export default function DashBoard() {
           <div className="team-grid-header">
             <h2 className="nfl-matchups">Next Week&apos;s NFL Matchups</h2>
             <p>Click any matchup to see predicted scores</p>
+            
           </div>
         </header>
 

@@ -11,8 +11,33 @@
   align-items: center;
   text-align: center;
 }
+
+.history-chart-header-controls{
+  display: flex;
+  align-items: baseline;
+  justify-content: space-around;
+
+}
+
+button.clear-history-button {
+  max-height: 1.5rem;
+  max-width: 7.5rem;
+  margin-top: 1rem;
+  padding: 0.2rem .5rem;
+  background-color: lch(53.23% 104.58 40 / 0.771);
+  color: rgb(255, 255, 255);
+  /* Fix: per-corner border is not valid; use side borders to emphasize bottom-right edge */
+  border-top: 1px solid lch(12.32% 39.33 293.1);
+  border-bottom: 1px solid lch(0% 0 0);
+  border-left: 2px solid lch(100% 0.01 296.81);
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: var(--font-tech);
+  transition: background-color 0.3s ease;
+}
+
 h1 {
-  font-family: 'Playfair', 'Lucida Sans Unicode', 'Lucida Grande', 'Lucida Sans', Arial, sans-serif;
+  font-family: 'Orbitron', 'Lucida Sans Unicode', 'Lucida Grande', 'Lucida Sans', Arial, sans-serif;
 }
 
 h2.nfl-matchups {
@@ -43,7 +68,7 @@ p.nfl-matchups {
 section.history-chart {
   display: flex;
   flex-direction: column;
-  background-color: oklch(0% 0 0 / 0.7);
+  background-color: lch(4.73% 21.38 284.18 / 0.844);
   gap: 20px;
   font-size: 1rem;
   /* Adjusted for consistency */
@@ -65,7 +90,7 @@ section.team-main {
   flex-direction: row;
   justify-content: space-between;
   /* Center grid items */
-  
+
   /* Consistent gap */
   padding: 1rem;
 }

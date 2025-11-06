@@ -12,7 +12,7 @@
  * Modification Guide:
  *   - Keep heavy calculations out of the component—normalise data inside the
  *     context or dedicated selectors.
- *   - When adding new metrics, ensure you handle `null`/`undefined` so the UI
+ *   - When adding new probs, ensure you handle `null`/`undefined` so the UI
  *     never crashes while the backend evolves.
  */
 
@@ -27,19 +27,22 @@ import HistoryChart from './HistoryChart';
  * @param {Object} props
  * @param {Object|null} props.entry - The prediction entry object, or null if unavailable.
  *   - entry.game: {Object} Game metadata (week, season, home/away abbreviations).
- *   - entry.metrics: {Object} Prediction metrics (scores, point_diff).
- *   - entry.probs: {Object} Probability metrics (home, away, ensemble).
+ *   - entry.probs: {Object} Prediction probs (scores, point_diff).
+ *   - entry.probs: {Object} Probability probs (home, away, ensemble).
  *
  * Renders a chart and structured prediction details, handling missing/null data gracefully.
  */
 export default function PredictionResult({ entry }) {
   // Safely destructure, defaulting to empty objects if entry is null.
-  const { game = {}, metrics = {}, probs = {} } = entry || {};
-
+  const { game = {}, probs = {} } = entry || {};
+  console.log(JSON.stringify(game));
+  console.log(JSON.stringify(probs))
   // Compute display-friendly percentages, rounding if values exist.
   const homePct = probs.home != null ? Math.round(probs.home * 100) : null;
   const awayPct = probs.away != null ? Math.round(probs.away * 100) : null;
-  const ensemblePct = probs.ensemble != null ? Math.round(probs.ensemble * 100) : null;
+  const ensemblePct = probs.ensemble != null ? Math.round(((probs.homeScore+ probs.home + probs.away) / 1.5) * 100) : null;
+  const homeScore = probs.home_score != null ? Math.round(probs.home_score) : null;
+  const awayScore = probs.away_score != null ? Math.round(probs.away_score) : null;
 
   return (
     <>
@@ -55,14 +58,14 @@ export default function PredictionResult({ entry }) {
         </div>
         <div className="scores">
           <div className="score-line">
-            <strong>{game.home_abbr} (Home): {metrics.home_score != null ? metrics.home_score : '-'}</strong>
+            <strong>{game.home_abbr} (Home): {probs.home_score != null ? probs.home_score : '-'}</strong>
             <span className="score-sep"> — </span>
-            <strong>{game.away_abbr} (Away): {metrics.away_score != null ? metrics.away_score : '-'}</strong>
+            <strong>{game.away_abbr} (Away): {probs.away_score != null ? probs.away_score : '-'}</strong>
           </div>
           <div className="score-diff">
-            <strong>{game.home_abbr}</strong> {metrics.home_score != null ? metrics.home_score : '-'} — {metrics.away_score != null ? metrics.away_score : '-'} <strong>{game.away_abbr}</strong>
+            <strong>{game.home_abbr}</strong> {probs.home_score != null ? probs.home_score : '-'} — {probs.away_score != null ? probs.away_score : '-'} <strong>{game.away_abbr}</strong>
             <span className="separator">•</span>
-            <span>Diff: {metrics.point_diff != null ? metrics.point_diff : '-'}</span>
+            <span>Diff: {probs.point_diff != null ? probs.point_diff : '-'}</span>
           </div>
         </div>
         <div className="probs">

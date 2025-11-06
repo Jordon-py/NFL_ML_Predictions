@@ -1,10 +1,258 @@
 {
-  "training_timestamp_utc": "2025-11-01 07:07:59 UTC",
-  "rows_total": 2588,
-  "n_features_numeric": 156,
-  "n_features_categorical": 4,
-  "cv_n_splits": 5,
-  "random_seed": 42,
-  "production_ready": true,
-  "dataset_hash": 7970437072635788619
+  "generated_at_utc": "2025-11-06T01:46:04.901610+00:00",
+  "data_path": "backend\\data\\game_features.csv",
+  "models_dir": "backend\\models",
+  "random_state": 42,
+  "train_rows": 2467,
+  "holdout_rows": 121,
+  "home_regressor": {
+    "search_score": -7.487321046248946,
+    "mae_train": 7.0436470582813415
+  },
+  "away_regressor": {
+    "search_score": -7.377321858562728,
+    "mae_train": 6.836763744193308
+  },
+  "classifier": {
+    "search_score": 0.7167191980182898,
+    "accuracy_train": 0.6720713417105797,
+    "balanced_accuracy_train": 0.6597218623132073,
+    "f1_macro_train": 0.6601526228811719,
+    "brier_train": 0.20501238137661415,
+    "logloss_train": 0.5949634195000479
+  },
+  "evaluation": {
+    "regression_holdout": {
+      "home_mae": 6.960585618831082,
+      "away_mae": 7.1475774545109685
+    },
+    "classifier_holdout": {
+      "accuracy": 0.7272727272727273,
+      "balanced_accuracy": 0.7158584169453734,
+      "f1_macro": 0.717948717948718,
+      "roc_auc": 0.7408026755852842,
+      "brier": 0.2053812551654774,
+      "logloss": 0.5947404147228912,
+      "confusion_matrix": [
+        [
+          33,
+          19
+        ],
+        [
+          14,
+          55
+        ]
+      ],
+      "classification_report": {
+        "0": {
+          "precision": 0.7021276595744681,
+          "recall": 0.6346153846153846,
+          "f1-score": 0.6666666666666666,
+          "support": 52.0
+        },
+        "1": {
+          "precision": 0.7432432432432432,
+          "recall": 0.7971014492753623,
+          "f1-score": 0.7692307692307693,
+          "support": 69.0
+        },
+        "accuracy": 0.7272727272727273,
+        "macro avg": {
+          "precision": 0.7226854514088557,
+          "recall": 0.7158584169453734,
+          "f1-score": 0.717948717948718,
+          "support": 121.0
+        },
+        "weighted avg": {
+          "precision": 0.725573736212034,
+          "recall": 0.7272727272727273,
+          "f1-score": 0.7251536342445434,
+          "support": 121.0
+        }
+      },
+      "home_prediction_rate": 0.6115702479338843,
+      "threshold": 0.48000000000000004,
+      "threshold_metric": 0.717948717948718,
+      "youden_j": 0.4317168338907425
+    },
+    "score_model_bias": {
+      "home_prediction_rate": 0.6776859504132231,
+      "mean_probability": 0.6288199166465152
+    }
+  },
+  "previous_report": {
+    "generated_at_utc": "2025-11-06T01:43:57.043736+00:00",
+    "data_path": "backend\\data\\game_features.csv",
+    "models_dir": "backend\\models",
+    "random_state": 42,
+    "train_rows": 2467,
+    "holdout_rows": 121,
+    "home_regressor": {
+      "search_score": -7.487321046248946,
+      "mae_train": 7.0436470582813415
+    },
+    "away_regressor": {
+      "search_score": -7.377321858562728,
+      "mae_train": 6.836763744193308
+    },
+    "classifier": {
+      "search_score": 0.7167191980182898,
+      "accuracy_train": 0.6720713417105797,
+      "balanced_accuracy_train": 0.6597218623132073,
+      "f1_macro_train": 0.6601526228811719,
+      "brier_train": 0.20501238137661415,
+      "logloss_train": 0.5949634195000479
+    },
+    "evaluation": {
+      "regression_holdout": {
+        "home_mae": 6.960585618831082,
+        "away_mae": 7.1475774545109685
+      },
+      "classifier_holdout": {
+        "accuracy": 0.7272727272727273,
+        "balanced_accuracy": 0.7158584169453734,
+        "f1_macro": 0.717948717948718,
+        "roc_auc": 0.7408026755852842,
+        "brier": 0.2053812551654774,
+        "logloss": 0.5947404147228912,
+        "confusion_matrix": [
+          [
+            33,
+            19
+          ],
+          [
+            14,
+            55
+          ]
+        ],
+        "classification_report": {
+          "0": {
+            "precision": 0.7021276595744681,
+            "recall": 0.6346153846153846,
+            "f1-score": 0.6666666666666666,
+            "support": 52.0
+          },
+          "1": {
+            "precision": 0.7432432432432432,
+            "recall": 0.7971014492753623,
+            "f1-score": 0.7692307692307693,
+            "support": 69.0
+          },
+          "accuracy": 0.7272727272727273,
+          "macro avg": {
+            "precision": 0.7226854514088557,
+            "recall": 0.7158584169453734,
+            "f1-score": 0.717948717948718,
+            "support": 121.0
+          },
+          "weighted avg": {
+            "precision": 0.725573736212034,
+            "recall": 0.7272727272727273,
+            "f1-score": 0.7251536342445434,
+            "support": 121.0
+          }
+        },
+        "home_prediction_rate": 0.6115702479338843,
+        "threshold": 0.48000000000000004,
+        "threshold_metric": 0.717948717948718,
+        "youden_j": 0.4317168338907425
+      },
+      "score_model_bias": {
+        "home_prediction_rate": 0.6776859504132231,
+        "mean_probability": 0.6288199166465152
+      }
+    },
+    "previous_report": {
+      "generated_at_utc": "2025-11-06T01:25:51.687235+00:00",
+      "data_path": "backend\\data\\game_features.csv",
+      "models_dir": "backend\\models",
+      "random_state": 42,
+      "train_rows": 2467,
+      "holdout_rows": 121,
+      "home_regressor": {
+        "search_score": -7.527832962322849,
+        "mae_train": 6.9949696274527735
+      },
+      "away_regressor": {
+        "search_score": -7.407128643751706,
+        "mae_train": 6.713616277470993
+      },
+      "classifier": {
+        "search_score": 0.7051986869294604,
+        "accuracy_train": 0.6927442237535468,
+        "balanced_accuracy_train": 0.6836526003149481,
+        "f1_macro_train": 0.6848271626411884,
+        "brier_train": 0.19969302216960938,
+        "logloss_train": 0.583322326027099
+      },
+      "evaluation": {
+        "regression_holdout": {
+          "home_mae": 7.103607582418263,
+          "away_mae": 7.211262325363205
+        },
+        "classifier_holdout": {
+          "accuracy": 0.7272727272727273,
+          "balanced_accuracy": 0.7134894091415831,
+          "f1_macro": 0.716103803768219,
+          "roc_auc": 0.7309085841694537,
+          "brier": 0.20617497449176075,
+          "logloss": 0.5974060476846909,
+          "confusion_matrix": [
+            [
+              32,
+              20
+            ],
+            [
+              13,
+              56
+            ]
+          ],
+          "classification_report": {
+            "0": {
+              "precision": 0.7111111111111111,
+              "recall": 0.6153846153846154,
+              "f1-score": 0.6597938144329897,
+              "support": 52.0
+            },
+            "1": {
+              "precision": 0.7368421052631579,
+              "recall": 0.8115942028985508,
+              "f1-score": 0.7724137931034483,
+              "support": 69.0
+            },
+            "accuracy": 0.7272727272727273,
+            "macro avg": {
+              "precision": 0.7239766081871345,
+              "recall": 0.7134894091415831,
+              "f1-score": 0.716103803768219,
+              "support": 121.0
+            },
+            "weighted avg": {
+              "precision": 0.7257841573631048,
+              "recall": 0.7272727272727273,
+              "f1-score": 0.7240151245839124,
+              "support": 121.0
+            }
+          },
+          "home_prediction_rate": 0.628099173553719
+        },
+        "score_model_bias": {
+          "home_prediction_rate": 0.6611570247933884,
+          "mean_probability": 0.6092600092158493
+        }
+      },
+      "previous_report": {
+        "training_timestamp_utc": "2025-11-01 07:07:59 UTC",
+        "rows_total": 2588,
+        "n_features_numeric": 156,
+        "n_features_categorical": 4,
+        "cv_n_splits": 5,
+        "random_seed": 42,
+        "production_ready": true,
+        "dataset_hash": 7970437072635788619
+      }
+    },
+    "decision_threshold": 0.48000000000000004
+  },
+  "decision_threshold": 0.48000000000000004
 }

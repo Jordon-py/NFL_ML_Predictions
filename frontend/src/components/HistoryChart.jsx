@@ -1,5 +1,7 @@
 // /frontend/src/components/HistoryChart.jsx
-// @ts-nocheck
+/**
+ * TypeScript checking enabled. All major props and helpers are now typed for maintainability.
+ */
 
 /**
  * HistoryChart — Educational Overview
@@ -40,6 +42,33 @@
  */
 
 import React, { useMemo } from "react";
+import D_BUTTON from "./D_BUTTON";
+
+
+/**
+ * @typedef {Object} Game
+ * @property {number} season
+ * @property {number} week
+ * @property {string} away_abbr
+ * @property {string} home_abbr
+ * @property {string|number|Date=} ts
+ */
+
+/**
+ * @typedef {Object} Event
+ * @property {string|number|Date=} ts
+ * @property {string|number|Date=} time
+ * @property {{home?: number, ensemble?: number}=} probs
+ * @property {number=} home_win_probability
+ * @property {Game=} game
+ */
+
+/**
+ * @typedef {Object} HistoryChartProps
+ * @property {Event[]|undefined} history
+ * @property {Object=} state
+ * @property {Function=} onClearHistory
+ */
 
 /* ---------- tiny utilities ---------- */
 
@@ -48,10 +77,10 @@ const firstNonNullish = (...values) => values.find((v) => v != null);
 
 /** Convert a probability in [0..1] to an integer percentage, or null if invalid. */
 const toWholePercent = (prob) => (
-    typeof prob === "number" ? 
+  typeof prob === "number" ?
     Math.round(prob * 100) : null);
 
-    
+
 /** Safely coerce many timestamp shapes to a Date, or null if not present. */
 const toDateOrNull = (value) => {
   if (value == null) return null;
@@ -67,11 +96,10 @@ const extractTimestamp = (event) => toDateOrNull(firstNonNullish(event?.ts, even
 /** Prefer `probs.home`, fallback to other sources; return [0..1] or null. */
 const extractHomeWinProbability = (event) =>
   firstNonNullish(
-    event?.probs?.home,
-    event?.probs?.ensemble,
-    event?.probs?.away,
-    event?.home_win_probability,
-    null,
+    event?.probs?.home,            // primary source per contract
+    event?.home_win_probability,   // fallback used elsewhere in app
+    event?.probs?.ensemble,        // optional ensemble prob
+    null
   );
 
 /** Build a readable game label, or a generic entry label if no game info exists. */
@@ -86,20 +114,32 @@ const buildGameLabel = (event, index) => {
   return `Entry ${index + 1}`;
 };
 
-export default function HistoryChart({ history, state }) {
+/**
+ * HistoryChart
+ * @param {Object} props
+ * @param {Array} props.history - Array of prediction events
+ * @param {Object} props.state - Optional controller state
+ * @param {Function} [props.onClearHistory] - Callback to clear history (provided by parent)
+ */
+/**
+ * HistoryChart
+ * @param {HistoryChartProps} props
+ */
+export default function HistoryChart({ history, state, onClearHistory }) {
   // Normalize the input early so the rest of the code can assume an array.
   const historyItems = useMemo(() => {
-    if (Array.isArray(history)) return history;
-    if (Array.isArray(state?.history)) return state.history;
+    if (Array.isArray(history)) {
+      return history;
+    }
+    if (Array.isArray(state?.history)) {
+      return state.history;
+    }
     return [];
   }, [history, state?.history]);
 
   /**
    * chartPoints: normalized, render-ready rows
    *   - index: stable key/index
-   *   - timestamp: Date|null
-   *   - homeWinPercent: integer percent or null
-   *   - label: string
    */
   const chartPoints = useMemo(() => {
     return historyItems.map((event, index) => {
@@ -139,6 +179,7 @@ export default function HistoryChart({ history, state }) {
     };
   }, [chartPoints, historyItems]);
 
+  // Remove useEffect and handleClick here; expect onClearHistory prop from parent.
   /* ---------- render ---------- */
 
   if (chartPoints.length === 0) {
@@ -153,17 +194,22 @@ export default function HistoryChart({ history, state }) {
     );
   }
 
+  // Note: Clear History control is self-contained via D_BUTTON (uses context)
+
   return (
     <section className="history-chart" aria-live="polite">
       <header>
-        <h2>Prediction History</h2>
+        <div className="history-chart-header-controls">
+          <h2>Prediction History</h2>
+          <D_BUTTON />
+        </div>
+        <br />
         <small>
           {statsSummary.totalCount} item(s)
           {statsSummary.mostRecentDate && <> • last: {statsSummary.mostRecentDate.toLocaleString()}</>}
           {statsSummary.averageHomeWinPercent != null && <> • avg home win: {statsSummary.averageHomeWinPercent}%</>}
         </small>
       </header>
-
       <ol className="history-points a-text-fade-slide">
         {chartPoints.slice(0, 16).map((row) => (
           <li key={row.index} title={row.label}>

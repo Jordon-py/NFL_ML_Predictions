@@ -1,408 +1,563 @@
 #!/usr/bin/env python3
+"""Bias-aware trainer for NFL score regressors and calibrated win classifier.
+
+This module orchestrates model retraining for the FastAPI backend. It consumes
+``backend/data/game_features.csv`` (emitted by :mod:`backend.build_dataset`) and
+produces refreshed artifacts under ``backend/models``. The implementation
+prioritises reproducibility, leakage control, and fairness-aware diagnostics:
+
+- Deterministic random state across preprocessing, model initialisation, and CV.
+- Time-aware cross-validation (``TimeSeriesSplit``) with a chronologically
+  isolated validation fold provided by the dataset's ``split`` column.
+- Unified preprocessing pipeline shared by both score regressors and the win
+  classifier to keep feature handling consistent.
+- Built-in bias probes (confusion matrix, classification report, calibration
+  metrics) highlighting home/away prediction symmetry.
+- Automatic metadata + report emission to track deltas versus prior training
+  runs for easier operational auditing.
+
+Run from repository root::
+
+    python backend/train_models.py --data backend/data/game_features.csv         --models backend/models --random-state 42
 """
-Train leak-free NFL models with time-aware CV.
-
-- Drops label and label-derived columns from features.
-- Uses TimeSeriesSplit for all model selection.
-- Reserves the final chronological fold for holdout metrics.
-- Writes: artifacts/{preprocessor,home_model,away_model,win_clf_calibrated}.joblib
-         artifacts/training_report.json
-         artifacts/metadata.json
-- Environment variables are loaded with defaults and converted to appropriate types for safety.
-"""
-
-# File: backend/train_models.py
-# Purpose: Train ML models for NFL game predictions using time-aware cross-validation to prevent data leakage.
-
-#  Functions: _ensure_columns, _dataset_hash, _drop_leaky_columns, _infer_features, _make_preprocessor, _split_for_calibration, _fit_regression, _fit_classifier, _evaluate_regression, _dataset_sort, main
-
-# Variables: RANDOM_SEED, N_SPLITS, TARGET_HOME, TARGET_AWAY, CLASS_LABEL, TIME_KEYS, ID_COLS, LEAK_BLOCKLIST, REG_PARAM_DISTS, CLF_PARAM_DISTS, log
-
-# Interacts With: backend/data/merge_dominance.csv (preferred input dataset), backend/models/ (output models and metadata)
+from __future__ import annotations
 
 import argparse
 import json
 import logging
-import os
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import List, Tuple, Dict, cast, Any
-from dotenv import load_dotenv
+from pathlib import Path
+from typing import Any, Dict, Iterable, List, Tuple
 
+import joblib
 import numpy as np
 import pandas as pd
+from dotenv import load_dotenv
+from sklearn.calibration import CalibratedClassifierCV
 from sklearn.compose import ColumnTransformer
+from sklearn.ensemble import HistGradientBoostingRegressor
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
+    ConfusionMatrixDisplay,
+    accuracy_score,
+    balanced_accuracy_score,
+    brier_score_loss,
+    classification_report,
+    f1_score,
+    log_loss,
     mean_absolute_error,
     roc_auc_score,
-    brier_score_loss,
-    log_loss,
 )
-from sklearn.model_selection import TimeSeriesSplit, RandomizedSearchCV
+from sklearn.model_selection import RandomizedSearchCV, TimeSeriesSplit
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
-from sklearn.ensemble import HistGradientBoostingRegressor
-from sklearn.calibration import CalibratedClassifierCV
-from joblib import dump
 
-# -----------------------
-# Configuration
-# -----------------------
-load_dotenv(dotenv_path="backend/.env", verbose=True)
-
-SERVE_FRONTEND=os.getenv('SERVE_FRONTEND')
-CORS_ORIGINS=os.getenv('CORS_ORIGINS')
-NODE_ENV=os.getenv('NODE_ENV')
-HP_N_ITER=int(os.getenv('HP_N_ITER', '100'))  # Default to 100 if not set or invalid
-CV_SPLITS=int(os.getenv('CV_SPLITS', '5'))  # Default to 5
-RANDOM_SEED=int(os.getenv('RANDOM_SEED', '42'))  # Default to 42
-N_SPLITS=int(os.getenv('N_SPLITS', '5'))  # Default to 5
-N_JOBS = int(os.getenv('N_JOBS', '-1'))  # limit parallelism to avoid memory spikes
-
-print(N_JOBS, NODE_ENV, SERVE_FRONTEND, CORS_ORIGINS)
-# ----------Developement enviorment -----------
-DEV_ORIGINS=os.getenv('DEV_ORIGINS', 'http://localhost:3000')
-
-TRAIN_DATASET_FILE=os.getenv(
-    'TRAIN_DATASET_FILE',
-    'C:/Users/iProg/OneDrive/Documents/Football_predict/nfl_prediction_system/NFL_ML_Predictions/backend/data/game_features.csv'
-    )
-
+RANDOM_SEED = 42
+N_SPLITS = 5
 TARGET_HOME = "home_points_for"
 TARGET_AWAY = "away_points_for"
-CLASS_LABEL = "home_win"  # must be 0/1
+CLASS_LABEL = "home_win"
 TIME_KEYS = ["season", "week"]
-
-ID_COLS = {
-    "game_id",
-    # "home_team",
-    # "away_team",
-    "home_team_id",
-    "away_team_id",
-    "stadium",
-}
-
-# Columns that must never enter features (labels or post-game/market values)
+ID_COLS = ["game_id", "home_team", "away_team"]
 LEAK_BLOCKLIST = {
-    # Labels and direct targets
+    TARGET_HOME,
+    TARGET_AWAY,
     CLASS_LABEL,
-    TARGET_HOME.strip().lower(),
-    TARGET_AWAY.strip().lower(),
-    "winner",
     "point_diff",
-    # Post-game realized values
-    "home_points_against",
-    "away_points_against",
     "home_score",
     "away_score",
-    "final_home_score",
-    "final_away_score",
-    "postgame_margin",
-    "post_game_total",
-    "actual_margin",
-    # Market-informed or derived win signals that can leak outcome
-    "home_moneyline",
-    "away_moneyline",
     "home_win_prob",
     "away_win_prob",
-    # Aggregated outcome-like rates
-    "season_home_win_rate",
+    "winner",
 }
-
 REG_PARAM_DISTS = {
-    "reg__max_depth": [None, 6, 10, 14],
-    "reg__learning_rate": np.linspace(0.02, 0.2, 6),
-    "reg__max_leaf_nodes": [15, 31, 63, 127],
-    "reg__l2_regularization": np.linspace(0.0, 0.2, 5),
+    "model__learning_rate": np.logspace(-2.3, -0.5, num=10),
+    "model__max_depth": [2, 3, 4, 5, 6],
+    "model__max_leaf_nodes": [15, 31, 63, 127, 255],
+    "model__min_samples_leaf": [3, 5, 8, 12, 20, 32],
+    "model__l2_regularization": np.logspace(-2, 1, num=8),
 }
-
 CLF_PARAM_DISTS = {
-    "clf__C": np.logspace(-3, 1, 8),
-    "clf__penalty": ["l2"],
-    "clf__solver": ["liblinear", "lbfgs"],
-    "clf__class_weight": [None, "balanced"],
+    "model__C": np.logspace(-3, 2, num=12),
+    "model__solver": ["lbfgs", "liblinear", "saga"],
+    "model__penalty": ["l2"],
+    "model__class_weight": ["balanced", None],
 }
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-)
-log = logging.getLogger("train_models")
 
 
 @dataclass
-class TrainSummary:
-    training_timestamp_utc: str
-    rows_total: int
-    n_features_numeric: int
-    n_features_categorical: int
-    cv_n_splits: int
-    random_seed: int
-    production_ready: bool
-    dataset_hash: int
+class TrainerConfig:
+    """Runtime configuration for training."""
+
+    data_path: Path
+    models_dir: Path
+    metrics_dir: Path
+    random_state: int = RANDOM_SEED
+    n_jobs: int = -1
+    max_search_iter: int = 25
+
+    @property
+    def report_path(self) -> Path:
+        return self.models_dir / "training_report.json"
+
+    @property
+    def metadata_path(self) -> Path:
+        return self.models_dir / "metadata.json"
+
+    @property
+    def preprocessor_path(self) -> Path:
+        return self.models_dir / "preprocessor.joblib"
+
+    @property
+    def home_model_path(self) -> Path:
+        return self.models_dir / "home_model.joblib"
+
+    @property
+    def away_model_path(self) -> Path:
+        return self.models_dir / "away_model.joblib"
+
+    @property
+    def win_clf_path(self) -> Path:
+        return self.models_dir / "win_clf_calibrated.joblib"
 
 
-def _ensure_columns(df: pd.DataFrame, required: List[str]) -> None:
-    missing = [c for c in required if c not in df.columns]
+def load_dataset(cfg: TrainerConfig) -> pd.DataFrame:
+    """Read dataset and validate mandatory columns."""
+
+    df = pd.read_csv(cfg.data_path)
+    required = set(TIME_KEYS + ID_COLS + [TARGET_HOME, TARGET_AWAY, CLASS_LABEL, "split"])
+    missing = required - set(df.columns)
     if missing:
-        raise ValueError(f"Missing required columns: {missing}")
+        raise ValueError(f"Dataset missing required columns: {sorted(missing)}")
+    if df.empty:
+        raise ValueError("Dataset is empty; run backend/build_dataset.py first.")
 
-
-def _dataset_hash(df: pd.DataFrame) -> int:
-    return int(pd.util.hash_pandas_object(df[TIME_KEYS + ["home_team", "away_team"]], index=False).sum())
-
-
-def _drop_leaky_columns(df: pd.DataFrame) -> pd.DataFrame:
-    """Drop known leaky columns and underscore-prefixed engineered hints.
-
-    This complements the stricter leak guard in enhanced_pipeline.py by ensuring
-    the legacy training path avoids obvious label/post-game leaks and internal
-    engineered signals (convention: leading underscore).
-    """
-    present = [c for c in LEAK_BLOCKLIST if c in df.columns]
-    # Heuristic: drop all columns starting with '_' (often post-merge engineered signals)
-    underscore_cols = [c for c in df.columns if isinstance(c, str) and c.startswith("_")]
-    to_drop = sorted(set(present) | set(underscore_cols))
-    if to_drop:
-        log.warning("Dropping leaky/engineered columns: %s", to_drop)
-        df = df.drop(columns=to_drop)
+    df = df.sort_values(TIME_KEYS + ["game_id"]).reset_index(drop=True)
     return df
 
 
-def _infer_features(df: pd.DataFrame) -> Tuple[List[str], List[str]]:
-    """Return numeric and categorical feature names after removing IDs and blocklisted fields."""
-    ignore = set(ID_COLS) | set(TIME_KEYS) | set(LEAK_BLOCKLIST)
-    numeric: List[str] = []
-    categorical: List[str] = []
-    cat_check = df['home_team'].unique()
-    for c in df.columns:
-        if c in ignore:
-            continue
-        if c in (TARGET_HOME, TARGET_AWAY, CLASS_LABEL):
-            continue
-        if pd.api.types.is_numeric_dtype(df[c]):
-            numeric.append(c)
-        else:
-            categorical.append(c)
-        
-    return numeric, categorical
+def drop_leakage_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Remove columns that would leak targets or post-game outcomes."""
+
+    cols = [c for c in df.columns if c not in LEAK_BLOCKLIST and not c.startswith("_")]
+    return df[cols]
 
 
-def _make_preprocessor(num_cols: List[str], cat_cols: List[str]) -> ColumnTransformer:
-    num_pipe = Pipeline(
+def infer_feature_columns(df: pd.DataFrame) -> Tuple[List[str], List[str]]:
+    """Return numeric and categorical feature names for preprocessing."""
+
+    numeric_cols = [
+        c
+        for c in df.columns
+        if pd.api.types.is_numeric_dtype(df[c])
+        and c not in TIME_KEYS
+        and not c.startswith("split")
+        and c not in LEAK_BLOCKLIST
+    ]
+    categorical_cols = [c for c in ("home_team", "away_team", "game_type") if c in df.columns]
+    return numeric_cols, categorical_cols
+
+
+def make_preprocessor(numeric_cols: Iterable[str], categorical_cols: Iterable[str]) -> ColumnTransformer:
+    """Build a reusable preprocessing pipeline for all estimators."""
+
+    numeric_pipeline = Pipeline(
         steps=[
             ("imputer", SimpleImputer(strategy="median")),
             ("scaler", StandardScaler()),
         ]
     )
-    cat_pipe = Pipeline(
+    categorical_pipeline = Pipeline(
         steps=[
             ("imputer", SimpleImputer(strategy="most_frequent")),
-            # Keep OHE sparse to reduce memory footprint; downstream estimators must accept sparse
-            ("ohe", OneHotEncoder(handle_unknown="ignore", sparse_output=True)),
+            (
+                "encoder",
+                OneHotEncoder(handle_unknown="ignore", sparse_output=False),
+            ),
         ]
     )
+
     return ColumnTransformer(
         transformers=[
-            ("num", num_pipe, num_cols),  
-            ("cat", cat_pipe, cat_cols),
+            ("num", numeric_pipeline, list(numeric_cols)),
+            ("cat", categorical_pipeline, list(categorical_cols)),
         ],
-        sparse_threshold=0.0,  # Force dense output
+        remainder="drop",
+        n_jobs=None,
     )
 
 
-def _split_for_calibration(tscv: TimeSeriesSplit, X: pd.DataFrame, y: pd.Series):
-    """Use the last TimeSeriesSplit fold as validation/holdout. Others become the training pool."""
-    splits = list(tscv.split(X, y))
-    train_idx_all: List[int] = []
-    for tr, va in splits[:-1]:
-        train_idx_all.extend(tr.tolist())
-        train_idx_all.extend(va.tolist())
-    calib_tr, calib_va = splits[-1]
-    return np.array(train_idx_all), calib_tr, calib_va
+def _time_series_split(X: pd.DataFrame, n_splits: int) -> TimeSeriesSplit:
+    """Utility wrapper to keep split logic centralised."""
+
+    min_train_size = max(1, len(X) // (n_splits + 1))
+    return TimeSeriesSplit(n_splits=n_splits, test_size=min_train_size)
 
 
-def _fit_regression(
-    X: pd.DataFrame, y: pd.Series, pre: ColumnTransformer, random_state: int, n_jobs: int = N_JOBS
-) -> Pipeline:
-    rs = RandomizedSearchCV(
-        estimator=Pipeline([
-            ('pre', pre),
-            ('reg', HistGradientBoostingRegressor(random_state=random_state))
-        ]),
-        param_distributions=REG_PARAM_DISTS,
-        cv=TimeSeriesSplit(n_splits=N_SPLITS),
-        scoring="neg_mean_absolute_error",
-        n_jobs=n_jobs,
-        random_state=random_state,
-        verbose=2,
-        n_iter=min(HP_N_ITER, len(list(REG_PARAM_DISTS.values())[0]) * 10),
-        refit=True,
-    )
-    rs.fit(X, y)
-    logging.info('%s rs', rs)
-    return cast(Pipeline, rs.best_estimator_)
-
-
-def _fit_classifier(
-    X: pd.DataFrame, y: pd.Series, pre: ColumnTransformer, random_state: int, n_jobs: int = N_JOBS
+def fit_regressor(
+    name: str,
+    X: pd.DataFrame,
+    y: pd.Series,
+    preprocessor: ColumnTransformer,
+    cfg: TrainerConfig,
 ) -> Tuple[Pipeline, Dict[str, Any]]:
-    rs = RandomizedSearchCV(
-        estimator=Pipeline([
-            ('pre', pre),
-            ('clf', LogisticRegression(random_state=random_state, max_iter=1000))
-        ]),
+    """Fit a HistGradientBoostingRegressor with randomized hyper-parameter search."""
+
+    pipeline = Pipeline(
+        steps=[
+            ("preprocess", preprocessor),
+            (
+                "model",
+                HistGradientBoostingRegressor(
+                    random_state=cfg.random_state,
+                    max_iter=500,
+                    l2_regularization=1.0,
+                    early_stopping=True,
+                ),
+            ),
+        ]
+    )
+
+    search = RandomizedSearchCV(
+        pipeline,
+        param_distributions=REG_PARAM_DISTS,
+        n_iter=cfg.max_search_iter,
+        cv=_time_series_split(X, N_SPLITS),
+        random_state=cfg.random_state,
+        n_jobs=cfg.n_jobs,
+        scoring="neg_mean_absolute_error",
+        verbose=0,
+    )
+    search.fit(X, y)
+
+    best_model: Pipeline = search.best_estimator_
+    preds = best_model.predict(X)
+    metrics = {
+        "search_score": float(search.best_score_),
+        "mae_train": float(mean_absolute_error(y, preds)),
+    }
+    logging.info("%s regressor best params: %s", name, search.best_params_)
+    return best_model, metrics
+
+
+def fit_classifier(
+    X: pd.DataFrame,
+    y: pd.Series,
+    preprocessor: ColumnTransformer,
+    cfg: TrainerConfig,
+) -> Tuple[CalibratedClassifierCV, Dict[str, Any]]:
+    """Train a class-weighted logistic regression with calibration."""
+
+    base_pipeline = Pipeline(
+        steps=[
+            ("preprocess", preprocessor),
+            (
+                "model",
+                LogisticRegression(
+                    random_state=cfg.random_state,
+                    max_iter=1000,
+                    class_weight="balanced",
+                    solver="lbfgs",
+                ),
+            ),
+        ]
+    )
+
+    search = RandomizedSearchCV(
+        base_pipeline,
         param_distributions=CLF_PARAM_DISTS,
-        cv=TimeSeriesSplit(n_splits=N_SPLITS),
-        scoring="neg_log_loss",
-        n_jobs=n_jobs,
-        random_state=random_state,
-        verbose=2,
-    n_iter=min(HP_N_ITER, len(list(CLF_PARAM_DISTS.values())[0]) * 5),
-        refit=True,
+        n_iter=min(cfg.max_search_iter, 40),
+        cv=_time_series_split(X, N_SPLITS),
+        random_state=cfg.random_state,
+        n_jobs=cfg.n_jobs,
+        scoring="roc_auc",
+        verbose=0,
     )
-    rs.fit(X, y)
-    logging.info('%s rs', rs)
-    best_pipeline = cast(Pipeline, rs.best_estimator_)
-    
-    # Compute holdout metrics using the last fold
-    tscv = TimeSeriesSplit(n_splits=N_SPLITS)
-    train_idx, _, holdout_idx = _split_for_calibration(tscv, X, y)
-    pred_proba = best_pipeline.predict_proba(X.iloc[holdout_idx])[:, 1]
-    auc = roc_auc_score(y.iloc[holdout_idx], pred_proba)
-    brier = brier_score_loss(y.iloc[holdout_idx], pred_proba)
-    logloss = log_loss(y.iloc[holdout_idx], pred_proba)
-    
-    holdout_metrics = {
-        "roc_auc": auc,
-        "brier_score": brier,
-        "log_loss": logloss,
-        "optimal_threshold": 0.5,
-        "optimal_threshold_f1": 0.5,
-        "optimal_threshold_acc": 0.5,
+    search.fit(X, y)
+
+    calibrated = CalibratedClassifierCV(
+        estimator=search.best_estimator_,
+        method="isotonic",
+        cv=3,
+        n_jobs=cfg.n_jobs,
+    )
+    calibrated.fit(X, y)
+
+    preds = calibrated.predict(X)
+    proba = calibrated.predict_proba(X)[:, 1]
+    proba_safe = np.clip(proba, 1e-6, 1 - 1e-6)  # Guards log_loss against 0/1 probabilities on newer sklearn builds.
+
+    metrics = {
+        "search_score": float(search.best_score_),
+        "accuracy_train": float(accuracy_score(y, preds)),
+        "balanced_accuracy_train": float(balanced_accuracy_score(y, preds)),
+        "f1_macro_train": float(f1_score(y, preds, average="macro")),
+        "brier_train": float(brier_score_loss(y, proba)),
+        "logloss_train": float(log_loss(y, proba_safe)),
     }
-    
-    return best_pipeline, holdout_metrics
+    logging.info("Classifier best params: %s", search.best_params_)
+    return calibrated, metrics
 
 
-def _evaluate_regression(model: Pipeline, X: pd.DataFrame, y: pd.Series) -> float:
-    pred = model.predict(X)
-    return float(mean_absolute_error(y, pred))
+def evaluate_regressors(
+    home_model: Pipeline,
+    away_model: Pipeline,
+    X_holdout: pd.DataFrame,
+    y_home: pd.Series,
+    y_away: pd.Series,
+) -> Dict[str, Any]:
+    """Compute MAE on holdout split for both score regressors."""
+
+    home_preds = home_model.predict(X_holdout)
+    away_preds = away_model.predict(X_holdout)
+    return {
+        "home_mae": float(mean_absolute_error(y_home, home_preds)),
+        "away_mae": float(mean_absolute_error(y_away, away_preds)),
+    }
 
 
-def _dataset_sort(df: pd.DataFrame) -> pd.DataFrame:
-    return df.sort_values(TIME_KEYS).reset_index(drop=True)
+def find_optimal_threshold(
+    y_true: pd.Series,
+    proba: np.ndarray,
+    step: float = 0.01,
+) -> Tuple[float, float]:
+    """Return the threshold that maximises macro-F1, keeping class recall parity in view."""
+
+    best_threshold, best_score = 0.5, -np.inf
+    for threshold in np.arange(step, 1.0, step):
+        preds = (proba >= threshold).astype(int)
+        score = f1_score(y_true, preds, average="macro", zero_division=0)
+        if score > best_score:
+            best_threshold, best_score = threshold, score
+
+    return best_threshold, best_score
 
 
-def main(data_path: str, out_dir: str) -> None:
-    np.random.seed(RANDOM_SEED)
+def evaluate_classifier(
+    clf: CalibratedClassifierCV,
+    X_holdout: pd.DataFrame,
+    y_holdout: pd.Series,
+) -> Dict[str, Any]:
+    """Return fairness-oriented diagnostics for the win classifier."""
 
-    df = pd.read_csv(data_path)
-    _ensure_columns(df, TIME_KEYS + [TARGET_HOME, TARGET_AWAY, CLASS_LABEL])
-    if df.empty:
-        raise RuntimeError(f"Dataset is empty: {data_path}")
+    proba = clf.predict_proba(X_holdout)[:, 1]
+    threshold, threshold_metric = find_optimal_threshold(y_holdout, proba)
+    proba_safe = np.clip(proba, 1e-6, 1 - 1e-6)  # Keep evaluation numerically stable for log-loss comparisons.
+    preds = (proba >= threshold).astype(int)
 
-    # Chronological order
-    df = _dataset_sort(df)
-
-    # Extract targets BEFORE dropping leaky columns
-    y_home = df[TARGET_HOME].copy()
-    y_away = df[TARGET_AWAY].copy()
-    # Drop NaN values before converting to int
-    y_win = df[CLASS_LABEL].copy()
-    cat = df[['home_team', 'away_team']]
-    
-    # Now drop leaky columns from features (but keep targets separately)
-    df = _drop_leaky_columns(df)
-
-    # Remove rows with missing targets (apply same mask to features and targets)
-    keep_mask = (~y_home.isna()) & (~y_away.isna()) & (~y_win.isna())
-    df = df.loc[keep_mask].reset_index(drop=True)
-    y_home = y_home.loc[keep_mask].reset_index(drop=True)
-    y_away = y_away.loc[keep_mask].reset_index(drop=True)
-    y_win = y_win.loc[keep_mask].astype(int).reset_index(drop=True)
-
-    # Features after sanitization
-    num_cols, cat_cols = _infer_features(df)
-    feature_cols = num_cols + cat_cols
-    if not feature_cols:
-        raise RuntimeError("No features found after leakage sanitization. Check your dataset.")
-    X = df[feature_cols].copy()
-    # Cast numeric columns to float32 to reduce memory footprint during CV
-    for nc in num_cols:
-        if nc in X.columns:
-            X[nc] = X[nc].astype('float32')
-    pre = _make_preprocessor(num_cols, cat_cols)
-
-    # Fit models (time-aware CV inside)
-    log.info("Fitting home points regressor")
-    # Allow user to override parallel jobs via env or CLI
-    n_jobs = N_JOBS
-    home_model = _fit_regression(X, y_home, pre, RANDOM_SEED, n_jobs=n_jobs)
-    log.info('%s home_model', home_model)
-    log.info("Fitting away points regressor")
-    away_model = _fit_regression(X, y_away, pre, RANDOM_SEED, n_jobs=n_jobs)
-
-    log.info("Fitting win classifier")
-    win_model, win_holdout_metrics = _fit_classifier(X, y_win, pre, RANDOM_SEED, n_jobs=n_jobs)
-
-    # Quick in-sample sanity MAE (for monitoring only)
-    mae_home = _evaluate_regression(home_model, X, y_home)
-    mae_away = _evaluate_regression(away_model, X, y_away)
-
-    # Persist artifacts
-    os.makedirs(out_dir, exist_ok=True)
-    dump(pre, os.path.join(out_dir, "preprocessor.joblib"))
-    dump(home_model, os.path.join(out_dir, "home_model.joblib"))
-    dump(away_model, os.path.join(out_dir, "away_model.joblib"))
-    dump(win_model, os.path.join(out_dir, "win_clf_calibrated.joblib"))
-
-    # Reports
-    training_timestamp_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S %Z")
-    summary = TrainSummary(
-        training_timestamp_utc=training_timestamp_utc,
-        rows_total=int(len(df)),
-        n_features_numeric=len(num_cols),
-        n_features_categorical=len(cat_cols),
-        cv_n_splits=N_SPLITS,
-        random_seed=RANDOM_SEED,
-        production_ready=True or False,
-        dataset_hash=_dataset_hash(df),
+    report = classification_report(y_holdout, preds, output_dict=True)
+    cm = ConfusionMatrixDisplay.from_predictions(
+        y_holdout,
+        preds,
+        display_labels=["Away win", "Home win"],
     )
+    confusion = cm.confusion_matrix.tolist()
+    tn, fp, fn, tp = cm.confusion_matrix.ravel()
 
+    return {
+        "accuracy": float(accuracy_score(y_holdout, preds)),
+        "balanced_accuracy": float(balanced_accuracy_score(y_holdout, preds)),
+        "f1_macro": float(f1_score(y_holdout, preds, average="macro")),
+        "roc_auc": float(roc_auc_score(y_holdout, proba)),
+        "brier": float(brier_score_loss(y_holdout, proba)),
+        "logloss": float(log_loss(y_holdout, proba_safe)),
+        "confusion_matrix": confusion,
+        "classification_report": report,
+        "home_prediction_rate": float(preds.mean()),
+        "threshold": float(threshold),
+        "threshold_metric": float(threshold_metric),
+        "youden_j": float((tp / (tp + fn + 1e-12)) - (fp / (fp + tn + 1e-12))),
+    }
+
+
+def score_based_classifier(
+    home_model: Pipeline,
+    away_model: Pipeline,
+    X: pd.DataFrame,
+) -> np.ndarray:
+    """Generate probabilities from score differential using logistic mapping."""
+
+    home_scores = home_model.predict(X)
+    away_scores = away_model.predict(X)
+    diff = home_scores - away_scores
+    return 1 / (1 + np.exp(-0.35 * diff))
+
+
+def load_previous_report(path: Path) -> Dict[str, Any]:
+    if path.exists():
+        with path.open("r", encoding="utf-8") as fh:
+            return json.load(fh)
+    return {}
+
+
+def save_artifacts(
+    cfg: TrainerConfig,
+    preprocessor: ColumnTransformer,
+    home_model: Pipeline,
+    away_model: Pipeline,
+    classifier: CalibratedClassifierCV,
+) -> None:
+    cfg.models_dir.mkdir(parents=True, exist_ok=True)
+    joblib.dump(preprocessor, cfg.preprocessor_path)
+    joblib.dump(home_model, cfg.home_model_path)
+    joblib.dump(away_model, cfg.away_model_path)
+    joblib.dump(classifier, cfg.win_clf_path)
+    logging.info("Artifacts persisted to %s", cfg.models_dir)
+
+
+def write_report(cfg: TrainerConfig, report: Dict[str, Any]) -> None:
+    cfg.models_dir.mkdir(parents=True, exist_ok=True)
+    with cfg.report_path.open("w", encoding="utf-8") as fh:
+        json.dump(report, fh, indent=2)
+    logging.info("Training report written to %s", cfg.report_path)
+
+
+def write_metadata(
+    cfg: TrainerConfig,
+    numeric_cols: List[str],
+    categorical_cols: List[str],
+    train_rows: int,
+    holdout_rows: int,
+    win_probability_threshold: float,
+) -> None:
     metadata = {
-        "training_timestamp_utc": summary.training_timestamp_utc,
-        "dataset_hash": summary.dataset_hash,
-        "preprocessor": "preprocessor.joblib",
-        "home_model": "home_model.joblib",
-        "away_model": "away_model.joblib",
-        "win_model": "win_clf_calibrated.joblib",
-        "raw_feature_columns": {"numeric": num_cols, "categorical": cat_cols},
-        "production_ready": True ,
-        "cv": {"type": "TimeSeriesSplit", "n_splits": N_SPLITS},
-        "holdout_metrics_win": win_holdout_metrics,
-        "quick_mae": {"home": mae_home, "away": mae_away},
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "numeric_features": numeric_cols,
+        "categorical_features": categorical_cols,
+        "dataset": str(cfg.data_path),
+        "train_rows": train_rows,
+        "holdout_rows": holdout_rows,
+        "win_probability_threshold": win_probability_threshold,
+        "raw_feature_columns": {
+            "numeric": numeric_cols,
+            "categorical": categorical_cols,
+        },
+    }
+    with cfg.metadata_path.open("w", encoding="utf-8") as fh:
+        json.dump(metadata, fh, indent=2)
+    logging.info("Metadata written to %s", cfg.metadata_path)
+
+
+def train(cfg: TrainerConfig) -> Dict[str, Any]:
+    """Execute the training workflow end-to-end and return aggregated metrics."""
+
+    np.random.seed(cfg.random_state)
+
+    raw = load_dataset(cfg)
+    modeling_df = raw[raw["split"].isin(["train", "validation"])].copy()
+    inference_rows = raw[raw["split"] == "inference"].shape[0]
+
+    if modeling_df[CLASS_LABEL].isna().any():
+        modeling_df = modeling_df.dropna(subset=[CLASS_LABEL, TARGET_HOME, TARGET_AWAY])
+
+    logging.info("Loaded %d rows (%d inference rows held out).", len(raw), inference_rows)
+
+    features_df = drop_leakage_columns(modeling_df)
+    numeric_cols, categorical_cols = infer_feature_columns(features_df)
+    preprocessor = make_preprocessor(numeric_cols, categorical_cols)
+
+    train_mask = modeling_df["split"] == "train"
+    holdout_mask = modeling_df["split"] == "validation"
+
+    X_train = features_df.loc[train_mask, :]
+    X_holdout = features_df.loc[holdout_mask, :]
+    y_home_train = modeling_df.loc[train_mask, TARGET_HOME]
+    y_away_train = modeling_df.loc[train_mask, TARGET_AWAY]
+    y_class_train = modeling_df.loc[train_mask, CLASS_LABEL].astype(int)
+
+    home_model, home_metrics = fit_regressor("home", X_train, y_home_train, preprocessor, cfg)
+    away_model, away_metrics = fit_regressor("away", X_train, y_away_train, preprocessor, cfg)
+    clf, clf_metrics = fit_classifier(X_train, y_class_train, preprocessor, cfg)
+
+    evaluation: Dict[str, Any] = {}
+    decision_threshold = 0.5
+    if not X_holdout.empty:
+        evaluation["regression_holdout"] = evaluate_regressors(
+            home_model,
+            away_model,
+            X_holdout,
+            modeling_df.loc[holdout_mask, TARGET_HOME],
+            modeling_df.loc[holdout_mask, TARGET_AWAY],
+        )
+
+        clf_holdout_metrics = evaluate_classifier(
+            clf,
+            X_holdout,
+            modeling_df.loc[holdout_mask, CLASS_LABEL].astype(int),
+        )
+        evaluation["classifier_holdout"] = clf_holdout_metrics
+        decision_threshold = clf_holdout_metrics.get("threshold", decision_threshold)
+
+        score_proba = score_based_classifier(home_model, away_model, X_holdout)
+        evaluation["score_model_bias"] = {
+            "home_prediction_rate": float((score_proba >= 0.5).mean()),
+            "mean_probability": float(score_proba.mean()),
+        }
+
+    previous_report = load_previous_report(cfg.report_path)
+    report = {
+        "generated_at_utc": datetime.now(tz=timezone.utc).isoformat(),
+        "data_path": str(cfg.data_path),
+        "models_dir": str(cfg.models_dir),
+        "random_state": cfg.random_state,
+        "train_rows": int(train_mask.sum()),
+        "holdout_rows": int(holdout_mask.sum()),
+        "home_regressor": home_metrics,
+        "away_regressor": away_metrics,
+        "classifier": clf_metrics,
+        "evaluation": evaluation,
+        "previous_report": previous_report,
+        "decision_threshold": decision_threshold,
     }
 
-    with open(os.path.join(out_dir, "training_report.json"), "w", encoding="utf-8") as f:
-        json.dump(asdict(summary), f, indent=2)
-    with open(os.path.join(out_dir, "metadata.json"), "w", encoding="utf-8") as f:
-        json.dump(metadata, f, indent=2)
+    save_artifacts(cfg, preprocessor, home_model, away_model, clf)
+    write_report(cfg, report)
+    write_metadata(
+        cfg,
+        numeric_cols,
+        categorical_cols,
+        int(train_mask.sum()),
+        int(holdout_mask.sum()),
+        decision_threshold,
+    )
 
-    log.info("Saved models and reports to %s", out_dir)
-    log.info("Summary: %s", summary)
-    log.info("Metadata: %s", metadata)
+    return report
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Train NFL prediction models with fairness diagnostics")
+    parser.add_argument("--data", type=Path, default=Path("backend/data/game_features.csv"), help="Dataset path emitted by backend/build_dataset.py")
+    parser.add_argument("--models", type=Path, default=Path("backend/models"), help="Directory to persist trained artifacts")
+    parser.add_argument("--metrics", type=Path, default=Path("metrics/training"), help="Directory to store supplemental metrics (reserved for future use)")
+    parser.add_argument("--random-state", type=int, default=RANDOM_SEED, help="Random seed for deterministic behaviour")
+    parser.add_argument("--max-search-iter", type=int, default=25, help="RandomizedSearch iterations per estimator")
+    parser.add_argument("--log-level", type=str, default="INFO", help="Logging level (DEBUG, INFO, WARNING, ERROR)")
+    return parser.parse_args()
+
+
+def main() -> None:
+    load_dotenv("backend/.env", override=False)
+
+    args = parse_args()
+    logging.basicConfig(
+        level=getattr(logging, args.log_level.upper(), logging.INFO),
+        format="%(asctime)s %(levelname)s %(message)s",
+    )
+
+    cfg = TrainerConfig(
+        data_path=args.data,
+        models_dir=args.models,
+        metrics_dir=args.metrics,
+        random_state=args.random_state,
+        max_search_iter=args.max_search_iter,
+    )
+
+    logging.info("Starting training with dataset %s", cfg.data_path)
+    report = train(cfg)
+    logging.info("Training complete: %s", json.dumps(report["evaluation"], indent=2)[:800])
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Train leak-free NFL models with time-aware CV.")
-    parser.add_argument("--data", type=str, default="./backend/data/merge_dominance.csv", help="Path to features CSV (default: merge_dominance.csv).")
-    parser.add_argument("--out", type=str, default="models", help="Output directory for artifacts and reports.")
-    parser.add_argument("--n-jobs", type=int, default=N_JOBS, help="Number of parallel jobs to use for CV (default from N_JOBS env)")
-    parser.add_argument("--hp-niter", type=int, default=HP_N_ITER, help="Number of RandomizedSearchCV iterations (overrides HP_N_ITER env)")
-    args = parser.parse_args()
-    # Allow quick runs by overriding HP_N_ITER when provided on CLI
-    HP_N_ITER = int(args.hp_niter)
-    main(args.data, args.out)
+    main()

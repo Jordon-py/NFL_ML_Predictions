@@ -58,9 +58,9 @@
   top: 0;
   left: 0;
   width: 100%;
-  animation: outLineGlow;
+  animation: outlineGlow;
   z-index: 1000;
-  transition: background-color 1.9s, box-shadow 1.7s;
+  transition: background-color 1.9s, box-shadow 2.7s;
   font-family: 'Cinzel', system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
   /* Enhancement 2 */
   box-sizing: border-box;
@@ -131,7 +131,7 @@
 /* Enhancement 1: Heading font for clearer hierarchy */
 .navBar h1 {
   margin: 0;
-  font-size: 2.5rem;
+  font-size: 3.5rem;
   font-family: 'Cinzel', system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
   letter-spacing: 1.8px;
 }

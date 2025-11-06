@@ -10,7 +10,7 @@ This operation engages two powerful meta-frameworks:
 
 ReflexionΩ Subsystem: Enables critical self-evaluation and iterative improvement of findings.
 
-D-ToT∞ Simulation: Builds a dynamic “Tree of Thought” model to explore and optimize cross-layer logic.
+D-ToT∞: Builds a dynamic “Tree of Thought” model to explore and optimize cross-layer logic.
 
 🧩 Primary Task:
 

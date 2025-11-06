@@ -1,143 +1,164 @@
 # predictions
 
-BAL logo
+## WIN MATCH
+
 BAL
 @
-MIA logo
-MIA
-2025-10-30T20:15:00Z
+MIA = BAL = 28 MIA = 6 
+
+2025-10-30<br/>T20:15:00Z
 model
 Home win: 29%
 Point diff: 8.8
-Score: 28.5–19.7
-CHI logo
+Score: 28.5–19.7<br />
+
+## WIN MATCH
+
 CHI
 @
-CIN logo
-CIN
-2025-11-02T13:00:00Z
+CIN CHI = 47 CIN = 42
+
+2025-11-02<br />T13:00:00Z
 model
 Home win: 40%
 Point diff: 8.3
-Score: 27.9–19.6
-MIN logo
+Score: 27.9–19.6<br />
+
+## WIN
+
 MIN
 @
-DET logo
-DET
-2025-11-02T13:00:00Z
+DET MIN= 31 DET= 24
+
+2025-11-02<br />T13:00:00Z
 model
 Home win: 59%
 Point diff: 10.9
-Score: 30.5–19.6
-CAR logo
-CAR
-@
-GB logo
-GB
-2025-11-02T13:00:00Z
+Score: 30.5–19.6<br />
+
+## WIN 
+
+CAR = 16 
+
+GB = 13
+
+2025-11-02<br />T13:00:00Z
 model
 Home win: 90%
 Point diff: 14.7
-Score: 29.2–14.5
-DEN logo
-DEN
+Score: 29.2–14.5<br />
+
+## WIN 
+DEN= 18
 @
-HOU logo
-HOU
-2025-11-02T13:00:00Z
+HOU= 15
+
+2025-11-02<br />T13:00:00Z
 model
 Home win: 63%
 Point diff: 13.7
 Score: 29–15.3
-ATL logo
-ATL
-@
-NE logo
-NE
-2025-11-02T13:00:00Z
+<br />
+
+ATL = 23  PREDICTED WRONG
+
+NE = 24
+
+2025-11-02<br />T13:00:00Z
 model
 Home win: 74%
 Point diff: 14.1
-Score: 31.8–17.7
-SF logo
-SF
+Score: 31.8–17.
+<br />
+
+## WIN 
+
+SF=34
 @
-NYG logo
-NYG
-2025-11-02T13:00:00Z
+NYG=24
+
+2025-11-02<br />T13:00:00Z
 model
 Home win: 32%
 Point diff: 7.8
-Score: 27.4–19.6
-IND logo
-IND
+Score: 27.4–19.6<br />
+
+## LOST
+IND=20
 @
-PIT logo
-PIT
-2025-11-02T13:00:00Z
+PIT=27
+
+2025-11-02<br />T13:00:00Z
 model
 Home win: 46%
 Point diff: 10.2
 Score: 30–19.9
-LAC logo
-LAC
+<br />
+
+## WIN
+
+LAC= 27
 @
-TEN logo
-TEN
-2025-11-02T13:00:00Z
+TEN=20
+
+2025-11-02<br />T13:00:00Z
 model
 Home win: 20%
 Point diff: 9.4
-Score: 26.5–17.1
-NO logo
+Score: 26.5–17.
+<br />
+
+## LOSS
 NO
 @
-LAR logo
 LAR
-2025-11-02T16:05:00Z
+
+2025-11-02<br />T16:05:00Z
 model
 Home win: 86%
 Point diff: 13.5
-Score: 28.9–15.4
-JAX logo
-JAX
-@
-LV logo
-LV
-2025-11-02T16:05:00Z
+Score: 28.9–15.4<br />
+
+JAX=30
+
+LV=29
+
+2025-11-02<br />T16:05:00Z
 model
 Home win: 39%
 Point diff: 6.7
-Score: 24.8–18.2
-KC logo
+Score: 24.8–18.
+<br />
+
+## WIN
 KC
 @
-BUF logo
 BUF
-2025-11-02T16:25:00Z
+
+2025-11-02<br />T16:25:00Z
 model
 Home win: 55%
 Point diff: 6.2
-Score: 30.1–23.9
-SEA logo
-SEA
+Score: 30.1–23.9<br />
+
+SEA=27
 @
-WAS logo
-WAS
-2025-11-02T20:20:00Z
+WAS=20
+
+2025-11-02<br />T20:20:00Z
 model
 Home win: 30%
 Point diff: 7.2
-Score: 26.7–19.5
-ARI logo
+Score: 26.7–19.5<br />
+
 ARI
 @
-DAL logo
 DAL
-2025-11-03T20:15:00Z
+
+2025-11-03<br />T20:15:00Z
 model
 Home win: 60%
 Point diff: 9.7
-Score: 30.3–20.6
+Score: 30.3–20.6<br />
+
 Saved Predictions

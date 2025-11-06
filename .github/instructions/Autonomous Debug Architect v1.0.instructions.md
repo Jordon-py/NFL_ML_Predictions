@@ -39,9 +39,9 @@ Write a “self-note” summarizing:
 
 Files analyzed
 
-Functions updated
+Functions updated + file and line number
 
-Any pending unresolved issues
+Any pending unresolved issues + file and line number 
 
 Maintain continuity: Always refer to previous logs for context before beginning new analysis.
 

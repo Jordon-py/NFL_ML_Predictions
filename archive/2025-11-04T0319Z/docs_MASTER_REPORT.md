@@ -1,3 +1,9 @@
+# Backup: MASTER_REPORT.md (2025-11-04T0319Z)
+
+This is an automated backup of docs/MASTER_REPORT.md prior to the Dry Run refactor plan edits.
+
+---
+
 # NFL_ML_Predictions — Master Engineering Report
 
 Last updated: 2025-11-01
@@ -114,91 +120,3 @@ No outstanding CSS variable or property errors remain in TeamGrid.css as of this
   - `backend/models/` → `preprocessor.joblib`, `win_clf_calibrated.joblib`, `metadata.json`, `training_report_*.json`
 - Documentation
   - This file supersedes scattered report notes; for setup details see `docs/ONBOARDING_DEBUG_GUIDE.md`.
-
-## Dry Run: API Coherence Audit (2025-11-04)
-
-This non-destructive audit documents how the frontend and backend communicate, highlights any schema/route mismatches, and proposes safe, incremental improvements. No breaking changes were made in this phase.
-
-### Integration overview
-
-- Core flow: React (Vite) calls FastAPI endpoints via the API client in `frontend/src/api/client.js`.
-- Dev: Vite proxy forwards relative paths (API base is empty string).
-- Prod: API base resolves to `VITE_API_BASE` or Heroku fallback.
-- Primary endpoints the UI uses:
-  - GET `/schedule/next-week` → array of games with `home_abbr`, `away_abbr`, `season`, `week`, `kickoff_ts_utc`
-  - POST `/predict` → `PredictionResponse` with scores, win probabilities, provenance, and telemetry
-  - GET `/predict/next-week` → batch predictions for schedule
-  - GET `/health` → service readiness (used by hooks)
-  - POST `/retrain` → training kick-off (used by hooks)
-
-### Structural alignment (schemas)
-
-- Request shape (frontend → backend):
-  - `PredictionRequest` = `{ home_team: str, away_team: str, season: int, week: int }`
-  - Client coercion: `toPredictionRequest()` accepts either `{homeTeam, awayTeam, ...}` or `{home_abbr, away_abbr, ...}` and normalizes to the backend schema.
-- Response shape (backend → frontend):
-  - `PredictionResponse` includes:
-    - Numeric: `home_score`, `away_score`, `home_win_probability`, `away_win_probability`, `point_diff`
-    - Context: `mode`, `prediction_source`
-    - Telemetry: `win_classifier_used` (bool), `win_probability_source` (string), `win_threshold_used` (float|null)
-  - Frontend TeamGrid reads the telemetry and shows a compact badge: `clf` when the classifier path produces probability; `legacy` when a sigmoid fallback was required.
-
-### Behavioral notes
-
-- Timing/latency: client wrapper has timeout and retry with exponential backoff; requests abort after ~15s by default.
-- State sync: per-card loading flags avoid duplicate clicks; errors are localized per card to prevent nuking the full grid.
-- User feedback: non-blocking toasts summarize errors; provenance badges make model/fallback paths transparent.
-
-### Performance hygiene
-
-- Redundant fetches avoided: one schedule fetch on mount; per-card predictions on demand.
-- Compression/caching: suitable for future improvement; current responses are small. Consider enabling gzip/deflate on server and setting client Cache-Control on schedule responses.
-
-### Error map (front ↔ back)
-
-- Dev base URL: correctly empty for proxy; production falls back to Heroku if `VITE_API_BASE` is unset (warns once). Risk: stale fallback URL. Mitigation: set `VITE_API_BASE` in Vercel.
-- PowerShell curl quoting can fail for manual POST tests. Recommendation: use a small Node/Python script (scripts/api_test.py) or the browser client.
-- Legacy metadata may omit categoricals; server now validates only minimal identifiers and imputes numeric gaps. UI remains compatible.
-
-### Optimization blueprint (bidirectional improvements)
-
-- Frontend
-  - Add optional memoization for schedule data in context to avoid re-fetch on route changes.
-  - Surface `win_threshold_used` in a tooltip (already implemented) and optionally add a toggle to show hard classification vs probability.
-- Backend
-  - Enable HTTP compression and ETag for schedule resources.
-  - Expose a tiny `/provenance/counters` endpoint to count classifier vs fallback usage for monitoring (non-critical).
-  - Keep `metadata.json` in sync with categoricals to reduce imputation reliance.
-
-### D-ToT∞ map (text)
-
-```
-Root: Deliver accurate, transparent predictions UI ↔ API
-├─ Functional: methods/routes/payloads
-│  ├─ POST /predict uses normalized {home_team, away_team, season, week}
-│  └─ GET /schedule/next-week powers matchups
-├─ Structural: JSON schema alignment
-│  ├─ Telemetry added: win_classifier_used, win_probability_source, win_threshold_used
-│  └─ UI renders badges based on telemetry without breaking prior fields
-├─ Behavioral: timing/state/UX
-│  ├─ Per-card loading + local errors → no grid nuking
-│  └─ Toasts + tooltips → user feedback without noise
-└─ Performance: fetch/caching/compression
-   ├─ Dev proxy removes CORS overhead
-   └─ Future: gzip + ETag for schedule endpoints
-```
-
-### ReflexionΩ self-critique
-
-- Assumptions: schedule CSV columns match current mapping; if not, server falls back gracefully (🟢 Minor Concern).
-- Risk: relying on Heroku fallback URL in production could mask misconfiguration (🟡 Moderate Issue). Action: ensure `VITE_API_BASE` is set.
-- Completeness: end-to-end classifier telemetry surfaced and verified by logs/UI; add a batch-level provenance summary endpoint later if needed (🟢 Minor Concern).
-
-### Enhanced final plan (backward-compatible)
-
-1) Keep telemetry fields in PredictionResponse and UI badge for transparency (done).
-2) Add HTTP compression for schedule endpoints; enable weak ETag (safe, optional).
-3) Add provenance counters endpoint for Ops (optional, non-breaking).
-4) Ensure Vercel project has `VITE_API_BASE` configured (ops task).
-
-All steps are incremental, low risk, and maintain current behavior.
