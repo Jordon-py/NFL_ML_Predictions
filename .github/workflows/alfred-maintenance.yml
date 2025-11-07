@@ -141,11 +141,9 @@ jobs:
             cat > alfred.log.md <<'LOG'
 # ALFRED Memory Log
 
-A persistent record of ALFRED’s reflections, reminders, and running notes.
+# A persistent record of ALFRED’s reflections, reminders, and running notes.
 
-> Motto: Anticipate • Educate • Elevate
-LOG
-          fi
+# > Motto: Anticipate • Educate • Elevate
 
       - name: "Append reflexion note to ALFRED memory"
         run: |
