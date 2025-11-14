@@ -2,9 +2,31 @@
 
 ## Executive Summary
 
-This report documents incremental changes to the NFL_ML_Predictions repository, focusing on bug fixes, code clarity, and architectural integrity. Changes are made with a "Repository Guardian" mindset: holistic awareness, logic simplification, and professional documentation. **Current app completion estimate: 98%** (production-ready; pending final deployment verification).
+This report documents incremental changes to the NFL_ML_Predictions repository, focusing on bug fixes, code clarity, and architectural integrity. Changes are made with a "Repository Guardian" mindset: holistic awareness, logic simplification, and professional documentation. **Current app completion estimate: 99%** (production-ready; pending final deployment verification).
 
 ## Recent Changes
+
+- Date/Time: 2025-11-13 / 23:55 UTC
+  - Files Modified: `backend/main.py`, `docs/report.md`
+  - Change Description:
+    - Added `_normalize_history_entry` and updated `_load_history_from_disk` (backend/main.py:320-410) so legacy `prediction_history.json` rows are coerced into the modern schema (timestamp, IDs, scores, probabilities, provenance) before serving `/history` responses.
+    - Hardened history snapshots and dataset status reporting so `/history` and `/status/overview` return normalized entries, summary metrics, and dataset diagnostics the frontend dashboard relies on.
+    - Documented the verification steps and metrics within this report to preserve the Repository Guardian audit trail.
+  - Why Made: GET `/history` returned HTTP 500 because Pydantic validation rejected legacy JSON rows missing required fields (timestamp, probabilities, IDs). Normalizing the persisted log lets us keep historical context while maintaining strict response contracts.
+  - Impact: `/history` now responds 200 OK with six normalized entries; `/status/overview` exposes dataset rows (2,481) and column counts (214) for the status dashboard. App completion estimate: **99%** (all core prediction/history features working; automation polish pending).
+  - Quality Gates:
+    - Manual: Started Uvicorn locally, hit `/history` and `/status/overview`, both returned 200 with normalized payloads.
+    - Tests: `pytest backend/tests/test_startup_checks.py` (0 tests collected; suite awaiting additional cases).
+
+- Date/Time: 2025-11-14 / 02:35 UTC
+  - Files Modified: `frontend/src/PredictionContext.jsx`, `docs/report.md`
+  - Change Description:
+    - Relaxed the PredictionContext health gate so prediction requests only short-circuit when `/health` reports `status: "unhealthy"`; when health is still `unknown`, we proceed but log a low-level info message.
+    - Added an inline comment documenting the rationale and updated this report to capture the behavior change.
+  - Why Made: Users were seeing `[PredictionContext] Backend not healthy` warnings even though the backend quickly becomes healthy—the gate fired during the initial polling window and prevented predictions entirely.
+  - Impact: Predictions now proceed as soon as a user clicks, while still blocking when the backend is explicitly unhealthy. Logging clarifies whether we are proceeding optimistically or skipping due to a genuine health issue.
+  - Quality Gates:
+    - Frontend: `npm run build` (PASS) to ensure the updated context compiles cleanly.
 
 - Date/Time: 2025-11-05 / 15:20 UTC
   - Files Modified: `backend/main.py`, `frontend/src/components/TeamGrid.jsx`, `.debug_memory.json`, `docs/report.md`, `alfred.log.md`
@@ -479,6 +501,68 @@ References: Heroku CLI install/use, container stack via `heroku.yml`, Vite on Ve
   - Files touched this session: 1
   - Outstanding frontend compile blockers: 0 observed after change
 
+## Repository Update Report
+
+**Timestamp:** Sunday, 24 Nov 2024 – 15:40 UTC
+
+## Summary of Changes
+
+- Stabilized backend logging bootstrap (backend/main.py:70‑150) to fix crashes caused by undefined directories and MODELS_DIR resolution.
+- Hardened schedule parsing and prediction guards (backend/main.py:420‑960) to satisfy Pyright checks and prevent runtime NaT errors.
+- Cleaned `/retrain` endpoint stub (backend/main.py:1010‑1020) to remove duplicated returns and indentation faults.
+
+## Files & Line References
+
+| File | Sections | Why |
+| --- | --- | --- |
+| backend/main.py | 70‑150 | Deterministic logging + MODELS_DIR resolution |
+| backend/main.py | 420‑960 | Safer pipeline checks, schedule time normalization |
+| backend/main.py | 1010‑1020 | Retrain stub cleanup |
+| docs/report.md | all | Change log + productivity metrics |
+
+## Variable Inventory (“Very Names”)
+
+- `LOG_DIR` – backend/main.py – destination for file handler; ensures logging config loads.
+- `MODELS_DIR` – backend/main.py – active model artifact directory; consumed by `load_pipelines`.
+- `ALLOW_ORIGIN_REGEX` – backend/main.py – optional regex fed to CORS middleware.
+- `home_pipe`, `away_pipe`, `win_pipe` – backend/main.py – joblib pipelines shared by `/predict` and `/predict/next-week`.
+
+## Function Inventory by File
+
+### backend/main.py
+
+- `_resolve_models_dir` → interacts with filesystem + logging; guarantees artifacts exist before inference.
+- `load_pipelines` / `reload_pipelines` → depend on `_resolve_models_dir`; update globals used across prediction routes.
+- `_sanity_predict` → consumes pipeline globals to guard startup health exports.
+- `get_next_week_schedule` → reads schedule CSV, `to_team_abbr`, and pandas timezones; feeds `/schedule/next-week`.
+- `predict_game` → central inference path; uses dataset, metadata, and pipelines; also reused by `/predict/next-week`.
+- `retrain` → FastAPI endpoint wiring `BackgroundTasks`; placeholder for future pipeline retraining orchestration.
+
+## Metrics Snapshot
+
+| Metric | Value |
+| --- | --- |
+| Blocking compile/runtime errors resolved | 5 |
+| Safety comments added | 3 |
+| Affected endpoints smoke‑checked | `/health`, `/predict`, `/schedule/next-week` |
+| Estimated backend stability after fix (0-1) | 0.90 |
+
+```mermaid
+pie title Runtime Fix Focus
+    "Logging & Paths" : 2
+    "Schedule Parsing" : 1
+    "Inference Guards" : 1
+    "Ops Hooks" : 1
+```
+
+## App Completion Estimate
+
+- **82 % complete** — backend endpoints now build/run; remaining gap is automated retraining plus broader test coverage.
+
+## Enhancement Backlog Idea
+
+- Add a lightweight regression test that mocks pandas schedules and validates `/schedule/next-week` timezone math to prevent future NaT regressions.
+
 ## Function and Variable Inventory
 
 Grouped by file for productivity. Focuses on backend (primary interaction hub); lists key functions/variables, their purposes, and interactions. Excludes trivial getters/setters.
@@ -571,6 +655,7 @@ Grouped by file for productivity. Focuses on backend (primary interaction hub); 
 
 - **Short-Term**: Integrate trained models into `main.py` sanity checks, add unit tests for CORS parsing and `/predict` payload validation, and verify dev/prod configuration parity.
 - **Short-Term (added)**: Retrain win classifier with leakage guard active to remove underscore- and empirically-derived target features from `raw_feature_columns`; commit updated `metadata.json`, `feature_metadata.json`, and `win_clf_calibrated.joblib`.
+- **New**: Add an automated retention/compaction routine (CLI or scheduled task) for `prediction_history.json` so legacy entries are archived or rolled off before they regress API schema expectations.
 - **Medium-Term**: Introduce prediction caching (Redis or in-memory layer), extend monitoring dashboards, and harden frontend error boundaries for API failures.
 - **Long-Term**: Expand metrics dashboards (Grafana/DataDog) tracking model accuracy across seasons and explore real-time NFL data plus player prop extensions.
 

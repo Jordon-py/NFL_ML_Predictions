@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import './NavBar.css';
-import HamburgerMenu from '../HamburgerMenu';
+import HamburgerMenu from '../Hamburger/HamburgerMenu';
 
 /**
  * NavBar.jsx
@@ -14,9 +14,10 @@ import HamburgerMenu from '../HamburgerMenu';
  *   - We call `handleScroll()` once on mount to sync initial state (in case the page loads scrolled).
  *   - Passive scroll listener + SSR guard for safety.
  */
-function NavBar() {
+function NavBar({ state = {} }) {
     // Keep string type to avoid changing downstream CSS expectations
     const [isSticking, setIsSticking] = useState('');
+    const { health } = state;
 
     // EFFECT: toggle the "sticking" class after scrolling a small distance.
     const handleScroll = () => {
@@ -39,6 +40,12 @@ function NavBar() {
             window.removeEventListener('scroll', handleScroll);
         };
     }, []); // run once on mount
+
+    const healthStatusClass = health?.status === 'healthy'
+        ? 'health-ok'
+        : health?.status === 'unhealthy'
+            ? 'health-error'
+            : 'health-unknown';
 
     return (
         <nav className={`navBar ${isSticking}`}>
@@ -72,7 +79,11 @@ function NavBar() {
                 </defs>
             </svg>
 
-            <h1>NFL Predict</h1>
+            <div className="nav-left">
+                <h1>NFL Predict</h1>
+                <div className={`health-indicator ${healthStatusClass}`} title={`Backend Status: ${health?.status} - ${health?.reason}`}></div>
+            </div>
+
             {/* Desktop links (hidden on small screens via CSS) */}
             <div className="navBar__links">
                 <NavLink to="/" end>Dashboard</NavLink>

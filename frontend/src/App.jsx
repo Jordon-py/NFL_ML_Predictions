@@ -1,47 +1,56 @@
-/**
- * App.jsx
- * -------
- * Purpose:
- *   Root component that wires global prediction state via Context.
- *   Replaces multiple overlapping states with a single canonical model.
- *
- * Layer 1 Fixes:
- *   - Correct default import for DashBoard export.
- *   - Normalize prediction data once and store in Context.
- *
- * Layer 2 Improvements:
- *   - Single "current" object and an append-only "history".
- *   - Push to history in one place to avoid drift and duplication.
+/*
+File: App.jsx
+Purpose: Root React component; wraps DashBoard in PredictionProvider and ErrorBoundary for centralized state and error handling.
+Functions: App (React component)
+Variables: none (stateless wrapper)
+Interacts With: PredictionContext (provides state), DashBoard (main UI), ErrorBoundary (error catch)
+
+App.jsx
+-------
+Purpose:
+  Root React component that wires up top-level routes for the NFL
+  prediction UI. All prediction logic and state live in children
+  (e.g., TeamGrid, HistoryPage), not in this file.
+
+Architecture notes:
+  - React Router is responsible for page-level navigation.
+  - Global layout/styling is pulled in via TeamGrid.css as the main
+    stylesheet entrypoint.
+
+Change Log
+  2025-11-11:
+    - Replaced placeholder content with a working App component.
+ *     - Fixed Dashboard import path and component name mismatch.
+ *     - Removed unused imports (Link, useState, HistoryChart) to reduce noise.
  */
 
 import React from 'react';
-import { useState } from 'react';
-import { Link, Route, Routes } from 'react-router-dom';
-import HistoryChart from './components/HistoryChart.jsx';
-import DashBoard from './components/DashBoard.jsx'; // FIX: default import, not named
-import './components/TeamGrid.css';
+import { Routes, Route } from 'react-router-dom';
+
+// Components (relative to src/)
+import Dashboard from './components/Dashboard/Dashboard.jsx';
 import HistoryPage from './components/HistoryPage.jsx';
-import StatsPage from './components/StatsPage.jsx';
 
+// Pages
+import StatsPage from './pages/StatsPage.jsx';
 
+// Global styles (root entry point for shared layout + theme)
+import './components/Card/TeamGrid.css';
 
 /**
  * App
  * -----
- * The Vercel Speed Insights component can cause runtime/SSR issues when
- * imported at module-evaluation time (it may access browser globals). To
- * avoid the site failing to render (especially on Vercel builds), we
- * dynamically import and render the component on the client only.
+ * Composes top-level pages using React Router:
+ *   - "/"        → Dashboard (next-week matchups + predictions)
+ *   - "/history" → HistoryPage (prediction logs and charts)
+ *   - "/stats"   → StatsPage (model / data stats)
  */
 export default function App() {
-  // Keep App focused on composition. All prediction state lives in Context.
   return (
-    <>
-      <Routes>
-        <Route path="/" element={<DashBoard />} />
-        <Route path="/history" element={<HistoryPage />} />
-        <Route path="/stats" element={<StatsPage />} />
-      </Routes>
-    </>
+    <Routes>
+      <Route path="/" element={<Dashboard />} />
+      <Route path="/history" element={<HistoryPage />} />
+      <Route path="/stats" element={<StatsPage />} />
+    </Routes>
   );
 }

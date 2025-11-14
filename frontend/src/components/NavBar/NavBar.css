@@ -157,3 +157,52 @@
 /* removed duplicate 768px breakpoint */
 
 /* (Removed duplicate 768px rule in favor of a single 700px breakpoint) */
+
+/* NavBar Health Indicator Styles */
+.nav-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.health-indicator {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  transition: background-color 0.3s ease;
+}
+
+.health-indicator.health-ok {
+  background-color: #4caf50;
+  /* Green */
+  box-shadow: 0 0 8px #4caf50;
+}
+
+.health-indicator.health-error {
+  background-color: #f44336;
+  /* Red */
+  box-shadow: 0 0 8px #f44336;
+}
+
+.health-indicator.health-unknown {
+  background-color: #9e9e9e;
+  /* Grey */
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(0.9);
+    box-shadow: 0 0 0 0 rgba(158, 158, 158, 0.7);
+  }
+
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 10px rgba(158, 158, 158, 0);
+  }
+
+  100% {
+    transform: scale(0.9);
+    box-shadow: 0 0 0 0 rgba(158, 158, 158, 0);
+  }
+}

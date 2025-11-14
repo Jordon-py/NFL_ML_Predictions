@@ -1,97 +1,121 @@
 // @ts-nocheck
 /**
- * StatsPage.jsx
- * ----------------
- * Purpose:
- *   Dedicated route that pairs the next-week schedule with stored prediction history.
- *   Keeps dependencies internal (no react-spinners) so Vercel builds stay lean.
- *
- * Key ideas:
- *   - Leverages PredictionContext history while lazily fetching the schedule.
- *   - Provides a minimal, accessible loading indicator implemented via local CSS.
- *   - Reuses the global <NavBar/> to keep navigation consistent.
+ * StatsPage.jsx — Status + History dashboard
+ * -----------------------------------------
+ * Pulls real-time health, dataset, and prediction history metrics from the backend
+ * while still falling back to local context data when offline. Serves as the
+ * "status page" requested by stakeholders.
  */
+import React, { useState, useEffect, useMemo } from "react";
+import { usePredictions } from "../PredictionContext";
+import NavBar from "../components/NavBar/NavBar.jsx";
+import HistoryChart from "../components/HistoryChart";
+import { getNextWeekSchedule, getPredictionHistory, getStatusOverview } from "../api/client";
+import styles from "./StatsPage.module.css";
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { usePredictions } from '../PredictionContext';
-import { getNextWeekSchedule } from '../api/client';
-import HistoryChart from '../components/HistoryChart';
-import NavBar from '../components/NavBar/NavBar.jsx';
-import './StatsPage.css';
+const toGameKey = (game) => [game?.season, game?.week, game?.home_abbr || game?.home_team, game?.away_abbr || game?.away_team]
+  .filter(Boolean)
+  .join("-");
 
-function LoadingSpinner() {
+function LoadingSpinner({ label = "Loading" }) {
   return (
-    <div className="loading-container" role="status" aria-live="polite">
-      <span className="loading-spinner" aria-hidden="true" />
-      <p>Loading schedule...</p>
+    <div className={styles.loadingContainer} role="status" aria-live="polite">
+      <span className={styles.loadingSpinner} aria-hidden="true" />
+      <p>{label}…</p>
     </div>
   );
 }
 
-const StatsPage = () => {
-  const { history } = usePredictions();
+function SummaryCard({ title, value, subtext, intent = "default" }) {
+  return (
+    <article className={`${styles.summaryCard} ${styles[intent] ?? ""}`}>
+      <p className={styles.summaryLabel}>{title}</p>
+      <strong className={styles.summaryValue}>{value ?? "—"}</strong>
+      {subtext && <small className={styles.summarySubtext}>{subtext}</small>}
+    </article>
+  );
+}
+
+export default function StatsPage() {
+  const predictionState = usePredictions();
   const [schedule, setSchedule] = useState([]);
+  const [historyPayload, setHistoryPayload] = useState({ entries: [], total: 0 });
+  const [overview, setOverview] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    const getSchedule = async () => {
+    let active = true;
+    const hydrate = async () => {
       try {
         setLoading(true);
-        const response = await getNextWeekSchedule();
-        if (response && response.games) {
-          setSchedule(response.games);
-        } else {
-          setSchedule([]);
-        }
+        const [scheduleData, historyData, overviewData] = await Promise.all([
+          getNextWeekSchedule(),
+          getPredictionHistory(50),
+          getStatusOverview(),
+        ]);
+        if (!active) return;
+        setSchedule(Array.isArray(scheduleData) ? scheduleData : []);
+        setHistoryPayload(historyData || { entries: [], total: 0 });
+        setOverview(overviewData || null);
         setError(null);
       } catch (err) {
-        console.error('Error fetching schedule:', err);
-        setError('Failed to load schedule. The API might be down.');
-        setSchedule([]);
+        if (!active) return;
+        console.error("[StatsPage] hydrate failed", err);
+        setError("Failed to load status data. Backend may be offline.");
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     };
-
-    getSchedule();
+    hydrate();
+    return () => { active = false; };
   }, []);
 
-  const predictionMap = useMemo(() => {
-    if (!history) return new Map();
-    return new Map(history.map(p => [p.game_id, p]));
+  const history = useMemo(() => {
+    if (Array.isArray(historyPayload?.entries) && historyPayload.entries.length) return historyPayload.entries;
+    return Array.isArray(predictionState?.history) ? predictionState.history : [];
+  }, [historyPayload, predictionState?.history]);
+
+  const historyMap = useMemo(() => {
+    const map = new Map();
+    history.forEach((entry) => {
+      if (entry?.game_id) map.set(entry.game_id, entry);
+    });
+    return map;
   }, [history]);
 
+  const health = overview?.health || predictionState?.health;
+  const datasetStats = overview?.dataset || {};
+  const historyMetrics = overview?.history?.metrics || { total_predictions: history.length };
+  const scheduleList = Array.isArray(schedule) ? schedule : [];
+
   const renderSchedule = () => {
-    if (loading) {
-      return <LoadingSpinner />;
-    }
-
-    if (error) {
-      return <div className="error-message">{error}</div>;
-    }
-
-    if (schedule.length === 0) {
-      return <p>No schedule available for the next week.</p>;
-    }
+    if (loading) return <LoadingSpinner label="Loading status" />;
+    if (error) return <div className={styles.error}>{error}</div>;
+    if (scheduleList.length === 0) return <p className={styles.empty}>No future games detected in the schedule file.</p>;
 
     return (
-      <ul className="schedule-list">
-        {schedule.map(game => {
-          const gamePrediction = predictionMap.get(game.game_id);
-          const kickoffTime = new Date(game.kickoff).toLocaleString();
+      <ul className={styles.scheduleList}>
+        {scheduleList.map((game) => {
+          const key = toGameKey(game);
+          const prediction = historyMap.get(key);
+          const kickoffDate = game?.kickoff ? new Date(game.kickoff) : null;
+          const kickoffLabel = kickoffDate ? kickoffDate.toLocaleString() : "TBD";
 
           return (
-            <li key={game.game_id} className="schedule-item">
-              <div className="game-info">
-                <span>{game.away_team} @ {game.home_team}</span>
-                <span className="kickoff-time">{kickoffTime}</span>
+            <li key={key} className={styles.scheduleItem}>
+              <div className={styles.gameInfo}>
+                <span>{game.away_abbr || game.away_team} @ {game.home_abbr || game.home_team}</span>
+                <span className={styles.kickoffTime}>{kickoffLabel}</span>
               </div>
-              {gamePrediction && (
-                <div className="prediction-details">
-                  <p>Home: {Math.round(gamePrediction.home_win_probability * 100)}%</p>
-                  <p>Away: {Math.round(gamePrediction.away_win_probability * 100)}%</p>
+              {prediction ? (
+                <div className={styles.predictionDetails}>
+                  <p>Home win: {Math.round((prediction.home_win_probability ?? 0) * 100)}%</p>
+                  <p>Away win: {Math.round((prediction.away_win_probability ?? 0) * 100)}%</p>
+                  <p className={styles.pointDiff}>Diff: {prediction.point_diff?.toFixed?.(1) ?? prediction.point_diff} pts</p>
                 </div>
+              ) : (
+                <p className={styles.pendingNote}>No prediction recorded yet.</p>
               )}
             </li>
           );
@@ -100,19 +124,48 @@ const StatsPage = () => {
     );
   };
 
+  const winRate = typeof historyMetrics?.win_rate === "number"
+    ? `${Math.round(historyMetrics.win_rate * 100)}%`
+    : "n/a";
+
   return (
     <>
-      <NavBar />
-      <div className="stats-page">
-        
-        <h1>Next Week Schedule & Predictions</h1>
-        {renderSchedule()}
+      <NavBar state={{ ...predictionState, health }} />
+      <div className={styles.statsPage}>
+        <header className={styles.pageHeader}>
+          <h1 className={styles.h1}>Prediction Status Page</h1>
+          <p className={styles.pageLead}>Live backend health, dataset stats, and recorded predictions.</p>
+        </header>
 
-        <h2>Historical Predictions</h2>
-        <HistoryChart />
+        <section className={styles.summaryGrid}>
+          <SummaryCard
+            title="Backend Health"
+            value={health?.status ?? "unknown"}
+            subtext={health?.reason}
+            intent={health?.status === "healthy" ? "ok" : health?.status === "unhealthy" ? "error" : "default"}
+          />
+          <SummaryCard
+            title="Dataset rows"
+            value={datasetStats?.rows ?? "—"}
+            subtext={datasetStats?.path ?? "path unknown"}
+          />
+          <SummaryCard
+            title="Predictions recorded"
+            value={historyMetrics?.total_predictions ?? history.length}
+            subtext={`Win rate: ${winRate}`}
+          />
+        </section>
+
+        <section className={styles.scheduleSection}>
+          <h2 className={styles.h2}>Next Week Schedule</h2>
+          {renderSchedule()}
+        </section>
+
+        <section className={styles.historySection}>
+          <h2 className={styles.h2}>Historical Predictions</h2>
+          <HistoryChart history={history} state={predictionState} />
+        </section>
       </div>
     </>
   );
-};
-
-export default StatsPage;
+}

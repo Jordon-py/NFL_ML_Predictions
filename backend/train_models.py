@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
 """
-Train leak-free NFL models with time-aware CV.
+File: train_models.py
+Purpose: Train ML models for NFL game predictions using time-aware cross-validation to prevent data leakage; outputs fitted models and metadata for backend/main.py inference.
+Functions: _ensure_columns, _dataset_hash, _drop_leaky_columns, _infer_features, _make_preprocessor, _split_for_calibration, _fit_regression, _fit_classifier, _evaluate_regression, _dataset_sort, main
+Variables: RANDOM_SEED, N_SPLITS, TARGET_HOME, TARGET_AWAY, CLASS_LABEL, TIME_KEYS, ID_COLS, LEAK_BLOCKLIST, REG_PARAM_DISTS, CLF_PARAM_DISTS, log
+Interacts With: backend/data/merge_dominance.csv or game_features CSV (input dataset), backend/models/ (output .joblib + metadata.json), backend/main.py (loads artifacts)
 
+Train leak-free NFL models with time-aware CV.
 - Drops label and label-derived columns from features.
 - Uses TimeSeriesSplit for all model selection.
 - Reserves the final chronological fold for holdout metrics.
@@ -10,15 +15,6 @@ Train leak-free NFL models with time-aware CV.
          artifacts/metadata.json
 - Environment variables are loaded with defaults and converted to appropriate types for safety.
 """
-
-# File: backend/train_models.py
-# Purpose: Train ML models for NFL game predictions using time-aware cross-validation to prevent data leakage.
-
-#  Functions: _ensure_columns, _dataset_hash, _drop_leaky_columns, _infer_features, _make_preprocessor, _split_for_calibration, _fit_regression, _fit_classifier, _evaluate_regression, _dataset_sort, main
-
-# Variables: RANDOM_SEED, N_SPLITS, TARGET_HOME, TARGET_AWAY, CLASS_LABEL, TIME_KEYS, ID_COLS, LEAK_BLOCKLIST, REG_PARAM_DISTS, CLF_PARAM_DISTS, log
-
-# Interacts With: backend/data/merge_dominance.csv (preferred input dataset), backend/models/ (output models and metadata)
 
 import argparse
 import json

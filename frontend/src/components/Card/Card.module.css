@@ -1,0 +1,188 @@
+/* Card.module.css — v2 Futuristic + Motion */
+/* Uses globals from base.css: fonts, --a-ease, cardPop/outlineGlow keyframes. */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  backdrop-filter: blur(16px);
+  border-radius: var(--r-md);
+  background-color: var(--lch-card);
+  color: var(--lch-text);
+  border: 1px solid var(--lch-border);
+  padding: 1rem;
+  position: relative;
+  width: clamp(300px, 100%, 380px);
+  box-shadow: 0 8px 24px oklch(0% 0 0 / 0.30);
+  animation: cardPop 0.6s var(--a-ease) calc(var(--i, 0) * 80ms) both;
+  transform-style: preserve-3d;
+  transition: transform .35s var(--a-ease), box-shadow .35s var(--a-ease), border-color .35s var(--a-ease);
+  outline: none;
+  /* 3D tuning knobs */
+  --card-tilt: 3deg;
+  --glow-time: 350ms;
+  --glow-accent: lch(80% 70 320 / 0.65);
+}
+
+.card:hover,
+.card:focus-within {
+  transform: translateY(-8px) scale(1.02) rotateX(0.6deg) rotateY(0.6deg);
+  box-shadow: 0 16px 40px oklch(0% 0 0 / 0.45), 0 0 22px var(--glow-accent);
+}
+
+.hasPrediction {
+  animation: outlineGlow 2s ease-in-out infinite;
+  border-color: var(--lch-primary);
+  box-shadow: 0 10px 30px oklch(0% 0 0 / 0.45), 0 0 25px var(--lch-primary);
+}
+
+.isLoading {
+  cursor: progress;
+}
+
+.isError {
+  border-color: lch(58% 78 30);
+  box-shadow: 0 0 0 1px lch(58% 78 30 / .4) inset;
+}
+
+.topBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: .25rem;
+}
+
+.left {
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+}
+
+.icon {
+  filter: drop-shadow(0 0 8px var(--lch-accent));
+}
+
+.title {
+  font-family: var(--font-tech);
+  letter-spacing: .5px;
+}
+
+.status {
+  font-size: .8rem;
+  color: var(--lch-muted);
+}
+
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: .75rem;
+  margin-bottom: 1rem;
+}
+
+.teamsRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.teamInfo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: .5rem;
+  flex: 1;
+}
+
+.away {
+  align-items: flex-start;
+}
+
+.home {
+  align-items: flex-end;
+}
+
+.atSymbol {
+  font-weight: 600;
+  color: var(--lch-accent);
+  font-size: 1.2rem;
+  font-family: var(--font-tech);
+}
+
+.teamLogo {
+  width: clamp(5rem, 15vw, 7rem);
+  aspect-ratio: 1/1;
+  object-fit: contain;
+  border-radius: 50%;
+  background: oklch(0% 0 0 / .2);
+  padding: 8px;
+  transition: transform .4s var(--a-ease), filter .4s var(--a-ease);
+  animation: fadeInVar .8s var(--a-ease) both;
+}
+
+.teamLogo:hover {
+  transform: scale(1.12) rotate(5deg);
+  filter: brightness(1.2) drop-shadow(0 0 12px var(--lch-primary));
+}
+
+.kickoff {
+  font-size: .9rem;
+  color: var(--lch-muted);
+  white-space: nowrap;
+  font-family: var(--font-tech);
+  animation: textFadeSlide 1s var(--a-ease) 300ms both;
+}
+
+.prediction {
+  display: flex;
+  flex-direction: column;
+  gap: .75rem;
+  margin-top: auto;
+  padding-top: .75rem;
+  border-top: 1px solid var(--lch-border);
+}
+
+.predictionBody {
+  display: grid;
+  gap: .5rem;
+}
+
+.probRow,
+.detailRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.diff {
+  opacity: .85;
+  font-style: normal;
+  margin-left: .35rem;
+}
+
+.cta {
+  text-align: center;
+  font-weight: 600;
+  font-family: var(--font-tech);
+  animation: pulseSoft 2s ease-in-out infinite;
+}
+
+.errorMsg {
+  color: lch(70% 100 30);
+}
+
+.progressTrack {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: lch(20% 5 250 / .35);
+  overflow: hidden;
+  border-bottom-left-radius: var(--r-md);
+  border-bottom-right-radius: var(--r-md);
+}
+
+.progressBar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--lch-accent), var(--lch-primary));
+}

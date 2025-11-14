@@ -212,17 +212,18 @@ main.app-main {
 /* Dashboard container - ensure it doesn't interfere with sticky nav */
 .dashboard {
   position: relative;
-
-  width: 100%;
+  max-width: 500vw;
+  width: 400vw;
   min-height: 100vh;
   overflow-y: visible;
 }
 
 /* Containers (Enhancement 3) */
 .container {
-  max-width: 1500px;
+  max-width: 500vw;
   width: 100%;
   margin: 0 auto;
+  overflow-x: auto;
 }
 
 .team-grid-header {
@@ -240,23 +241,48 @@ div.probability.home-win-prob.inner-card.a-shine {
   display: flex;
   font-size: 1rem;
   font-optical-sizing: auto;
-  color: lch(100% 0.01 296.81);
+  color: lch(45.53% 43.82 269.59);
 
+}
+
+section.team-main {
+  display: flex;
+  max-width: 200vw;
+  width: 200vw;
+  border-style: double;
+  border-color: #e74c3c;
+  overflow-x: scroll;
 }
 
 /* Grid (Enhancement 3) */
 .team-grid-section {
-  padding-inline: clamp(12px, 2vw, 24px);
+  display: flex;
+  border-style: double;
+  max-width: 200vw;
+  width: 99%;
+  overflow: visible, scroll;
 }
+
+div.grid-item {
+  display: flex;
+  flex-wrap: wrap;
+  flex-direction: row;
+  justify-items: center;
+  border-style: groove;
+  max-width: 200vw;
+  width: 198vw;
+  max-height: 50vh;
+  height: 25%;
+  overflow-x: scroll;
+
+}
+
 
 .team-grid-cards {
   display: grid;
-  background-color: #00000000;
-
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 1rem;
-  border-radius: 1.5%;
-  border-color: whitesmoke;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1.5rem;
+  padding: 1.5rem;
 }
 
 .matchup-time.inner-card {
@@ -286,31 +312,24 @@ div.probability.home-win-prob.inner-card.a-shine {
 /* Cards (Enhancement 4 + 5 + 10) */
 .matchup-card.inner-card {
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
+  /* Changed to column for better content flow */
   -webkit-backdrop-filter: blur(10px);
-  /* normalized prefix form */
   backdrop-filter: blur(10px);
-  /* standard property for compatibility */
   background-color: var(--c-card);
   border-radius: 18px;
   box-shadow: 0 6px 18px 1px rgba(17, 0, 0, 0.712);
-  padding: 10px;
-  margin-bottom: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  transition: transform 0.7s, box-shadow 0.8s;
+  padding: 1rem;
+  /* Use rem for scalable spacing */
+  margin-bottom: 1.5rem;
+  /* Use rem */
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  /* Smoother transition */
   position: relative;
-  max-height: 450px;
-  height: 100%;
-  max-width: 320px;
-
   width: 100%;
   color: #cbe4ff;
-  /* Apply fade-in animation on load */
-  animation: fadeInVar 0.6s cubic-bezier(.22, .61, .36, 1) both, outlineGlow 1.2s ease-in-out both;
+  animation: fadeInVar 0.6s cubic-bezier(.22, .61, .36, 1) both;
   animation-delay: calc(var(--i, 0) * 100ms);
-  /* Stagger animation based on index */
 }
 
 .inner-card {
