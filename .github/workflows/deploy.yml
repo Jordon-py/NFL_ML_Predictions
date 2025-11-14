@@ -2,63 +2,67 @@ name: Deploy
 
 on:
   push:
-    branches: [ master ]
+    branches:
+      - main
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-${{ github.ref }}
+      cancel-in-progress: true
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.11
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: 18
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - name: Setup Heroku CLI (action)
+        # Use an action that accepts api key via 'with' to avoid using secrets at top-level
+        uses: akshnz/heroku-cli-action@v1
         with:
-          python-version: '3.11'
+          heroku_api_key: ${{ secrets.HEROKU_API_KEY }}
 
-      - name: Install Heroku CLI
-        run: |
-          curl https://cli-assets.heroku.com/install.sh | sh
-
-      - name: Install Vercel CLI
-        run: |
-          npm i -g vercel@latest
-
-      - name: Login Heroku
+      - name: Verify Heroku login (safe step-level env)
         env:
           HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
         run: |
-          heroku whoami
+          if [ -z "${HEROKU_API_KEY}" ]; then
+            echo "ERROR: HEROKU_API_KEY secret is missing. Add it in Settings → Secrets and Variables → Actions."
+            exit 1
+          fi
+          heroku whoami || true
 
-      - name: Vercel Link
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: |
-          vercel link --yes --project nfl-ml-predictions --scope christopher-jordons-projects
+      - name: Setup Vercel (if used)
+        uses: amondnet/vercel-action@v20
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-args: '--prod'
+          working-directory: ./frontend
 
-      - name: Set Heroku CORS
-        run: |
-          heroku config:set CORS_ORIGINS="http://localhost:3000,https://localhost:3000,https://nfl-predict-frontend.vercel.app,https://nfl-ml-predictions.vercel.app" -a ${{ secrets.HEROKU_APP_NAME }}
-
-      - name: Install and Build Frontend
-        run: |
-          npm ci --prefix frontend
-          npm run build --prefix frontend
-
-      - name: Push to Heroku
+      - name: Deploy to Heroku container (conditional)
+        if: ${{ secrets.HEROKU_API_KEY && secrets.HEROKU_APP }}
         env:
           HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+          HEROKU_APP: ${{ secrets.HEROKU_APP }}
         run: |
-          git push https://heroku:${HEROKU_API_KEY}@git.heroku.com/${{ secrets.HEROKU_APP_NAME }}.git HEAD:main
+          echo "Logging into Heroku container registry..."
+          heroku container:login
+          echo "Pushing container to Heroku app: $HEROKU_APP"
+          heroku container:push web --app "$HEROKU_APP"
+          heroku container:release web --app "$HEROKU_APP"
 
-      - name: Deploy to Vercel
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VITE_API_URL: https://${{ secrets.HEROKU_APP_NAME }}.herokuapp.com
+      - name: Fail if required deployment secrets are missing
+        if: ${{ !secrets.HEROKU_API_KEY || !secrets.HEROKU_APP || !secrets.VERCEL_TOKEN }}
         run: |
-          vercel --prod --yes --token "$VERCEL_TOKEN"
+          echo "One or more deployment secrets (HEROKU_API_KEY, HEROKU_APP, VERCEL_TOKEN) are missing."
+          echo "Add them at: Settings → Secrets and variables → Actions"
+          exit 1

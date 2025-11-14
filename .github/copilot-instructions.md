@@ -21,7 +21,7 @@
 
 6. **Change Discipline:** Make focused changes. Do not perform large refactors unless complexity/redundancy/errors detected. Focus on incremental improvements.
 
-7. **Self-Awareness & Reflexion:** Before completing changes, self-check: "Is this clearer? Simpler? Would a new contributor understand without explanation?"
+7. **Self-Awareness & Reflexion:** Before completing changes, self-check: "Is this clearer? Simpler? Would a new contributor understand without explanation?, DOES IT WORK!!"
 
 ### Dev Quickstart
 - Start backend (local): `cd backend && python -m venv .venv && .\.venv\Scripts\Activate.ps1 && python -m pip install -r requirements.txt && python -m uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000`
