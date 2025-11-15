@@ -68,7 +68,7 @@ export default function StatsPage() {
 
   // Local UI state
   const [isPageLoading, setIsPageLoading] = useState(true);
-  const [pageError, setPageError] = useState(/** @type {string | null} */ (null));
+  const [pageError, setPageError] = useState(/** @type {string | null} */(null));
 
   /**
    * Initial hydration:
@@ -137,18 +137,18 @@ export default function StatsPage() {
     history.forEach(
       /** @param {any} entry */
       (entry) => {
-      if (!entry) return;
+        if (!entry) return;
 
-      // Primary key: stable ID from the backend, if present
-      if (entry.game_id) {
-        map.set(entry.game_id, entry);
-      }
+        // Primary key: stable ID from the backend, if present
+        if (entry.game_id) {
+          map.set(entry.game_id, entry);
+        }
 
-      // Fallback: composite key constructed from season/week/home/away
-      const compositeKey = toGameKey(entry);
-      if (compositeKey) {
-        map.set(compositeKey, entry);
-      }
+        // Fallback: composite key constructed from season/week/home/away
+        const compositeKey = toGameKey(entry);
+        if (compositeKey) {
+          map.set(compositeKey, entry);
+        }
       }
     );
 

@@ -7,6 +7,7 @@ This report documents incremental changes to the NFL_ML_Predictions repository, 
 ## Recent Changes
 
 <<<<<<< HEAD
+
 - Date/Time: 2025-11-15 / 00:15 UTC (approximate)
   - Files Modified: `frontend/src/components/DashBoard/Dashboard.jsx`, `frontend/src/components/Card/TeamGrid.jsx`, `frontend/src/components/Card/Card.jsx`, `frontend/src/components/Card/TeamGrid.css`, `frontend/src/components/PredictionResult.jsx`, `backend/main.py`, `docs/report.md`
   - Change Description:
@@ -42,7 +43,7 @@ This report documents incremental changes to the NFL_ML_Predictions repository, 
     - **Build Fixes**: Corrected case-sensitive import paths (`Dashboard` vs `DashBoard`)
     - **Documentation**: Created comprehensive refactoring report with metrics, naming conventions, and impact analysis
   - Why Made: Improve code maintainability and reduce cognitive load for developers. Ambiguous variable names like `key`, `error`, `loading` without context made debugging and code review unnecessarily difficult. Establishing clear naming conventions benefits long-term maintenance.
-  - Impact: 
+  - Impact:
     - Readability improved by ~40% (measured by variable name descriptiveness)
     - Cognitive complexity reduced by 37% (average per function)
     - Self-documenting variables increased from 32% to 89%
@@ -59,6 +60,7 @@ This report documents incremental changes to the NFL_ML_Predictions repository, 
     - Create shared utility file for `generateGameKey()` (used in multiple files)
     - Consider TypeScript migration for full type safety
     - Add PropTypes or interfaces for component props
+
 >>>>>>> 4b165d32064323a91281a4d99d1d32808123b456
 
 - Date/Time: 2025-11-13 / 23:55 UTC
@@ -585,6 +587,7 @@ References: Heroku CLI install/use, container stack via `heroku.yml`, Vite on Ve
 - **Why Made**: Ensures the JSX runtime can resolve React hooks consistently while giving maintainers explicit guidance on required packages.
 - **Impact**: Resolved build warnings related to React module resolution. App completion estimate: 68%.
 - **Metrics Post-Change**:
+
   ## Recent Changes
 
   - Date/Time: 2025-11-15 / 00:46 UTC (covers 00:15â€“00:46 UTC window)
