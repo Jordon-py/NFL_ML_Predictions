@@ -1028,7 +1028,33 @@ def get_current_nfl_context() -> Dict[str, Any]:
     """
     now = datetime.now()
     cur_season = now.year if now.month >= 8 else now.year - 1
-    ...
+    
+    # Default fallback values
+    default_context = {
+        "current_season": cur_season,
+        "last_completed_season": cur_season,
+        "last_completed_week": 1,
+        "next_prediction_season": cur_season,
+        "next_prediction_week": 2,
+        "status": "preseason_or_early"
+    }
+    
+    # Try to get more accurate context from dataset if available
+    if dataset_df is not None and not dataset_df.empty:
+        try:
+            if "season" in dataset_df.columns and "week" in dataset_df.columns:
+                max_season = int(dataset_df["season"].max())
+                max_week_in_season = int(dataset_df[dataset_df["season"] == max_season]["week"].max())
+                
+                default_context["last_completed_season"] = max_season
+                default_context["last_completed_week"] = max_week_in_season
+                default_context["next_prediction_season"] = max_season
+                default_context["next_prediction_week"] = min(max_week_in_season + 1, 18)
+                default_context["status"] = "nfl_season_active"
+        except Exception as e:
+            log.warning(f"Failed to extract context from dataset: {e}")
+    
+    return default_context
 
 def build_game_mask(df: pd.DataFrame, season: int, week: int,
                     home_abbr: str, away_abbr: str) -> pd.Series:
@@ -1195,14 +1221,31 @@ def get_next_week_schedule() -> List[ScheduleGame]:
         Pydantic model instances ready to be serialized as JSON.
     """
     spath = _resolve_schedule_path()
-    ...
+    try:
+        df = _load_schedule_df(spath)
+    except FileNotFoundError:
+        log.error(f"Schedule file not found: {spath}")
+        raise HTTPException(503, "Schedule data unavailable")
+    except Exception as exc:
+        log.error(f"Failed to load schedule from {spath}: {exc}")
+        raise HTTPException(500, "Failed to load schedule data from server")
+
+    # Parse kickoff timestamps
+    if "kickoff_ts_utc" not in df.columns:
+        df["kickoff_ts_utc"] = pd.to_datetime(
+            df["gameday"].astype(str) + " " + df["gametime"].fillna("00:00").astype(str),
+            errors="coerce",
+            utc=True
+        )
+
     now = pd.Timestamp.now(tz="UTC")
     future = df[df["kickoff_ts_utc"].notna() & (df["kickoff_ts_utc"] >= now)]
     current_week = int(future["week"].min()) if not future.empty else int(df["week"].max())
 
     # Games for the identified week
     week_games = df[df["week"] == current_week]
-
+    
+    results = []
     for _, r in week_games.iterrows():
         try:
             h = to_team_abbr(r["home_team"])
@@ -1216,7 +1259,24 @@ def get_next_week_schedule() -> List[ScheduleGame]:
             elif pd.isna(kickoff_val) or kickoff_val is None:
                 kickoff_val = datetime.now(timezone.utc)
                 log.warning(f"Invalid kickoff time for {a}@{h}, using current time")
-            ...
+            
+            results.append(
+                ScheduleGame(
+                    game_id=r.get("game_id", f"{r['season']}_{r['week']:02d}_{a}_{h}"),
+                    season=int(r["season"]),
+                    week=int(r["week"]),
+                    home_team=r["home_team"],
+                    away_team=r["away_team"],
+                    home_abbr=h,
+                    away_abbr=a,
+                    kickoff=kickoff_val,
+                )
+            )
+        except Exception as e:
+            log.warning(f"Skipping game row due to error: {e}")
+            continue
+    
+    return results
 
 
 # -----------------------------------------------------------
@@ -1432,7 +1492,87 @@ def predict_next_week() -> Dict[str, Any]:
     """
     if not all((home_pipe, away_pipe, win_pipe)):
         raise HTTPException(503, "Models not loaded.")
-    ...
+    
+    # Get the context to determine which week to predict
+    context = get_current_nfl_context()
+    pred_season = context["next_prediction_season"]
+    pred_week = context["next_prediction_week"]
+    
+    # Load the schedule
+    spath = _resolve_schedule_path()
+    try:
+        schedule_df = _load_schedule_df(spath)
+    except FileNotFoundError:
+        log.error(f"Schedule file not found: {spath}")
+        raise HTTPException(503, "Schedule data unavailable for next-week predictions")
+    except Exception as exc:
+        log.error(f"Failed to load schedule from {spath}: {exc}")
+        raise HTTPException(500, "Failed to load schedule data for next-week predictions")
+    
+    # Filter to the target week
+    week_games = schedule_df[
+        (schedule_df["season"] == pred_season) & (schedule_df["week"] == pred_week)
+    ]
+    
+    results = []
+    for _, row in week_games.iterrows():
+        try:
+            home_abbr = to_team_abbr(row["home_team"])
+            away_abbr = to_team_abbr(row["away_team"])
+            
+            # Call the single-game prediction endpoint
+            req = PredictionRequest(
+                home_team=home_abbr,
+                away_team=away_abbr,
+                season=pred_season,
+                week=pred_week
+            )
+            prediction = predict_game(req)
+            
+            results.append({
+                "game": {
+                    "home_team": row["home_team"],
+                    "away_team": row["away_team"],
+                    "home_abbr": home_abbr,
+                    "away_abbr": away_abbr,
+                    "season": pred_season,
+                    "week": pred_week
+                },
+                "prediction": prediction.model_dump()
+            })
+        except HTTPException as http_exc:
+            # Propagate HTTP exceptions
+            if http_exc.status_code >= 500:
+                raise
+            # For 400/404, record as an error in the results
+            results.append({
+                "game": {
+                    "home_team": row.get("home_team"),
+                    "away_team": row.get("away_team"),
+                    "season": pred_season,
+                    "week": pred_week
+                },
+                "error": http_exc.detail
+            })
+        except Exception as exc:
+            log.warning(f"Failed to predict {row.get('away_team')}@{row.get('home_team')}: {exc}")
+            results.append({
+                "game": {
+                    "home_team": row.get("home_team"),
+                    "away_team": row.get("away_team"),
+                    "season": pred_season,
+                    "week": pred_week
+                },
+                "error": str(exc)
+            })
+    
+    return {
+        "context": context,
+        "season": pred_season,
+        "week": pred_week,
+        "predictions": results,
+        "total_games": len(results)
+    }
 
 
 # -----------------------
