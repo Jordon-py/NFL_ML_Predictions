@@ -28,7 +28,7 @@ import React from 'react';
 import { Routes, Route } from 'react-router-dom';
 
 // Components (relative to src/)
-import Dashboard from './components/Dashboard/Dashboard.jsx';
+import Dashboard from './components/DashBoard/Dashboard.jsx';
 import HistoryPage from './components/HistoryPage.jsx';
 
 // Pages

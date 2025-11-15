@@ -11,19 +11,19 @@ import TeamGrid from "../Card/TeamGrid.jsx";
 import PredictionResult from "../PredictionResult.jsx";
 import HistoryChart from "../HistoryChart.jsx";
 import NavBar from "../NavBar/NavBar.jsx";
-import styles from "./DashBoard.module.css";
+import styles from "./Dashboard.module.css";
 
 /**
  * Dashboard — layout-only container using CSS Modules.
  * Cleans up context shape handling and avoids inline styles.
  */
-const LS_KEY = "prediction_history";
+const PREDICTION_HISTORY_KEY = "prediction_history";
 
-function loadHistoryLocal() {
+function loadPredictionHistoryFromLocalStorage() {
   try {
-    const raw = localStorage.getItem(LS_KEY);
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    const rawHistoryData = localStorage.getItem(PREDICTION_HISTORY_KEY);
+    const parsedHistory = JSON.parse(rawHistoryData);
+    return Array.isArray(parsedHistory) ? parsedHistory : [];
   } catch {
     return [];
   }
@@ -50,58 +50,66 @@ function loadHistoryLocal() {
  */
 export default function DashBoard() {
   const {
-    current,
-    history = [],
-    schedule,
-    week,
-    teams,
-    predictions,
-    loading,
-    errors,
-    makePrediction,
-    health
+    current: currentPrediction,
+    history: predictionHistory = [],
+    schedule: upcomingGames,
+    week: currentWeek,
+    teams: teamMetadata,
+    predictions: gamePredictions,
+    loading: loadingStates,
+    errors: errorStates,
+    makePrediction: handlePredictionRequest,
+    health: backendHealth
   } = usePredictions() || {};
 
-  const latestFromHistory = history.length ? history[0] : null;
+  const mostRecentPrediction = predictionHistory.length ? predictionHistory[0] : null;
+  const displayedPrediction = currentPrediction ?? mostRecentPrediction;
 
-  const navState = useMemo(
-    () => ({ current: current ?? latestFromHistory, latest: latestFromHistory, count: history.length, health }),
-    [current, latestFromHistory, history.length, health]
+  const navigationBarState = useMemo(
+    () => ({ 
+      current: displayedPrediction, 
+      latest: mostRecentPrediction, 
+      count: predictionHistory.length, 
+      health: backendHealth 
+    }),
+    [displayedPrediction, mostRecentPrediction, predictionHistory.length, backendHealth]
   );
-  // Removed legacy CSV fetch — schedule now loaded centrally in PredictionContext.
-  // If we later need raw CSV for analytics, add a dedicated hook instead of inline effect.
+  const isBackendHealthy = backendHealth?.status === 'healthy';
+  const healthMessage = isBackendHealthy
+    ? "Click any matchup to see predicted scores"
+    : `Models loading... predictions are temporarily disabled. Reason: ${backendHealth?.reason || 'initializing'}`;
+
   return (
     <>
-      <NavBar state={navState} />
+      <NavBar state={navigationBarState} />
 
       <main className={styles.dashboard}>
         <header className={styles.header}>
           <div className={styles.teamGridHeader}>
             <h2 className={styles.title}>Next Week&apos;s NFL Matchups</h2>
-            <p className={styles.subtitle}>
-              {health?.status !== 'healthy'
-                ? `Models loading... predictions are temporarily disabled. Reason: ${health?.reason || 'initializing'}`
-                : "Click any matchup to see predicted scores"
-              }
-            </p>
+            <p className={styles.subtitle}>{healthMessage}</p>
           </div>
         </header>
 
         <section className={styles.teamMain}>
           <TeamGrid
-            games={schedule}
-            week={week}
-            teams={teams}
-            predictions={predictions}
-            loading={loading}
-            errors={errors}
-            onPredict={makePrediction}
+            games={upcomingGames}
+            week={currentWeek}
+            teams={teamMetadata}
+            predictions={gamePredictions}
+            loading={loadingStates}
+            errors={errorStates}
+            onPredict={handlePredictionRequest}
           />
-          <HistoryChart className={styles.historyChart} history={history} latestPred={current ?? latestFromHistory} />
+          <HistoryChart 
+            className={styles.historyChart} 
+            history={predictionHistory} 
+            latestPred={displayedPrediction} 
+          />
         </section>
 
         <section aria-live="polite">
-          <PredictionResult entry={current ?? latestFromHistory} />
+          <PredictionResult entry={displayedPrediction} />
         </section>
       </main>
     </>
