@@ -1,116 +1,219 @@
-import React from "react";
-import styles from "./Card.module.css";
+// Card/Card.jsx
+// ------------------------------------------------------
+// Presentation component for a single NFL game.
+// - Expects a `game` object with team + kickoff info.
+// - Designed to look clean inside the TeamGrid layout.
+// - Shows matchup, time, venue, and optional prediction.
+// ------------------------------------------------------
+
+import React from 'react';
+import './Card.module.css'; // optional: or you can keep all styles in TeamGrid.css
 
 /**
- * Card v2 — Prop-driven & motion-aware
- * Props:
- *  - matchup: { away_team, home_team, kickoff, away_logo, home_logo }
- *  - prediction?: { home_win_probability, away_win_probability, home_score?, away_score?, point_diff? }
- *  - title?: string  (e.g., "AI Node")
- *  - status?: "Active" | "Idle" | "Error" | string
- *  - icon?: ReactNode
- *  - progress?: number (0..100)
- *  - loading?: boolean
- *  - error?: string
- *  - index?: number (stagger)
- *  - onClick?: () => void
+ * @typedef {Object} Game
+ * @property {number|string|null} [week]
+ * @property {string|null} [home_team]
+ * @property {string|null} [away_team]
+ * @property {string|null} [home]
+ * @property {string|null} [away]
+ * @property {string|null} [venue]
+ * @property {string|number|Date|null} [kickoff]
+ * @property {string|number|Date|null} [start_time]
+ * @property {string|null} [home_logo]
+ * @property {string|null} [away_logo]
+ * @property {number|null} [home_win_probability]
+ * @property {number|null} [home_pred_score]
+ * @property {number|null} [away_pred_score]
  */
-export default function Card({
-  matchup,
-  prediction,
-  title,
-  status,
-  icon,
-  progress,
-  loading = false,
-  error,
-  index = 0,
-  onClick
-}) {
-  if (!matchup) return null;
 
-  const { away_team, home_team, kickoff, away_logo, home_logo } = matchup;
-  const hasPrediction = !!prediction;
+/**
+ * @param {string|number|Date|null|undefined} kickoffRaw
+ * @returns {string}
+ */
+function formatKickoff(kickoffRaw) {
+  if (!kickoffRaw) return 'TBD';
 
-  const pct = (v) =>
-    typeof v === "number" && isFinite(v) ? Math.round(v * 100) : null;
+  const date = new Date(kickoffRaw);
+  if (Number.isNaN(date.getTime())) {
+    // If we can’t parse it, just show the raw string
+    return typeof kickoffRaw === 'string' ? kickoffRaw : String(kickoffRaw);
+  }
+
+  // Example: Sun, Nov 9 · 10:00 AM
+  return date.toLocaleString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+/**
+ * @param {number|null|undefined} prob
+ * @returns {string|null}
+ */
+function toPercent(prob) {
+  if (prob === null || prob === undefined) return null;
+  const pct = Math.round(prob * 100);
+  return `${pct}%`;
+}
+
+/**
+ * @param {{
+ *   game: Game,
+ *   isLoading?: boolean,
+ *   error?: string | null,
+ *   onClick?: () => void,
+ * }} props
+ */
+function Card({ game, isLoading = false, error = null, onClick }) {
+  const {
+    week,
+    home_team,
+    away_team,
+    home,
+    away,
+    venue,
+    kickoff,
+    start_time,
+    home_logo,
+    away_logo,
+    home_win_probability,
+    home_pred_score,
+    away_pred_score,
+  } = game;
+
+  const displayWeek = week ?? '–';
+  const homeTeam = home_team || home || 'HOME';
+  const awayTeam = away_team || away || 'AWAY';
+  const kickoffLabel = formatKickoff(kickoff || start_time);
+  const winProbLabel = toPercent(home_win_probability);
+
+  const hasPrediction =
+    home_pred_score !== undefined && away_pred_score !== undefined;
+
+  const rootClassName = [
+    'game-card',
+    isLoading ? 'game-card--loading' : '',
+    error ? 'game-card--error' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  const handleKeyDown = (event) => {
+    if (!onClick) return;
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      onClick();
+    }
+  };
 
   return (
     <article
-      className={[
-        styles.card,
-        hasPrediction ? styles.hasPrediction : "",
-        loading ? styles.isLoading : "",
-        error ? styles.isError : "",
-      ].join(" ")}
-      style={{ ["--i"]: index }}
-      tabIndex={0}
-      role="button"
-      aria-pressed={loading ? "true" : "false"}
+      className={rootClassName}
+      aria-label={`${awayTeam} at ${homeTeam}`}
       onClick={onClick}
-      onKeyDown={(e) => (e.key === "Enter" ? onClick?.(e) : null)}
+      onKeyDown={handleKeyDown}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
     >
-      {/* Top bar: optional icon/title/status */}
-      {(title || status || icon) && (
-        <div className={styles.topBar}>
-          <div className={styles.left}>
-            {icon && <span className={styles.icon} aria-hidden>{icon}</span>}
-            {title && <strong className={styles.title}>{title}</strong>}
-          </div>
-          {status && <span className={styles.status}>{status}</span>}
-        </div>
-      )}
-
-      <header className={styles.head}>
-        <div className={styles.teamsRow}>
-          <div className={[styles.teamInfo, styles.away].join(" ")}>
-            <img className={styles.teamLogo} src={away_logo} alt={`${away_team} logo`} />
-            <span className={styles.teamName}>{away_team}</span>
-          </div>
-          <span className={styles.atSymbol} aria-hidden>@</span>
-          <div className={[styles.teamInfo, styles.home].join(" ")}>
-            <img className={styles.teamLogo} src={home_logo} alt={`${home_team} logo`} />
-            <span className={styles.teamName}>{home_team}</span>
-          </div>
-        </div>
-        <div className={styles.meta}>
-          <time className={styles.kickoff} dateTime={kickoff}>
-            {kickoff ? new Date(kickoff).toLocaleString() : "TBD"}
-          </time>
-        </div>
+      <header className="game-card__header">
+        <span className="game-card__week">W{displayWeek}</span>
+        <span className="game-card__kickoff">{kickoffLabel}</span>
       </header>
 
-      <section className={styles.prediction}>
-        {loading ? (
-          <p className={styles.cta} aria-live="polite">Predicting…</p>
-        ) : error ? (
-          <p className={styles.errorMsg} role="status">{error}</p>
-        ) : hasPrediction ? (
-          <div className={styles.predictionBody}>
-            <div className={styles.probRow}><span>Home</span><b>{pct(prediction.home_win_probability)}%</b></div>
-            <div className={styles.probRow}><span>Away</span><b>{pct(prediction.away_win_probability)}%</b></div>
-            {/* Optional numeric details if present */}
-            {(prediction.home_score != null || prediction.away_score != null || prediction.point_diff != null) && (
-              <div className={styles.detailRow}>
-                <span>Score</span>
-                <b>
-                  {away_team} {prediction.away_score ?? "—"} – {prediction.home_score ?? "—"} {home_team}
-                  {prediction.point_diff != null && <em className={styles.diff}> • Δ {prediction.point_diff.toFixed?.(1) ?? prediction.point_diff}</em>}
-                </b>
-              </div>
-            )}
-          </div>
-        ) : (
-          <p className={styles.cta} aria-live="polite">Click to generate prediction</p>
-        )}
-      </section>
+      <div className="game-card__teams">
+        <div className="game-card__team game-card__team--away">
+          {away_logo && (
+            <img
+              src={away_logo}
+              alt={`${awayTeam} logo`}
+              className="game-card__logo"
+              loading="lazy"
+            />
+          )}
+          <span className="game-card__label">Away</span>
+          <span className="game-card__name">{awayTeam}</span>
+        </div>
 
-      {/* Optional progress meter */}
-      {typeof progress === "number" && isFinite(progress) && (
-        <div className={styles.progressTrack} aria-hidden>
-          <div className={styles.progressBar} style={{ width: `${Math.max(0, Math.min(100, progress))}%` }} />
+        <div className="game-card__vs"> @ </div>
+
+        <div className="game-card__team game-card__team--home">
+          {home_logo && (
+            <img
+              src={home_logo}
+              alt={`${homeTeam} logo`}
+              className="game-card__logo"
+              loading="lazy"
+            />
+          )}
+          <span className="game-card__label">Home</span>
+          <span className="game-card__name">{homeTeam}</span>
+        </div>
+      </div>
+
+      {venue && (
+        <div className="game-card__venue" title={venue}>
+          {venue}
         </div>
       )}
+
+      <footer className="game-card__footer">
+        {isLoading ? (
+          <span className="game-card__prediction game-card__prediction--loading">
+            Fetching prediction...
+          </span>
+        ) : hasPrediction ? (
+          <div className="game-card__prediction">
+            <span className="game-card__prediction-label">Model Score</span>
+            <div className="game-card__prediction-row">
+              <span className="game-card__prediction-team">
+                {awayTeam}: <strong>{
+                  away_pred_score == null
+                    ? ''
+                    : (away_pred_score.toFixed?.(1) ?? away_pred_score)
+                }</strong>
+              </span>
+              <span className="game-card__prediction-team">
+                {homeTeam}: <strong>{
+                  home_pred_score == null
+                    ? ''
+                    : (home_pred_score.toFixed?.(1) ?? home_pred_score)
+                }</strong>
+              </span>
+            </div>
+          </div>
+        ) : (
+          <span className="game-card__prediction game-card__prediction--empty">
+            Predictions not available yet
+          </span>
+        )}
+
+        {winProbLabel && (
+          <div className="game-card__winprob">
+            <span className="game-card__winprob-label">Home win chance</span>
+            <span className="game-card__winprob-value">{winProbLabel}</span>
+            <div
+              className="game-card__winprob-bar"
+              aria-hidden="true"
+            >
+              <div
+                className="game-card__winprob-fill"
+                style={{ width: winProbLabel }}
+              />
+            </div>
+          </div>
+        )}
+
+        {error && !isLoading && (
+          <div className="game-card__error" role="status">
+            {error}
+          </div>
+        )}
+      </footer>
     </article>
   );
 }
+
+export default Card;

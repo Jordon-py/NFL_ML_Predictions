@@ -59,6 +59,12 @@
   --lch-border: lch(80% 10 250 / 0.20);
   --lch-text: lch(95% 4 250);
   --lch-muted: lch(85% 6 250 / 0.85);
+
+  /* Nav health indicators + focus rings (converted to LCH-based tokens) */
+  --color-health-ok: lch(70% 60 145);
+  --color-health-error: lch(60% 65 30);
+  --color-health-unknown: lch(70% 8 260);
+  --color-focus-ring: var(--lch-primary);
 }
 
 /* --- Base & global layout ------------------------------------------------ */
@@ -97,7 +103,7 @@ body {
   body {
     background-attachment: scroll;
   }
-  
+
 }
 
 

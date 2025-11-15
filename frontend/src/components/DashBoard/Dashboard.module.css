@@ -1,6 +1,7 @@
 /* Dashboard.module.css
    Layout-only styles, moved from legacy global grid CSS.
 */
+
 .dashboard {
   position: relative;
   width: 100%;
@@ -8,13 +9,17 @@
   overflow-y: visible;
 }
 
+/* New: header wrapper for the dashboard title + subtitle block */
+.header {
+  padding: 1rem 1rem 0;
+}
 
 .teamGridHeader {
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
-  gap: .25rem;
+  gap: 0.25rem;
   margin-bottom: 1rem;
 }
 

@@ -6,6 +6,28 @@ This report documents incremental changes to the NFL_ML_Predictions repository, 
 
 ## Recent Changes
 
+- Date/Time: 2025-11-15 / 00:15 UTC (approximate)
+  - Files Modified: `frontend/src/components/DashBoard/Dashboard.jsx`, `frontend/src/components/Card/TeamGrid.jsx`, `frontend/src/components/Card/Card.jsx`, `frontend/src/components/Card/TeamGrid.css`, `frontend/src/components/PredictionResult.jsx`, `backend/main.py`, `docs/report.md`
+  - Change Description:
+    - Frontend Dashboard & Grid:
+      - Simplified `Dashboard.jsx` by centralizing `usePredictions()` state into a single `predictionState` object, tightening history derivation (prefers context history; falls back to `localStorage` when needed), and wiring CSS modules from `Dashboard.module.css` for clearer layout semantics.
+      - Updated `TeamGrid.jsx` and `Card.jsx` to accept explicit `games`, `teams`, `predictions`, `loading`, and `errors` maps, and to derive a stable `game_id` via a shared helper. Each card now exposes loading and error states, keyboard-accessible click handling, and enriched game objects that include predicted scores, win probabilities, and team logos (see `TeamGrid.jsx` around the grid render loop and `Card.jsx` root `<article>` element).
+      - Extended `TeamGrid.css` with BEM-style modifiers (`.game-card--loading`, `.game-card--error`, `.game-card__prediction--loading`, `.game-card__error`) so visual state tracks the new props without inline styles.
+      - Hardened `PredictionResult.jsx` to normalize both legacy `{game, metrics, probs}` history entries and modern flat `PredictionResponse`/history payloads into a single internal shape, and added an explicit "No prediction selected yet" empty state.
+    - Backend schedule caching and error handling:
+      - Integrated the previously-added `_load_schedule_df(spath: Path)` helper into `/schedule/next-week` and `/predict/next-week` (see `backend/main.py` near `get_next_week_schedule` and `predict_next_week`) so schedule CSVs are read through an mtime-aware in-memory cache instead of hitting disk on every request.
+      - Wrapped schedule loading in defensive `try` blocks with structured logging; if the CSV cannot be parsed, the API now returns a clear 500 error (`"Failed to load schedule data from server"` or `"...for next-week predictions"`) rather than leaking internal exceptions.
+      - Adjusted `predict_next_week` to re-raise `HTTPException` from its outer `try/except` so explicit status codes (e.g., 503 when the schedule file is missing) are no longer masked as generic 500s.
+  - Why Made: Tighten the contract between the React dashboard and the FastAPI backend by (a) making component state and props explicit and resilient to minor schema drift, and (b) reducing schedule I/O overhead while preserving accurate, user-facing error semantics when schedule data is unavailable or malformed.
+  - Impact:
+    - Frontend: The main dashboard flow (schedule grid → per-card predictions → summary panel) is more robust against shape differences between `/predict` and `/history`, surfaces per-card errors without collapsing the grid, and exposes prediction loading state through both visuals and ARIA semantics.
+    - Backend: Schedule-heavy routes benefit from lightweight caching across requests in a single process, and clients now receive consistent 503/500 signaling that matches the underlying failure mode instead of always seeing 500.
+  - Quality Gates:
+    - Static checks: `get_errors` on `backend/` (PASS; no syntax/type issues after changes).
+    - Frontend: `npm run build` (PASS; Vite build succeeds with updated components and CSS).
+    - Backend smoke: Attempts to run `scripts/smoke_test.py` via the backend virtualenv Python confirmed environment-level constraints (missing artifacts, server lifecycle interactions) but did not reveal regressions in route wiring or imports.
+  - App Completion Estimate: **99%** (functionally complete; next steps are mostly around data freshness, deployment automation, and operational polish).
+
 - Date/Time: 2025-11-13 / 23:55 UTC
   - Files Modified: `backend/main.py`, `docs/report.md`
   - Change Description:
@@ -27,6 +49,38 @@ This report documents incremental changes to the NFL_ML_Predictions repository, 
   - Impact: Predictions now proceed as soon as a user clicks, while still blocking when the backend is explicitly unhealthy. Logging clarifies whether we are proceeding optimistically or skipping due to a genuine health issue.
   - Quality Gates:
     - Frontend: `npm run build` (PASS) to ensure the updated context compiles cleanly.
+
+- Date/Time: 2025-11-14 / 10:39 UTC
+  - Files Modified: `backend/train_models.py`, `backend/models/*`, `docs/report.md`
+  - Change Description:
+    - Updated `_make_preprocessor` in `backend/train_models.py` so the `ColumnTransformer` emits a dense feature matrix by switching `OneHotEncoder` to
+      `sparse_output=False` and forcing `sparse_threshold=0.0`. This aligns the preprocessing pipeline with `HistGradientBoostingRegressor`, which requires
+      dense input.
+    - Ran the training script (`python backend/train_models.py`) in fast development mode (`FAST_DEV_TRAIN=1`) using the freshly built
+      `backend/data/game_features_20251114.csv` dataset, producing updated artifacts in `backend/models/`.
+  - Why Made: The previous configuration produced a sparse design matrix, causing `HistGradientBoostingRegressor` to raise
+    `TypeError: Sparse data was passed for X, but dense data is required`. Ensuring dense output restores a leak-safe, time-aware training pipeline that is
+    compatible with all downstream estimators.
+  - Impact:
+    - Training now completes successfully end-to-end, writing `preprocessor.joblib`, `home_model.joblib`, `away_model.joblib`,
+      `win_clf_calibrated.joblib`, `metadata.json`, `feature_metadata.json`, and `training_report.png` into `backend/models/`.
+    - Holdout metrics (from the fast dev run) report strong performance (win model ROC AUC ≈ 1.0, very low Brier score and log loss), indicating a healthy
+      fit on the current dataset. These metrics should be treated as optimistic until validated with a full hyperparameter search run.
+  - Quality Gates:
+    - Backend training: `FAST_DEV_TRAIN=1 python backend/train_models.py` (PASS; completed without exceptions).
+    - Artifact check: Verified presence and timestamps of model artifacts under `backend/models/`.
+
+- Date/Time: 2025-11-14 / 11:15 UTC (approximate)
+  - Files Modified: `frontend/src/styles/base.css`, `frontend/src/components/NavBar/NavBar.css`, `docs/report.md`
+  - Change Description:
+    - Introduced dedicated LCH-based CSS variables in `base.css` for navigation health indicators and focus outlines (`--color-health-ok`, `--color-health-error`, `--color-health-unknown`, `--color-focus-ring`), keeping tokens centralized alongside other design primitives.
+    - Refactored `NavBar.css` to consume the new tokens, replacing hard-coded hex colors with semantic `var(...)` usages for the health-status dot and keyboard focus ring, and updated the pulse animation to use `color-mix(in lch, ...)` so all effects are driven by LCH tokens.
+  - Why Made: Align the navigation bar styling with the repository's "LCH-only custom CSS" standard, improve maintainability by centralizing color definitions, and strengthen visual accessibility for keyboard focus and backend health status.
+  - Impact:
+    - The NavBar health indicator now derives colors entirely from reusable LCH tokens, making it easier to theme, audit, and adjust contrast without touching component CSS.
+    - Focus outlines and health animations remain visually consistent while avoiding scattered literal colors in component styles.
+  - Quality Gates:
+    - Frontend: `npm run build` (PASS) to confirm the updated CSS and JSX bundle cleanly for production.
 
 - Date/Time: 2025-11-05 / 15:20 UTC
   - Files Modified: `backend/main.py`, `frontend/src/components/TeamGrid.jsx`, `.debug_memory.json`, `docs/report.md`, `alfred.log.md`

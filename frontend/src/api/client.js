@@ -38,25 +38,37 @@ const RETRY_BASE_MS = 300;     // backoff base
 const JITTER_FRAC = 0.25;      // up to +25% random jitter
 
 // ---------- Tiny in-memory cache for idempotent GETs ----------
+/** @type {Map<string, { expiresAt: number; data: any }>} */
 const _cache = new Map(); // key: url, value: { expiresAt:number, data:any }
+/** @param {string} url */
 function readCache(url) {
   const e = _cache.get(url);
   if (!e) return undefined;
   if (Date.now() > e.expiresAt) { _cache.delete(url); return undefined; }
   return e.data;
 }
+/**
+ * @param {string} url
+ * @param {any} data
+ * @param {number} ttlMs
+ */
 function writeCache(url, data, ttlMs) {
   if (!ttlMs || ttlMs <= 0) return;
   _cache.set(url, { expiresAt: Date.now() + ttlMs, data });
 }
 
 // ---------- URL helpers ----------
+/** @param {string} base */
 function normalizeBase(base) {
   if (!base) return "";
   let b = String(base).trim();
   if (b.includes(",")) b = b.split(",").map(s => s.trim()).find(Boolean) || ""; // pick first
   return b.replace(/\/+$/, "");
 }
+/**
+ * @param {string} base
+ * @param {string} path
+ */
 function joinUrl(base, path) {
   const b = normalizeBase(base);
   const p = String(path || "").trim().replace(/^\/+/, "");
@@ -64,6 +76,7 @@ function joinUrl(base, path) {
 }
 
 /** Validate absolute URLs to prevent accidental text like "VITE_API_BASE not set" from becoming a base. */
+/** @param {string} maybeUrl */
 function isValidAbsoluteUrl(maybeUrl) {
   if (!maybeUrl || typeof maybeUrl !== "string") return false;
   const s = maybeUrl.trim();
@@ -76,32 +89,44 @@ function isValidAbsoluteUrl(maybeUrl) {
 
 // Base URL resolution with strong guards against invalid env strings
 function resolveApiBase() {
-  const herokuFallback = "https://nfl-predict-ecf5a5bd34fe.herokuapp.com"; // <- replace if needed
-  const fromEnvRaw = import.meta?.env?.VITE_API_BASE || "";
+  const herokuFallback = "https://nfl-predict-ecf5a5bd34fe.herokuapp.com"; 
+  /** @type {any} */
+  const meta = import.meta;
+  const fromEnvRaw = (meta && meta.env && meta.env.VITE_API_BASE) || "";
   const fromEnv = normalizeBase(fromEnvRaw);
   const host = (typeof window !== "undefined" && window.location && window.location.hostname) || "";
   const isLocalHost = /^(localhost|127\.0\.0\.1)$/i.test(host);
 
   // DEV: rely on Vite proxy; use relative URLs only
-  if (isLocalHost) return "";
+  if (isLocalHost) 
+    return herokuFallback;
 
   // PROD: only trust env if it looks like a full http(s) URL
-  if (fromEnv && isValidAbsoluteUrl(fromEnv)) return fromEnv;
+  if (fromEnv && isValidAbsoluteUrl(fromEnv)) 
+    return fromEnv;
 
   // If env exists but invalid, log once and fall back
-  if (fromEnv && typeof window !== "undefined" && !window.__NFL_API_BASE_INVALID_WARNED__) {
-    try {
-      console.error(`[NFL-ML] Ignoring invalid VITE_API_BASE=\"${fromEnvRaw}\". It must start with http(s) and contain no spaces.`);
-      window.__NFL_API_BASE_INVALID_WARNED__ = true;
-    } catch { }
+  if (fromEnv && typeof window !== "undefined") {
+    /** @type {any} */
+    const w = window;
+    if (!w.__NFL_API_BASE_INVALID_WARNED__) {
+      try {
+        console.error(`[NFL-ML] Ignoring invalid VITE_API_BASE=\"${fromEnvRaw}\". It must start with http(s) and contain no spaces.`);
+        w.__NFL_API_BASE_INVALID_WARNED__ = true;
+      } catch { }
+    }
   }
 
   // Final fallback (Heroku or your hosted backend)
-  if (typeof window !== "undefined" && !window.__NFL_API_BASE_FALLBACK_WARNED__) {
-    try {
-      console.warn("[NFL-ML] Using Heroku API fallback. Set Vercel env VITE_API_BASE to your backend URL.");
-      window.__NFL_API_BASE_FALLBACK_WARNED__ = true;
-    } catch { }
+  if (typeof window !== "undefined") {
+    /** @type {any} */
+    const w2 = window;
+    if (!w2.__NFL_API_BASE_FALLBACK_WARNED__) {
+      try {
+        console.warn("[NFL-ML] Using Heroku API fallback. Set Vercel env VITE_API_BASE to your backend URL.");
+        w2.__NFL_API_BASE_FALLBACK_WARNED__ = true;
+      } catch { }
+    }
   }
   return herokuFallback;
 }
@@ -109,7 +134,14 @@ export const API_BASE = resolveApiBase();
 
 // ---------- Error type ----------
 export class ApiError extends Error {
-  /** @param {number} status @param {string} message @param {any} payload @param {string} url @param {Headers} headers @param {number=} retryAfterMs */
+  /**
+   * @param {number} status
+   * @param {string} message
+   * @param {any} [payload]
+   * @param {string} [url]
+   * @param {Headers} [headers]
+   * @param {number} [retryAfterMs]
+   */
   constructor(status, message, payload, url, headers, retryAfterMs) {
     super(message);
     this.name = "ApiError";
@@ -122,10 +154,13 @@ export class ApiError extends Error {
 }
 
 // ---------- Retry/timeout fetch ----------
-const delay = (ms) => new Promise(r => setTimeout(r, ms));
+/** @param {number} ms */
+const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+/** @param {number} ms */
 const withJitter = (ms) => Math.floor(ms * (1 + Math.random() * JITTER_FRAC));
 
 /** Parse Retry-After header into ms. Supports delta-seconds or http-date. */
+/** @param {Headers} headers */
 function parseRetryAfterMs(headers) {
   const ra = headers?.get?.("Retry-After");
   if (!ra) return undefined;
@@ -137,11 +172,14 @@ function parseRetryAfterMs(headers) {
 }
 
 /** Decide if an error is worth retrying */
+/** @param {unknown} err */
 function isRetriable(err) {
   if (!err) return false;
-  if (err?.name === "AbortError") return true;
-  if (err instanceof TypeError) return true; // network
-  const s = /** @type {any} */(err).status;
+  /** @type {any} */
+  const anyErr = err;
+  if (anyErr?.name === "AbortError") return true;
+  if (anyErr instanceof TypeError) return true; // network
+  const s = anyErr.status;
   return typeof s === "number" && (s >= 500 || s === 429);
 }
 
@@ -151,13 +189,19 @@ function isRetriable(err) {
  * @param {RequestInit & {cacheTtlMs?: number}} init
  * @param {{ timeoutMs?: number, retries?: number, cacheTtlMs?: number }} opts
  */
-async function api(path, init = {}, { timeoutMs = DEFAULT_TIMEOUT_MS, retries = RETRY_ATTEMPTS, cacheTtlMs } = {}) {
+/**
+ * @param {string} path
+ * @param {RequestInit & {cacheTtlMs?: number}} [init]
+ * @param {{ timeoutMs?: number, retries?: number, cacheTtlMs?: number }} [opts]
+ */
+async function api(path, init = {}, opts = {}) {
+  const { timeoutMs = DEFAULT_TIMEOUT_MS, retries = RETRY_ATTEMPTS, cacheTtlMs } = opts;
   const isAbsolute = /^https?:\/\//i.test(String(path));
   const url = isAbsolute ? String(path) : joinUrl(API_BASE, path);
 
   // Simple GET cache (idempotent only)
   const method = (init.method || "GET").toUpperCase();
-  const effectiveTtl = init.cacheTtlMs ?? cacheTtlMs;
+  const effectiveTtl = (/** @type {any} */(init)).cacheTtlMs ?? cacheTtlMs;
   if (method === "GET" && effectiveTtl) {
     const cached = readCache(url);
     if (cached !== undefined) return cached;
@@ -170,7 +214,8 @@ async function api(path, init = {}, { timeoutMs = DEFAULT_TIMEOUT_MS, retries = 
 
     try {
       const hasBody = Object.prototype.hasOwnProperty.call(init, "body") && init.body != null;
-      const headers = { ...(init?.headers || {}) };
+      /** @type {Record<string, string>} */
+      const headers = { ...(/** @type {any} */(init)?.headers || {}) };
       // Only set JSON Content-Type when body is a string (postJson uses stringified body)
       if (hasBody && typeof init.body === "string" && !("Content-Type" in headers)) headers["Content-Type"] = "application/json";
       if (!("Accept" in headers)) headers["Accept"] = "application/json, text/plain;q=0.9, */*;q=0.8";
@@ -178,8 +223,8 @@ async function api(path, init = {}, { timeoutMs = DEFAULT_TIMEOUT_MS, retries = 
       const res = await fetch(url, { credentials: "omit", ...init, headers, signal: controller.signal });
       const ctype = String(res.headers.get("Content-Type") || "");
 
-      const parseJson = async () => { try { return await res.json(); } catch { return null; } };
-      const parseText = async () => { try { return await res.text(); } catch { return null; } };
+      const parseJson = async () => { try { return await res.json(); } catch { return res.text; } };
+      const parseText = async () => { try { return await res.text(); } catch { return res.json; } };
 
       if (!res.ok) {
         const payload = ctype.includes("application/json") ? await parseJson() : await parseText();
@@ -205,7 +250,9 @@ async function api(path, init = {}, { timeoutMs = DEFAULT_TIMEOUT_MS, retries = 
 }
 
 // Convenience wrappers
+/** @param {string} path @param {{ timeoutMs?: number, retries?: number, cacheTtlMs?: number }} [opts] */
 const get = (path, opts = {}) => api(path, { ...opts, method: "GET" }, opts);
+/** @param {string} path @param {any} body @param {{ timeoutMs?: number, retries?: number, cacheTtlMs?: number }} [opts] */
 const postJson = (path, body, opts = {}) => api(path, { ...opts, method: "POST", body: JSON.stringify(body) }, opts);
 
 // ---------- Team coercion & validation ----------
@@ -213,6 +260,7 @@ const TEAM_ABBR = new Set([
   "ARI", "ATL", "BAL", "BUF", "CAR", "CHI", "CIN", "CLE", "DAL", "DEN", "DET", "GB", "HOU", "IND", "JAX", "KC",
   "LV", "LAC", "LAR", "MIA", "MIN", "NE", "NO", "NYG", "NYJ", "PHI", "PIT", "SF", "SEA", "TB", "TEN", "WAS"
 ]);
+/** @type {Record<string, string>} */
 const TEAM_NAME_TO_ABBR = {
   "Arizona Cardinals": "ARI", "Atlanta Falcons": "ATL", "Baltimore Ravens": "BAL", "Buffalo Bills": "BUF",
   "Carolina Panthers": "CAR", "Chicago Bears": "CHI", "Cincinnati Bengals": "CIN", "Cleveland Browns": "CLE",
@@ -225,6 +273,7 @@ const TEAM_NAME_TO_ABBR = {
   // legacy / relocations (best-effort)
   "LA": "LAR", "STL": "LAR", "SD": "LAC", "OAK": "LV", "WSH": "WAS"
 };
+/** @param {string|number|undefined} value */
 function coerceTeam(value) {
   if (!value && value !== 0) throw new ApiError(400, "Missing team", null, "coerceTeam");
   const s = String(value).trim();
@@ -234,6 +283,12 @@ function coerceTeam(value) {
   if (TEAM_NAME_TO_ABBR[title]) return TEAM_NAME_TO_ABBR[title];
   throw new ApiError(400, `Unknown team: ${value}`, null, "coerceTeam");
 }
+/**
+ * @param {number|string|undefined} n
+ * @param {number} lo
+ * @param {number} hi
+ * @param {string} label
+ */
 function clampInt(n, lo, hi, label) {
   const x = Number(n);
   if (!Number.isFinite(x) || !Number.isInteger(x)) throw new ApiError(400, `${label} must be an integer`, null, "clampInt");
@@ -259,7 +314,9 @@ export function toPredictionRequest({ homeTeam, awayTeam, season, week, home_abb
 
 // ---------- Public API ----------
 export function createApi(base = API_BASE) {
+  /** @param {string} p @param {{ timeoutMs?: number, retries?: number, cacheTtlMs?: number }} [o] */
   const _get = (p, o) => api(joinUrl(base, p), { ...o, method: "GET" }, o);
+  /** @param {string} p @param {any} b @param {{ timeoutMs?: number, retries?: number, cacheTtlMs?: number }} [o] */
   const _post = (p, b, o) => api(joinUrl(base, p), { ...o, method: "POST", body: JSON.stringify(b) }, o);
 
   return {
@@ -274,6 +331,7 @@ export function createApi(base = API_BASE) {
     predictNextWeek: () => _get("/predict/next-week"),
 
     /** Single-game prediction (validated) */
+    /** @param {any} params */
     predictGame: (params) => _post("/predict", toPredictionRequest(params)),
 
     /** History + status endpoints */
