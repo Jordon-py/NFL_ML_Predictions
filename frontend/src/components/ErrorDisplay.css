@@ -1,0 +1,36 @@
+:root {
+    --error-bg: lch(97% 12 30);
+    --error-border: lch(70% 60 30);
+    --error-text: lch(25% 15 20);
+    --error-button-bg: lch(70% 60 40);
+    --error-button-bg-hover: lch(65% 60 40);
+    --error-button-text: lch(12% 10 260);
+}
+
+.error-display {
+    padding: 1rem 1.25rem;
+    margin: 0.75rem 0;
+    border-radius: 0.5rem;
+    border: 1px solid var(--error-border);
+    background: var(--error-bg);
+    color: var(--error-text);
+}
+
+.error-display__message {
+    margin: 0 0 0.5rem;
+}
+
+.error-display__retry {
+    border: none;
+    border-radius: 999px;
+    padding: 0.4rem 0.9rem;
+    font-size: 0.9rem;
+    cursor: pointer;
+    background: var(--error-button-bg);
+    color: var(--error-button-text);
+}
+
+.error-display__retry:hover,
+.error-display__retry:focus-visible {
+    background: var(--error-button-bg-hover);
+}

@@ -29,415 +29,487 @@
  * - Per-call opts: api(path, init, { timeoutMs: 10000, retries: 1, cacheTtlMs: 5000 })
  */
 
-/** @typedef {{home_team: string, away_team: string, season: number, week: number}} PredictionRequest */
-/** @typedef {{status:number,message:string,payload?:any,url?:string,headers?:Headers,retryAfterMs?:number}} ApiErrorLike */
-
-const DEFAULT_TIMEOUT_MS = 15000;
-const RETRY_ATTEMPTS = 2;      // total tries = 1 + RETRY_ATTEMPTS
-const RETRY_BASE_MS = 300;     // backoff base
-const JITTER_FRAC = 0.25;      // up to +25% random jitter
-
-// ---------- Tiny in-memory cache for idempotent GETs ----------
-/** @type {Map<string, { expiresAt: number; data: any }>} */
-const _cache = new Map(); // key: url, value: { expiresAt:number, data:any }
-/** @param {string} url */
-function readCache(url) {
-  const e = _cache.get(url);
-  if (!e) return undefined;
-  if (Date.now() > e.expiresAt) { _cache.delete(url); return undefined; }
-  return e.data;
-}
 /**
- * @param {string} url
- * @param {any} data
- * @param {number} ttlMs
+ * Enhanced NFL-ML API Client with Type Safety
  */
-function writeCache(url, data, ttlMs) {
-  if (!ttlMs || ttlMs <= 0) return;
-  _cache.set(url, { expiresAt: Date.now() + ttlMs, data });
-}
 
-// ---------- URL helpers ----------
-/** @param {string} base */
-function normalizeBase(base) {
-  if (!base) return "";
-  let b = String(base).trim();
-  if (b.includes(",")) b = b.split(",").map(s => s.trim()).find(Boolean) || ""; // pick first
-  return b.replace(/\/+$/, "");
-}
+// Type Definitions
 /**
- * @param {string} base
- * @param {string} path
+ * @typedef {Object} PredictionRequest
+ * @property {string} home_team
+ * @property {string} away_team  
+ * @property {number} season
+ * @property {number} week
  */
-function joinUrl(base, path) {
-  const b = normalizeBase(base);
-  const p = String(path || "").trim().replace(/^\/+/, "");
-  return b ? `${b}/${p}` : `/${p}`;
-}
 
-/** Validate absolute URLs to prevent accidental text like "VITE_API_BASE not set" from becoming a base. */
-/** @param {string} maybeUrl */
-function isValidAbsoluteUrl(maybeUrl) {
-  if (!maybeUrl || typeof maybeUrl !== "string") return false;
-  const s = maybeUrl.trim();
-  if (s.includes(" ")) return false; // no spaces allowed
-  try {
-    const u = new URL(s);
-    return /^https?:$/.test(u.protocol);
-  } catch { return false; }
-}
-
-// Base URL resolution with strong guards against invalid env strings
 /**
- * Resolve the effective API base URL for the current environment.
- *
- * Rules:
- * - In dev (localhost) → return an empty string so calls are relative and
- *   can be proxied by Vite to the backend.
- * - In production (non-localhost) → prefer VITE_API_BASE if it looks like
- *   a full http(s) URL; otherwise fall back to a baked-in backend URL.
- *
- * This keeps dev setup simple while making Vercel/Heroku deployment explicit.
- *
- * @returns {string} Base URL ("" for same-origin relative calls).
+ * @typedef {Object} PredictionResponse
+ * @property {number} home_score
+ * @property {number} away_score
+ * @property {number} home_win_probability
+ * @property {number} away_win_probability
+ * @property {number} point_diff
+ * @property {string} mode
+ * @property {string} prediction_source
+ * @property {boolean} win_classifier_used
+ * @property {string} win_probability_source
+ * @property {number} [win_threshold_used]
+ * @property {number} [confidence_score]
  */
-function resolveApiBase() {
-  const herokuFallback = "https://nfl-predict-ecf5a5bd34fe.herokuapp.com";
-  /** @type {any} */
-  const meta = import.meta;
-  const fromEnvRaw = (meta && meta.env && meta.env.VITE_API_BASE) || "";
-  const fromEnv = normalizeBase(fromEnvRaw);
-  const host =
-    (typeof window !== "undefined" &&
-      window.location &&
-      window.location.hostname) ||
-    "";
-  const isLocalHost = /^(localhost|127\.0\.0\.1)$/i.test(host);
 
-  // DEV: rely on Vite proxy; use relative URLs only
-  // When running on localhost, use a relative base so Vite can proxy
-  // API calls to the backend (configured in vite.config.js).
-  if (isLocalHost)
-    return "";
+/**
+ * @typedef {Object} ApiConfig
+ * @property {number} [timeoutMs]
+ * @property {number} [retries]
+ * @property {number} [cacheTtlMs]
+ * @property {string} [baseUrl]
+ */
 
-  // PROD: only trust env if it looks like a full http(s) URL
-  if (fromEnv && isValidAbsoluteUrl(fromEnv))
-    return fromEnv;
+class TypedApiClient {
+  /**
+   * @param {ApiConfig} config
+   */
+  constructor(config = {}) {
+    this.config = {
+      timeoutMs: config.timeoutMs || 15000,
+      retries: config.retries || 2,
+      cacheTtlMs: config.cacheTtlMs || 0,
+      baseUrl: config.baseUrl || this.resolveBaseUrl(),
+      ...config
+    };
 
-  // If env exists but invalid, log once and fall back
-  if (fromEnv && typeof window !== "undefined") {
-    /** @type {any} */
-    const w = window;
-    if (!w.__NFL_API_BASE_INVALID_WARNED__) {
+    this.cache = new Map();
+    this.requestQueue = new Map();
+  }
+
+  // Enhanced URL resolution with validation
+  resolveBaseUrl() {
+    // Guard against non-Vite environments where `import.meta.env` may not
+    // be declared in type definitions.
+    const meta = typeof import.meta !== 'undefined' ? /** @type {any} */ (import.meta) : {};
+    const envUrl = meta.env && typeof meta.env.VITE_API_BASE === 'string'
+      ? meta.env.VITE_API_BASE
+      : undefined;
+    const isLocalhost = window.location.hostname.includes('localhost');
+
+    if (envUrl && this.isValidUrl(envUrl)) {
+      return envUrl;
+    }
+
+    if (isLocalhost) {
+      return ''; // Use relative URLs for local development
+    }
+
+    return 'https://nfl-predict-ecf5a5bd34fe.herokuapp.com';
+  }
+
+  /**
+   * @param {string} url
+   * @returns {boolean}
+   */
+  isValidUrl(url) {
+    try {
+      new URL(url);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * @param {string} path
+   * @param {RequestInit} init
+   * @param {ApiConfig} options
+   * @returns {Promise<any>}
+   */
+  async request(path, init = {}, options = {}) {
+    const mergedOptions = { ...this.config, ...options };
+    const url = this.buildUrl(path, mergedOptions.baseUrl);
+    const cacheKey = init.method === 'GET' ? url : null;
+
+    // Check cache for GET requests
+    if (cacheKey && mergedOptions.cacheTtlMs > 0) {
+      const cached = this.getCache(cacheKey);
+      if (cached !== undefined) {
+        return cached;
+      }
+    }
+
+    // Prevent duplicate requests
+    if (this.requestQueue.has(url)) {
+      return this.requestQueue.get(url);
+    }
+
+    const requestPromise = this.executeRequest(url, init, mergedOptions);
+    this.requestQueue.set(url, requestPromise);
+
+    try {
+      const result = await requestPromise;
+
+      // Cache successful GET responses
+      if (cacheKey && mergedOptions.cacheTtlMs > 0) {
+        this.setCache(cacheKey, result, mergedOptions.cacheTtlMs);
+      }
+
+      return result;
+    } finally {
+      this.requestQueue.delete(url);
+    }
+  }
+
+  /**
+   * @param {string} url
+   * @param {RequestInit} init
+   * @param {ApiConfig} options
+   * @returns {Promise<any>}
+   */
+  async executeRequest(url, init, options) {
+    const maxRetries = typeof options.retries === 'number' ? options.retries : 0;
+    const timeoutMs = typeof options.timeoutMs === 'number' ? options.timeoutMs : this.config.timeoutMs;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
       try {
-        console.error(
-          `[NFL-ML] Ignoring invalid VITE_API_BASE="${fromEnvRaw}". It must start with http(s) and contain no spaces.`
-        );
-        w.__NFL_API_BASE_INVALID_WARNED__ = true;
-      } catch {
-        // ignore logging failures
+        const response = await fetch(url, {
+          ...init,
+          signal: controller.signal,
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            ...init.headers
+          }
+        });
+
+        if (!response.ok) {
+          throw await this.createApiError(response, url);
+        }
+
+        const contentType = response.headers.get('content-type');
+        const data = contentType?.includes('application/json')
+          ? await response.json()
+          : await response.text();
+
+        return this.validateResponse(data, init.method || 'GET', url);
+
+      } catch (/** @type {any} */ error) {
+        if (attempt === maxRetries || !this.isRetriable(error)) {
+          throw error;
+        }
+
+        await this.delay(this.calculateBackoff(attempt, error));
+      } finally {
+        clearTimeout(timeoutId);
       }
     }
   }
 
-  // Final fallback (Heroku or your hosted backend)
-  if (typeof window !== "undefined") {
-    /** @type {any} */
-    const w2 = window;
-    if (!w2.__NFL_API_BASE_FALLBACK_WARNED__) {
-      try {
-        console.warn(
-          "[NFL-ML] Using Heroku API fallback. Set Vercel env VITE_API_BASE to your backend URL."
-        );
-        w2.__NFL_API_BASE_FALLBACK_WARNED__ = true;
-      } catch {
-        // ignore logging failures
-      }
+  /**
+   * @param {Response} response
+   * @param {string} url
+   * @returns {Promise<ApiError>}
+   */
+  async createApiError(response, url) {
+    let payload;
+    try {
+      payload = await response.json();
+    } catch {
+      payload = await response.text();
+    }
+
+    return new ApiError(
+      response.status,
+      payload?.detail || payload?.message || response.statusText,
+      payload,
+      url,
+      response.headers
+    );
+  }
+
+  /**
+   * @param {any} data
+   * @param {string} method
+   * @param {string} url
+   * @returns {any}
+   */
+  validateResponse(data, method, url) {
+    // Always validate prediction responses regardless of HTTP verb so
+    // both POST /predict and any future GET-based prediction endpoints
+    // share the same contract checks.
+    if (url.includes('/predict') && data) {
+      return this.validatePredictionResponse(data);
+    }
+    return data;
+  }
+
+  /**
+   * @param {any} data
+   * @returns {PredictionResponse}
+   */
+  validatePredictionResponse(data) {
+    const required = ['home_score', 'away_score', 'home_win_probability', 'point_diff'];
+    const missing = required.filter(field => data[field] === undefined);
+
+    if (missing.length > 0) {
+      throw new ApiError(500, `Invalid prediction response: missing ${missing.join(', ')}`);
+    }
+
+    return data;
+  }
+
+  // Prediction-specific methods with enhanced validation
+  /**
+   * @param {PredictionRequest} request
+   * @param {ApiConfig} options
+   * @returns {Promise<PredictionResponse>}
+   */
+  async predictGame(request, options = {}) {
+    this.validatePredictionRequest(request);
+
+    return this.request('/predict', {
+      method: 'POST',
+      body: JSON.stringify(request)
+    }, options);
+  }
+
+  /**
+   * @param {PredictionRequest} request
+   */
+  validatePredictionRequest(request) {
+    if (!request.home_team || !request.away_team) {
+      throw new ApiError(400, 'Home and away team are required');
+    }
+
+    if (request.season < 2000 || request.season > 2100) {
+      throw new ApiError(400, 'Season must be between 2000 and 2100');
+    }
+
+    if (request.week < 1 || request.week > 22) {
+      throw new ApiError(400, 'Week must be between 1 and 22');
+    }
+
+    if (request.home_team === request.away_team) {
+      throw new ApiError(400, 'Home and away teams cannot be the same');
     }
   }
 
-  return herokuFallback;
+  // Cache management
+  /**
+   * @param {string} key
+   * @returns {any}
+   */
+  getCache(key) {
+    const entry = this.cache.get(key);
+    if (!entry) return undefined;
+
+    if (Date.now() > entry.expiresAt) {
+      this.cache.delete(key);
+      return undefined;
+    }
+
+    return entry.data;
+  }
+
+  /**
+   * @param {string} key
+   * @param {any} data
+   * @param {number} ttlMs
+   */
+  setCache(key, data, ttlMs) {
+    this.cache.set(key, {
+      expiresAt: Date.now() + ttlMs,
+      data
+    });
+  }
+
+  // Utility methods
+  /**
+   * @param {number} ms
+   * @returns {Promise<void>}
+   */
+  delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * @param {number} attempt
+    * @param {Error|ApiError} error
+   * @returns {number}
+   */
+  calculateBackoff(attempt, error) {
+    const baseMs = 300;
+    const jitter = 0.25;
+    const retryAfter = error instanceof ApiError && error.retryAfterMs ? error.retryAfterMs : 0;
+
+    return Math.max(
+      baseMs * Math.pow(2, attempt) * (1 + Math.random() * jitter),
+      retryAfter
+    );
+  }
+
+  /**
+   * @param {Error|ApiError} error
+   * @returns {boolean}
+   */
+  isRetriable(error) {
+    if (error.name === 'AbortError') return true;
+    if (error instanceof TypeError) return true; // Network errors
+    if (error instanceof ApiError) {
+      return error.status >= 500 || error.status === 429;
+    }
+    return false;
+  }
+
+  /**
+   * @param {string} path
+   * @param {string} baseUrl
+   * @returns {string}
+   */
+  buildUrl(path, baseUrl) {
+    if (path.startsWith('http')) return path;
+
+    const normalizedBase = baseUrl.replace(/\/+$/, '');
+    const normalizedPath = path.replace(/^\/+/, '');
+
+    return normalizedBase ? `${normalizedBase}/${normalizedPath}` : `/${normalizedPath}`;
+  }
 }
 
-export const API_BASE = resolveApiBase();
-
-
-// ---------- Error type ----------
-export class ApiError extends Error {
+// Enhanced Error Class
+class ApiError extends Error {
   /**
    * @param {number} status
    * @param {string} message
    * @param {any} [payload]
    * @param {string} [url]
    * @param {Headers} [headers]
-   * @param {number} [retryAfterMs]
    */
-  constructor(status, message, payload, url, headers, retryAfterMs) {
+  constructor(status, message, payload, url, headers) {
     super(message);
-    this.name = "ApiError";
+    this.name = 'ApiError';
     this.status = status;
     this.payload = payload;
     this.url = url;
     this.headers = headers;
-    this.retryAfterMs = retryAfterMs;
+    this.retryAfterMs = this.parseRetryAfter(headers);
+  }
+
+  /**
+    * @param {Headers|undefined} headers
+    * @returns {number|undefined}
+    */
+  parseRetryAfter(headers) {
+    const value = headers?.get('Retry-After');
+    if (!value) return undefined;
+
+    const seconds = parseInt(value, 10);
+    if (!isNaN(seconds)) return seconds * 1000;
+
+    const date = Date.parse(value);
+    if (!isNaN(date)) return Math.max(0, date - Date.now());
+
+    return undefined;
   }
 }
 
-// ---------- Retry/timeout fetch ----------
-/** @param {number} ms */
-const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-/** @param {number} ms */
-const withJitter = (ms) => Math.floor(ms * (1 + Math.random() * JITTER_FRAC));
-
-/** Parse Retry-After header into ms. Supports delta-seconds or http-date. */
-/** @param {Headers} headers */
-function parseRetryAfterMs(headers) {
-  const ra = headers?.get?.("Retry-After");
-  if (!ra) return undefined;
-  const s = Number(ra);
-  if (Number.isFinite(s)) return Math.max(0, s * 1000);
-  const t = Date.parse(ra);
-  if (Number.isFinite(t)) return Math.max(0, t - Date.now());
-  return undefined;
-}
-
-/** Decide if an error is worth retrying */
-/** @param {unknown} err */
-function isRetriable(err) {
-  if (!err) return false;
-  /** @type {any} */
-  const anyErr = err;
-  if (anyErr?.name === "AbortError") return true;
-  if (anyErr instanceof TypeError) return true; // network
-  const s = anyErr.status;
-  return typeof s === "number" && (s >= 500 || s === 429);
-}
+// Create default instance
+const defaultClient = new TypedApiClient();
 
 /**
- * Core API call with per-attempt AbortController, timeout, optional GET caching, and retries.
- * @param {string} path
- * @param {RequestInit & {cacheTtlMs?: number}} init
- * @param {{ timeoutMs?: number, retries?: number, cacheTtlMs?: number }} opts
- */
-/**
- * @param {string} path
- * @param {RequestInit & {cacheTtlMs?: number}} [init]
- * @param {{ timeoutMs?: number, retries?: number, cacheTtlMs?: number }} [opts]
- */
-async function api(path, init = {}, opts = {}) {
-  const { timeoutMs = DEFAULT_TIMEOUT_MS, retries = RETRY_ATTEMPTS, cacheTtlMs } = opts;
-  const isAbsolute = /^https?:\/\//i.test(String(path));
-  const url = isAbsolute ? String(path) : joinUrl(API_BASE, path);
-
-  // Simple GET cache (idempotent only)
-  const method = (init.method || "GET").toUpperCase();
-  const effectiveTtl = (/** @type {any} */(init)).cacheTtlMs ?? cacheTtlMs;
-  if (method === "GET" && effectiveTtl) {
-    const cached = readCache(url);
-    if (cached !== undefined) return cached;
-  }
-
-  let attempt = 0;
-  while (true) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-
-    try {
-      const hasBody = Object.prototype.hasOwnProperty.call(init, "body") && init.body != null;
-      /** @type {Record<string, string>} */
-      const headers = { ...(/** @type {any} */(init)?.headers || {}) };
-      // Only set JSON Content-Type when body is a string (postJson uses stringified body)
-      if (hasBody && typeof init.body === "string" && !("Content-Type" in headers)) headers["Content-Type"] = "application/json";
-      if (!("Accept" in headers)) headers["Accept"] = "application/json, text/plain;q=0.9, */*;q=0.8";
-
-      const res = await fetch(url, { credentials: "omit", ...init, headers, signal: controller.signal });
-      const ctype = String(res.headers.get("Content-Type") || "");
-
-      const parseJson = async () => { try { return await res.json(); } catch { return res.text; } };
-      const parseText = async () => { try { return await res.text(); } catch { return res.json; } };
-
-      if (!res.ok) {
-        const payload = ctype.includes("application/json") ? await parseJson() : await parseText();
-        const msg = (payload && (payload.detail || payload.message)) || res.statusText || "Request failed";
-        const retryAfterMs = (res.status === 429 || res.status === 503) ? parseRetryAfterMs(res.headers) : undefined;
-        throw new ApiError(res.status, msg, payload, url, res.headers, retryAfterMs);
-      }
-
-      const out = ctype.includes("application/json") ? await parseJson() : await parseText();
-      if (method === "GET" && effectiveTtl) writeCache(url, out, effectiveTtl);
-      return out;
-    } catch (err) {
-      const retriable = isRetriable(err);
-      if (!retriable || attempt >= retries) throw err;
-      const base = withJitter(RETRY_BASE_MS * Math.pow(2, attempt));
-      const extra = (/** @type {any} */(err))?.retryAfterMs || 0;
-      await delay(Math.max(base, extra));
-      attempt += 1;
-    } finally {
-      clearTimeout(timer);
-    }
-  }
-}
-
-// Convenience wrappers
-/** @param {string} path @param {{ timeoutMs?: number, retries?: number, cacheTtlMs?: number }} [opts] */
-const get = (path, opts = {}) => api(path, { ...opts, method: "GET" }, opts);
-/** @param {string} path @param {any} body @param {{ timeoutMs?: number, retries?: number, cacheTtlMs?: number }} [opts] */
-const postJson = (path, body, opts = {}) => api(path, { ...opts, method: "POST", body: JSON.stringify(body) }, opts);
-
-// ---------- Team coercion & validation ----------
-const TEAM_ABBR = new Set([
-  "ARI", "ATL", "BAL", "BUF", "CAR", "CHI", "CIN", "CLE", "DAL", "DEN", "DET", "GB", "HOU", "IND", "JAX", "KC",
-  "LV", "LAC", "LAR", "MIA", "MIN", "NE", "NO", "NYG", "NYJ", "PHI", "PIT", "SF", "SEA", "TB", "TEN", "WAS"
-]);
-/** @type {Record<string, string>} */
-const TEAM_NAME_TO_ABBR = {
-  "Arizona Cardinals": "ARI", "Atlanta Falcons": "ATL", "Baltimore Ravens": "BAL", "Buffalo Bills": "BUF",
-  "Carolina Panthers": "CAR", "Chicago Bears": "CHI", "Cincinnati Bengals": "CIN", "Cleveland Browns": "CLE",
-  "Dallas Cowboys": "DAL", "Denver Broncos": "DEN", "Detroit Lions": "DET", "Green Bay Packers": "GB",
-  "Houston Texans": "HOU", "Indianapolis Colts": "IND", "Jacksonville Jaguars": "JAX", "Kansas City Chiefs": "KC",
-  "Las Vegas Raiders": "LV", "Los Angeles Chargers": "LAC", "Los Angeles Rams": "LAR", "Miami Dolphins": "MIA",
-  "Minnesota Vikings": "MIN", "New England Patriots": "NE", "New Orleans Saints": "NO", "New York Giants": "NYG",
-  "New York Jets": "NYJ", "Philadelphia Eagles": "PHI", "Pittsburgh Steelers": "PIT", "San Francisco 49ers": "SF",
-  "Seattle Seahawks": "SEA", "Tampa Bay Buccaneers": "TB", "Tennessee Titans": "TEN", "Washington Commanders": "WAS",
-  // legacy / relocations (best-effort)
-  "LA": "LAR", "STL": "LAR", "SD": "LAC", "OAK": "LV", "WSH": "WAS"
-};
-/** @param {string|number|undefined} value */
-function coerceTeam(value) {
-  if (!value && value !== 0) throw new ApiError(400, "Missing team", null, "coerceTeam");
-  const s = String(value).trim();
-  if (TEAM_ABBR.has(s.toUpperCase())) return s.toUpperCase();
-  if (TEAM_NAME_TO_ABBR[s]) return TEAM_NAME_TO_ABBR[s];
-  const title = s.replace(/\s+/g, " ").replace(/\b\w/g, m => m.toUpperCase());
-  if (TEAM_NAME_TO_ABBR[title]) return TEAM_NAME_TO_ABBR[title];
-  throw new ApiError(400, `Unknown team: ${value}`, null, "coerceTeam");
-}
-/**
- * @param {number|string|undefined} n
- * @param {number} lo
- * @param {number} hi
- * @param {string} label
- */
-function clampInt(n, lo, hi, label) {
-  const x = Number(n);
-  if (!Number.isFinite(x) || !Number.isInteger(x)) throw new ApiError(400, `${label} must be an integer`, null, "clampInt");
-  if (x < lo || x > hi) throw new ApiError(400, `${label} out of range (${lo}-${hi})`, null, "clampInt");
-  return x;
-}
-
-// ---------- Schema mapper ----------
-/**
- * Normalize UI params → backend PredictionRequest.
- * Accepts either explicit fields or schedule objects with home/away_abbr.
- * Validates to prevent server-side 400s.
- * @param {{homeTeam?:string,awayTeam?:string,season?:number|string,week?:number|string,home_abbr?:string,away_abbr?:string,home_team?:string,away_team?:string}} p
- * @returns {PredictionRequest}
- */
-export function toPredictionRequest({ homeTeam, awayTeam, season, week, home_abbr, away_abbr, home_team, away_team }) {
-  const home = coerceTeam(home_abbr || home_team || homeTeam);
-  const away = coerceTeam(away_abbr || away_team || awayTeam);
-  const s = clampInt(season, 2000, 2100, "season");
-  const w = clampInt(week, 1, 22, "week");
-  return { home_team: home, away_team: away, season: s, week: w };
-}
-
-// ---------- Public API ----------
-// ---------- Public API ----------
-/**
- * Create a strongly-typed-ish API client bound to a base URL.
+ * Factory helper: create a new API client instance.
  *
- * The returned object exposes high-level methods that mirror the
- * FastAPI backend routes (health, schedule, predictions, history,
- * training). This keeps the rest of the frontend free of low-level
- * fetch/retry logic.
- *
- * @param {string} [base] Optional API base URL. Defaults to API_BASE,
- *   which is resolved from Vite env + window.location.
- * @returns {{
- *   getHealth: () => Promise<any>,
- *   getHealthStatus: () => Promise<any>,
- *   getTrainingReport: () => Promise<any>,
- *   getCalibrationReport: () => Promise<any>,
- *   getNextWeekSchedule: () => Promise<any>,
- *   predictNextWeek: () => Promise<any>,
- *   predictGame: (params: any) => Promise<any>,
- *   getPredictionHistory: (limit?: number) => Promise<any>,
- *   getStatusOverview: (limit?: number) => Promise<any>,
- *   startTraining: () => Promise<any>
- * }}
+ * @param {ApiConfig|string} [configOrBaseUrl] Either a config object or a base URL string.
+ * @returns {TypedApiClient}
  */
-export function createApi(base = API_BASE) {
-  /** @param {string} p @param {{ timeoutMs?: number, retries?: number, cacheTtlMs?: number }} [o] */
-  const _get = (p, o) => api(joinUrl(base, p), { ...o, method: "GET" }, o);
-  /** @param {string} p @param {any} b @param {{ timeoutMs?: number, retries?: number, cacheTtlMs?: number }} [o] */
-  const _post = (p, b, o) =>
-    api(joinUrl(base, p), { ...o, method: "POST", body: JSON.stringify(b) }, o);
+export function createApi(configOrBaseUrl = {}) {
+  if (typeof configOrBaseUrl === 'string') {
+    return new TypedApiClient({ baseUrl: configOrBaseUrl });
+  }
+  return new TypedApiClient(configOrBaseUrl || {});
+}
 
-  return {
-    /** Health endpoint. Uses a tiny cache (2s) to avoid spamming */
-    getHealth: () => _get("/health", { cacheTtlMs: 2000 }),
-    getHealthStatus: () => _get("/health", { cacheTtlMs: 2000 }),
-    getTrainingReport: () => _get("/report/training"),
-    getCalibrationReport: () => _get("/report/calibration"),
+// Named alias for the default instance used across the app.
+export const apiClient = defaultClient;
 
-    /** Next-week endpoints are stable within a session → short cache helps */
-    getNextWeekSchedule: () =>
-      _get("/schedule/next-week", { cacheTtlMs: 15000 }),
-    predictNextWeek: () => _get("/predict/next-week"),
+/**
+ * Fetch lightweight backend health status.
+ * Mirrors FastAPI `/health` endpoint.
+ *
+ * @param {ApiConfig} [options]
+ * @returns {Promise<any>}
+ */
+export function getHealthStatus(options = {}) {
+  // Small cache TTL keeps the navbar and dashboard responsive while
+  // avoiding excessive polling in production.
+  return defaultClient.request('/health', { method: 'GET' }, {
+    cacheTtlMs: 5000,
+    ...options,
+  });
+}
 
-    /** Single-game prediction (validated) */
-    /** @param {any} params */
-    predictGame: (params) => _post("/predict", toPredictionRequest(params)),
+/**
+ * Fetch the upcoming NFL week schedule from `/schedule/next-week`.
+ *
+ * @param {ApiConfig} [options]
+ * @returns {Promise<any[]>}
+ */
+export async function getNextWeekSchedule(options = {}) {
+  const data = await defaultClient.request('/schedule/next-week', { method: 'GET' }, options);
 
-    /** History + status endpoints */
-    getPredictionHistory: (limit = 50) =>
-      _get(`/history?limit=${limit}`, { cacheTtlMs: 5000 }),
-    getStatusOverview: (limit = 5) =>
-      _get(`/status/overview?limit=${limit}`, { cacheTtlMs: 10000 }),
+  // Backend may return an array of games or a wrapped object; normalize to an array.
+  if (Array.isArray(data)) return data;
+  if (data && Array.isArray(data.games)) return data.games;
+  return [];
+}
 
-    /** Training control */
-    startTraining: () => _post("/retrain", {}),
+/**
+ * Fetch recent prediction history entries.
+ * The backend may expose this as `/history` or `/history/predictions`; we
+ * start with the simpler `/history` contract and let the caller handle
+ * missing endpoints via try/catch (see PredictionContext).
+ *
+ * @param {number} [limit]
+ * @param {ApiConfig} [options]
+ * @returns {Promise<any>}
+ */
+export function getPredictionHistory(limit = 100, options = {}) {
+  const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 100;
+  const path = `/history?limit=${encodeURIComponent(String(safeLimit))}`;
+  return defaultClient.request(path, { method: 'GET' }, options);
+}
+
+/**
+ * High-level prediction helper used by PredictionContext.
+ * Accepts camelCase keys and normalises them to the backend's
+ * snake_case request payload.
+ *
+ * @param {{ homeTeam?: string; awayTeam?: string; home_team?: string; away_team?: string; season: number; week: number }} params
+ * @param {ApiConfig} [options]
+ * @returns {Promise<PredictionResponse>}
+ */
+export function predictGame(params, options = {}) {
+  if (!params) {
+    throw new ApiError(400, 'Prediction parameters are required');
+  }
+
+  const homeRaw = params.homeTeam ?? params.home_team;
+  const awayRaw = params.awayTeam ?? params.away_team;
+
+  if (!homeRaw || !awayRaw) {
+    throw new ApiError(400, 'Home and away team are required for prediction');
+  }
+
+  const payload = {
+    home_team: String(homeRaw).trim().toUpperCase(),
+    away_team: String(awayRaw).trim().toUpperCase(),
+    season: Number(params.season),
+    week: Number(params.week),
   };
+
+  return defaultClient.predictGame(payload, options);
 }
 
-// Default instance (uses resolved API_BASE)
-export const apiClient = createApi();
-// Named exports for direct import convenience
-// These mirror the methods on the default `apiClient` instance so that
-// components can either import the whole client or just the calls they use.
-export const getNextWeekSchedule = apiClient.getNextWeekSchedule;
-export const predictGame = apiClient.predictGame;
-export const predictNextWeek = apiClient.predictNextWeek;
-export const getHealth = apiClient.getHealth;
-export const getHealthStatus = apiClient.getHealthStatus;
-export const getTrainingReport = apiClient.getTrainingReport;
-export const getCalibrationReport = apiClient.getCalibrationReport;
-export const startTraining = apiClient.startTraining;
-export const getPredictionHistory = apiClient.getPredictionHistory;
-export const getStatusOverview = apiClient.getStatusOverview;
-
-// ---------- Helper to present ApiError nicely in UI ----------
-/**
- * Turn any thrown error into a short, human-readable message for the UI.
- *
- * Prefer using this instead of stringifying errors directly in components.
- * It knows about ApiError, AbortError, and network (TypeError) cases.
- *
- * @param {unknown} err Any value thrown from API calls or other logic.
- * @returns {string} A concise description that can be shown in toasts, banners,
- *   or inline error labels.
- */
-export function explainApiError(err) {
-  if (!err) return "Unknown error";
-  if (err instanceof ApiError) {
-    const p = err.payload;
-    const detail = (p && (p.detail || p.message)) || "";
-    const at = err.url ? ` @ ${err.url}` : "";
-    return `[${err.status}] ${err.message}${detail ? ` — ${detail}` : ""
-      }${at}`;
-  }
-  if (/** @type {any} */ (err)?.name === "AbortError") return "Request timed out";
-  if (err instanceof TypeError) return "Network error";
-  return String(/** @type {any} */(err)?.message || err);
-}
+// Export both class and default instance for advanced use cases.
+export { TypedApiClient, ApiError };
+export default defaultClient;

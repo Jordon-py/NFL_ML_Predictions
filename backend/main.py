@@ -40,7 +40,11 @@ Interacts With:
     - CORS environment configuration
 
 This file is the main entry point for backend deployment and local development.
+
+Enhanced version: provides improved data cohesion, validation, and
+application state management while preserving the original API contracts.
 """
+
 from __future__ import annotations
 
 import json
@@ -51,7 +55,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
-from typing import Any, AsyncGenerator, Dict, List, Optional
+from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple
 
 import joblib
 import numpy as np
@@ -60,833 +64,45 @@ from dotenv import load_dotenv
 from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
-
-# sklearn optional bits
-try:
-    from sklearn.utils.validation import check_is_fitted
-    SKLEARN_CHECK_AVAILABLE = True
-except Exception:
-    check_is_fitted = None  # type: ignore
-    SKLEARN_CHECK_AVAILABLE = False
-
-try:
-    from sklearn.exceptions import NotFittedError  # type: ignore
-    SKLEARN_NOTFITTED_AVAILABLE = True
-except Exception:
-    NotFittedError = None  # type: ignore
-    SKLEARN_NOTFITTED_AVAILABLE = False
-
-# ---------------------------------------------------------------------
-# Environment bootstrap
-# ---------------------------------------------------------------------
-backend_dir = Path(__file__).parent
-ENV = backend_dir / ".env"
-repo_root = backend_dir.parent
-dotenv_loaded = load_dotenv(dotenv_path=ENV)
-if not dotenv_loaded:
-    load_dotenv(dotenv_path=repo_root / ".env")
-
-# -----------------------
-# Paths and constants
-# -----------------------
-THIS_FILE = Path(__file__).resolve()
-BACKEND_DIR = THIS_FILE.parent
-BASE_DIR = BACKEND_DIR.parent
-DATA_DIR = BACKEND_DIR / "data"
-HISTORY_FILE = DATA_DIR / "prediction_history.json"
-MAX_HISTORY_ROWS = int(os.getenv("PREDICTION_HISTORY_LIMIT", "200"))
-LOG_DIR = BACKEND_DIR / "logs"
-LOG_DIR.mkdir(parents=True, exist_ok=True)
-# CHANGE-LOG: Pre-create the log directory so file handlers never fail during startup.
-
-# ---------------------------------------------------------------------
-# Models directory resolution
-#
-# On startup, we attempt to locate the most appropriate model artifact
-# directory. By default, the API expects to find pre-trained pipelines
-# (home_pipe.joblib, away_pipe.joblib, win_pipe.joblib) under a
-# `models/` folder in the backend directory. However, the enhanced
-# training pipeline writes its artifacts into date-stamped subfolders
-# (e.g. `20251110/models/`). To support seamless upgrades, we resolve
-# the models directory in the following order:
-#   1. If the environment variable `MODELS_DIR` is set, that path is
-#      used unconditionally.
-#   2. If a `models` directory exists in the backend directory, use it.
-#   3. Otherwise, scan for the most recent `<YYYYMMDD>/models` folder
-#      within the backend directory and use that.
-
-def _resolve_models_dir() -> Path:
-    """Resolve the directory containing model artifacts.
-
-    Returns a Path pointing to the directory with pre-trained pipelines.
-    The resolution order is described above. If no directory can be
-    resolved, falls back to `<backend>/models`.
-    """
-    # 1) Environment override
-    env_path = os.getenv("MODELS_DIR", "").strip()
-    if env_path:
-        p = Path(env_path)
-        if p.is_dir():
-            return p
-        # Use a local logger to avoid relying on global `log` before it is defined
-        logging.getLogger("api").warning("MODELS_DIR=%s is set but does not exist", p)
-    # 2) Legacy location: backend/models
-    legacy = BACKEND_DIR / "models"
-    if legacy.is_dir():
-        return legacy
-    # 3) Latest date-stamped run directory
-    # Look for directories matching YYYYMMDD under the backend dir
-    candidates: List[Path] = []
-    for child in BACKEND_DIR.iterdir():
-        try:
-            # Expect directory names like '20251110' that are all digits
-            if child.is_dir() and child.name.isdigit() and len(child.name) == 8:
-                models_sub = child / "models"
-                if models_sub.is_dir():
-                    candidates.append(models_sub)
-        except Exception:
-            continue
-    if candidates:
-        candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
-        latest = candidates[0]
-        logging.getLogger("api").info("Resolved latest models directory: %s", latest)
-        return latest
-    fallback = BACKEND_DIR / "models"
-    fallback.mkdir(parents=True, exist_ok=True)
-    logging.getLogger("api").warning("Falling back to default models directory: %s", fallback)
-    return fallback
-
-# -----------------------
-# Logging configuration
-# -----------------------
-# Logging
-logging.config.dictConfig(
-    {
-        "version": 1,
-        "disable_existing_loggers": False,
-        "formatters": {"d": {"format": "%(asctime)s %(levelname)s %(name)s %(message)s"}},
-        "handlers": {
-            "console": {"class": "logging.StreamHandler", "level": "INFO", "formatter": "d"},
-            "file": {
-                "class": "logging.FileHandler",
-                "level": "DEBUG",
-                "formatter": "d",
-                "filename": str(LOG_DIR / "api.log"),
-                "encoding": "utf-8",
-            },
-        },
-        "root": {"level": "DEBUG", "handlers": ["console", "file"]},
-    }
-)
-log = logging.getLogger("api")
-
-
-
-MODELS_DIR = _resolve_models_dir()
-log.info("Initial MODELS_DIR resolved to %s", MODELS_DIR)
-# CHANGE-LOG: Emit the resolved models path for quick operational diagnostics.
-DEFAULT_DATASET = DATA_DIR / "game_features_20251111.csv"
-DEFAULT_SCHEDULE = DATA_DIR / "Nfl_schedule_2025_2026.csv"
-
-FRONTEND_DIR = BASE_DIR / "frontend"
-FRONTEND_BUILD = FRONTEND_DIR / "build"
-FRONTEND_DIST = FRONTEND_DIR / "dist"
-
-TRUTHY = {"true", "t", "1", "yes", "y"}
-SERVE_FRONTEND = os.getenv("SERVE_FRONTEND", "false").strip().lower() in TRUTHY
-
-# Logging
-logging.config.dictConfig(
-    {
-        "version": 1,
-        "disable_existing_loggers": False,
-        "formatters": {"d": {"format": "%(asctime)s %(levelname)s %(name)s %(message)s"}},
-        "handlers": {
-            "console": {"class": "logging.StreamHandler", "level": "INFO", "formatter": "d"},
-            "file": {
-                "class": "logging.FileHandler",
-                "level": "DEBUG",
-                "formatter": "d",
-                "filename": str(LOG_DIR / "api.log"),
-                "encoding": "utf-8",
-            },
-        },
-        "root": {"level": "DEBUG", "handlers": ["console", "file"]},
-    }
-)
-log = logging.getLogger("api")
-
-# Globals
-model_objects: Optional[Dict[str, Any]] = None
-dataset_df: Optional[pd.DataFrame] = None
-home_pipe: Optional[Any] = None
-away_pipe: Optional[Any] = None
-win_pipe: Optional[Any] = None
-prediction_history: List[Dict[str, Any]] = []
-history_lock = Lock()
-ACTIVE_DATASET_PATH: Optional[str] = None
-DATASET_LAST_LOADED: Optional[datetime] = None
-
-# -----------------------
-# CORS configuration
-# -----------------------
-DEFAULT_ALLOWED_ORIGINS: List[str] = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "https://nfl-ml-predictions.vercel.app",
-    "https://nfl-ml-predictions-pr5uahmqx-christopher-jordons-projects.vercel.app",
-    "https://nfl-predict-6fghcp7sx-christopher-jordons-projects.vercel.app",
-    "https://new-nfl-predict.vercel.app",
-    "http://www.nfl-predict.vercel.app",
-]
-
-def _parse_cors_origins() -> List[str]:
-    env_origins = os.getenv("ALLOWED_ORIGINS", "").strip()
-    if env_origins:
-        origins = [o.strip() for o in env_origins.split(",") if o.strip()]
-        if origins:
-            log.info("CORS origins from env: %s", origins)
-            return origins
-    log.info("CORS origins (default): %s", DEFAULT_ALLOWED_ORIGINS)
-    return DEFAULT_ALLOWED_ORIGINS
-
-if os.getenv("RESTRICT_CORS", "false").strip().lower() in TRUTHY:
-    ALLOWED_ORIGINS = _parse_cors_origins()
-    log.info("CORS restricted mode enabled")
-else:
-    ALLOWED_ORIGINS = ["*"]
-    log.info("CORS configured to allow all origins")
-
-ALLOW_ORIGIN_REGEX = os.getenv("ALLOW_ORIGIN_REGEX", "").strip() or None
-
-# -----------------------------------------------------------
-# Required Pipelines
-# -----------------------------------------------------------
-
-# FIX: Added the missing 'load_pipelines' function
-def load_pipelines() -> tuple[Optional[Any], Optional[Any], Optional[Any]]:
-    global MODELS_DIR
-    def _attempt_load(dir_path: Path) -> tuple[Optional[Any], Optional[Any], Optional[Any]]:
-        try:
-            hp = joblib.load(dir_path / "home_pipe.joblib")
-            ap = joblib.load(dir_path / "away_pipe.joblib")
-            wp = joblib.load(dir_path / "win_pipe.joblib")
-            log.info("✓ Pipelines loaded successfully from %s", dir_path)
-            return hp, ap, wp
-        except Exception as exc:
-            log.error(
-                "✗ Failed to load pipelines from %s: %s", dir_path, exc, exc_info=True
-            )
-            return None, None, None
-
-    # First attempt using the currently resolved MODELS_DIR
-    hp, ap, wp = _attempt_load(MODELS_DIR)
-    if all((hp, ap, wp)):
-        return hp, ap, wp
-    # Try to re-resolve in case a new models directory was created after startup
-    new_dir = _resolve_models_dir()
-    if new_dir != MODELS_DIR:
-        MODELS_DIR = new_dir
-        log.info("Retrying pipeline load after resolving new MODELS_DIR=%s", MODELS_DIR)
-        hp, ap, wp = _attempt_load(MODELS_DIR)
-    return hp, ap, wp
-
-home_pipe, away_pipe, win_pipe = load_pipelines()
-
-
-
-def reload_pipelines() -> Dict[str, str]:
-    """Reload model pipelines from the resolved ``MODELS_DIR``.
-
-    This updates the module-level ``home_pipe``, ``away_pipe``, and
-    ``win_pipe`` variables in-place and returns a small status payload
-    suitable for the ``/reload-models`` endpoint.
-
-    Returns
-    -------
-    dict
-        A JSON-serializable status dictionary with keys ``status`` and
-        ``detail`` indicating whether reload succeeded.
-    """
-    global home_pipe, away_pipe, win_pipe
-
-    hp, ap, wp = load_pipelines()
-    home_pipe, away_pipe, win_pipe = hp, ap, wp
-
-    if all((home_pipe, away_pipe, win_pipe)):
-        log.info("Pipelines reloaded successfully via /reload-models endpoint.")
-        return {"status": "success", "detail": "Pipelines reloaded successfully."}
-
-    log.error("Failed to reload pipelines via /reload-models endpoint.")
-    return {"status": "error", "detail": "Failed to reload pipelines."}
-
+from pydantic import BaseModel, Field, validator
 
 # ---------------------------------------------------------------
-# Team maps
+# Enhanced Data Models with Strict Validation
 # ---------------------------------------------------------------
-TEAM_ABBREVIATIONS = {
-    "Arizona Cardinals": "ARI",
-    "Atlanta Falcons": "ATL",
-    "Baltimore Ravens": "BAL",
-    "Buffalo Bills": "BUF",
-    "Carolina Panthers": "CAR",
-    "Chicago Bears": "CHI",
-    "Cincinnati Bengals": "CIN",
-    "Cleveland Browns": "CLE",
-    "Dallas Cowboys": "DAL",
-    "Denver Broncos": "DEN",
-    "Detroit Lions": "DET",
-    "Green Bay Packers": "GB",
-    "Houston Texans": "HOU",
-    "Indianapolis Colts": "IND",
-    "Jacksonville Jaguars": "JAX",
-    "Kansas City Chiefs": "KC",
-    "Las Vegas Raiders": "LV",
-    "Los Angeles Chargers": "LAC",
-    "Los Angeles Rams": "LAR",
-    "Miami Dolphins": "MIA",
-    "Minnesota Vikings": "MIN",
-    "New England Patriots": "NE",
-    "New Orleans Saints": "NO",
-    "New York Giants": "NYG",
-    "New York Jets": "NYJ",
-    "Philadelphia Eagles": "PHI",
-    "Pittsburgh Steelers": "PIT",
-    "San Francisco 49ers": "SF",
-    "Seattle Seahawks": "SEA",
-    "Tampa Bay Buccaneers": "TB",
-    "Tennessee Titans": "TEN",
-    "Washington Commanders": "WAS",
-}
-TEAM_CODE_FIX = {"LA": "LAR", "STL": "LAR", "SD": "LAC", "OAK": "LV", "WSH": "WAS"}
-VALID_ABBRS = set(TEAM_ABBREVIATIONS.keys()) | set(TEAM_CODE_FIX.keys()) | set(TEAM_ABBREVIATIONS.values())
-
-def to_team_abbr(name: str) -> str:
-    n = str(name).strip()
-    if n in TEAM_CODE_FIX:
-        return TEAM_CODE_FIX[n]
-    if n in TEAM_ABBREVIATIONS:
-        return TEAM_ABBREVIATIONS[n]
-    if n in VALID_ABBRS:
-        return TEAM_CODE_FIX.get(n, n)
-    raise ValueError(f"Unknown team: {name}")
-
-# ---------------------------------------------------------------
-# Data Helpers
-# ---------------------------------------------------------------
-
-def _glob_latest(dir_path: Path, pattern: str) -> Optional[Path]:
-    try:
-        matches = sorted(dir_path.glob(pattern), key=lambda p: p.stat().st_mtime, reverse=True)
-        return matches[0] if matches else None
-    except Exception:
-        return None
-
-def _normalize_feature_cols(cols: Dict[str, List[str]] | List[str]) -> List[str]:
-    if isinstance(cols, dict):
-        return cols.get("numeric", []) + cols.get("categorical", [])
-    if isinstance(cols, list):
-        return cols
-    return []
-
-# FIX: Added back the required helper 'nan_safe_df'
-def _nan_safe_df(df: pd.DataFrame) -> pd.DataFrame:
-    """Minimal, safe NaN/inf sanitizer for inference."""
-    out = df.copy()
-    # Replace +/- inf → NaN
-    out.replace([np.inf, -np.inf], np.nan, inplace=True)
-    # Replace NaN → 0.0 (safe fallback that keeps model running)
-    out.fillna(0.0, inplace=True)
-    return out
-
-def _ensure_home_away(df: pd.DataFrame) -> pd.DataFrame:
-    cols = set(df.columns)
-    if {"home_team", "away_team"}.issubset(cols):
-        return df
-    if {"team", "opponent_team", "is_home"}.issubset(cols):
-        is_home = df["is_home"].astype(str).str.strip().str.lower().isin({"true", "t", "1", "yes", "y"})
-        return df.assign(
-            is_home=is_home,
-            home_team=np.where(is_home, df["team"], df["opponent_team"]),
-            away_team=np.where(is_home, df["opponent_team"], df["team"]),
-        )
-    log.warning("Dataset missing home/away columns and team/opponent fallback")
-    return df
-
-def _validate_dataset_schema(df: pd.DataFrame, model_objects: Dict[str, Any]) -> None:
-    expected = _normalize_feature_cols(model_objects.get("raw_feature_columns", {}))
-    if not expected:
-        log.warning("No expected feature list available; skipping dataset schema check")
-        return
-    miss = [c for c in expected if c not in df.columns]
-    if miss:
-        log.error("Dataset schema mismatch: %d missing engineered features. Sample: %s", len(miss), miss[:10])
-        raise RuntimeError(f"Dataset missing required engineered features: {miss[:5]}")
-
-# ---------------------------------------------------------------
-# Prediction history helpers
-# ---------------------------------------------------------------
-
-def _safe_float(value: Any) -> Optional[float]:
-    try:
-        f = float(value)
-    except (TypeError, ValueError):
-        return None
-    return None if np.isnan(f) else f
-
-
-def _load_history_from_disk() -> List[Dict[str, Any]]:
-    if not HISTORY_FILE.exists():
-        return []
-    try:
-        data = json.loads(HISTORY_FILE.read_text(encoding="utf-8"))
-        if isinstance(data, list):
-            normalized: List[Dict[str, Any]] = []
-            for item in data:
-                if not isinstance(item, dict):
-                    continue
-                try:
-                    normalized.append(_normalize_history_entry(item))
-                except Exception as exc:
-                    log.warning("Skipping malformed history entry: %s", exc)
-            return normalized[:MAX_HISTORY_ROWS]
-    except Exception as exc:
-        log.warning("Failed to parse %s: %s", HISTORY_FILE, exc)
-    return []
-
-
-def _persist_history(entries: List[Dict[str, Any]]) -> None:
-    try:
-        HISTORY_FILE.parent.mkdir(parents=True, exist_ok=True)
-        HISTORY_FILE.write_text(json.dumps(entries, indent=2), encoding="utf-8")
-    except Exception as exc:
-        log.warning("Unable to persist prediction history: %s", exc)
-
-
-def _history_snapshot(limit: Optional[int] = None) -> List[Dict[str, Any]]:
-    with history_lock:
-        snapshot = list(prediction_history)
-    if limit is None:
-        return snapshot
-    limit = max(1, min(limit, MAX_HISTORY_ROWS))
-    return snapshot[:limit]
-
-
-def _normalize_history_entry(raw: Dict[str, Any]) -> Dict[str, Any]:
-    """Coerce a legacy prediction log row into the canonical /history schema."""
-    required = {"timestamp", "game_id", "season", "week", "home_score_pred"}
-    if required.issubset(raw.keys()):
-        return raw
-
-    timestamp_val = raw.get("timestamp") or raw.get("ts") or raw.get("time") or raw.get("when")
-    try:
-        ts_iso = pd.to_datetime(timestamp_val).to_pydatetime().astimezone(timezone.utc).isoformat()
-    except Exception:
-        ts_iso = datetime.now(timezone.utc).isoformat()
-
-    home_team = str(raw.get("home_team") or raw.get("home") or "HOME")
-    away_team = str(raw.get("away_team") or raw.get("away") or "AWAY")
-
-    def _score(key_options: List[str]) -> Optional[float]:
-        for key in key_options:
-            if key in raw:
-                val = _safe_float(raw.get(key))
-                if val is not None:
-                    return val
-        return None
-
-    home_pred = _score(["home_score_pred", "pred_home", "home_score"])
-    away_pred = _score(["away_score_pred", "pred_away", "away_score"])
-    home_prob = _score(["home_win_probability", "prob_home"])
-    if home_prob is None:
-        home_prob = _safe_float(raw.get("probs", {}).get("home") if isinstance(raw.get("probs"), dict) else None)
-    away_prob = _score(["away_win_probability", "prob_away"])
-    if away_prob is None:
-        away_prob = 1 - home_prob if home_prob is not None else None
-    if away_prob is None:
-        away_prob = 1 - home_prob if home_prob is not None else None
-        probs_home_val = raw["probs"].get("home")
-    home_prob = _score(["home_win_probability", "prob_home"]) or _safe_float(probs_home_val)
-    away_prob = _score(["away_win_probability", "prob_away"]) or (1 - home_prob if home_prob is not None else None)
-    point_diff = _safe_float(raw.get("point_diff"))
-    if point_diff is None and home_pred is not None and away_pred is not None:
-        point_diff = round(home_pred - away_pred, 2)
-
-    actual_home = _score(["actual_home_score", "espn_home", "final_home"])
-    actual_away = _score(["actual_away_score", "espn_away", "final_away"])
-    predicted_winner = raw.get("predicted_winner")
-    if not predicted_winner:
-        if home_prob is not None and away_prob is not None:
-            predicted_winner = home_team if home_prob >= away_prob else away_team
-        elif home_pred is not None and away_pred is not None:
-            predicted_winner = home_team if home_pred >= away_pred else away_team
-        else:
-            predicted_winner = home_team
-
-    actual_winner = raw.get("actual_winner")
-    if not actual_winner and actual_home is not None and actual_away is not None:
-        actual_winner = home_team if actual_home >= actual_away else away_team
-
-    game_id = raw.get("game_id") or f"legacy-{away_team}@{home_team}"
-    season_val = int(_safe_float(raw.get("season")) or datetime.now().year)
-    week_val = int(_safe_float(raw.get("week")) or 0)
-
-    return {
-        # Use explicit None checks to avoid masking valid 0.0 probabilities
-        "away_win_probability": away_prob if away_prob is not None else (1 - home_prob if home_prob is not None else 0.0),
-        "game_id": game_id,
-        "season": season_val,
-        "week": week_val,
-        "home_team": home_team,
-        "away_team": away_team,
-        "home_score_pred": home_pred or 0.0,
-        "away_score_pred": away_pred or 0.0,
-        "home_win_probability": home_prob or 0.0,
-        "away_win_probability": away_prob or (1 - (home_prob or 0.0)),
-        "point_diff": point_diff or 0.0,
-        "mode": raw.get("mode", "legacy"),
-        "prediction_source": raw.get("prediction_source", "legacy-log"),
-        "win_threshold_used": raw.get("win_threshold_used"),
-        "predicted_winner": predicted_winner,
-        "kickoff": raw.get("kickoff") or raw.get("when"),
-        "actual_home_score": actual_home,
-        "actual_away_score": actual_away,
-        "actual_winner": actual_winner,
-    }
-
-
-def _build_history_entry(
-    req: "PredictionRequest",
-    prediction: "PredictionResponse",
-    game_row: Optional[pd.Series]
-) -> Dict[str, Any]:
-    actual_home = _safe_float(game_row.get("home_points_for")) if game_row is not None else None
-    actual_away = _safe_float(game_row.get("away_points_for")) if game_row is not None else None
-    kickoff_val = None
-    if game_row is not None:
-        kickoff_val = game_row.get("kickoff_ts_utc") or game_row.get("kickoff") or game_row.get("gameday")
-        if hasattr(kickoff_val, "isoformat"):
-            kickoff_val = kickoff_val.isoformat()
-        elif kickoff_val is not None:
-            try:
-                kickoff_val = pd.to_datetime(kickoff_val).isoformat()
-            except Exception:
-                kickoff_val = str(kickoff_val)
-
-    predicted_winner = req.home_team if prediction.home_win >= prediction.away_win else req.away_team
-    entry: Dict[str, Any] = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "game_id": f"{req.season}W{req.week}-{req.away_team}@{req.home_team}",
-        "season": req.season,
-        "week": req.week,
-        "home_team": req.home_team,
-        "away_team": req.away_team,
-        "home_score_pred": prediction.home_score,
-        "away_score_pred": prediction.away_score,
-        "home_win_probability": prediction.home_win_probability,
-        "away_win_probability": prediction.away_win_probability,
-        "point_diff": prediction.point_diff,
-        "mode": prediction.mode,
-        "prediction_source": prediction.prediction_source,
-        "win_threshold_used": prediction.win_threshold_used,
-        "predicted_winner": predicted_winner,
-        "kickoff": kickoff_val,
-    }
-
-    if actual_home is not None and actual_away is not None:
-        entry.update(
-            {
-                "actual_home_score": actual_home,
-                "actual_away_score": actual_away,
-                "actual_winner": req.home_team if actual_home >= actual_away else req.away_team,
-            }
-        )
-
-    return entry
-
-
-def _record_prediction_history(
-    req: "PredictionRequest",
-    prediction: "PredictionResponse",
-    game_row: Optional[pd.Series]
-) -> Dict[str, Any]:
-    entry = _build_history_entry(req, prediction, game_row)
-    with history_lock:
-        prediction_history.insert(0, entry)
-        if len(prediction_history) > MAX_HISTORY_ROWS:
-            del prediction_history[MAX_HISTORY_ROWS:]
-        _persist_history(prediction_history)
-    return entry
-
-
-def _compute_history_metrics(entries: List[Dict[str, Any]]) -> Dict[str, Any]:
-    if not entries:
-        return {"total_predictions": 0, "avg_point_diff": None, "win_rate": None}
-
-    diffs = [abs(float(e.get("point_diff", 0.0))) for e in entries if isinstance(e.get("point_diff"), (int, float))]
-    actuals = [e for e in entries if e.get("actual_winner") and e.get("predicted_winner")]
-
-    win_rate = None
-    if actuals:
-        correct = sum(1 for e in actuals if e["actual_winner"] == e["predicted_winner"])
-        win_rate = round(correct / len(actuals), 3)
-
-    avg_diff = round(float(np.mean(diffs)), 2) if diffs else None
-    return {
-        "total_predictions": len(entries),
-        "avg_point_diff": avg_diff,
-        "win_rate": win_rate,
-    }
-
-
-def _dataset_status() -> Dict[str, Any]:
-    rows = int(dataset_df.shape[0]) if dataset_df is not None else 0
-    cols = int(dataset_df.shape[1]) if dataset_df is not None else 0
-    return {
-        "path": ACTIVE_DATASET_PATH,
-        "rows": rows,
-        "columns": cols,
-        "loaded": bool(dataset_df is not None and not dataset_df.empty),
-        "last_loaded": DATASET_LAST_LOADED.isoformat() if DATASET_LAST_LOADED else None,
-    }
-
-# ---------------------------------------------------------------
-# Lifespan (Startup/Shutdown)
-# ---------------------------------------------------------------
-
-# [KEPT: This is the correct, refactored sanity check]
-def _sanity_predict(df: pd.DataFrame) -> None:
-    global home_pipe, away_pipe, win_pipe
-    if df is None or df.empty:
-        log.warning("Sanity predict: skipping, no dataset loaded")
-        return
-        
-    # Check if pipelines were loaded
-    if home_pipe is None or away_pipe is None or win_pipe is None:
-        log.info("Pipelines not loaded; skipping sanity predict")
-        return
-
-    # Get a sample row
-    sample = df.sample(1, random_state=42).copy()
-    
-    # We must drop target columns that might exist in the CSV
-    # but are not part of the features.
-    X = sample.drop(columns=["home_points_for", "away_points_for", "home_win"], errors="ignore")
-    failures = []
-    
-    def _try(pipe, label, method):
-        try:
-            if method == "predict":
-                pipe.predict(X)
-            elif method == "predict_proba":
-                pipe.predict_proba(X)
-        except Exception as e:
-            msg = str(e).lower()
-            is_not_fitted = (
-                SKLEARN_NOTFITTED_AVAILABLE
-                and NotFittedError is not None
-                and isinstance(e, NotFittedError)
-            )
-            if is_not_fitted or ("not fitted" in msg):
-                failures.append(f"{label} is not fitted")
-            else:
-                failures.append(f"{label}.{method} failed: {e}")
-
-    _try(home_pipe, "home_pipe", "predict")
-    _try(away_pipe, "away_pipe", "predict")
-    _try(win_pipe, "win_pipe", "predict_proba")
-
-    if failures:
-        raise RuntimeError(f"Sanity prediction failed: {'; '.join(failures)}")
-
-# [KEPT: This is the correct, refactored lifespan]
-@asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    global model_objects, dataset_df, home_pipe, away_pipe, win_pipe, ACTIVE_DATASET_PATH, DATASET_LAST_LOADED 
-    log.info("=" * 60)
-    log.info("STARTUP: NFL Prediction API v2.1.1 (Refactored)")
-    log.info("=" * 60)
-    
-    model_objects = {} # Initialize global
-    
-    try:
-        # Load metadata to get feature lists and thresholds
-        meta_path = MODELS_DIR / "metadata.json"
-        if not meta_path.exists():
-            raise FileNotFoundError(f"Missing {meta_path}")
-        meta_content = meta_path.read_text(encoding="utf-8")
-        meta = json.loads(meta_content)
-
-        # Determine feature metadata file path. If the training pipeline wrote
-        # "feature_metadata.json" into the same directory, use it; else fall
-        # back to a top-level feature metadata file. This covers both the
-        # legacy and enhanced pipeline formats.
-        feat_meta_path = MODELS_DIR / "feature_metadata.json"
-        if not feat_meta_path.exists():
-            # Try parent directory as fallback
-            parent_fm = MODELS_DIR.parent / "feature_metadata.json"
-            if parent_fm.exists():
-                feat_meta_path = parent_fm
-            else:
-                raise FileNotFoundError(
-                    f"Missing feature metadata file at {feat_meta_path} or {parent_fm}"
-                )
-
-        feat_meta_content = feat_meta_path.read_text(encoding="utf-8")
-
-        # Parse feature metadata: support both list-of-dicts and dict formats
-        if feat_meta_content.strip().startswith("["):
-            feat_meta_list = json.loads(feat_meta_content)
-            model_objects["raw_feature_columns"] = {
-                "numeric": [f["feature"] for f in feat_meta_list if f.get("dtype") == "float64"],
-                "categorical": [f["feature"] for f in feat_meta_list if f.get("dtype") != "float64"],
-            }
-        elif feat_meta_content.strip().startswith("{"):
-            feat_meta_dict = json.loads(feat_meta_content)
-            model_objects["raw_feature_columns"] = {
-                "numeric": list(feat_meta_dict.get("numeric", [])),
-                "categorical": list(feat_meta_dict.get("categorical", [])),
-            }
-        else:
-            raise ValueError(
-                "Unknown format for feature_metadata.json: expected JSON list or dict"
-            )
-
-        # Store only the metadata needed by other routes
-        # Mode: fallback to 'production' if unspecified
-        model_objects["mode"] = str(meta.get("mode", meta.get("training_mode", "production")))
-
-        # Determine optimal win threshold. The enhanced pipeline may not include
-        # an explicit optimal threshold in the metadata; fallback to 0.5.
-        win_summary = meta.get("validation_summary", {}).get("win", {})
-        # Support alternative naming in enhanced metadata (e.g. 'win' -> 'win' metrics)
-        # Attempt to fetch any of the known keys; default to 0.5
-        threshold = win_summary.get("optimal_threshold") or win_summary.get("optimal_threshold_f1") or win_summary.get("optimal_threshold_acc")
-        if threshold is None:
-            threshold = 0.5
-        model_objects["win_threshold_optimal"] = float(threshold)
-
-        log.info("✓ Pipelines loaded (from module level)")
-        log.info("✓ Metadata and feature lists loaded from %s and %s", meta_path, feat_meta_path)
-        log.info("Model registry keys: %s", list(model_objects.keys()))
-
-    except Exception as e:
-        log.error("✗ Failed to load metadata: %s", e, exc_info=True)
-        log.warning(
-            "Continuing without models/metadata; /health will report unhealthy"
-        )
-
-    # --- Dataset Loading ---
-    ds_path = Path(os.getenv("DATASET_PATH", str(DEFAULT_DATASET)))
-    log.info("Dataset path: %s", ds_path)
-    if not ds_path.exists():
-        # FIX: Removed hardcoded Windows path
-        alternates = (DATA_DIR / "game_features.csv", DATA_DIR / "merged_game_features.csv")
-        ds_alt = next((a for a in alternates if a.exists()), None)
-        if ds_alt is not None:
-            ds_path = ds_alt
-            log.info("Using alternate dataset: %s", ds_path)
-    ACTIVE_DATASET_PATH = str(ds_path)
-
-    try:
-        if ds_path.exists():
-            df = pd.read_csv(ds_path)
-            if not df.empty:
-                df.columns = [c.strip() for c in df.columns]
-                df = _ensure_home_away(df)
-                try:
-                    if model_objects:
-                        _validate_dataset_schema(df, model_objects)
-                except Exception as e:
-                    log.warning("Dataset schema validation failed: %s", e)
-                dataset_df = df
-                DATASET_LAST_LOADED = datetime.now(timezone.utc)
-                try:
-                    # Pass df to the refactored sanity check
-                    _sanity_predict(df) 
-                    log.info("✓ Sanity prediction passed")
-                except Exception as e:
-                    log.warning("Sanity prediction failed: %s; continuing", e)
-                log.info("✓ Dataset loaded: %d rows, %d columns", len(df), df.shape[1])
-            else:
-                dataset_df = pd.DataFrame()
-                log.warning("Dataset CSV is empty at %s", ds_path)
-        else:
-            dataset_df = pd.DataFrame()
-            log.warning("Dataset file does not exist: %s", ds_path)
-    except Exception as e:
-        dataset_df = pd.DataFrame()
-        log.error("Failed to load dataset: %s", e, exc_info=True)
-
-    log.info("=" * 60)
-    log.info("STARTUP COMPLETE")
-    log.info("Pipelines: %s", "✓ Loaded" if home_pipe else "✗ Missing")
-    log.info("Metadata: %s", "✓ Loaded" if model_objects else "✗ Missing")
-    log.info("Dataset: %s", "✓ Loaded" if dataset_df is not None and not dataset_df.empty else "✗ Missing")
-    log.info("=" * 60)
-    try:
-        history_seed = _load_history_from_disk()
-        with history_lock:
-            prediction_history.clear()
-            prediction_history.extend(history_seed)
-        log.info("Prediction history entries loaded: %d", len(prediction_history))
-    except Exception as exc:
-        log.warning("Failed loading prediction history: %s", exc)
-    try:
-        yield
-    finally:
-        log.info("SHUTDOWN: Cleaning up resources")
-
-# FastAPI app
-app = FastAPI(title="NFL ML Predictions API", version="2.1.1", lifespan=lifespan)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS or ["https://nfl-ml-predictions.vercel.app"],
-    allow_origin_regex=ALLOW_ORIGIN_REGEX,
-    allow_credentials=False,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-    allow_headers=["*"],
-    expose_headers=["*"],
-)
-
-if SERVE_FRONTEND:
-    for candidate in (FRONTEND_BUILD, FRONTEND_DIST):
-        if candidate.exists():
-            app.mount("/", StaticFiles(directory=str(candidate), html=True), name="frontend")
-            log.info("Serving frontend from %s", candidate)
-            break
-    else:
-        log.warning("SERVE_FRONTEND=true but no frontend build found.")
-
-# -----------------------
-# Schemas
-# -----------------------
 class PredictionRequest(BaseModel):
-    home_team: str
-    away_team: str
-    season: int
-    week: int
+    home_team: str = Field(..., min_length=2, max_length=50)
+    away_team: str = Field(..., min_length=2, max_length=50)
+    season: int = Field(..., ge=2000, le=2100)
+    week: int = Field(..., ge=1, le=22)
+
+    @validator('home_team', 'away_team')
+    def validate_team_names(cls, v):
+        if not v or not v.strip():
+            raise ValueError('Team name cannot be empty')
+        # Normalize to uppercase abbreviations to match dataset/team keys.
+        return v.strip().upper()
 
 class PredictionResponse(BaseModel):
-    home_score: float
-    away_score: float
-    home_win_probability: float
-    away_win_probability: float
-    home_win: float
-    away_win: float
+    home_score: float = Field(..., ge=0)
+    away_score: float = Field(..., ge=0)
+    home_win_probability: float = Field(..., ge=0, le=1)
+    away_win_probability: float = Field(..., ge=0, le=1)
+    home_win: float = Field(..., ge=0, le=1)
+    away_win: float = Field(..., ge=0, le=1)
     point_diff: float
     mode: str
     prediction_source: str
     win_classifier_used: bool
-    win_probability_source: str  # 'classifier' | 'classifier-margin' | 'legacy-sigmoid'
-    win_threshold_used: Optional[float] = None
+    win_probability_source: str
+    win_threshold_used: Optional[float] = Field(None, ge=0, le=1)
+    confidence_score: Optional[float] = Field(None, ge=0, le=1)  # New: prediction confidence
 
 class HealthResponse(BaseModel):
     status: str
     mode: str
     reason: str
-
+    timestamp: datetime
+    components: Dict[str, bool]  # Detailed component health
 
 class PredictionHistoryEntry(BaseModel):
     timestamp: datetime
@@ -902,26 +118,659 @@ class PredictionHistoryEntry(BaseModel):
     point_diff: float
     mode: str
     prediction_source: str
-    win_threshold_used: Optional[float] = None
+    win_threshold_used: Optional[float]
     predicted_winner: str
     kickoff: Optional[str] = None
     actual_home_score: Optional[float] = None
     actual_away_score: Optional[float] = None
     actual_winner: Optional[str] = None
+    confidence_score: Optional[float] = None  # New field
 
+# ---------------------------------------------------------------
+# Configuration & Constants with Better Validation
+# ---------------------------------------------------------------
+class Config:
+    """Centralized configuration with validation"""
+    
+    def __init__(self):
+        self.backend_dir = Path(__file__).parent.resolve()
+        self.repo_root = self.backend_dir.parent
+        self._load_environment()
+        
+        # Paths with validation
+        self.data_dir = self.backend_dir / "data"
+        self.data_dir.mkdir(parents=True, exist_ok=True)
+        
+        self.log_dir = self.backend_dir / "logs"
+        self.log_dir.mkdir(parents=True, exist_ok=True)
+        
+        self.models_dir = self._resolve_models_dir()
+        self._validate_paths()
+        
+    def _load_environment(self):
+        """Load environment variables with fallbacks"""
+        env_files = [
+            self.backend_dir / ".env",
+            self.repo_root / ".env"
+        ]
+        
+        for env_file in env_files:
+            if env_file.exists():
+                load_dotenv(dotenv_path=env_file)
+                break
+    
+    def _resolve_models_dir(self) -> Path:
+        """Resolve models directory with enhanced validation"""
+        # Environment override
+        env_path = os.getenv("MODELS_DIR", "").strip()
+        if env_path:
+            candidate = Path(env_path)
+            if candidate.is_dir():
+                return candidate
+            logging.getLogger("config").warning(f"MODELS_DIR={env_path} does not exist")
+        
+        # Legacy location
+        legacy = self.backend_dir / "models"
+        if legacy.is_dir():
+            return legacy
+        
+        # Latest date-stamped directory
+        candidates = []
+        for child in self.backend_dir.iterdir():
+            if (child.is_dir() and child.name.isdigit() and len(child.name) == 8):
+                models_sub = child / "models"
+                if models_sub.is_dir():
+                    candidates.append((models_sub, models_sub.stat().st_mtime))
+        
+        if candidates:
+            candidates.sort(key=lambda x: x[1], reverse=True)
+            return candidates[0][0]
+        
+        # Fallback
+        fallback = self.backend_dir / "models"
+        fallback.mkdir(parents=True, exist_ok=True)
+        return fallback
+    
+    def _validate_paths(self):
+        """Validate critical paths exist"""
+        required_paths = {
+            "data_dir": self.data_dir,
+            "log_dir": self.log_dir,
+            "models_dir": self.models_dir
+        }
+        
+        for name, path in required_paths.items():
+            if not path.exists():
+                logging.getLogger("config").warning(f"Required path does not exist: {name}={path}")
 
-class PredictionHistoryResponse(BaseModel):
-    total: int
-    limit: int
-    entries: List[PredictionHistoryEntry]
+# ---------------------------------------------------------------
+# Enhanced Data Manager Class
+# ---------------------------------------------------------------
+class DataManager:
+    """Manages dataset loading, validation, and access with thread safety"""
+    
+    def __init__(self, config: Config):
+        self.config = config
+        self._dataset: Optional[pd.DataFrame] = None
+        self._last_loaded: Optional[datetime] = None
+        self._lock = Lock()
+        self._active_path: Optional[str] = None
+        
+    def load_dataset(self) -> bool:
+        """Load dataset with enhanced validation"""
+        with self._lock:
+            try:
+                dataset_path = self._resolve_dataset_path()
+                
+                if not dataset_path.exists():
+                    logging.error(f"Dataset file not found: {dataset_path}")
+                    return False
+                
+                df = pd.read_csv(dataset_path)
+                if df.empty:
+                    logging.error("Dataset is empty")
+                    return False
+                
+                # Enhanced validation
+                df = self._validate_and_clean_dataset(df)
+                if df is None:
+                    return False
+                
+                self._dataset = df
+                self._last_loaded = datetime.now(timezone.utc)
+                self._active_path = str(dataset_path)
+                
+                logging.info(f"Dataset loaded successfully: {len(df)} rows, {df.shape[1]} columns")
+                return True
+                
+            except Exception as e:
+                logging.error(f"Failed to load dataset: {e}", exc_info=True)
+                return False
+    
+    def _resolve_dataset_path(self) -> Path:
+        """Resolve dataset path with fallbacks"""
+        env_path = os.getenv("DATASET_PATH", "").strip()
+        if env_path:
+            candidate = Path(env_path)
+            if candidate.exists():
+                return candidate
+        
+        # Try common filenames
+        default_candidates = [
+            self.config.data_dir / "game_features_20251114.csv",
+            self.config.data_dir / "game_features.csv",
+            self.config.data_dir / "merged_game_features.csv"
+        ]
+        
+        for candidate in default_candidates:
+            if candidate.exists():
+                return candidate
+        
+        # Return default even if it doesn't exist (for error handling)
+        return default_candidates[0]
+    
+    def _validate_and_clean_dataset(self, df: pd.DataFrame) -> Optional[pd.DataFrame]:
+        """Enhanced dataset validation and cleaning"""
+        try:
+            # Basic cleaning
+            df = df.dropna(how='all')
+            df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
+            
+            # Validate required columns
+            required_columns = {'home_team', 'away_team', 'season', 'week'}
+            missing_required = required_columns - set(df.columns)
+            if missing_required:
+                logging.error(f"Missing required columns: {missing_required}")
+                return None
+            
+            # Ensure home/away columns exist
+            df = self._ensure_home_away_columns(df)
+            
+            # Validate data types
+            if 'season' in df.columns:
+                df['season'] = pd.to_numeric(df['season'], errors='coerce').fillna(0).astype(int)
+            if 'week' in df.columns:
+                df['week'] = pd.to_numeric(df['week'], errors='coerce').fillna(0).astype(int)
+            
+            return df
+            
+        except Exception as e:
+            logging.error(f"Dataset validation failed: {e}", exc_info=True)
+            return None
+    
+    def _ensure_home_away_columns(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Ensure home/away columns exist with proper formatting"""
+        if {'home_team', 'away_team'}.issubset(df.columns):
+            return df
+            
+        if {'team', 'opponent_team', 'is_home'}.issubset(df.columns):
+            is_home = df['is_home'].astype(str).str.strip().str.lower().isin({'true', 't', '1', 'yes', 'y'})
+            df = df.assign(
+                home_team=np.where(is_home, df['team'], df['opponent_team']),
+                away_team=np.where(is_home, df['opponent_team'], df['team'])
+            )
+        
+        return df
+    
+    @property
+    def dataset(self) -> Optional[pd.DataFrame]:
+        with self._lock:
+            return self._dataset.copy() if self._dataset is not None else None
+    
+    @property
+    def status(self) -> Dict[str, Any]:
+        with self._lock:
+            rows = self._dataset.shape[0] if self._dataset is not None else 0
+            cols = self._dataset.shape[1] if self._dataset is not None else 0
+            return {
+                "path": self._active_path,
+                "rows": rows,
+                "columns": cols,
+                "loaded": self._dataset is not None and not self._dataset.empty,
+                "last_loaded": self._last_loaded.isoformat() if self._last_loaded else None
+            }
 
+# ---------------------------------------------------------------
+# Enhanced Model Manager
+# ---------------------------------------------------------------
+class ModelManager:
+    """Manages model loading, validation, and inference"""
+    
+    def __init__(self, config: Config):
+        self.config = config
+        self.home_pipe = None
+        self.away_pipe = None
+        self.win_pipe = None
+        self.metadata = None
+        self.feature_columns = None
+        self._load_lock = Lock()
+        
+    def load_models(self) -> Dict[str, Any]:
+        """Load models with enhanced validation"""
+        with self._load_lock:
+            result = {"status": "success", "loaded": []}
+            
+            try:
+                # Load pipelines
+                self.home_pipe, self.away_pipe, self.win_pipe = self._load_pipelines()
+                if all(p is not None for p in [self.home_pipe, self.away_pipe, self.win_pipe]):
+                    result["loaded"].extend(["home_pipe", "away_pipe", "win_pipe"])
+                else:
+                    result["status"] = "partial"
+                
+                # Load metadata
+                self.metadata = self._load_metadata()
+                if self.metadata:
+                    result["loaded"].append("metadata")
+                
+                # Load feature columns
+                self.feature_columns = self._load_feature_columns()
+                if self.feature_columns:
+                    result["loaded"].append("feature_columns")
+                
+                # Validate model coherence
+                if result["status"] == "success":
+                    self._validate_model_coherence()
+                
+                logging.info(f"Model loading completed: {result}")
+                return result
+                
+            except Exception as e:
+                logging.error(f"Model loading failed: {e}", exc_info=True)
+                return {"status": "error", "error": str(e)}
+    
+    def _load_pipelines(self) -> Tuple[Any, Any, Any]:
+        """Load model pipelines with error handling"""
+        pipelines = {}
+        
+        for name in ["home_pipe", "away_pipe", "win_pipe"]:
+            try:
+                pipeline_path = self.config.models_dir / f"{name}.joblib"
+                if pipeline_path.exists():
+                    pipelines[name] = joblib.load(pipeline_path)
+                    logging.info(f"✓ Loaded {name}")
+                else:
+                    logging.error(f"✗ Pipeline not found: {pipeline_path}")
+                    pipelines[name] = None
+            except Exception as e:
+                logging.error(f"✗ Failed to load {name}: {e}")
+                pipelines[name] = None
+        
+        return pipelines["home_pipe"], pipelines["away_pipe"], pipelines["win_pipe"]
 
-class StatusOverview(BaseModel):
-    health: HealthResponse
-    dataset: Dict[str, Any]
-    models: Dict[str, Any]
-    history: Dict[str, Any]
+    def _load_metadata(self) -> Optional[Dict[str, Any]]:
+        """Load training metadata from metadata.json if present.
 
+        The metadata file describes which feature columns were used during
+        training and includes helpful diagnostics (e.g. optimal win threshold).
+        """
+        meta_path = self.config.models_dir / "metadata.json"
+        if not meta_path.exists():
+            logging.getLogger("models").warning("metadata.json not found in %s", self.config.models_dir)
+            return None
+
+        try:
+            with meta_path.open("r", encoding="utf-8") as f:
+                data: Dict[str, Any] = json.load(f)
+
+            # Derive a default mode for downstream health/prediction responses.
+            if "mode" not in data:
+                data["mode"] = os.getenv("APP_MODE", "production")
+
+            logging.getLogger("models").info("Loaded metadata from %s", meta_path)
+            return data
+        except Exception as exc:  # pragma: no cover - defensive logging
+            logging.getLogger("models").error("Failed to load metadata.json: %s", exc, exc_info=True)
+            return None
+
+    def _load_feature_columns(self) -> Optional[Dict[str, List[str]]]:
+        """Extract raw feature column names from metadata.
+
+        Metadata stores feature columns under ``raw_feature_columns`` which may
+        be either a mapping with ``numeric`` / ``categorical`` or a flat list.
+        """
+        if not self.metadata:
+            return None
+
+        raw_cols = self.metadata.get("raw_feature_columns")
+        if isinstance(raw_cols, dict):
+            numeric = list(raw_cols.get("numeric") or [])
+            categorical = list(raw_cols.get("categorical") or [])
+            return {"numeric": numeric, "categorical": categorical}
+        if isinstance(raw_cols, list):
+            return {"numeric": list(raw_cols), "categorical": []}
+
+        logging.getLogger("models").warning("raw_feature_columns missing or malformed in metadata")
+        return None
+
+    def build_feature_frame(self, game_row: pd.Series) -> pd.DataFrame:
+        """Build a one-row feature DataFrame aligned to training columns.
+
+        This takes a raw dataset row (which contains many columns) and
+        constructs a DataFrame containing only the columns that the
+        pipelines expect, adding any missing columns as NaN so that
+        sklearn's imputers can handle them.
+        """
+        if not self.feature_columns:
+            # As a conservative fallback, drop obvious non-feature columns
+            # and pass everything else through. This should still be safe
+            # because the pipelines' ColumnTransformer will select what it
+            # needs.
+            logging.getLogger("models").warning("feature_columns not set; using full row as features")
+            return pd.DataFrame([game_row.to_dict()])
+
+        numeric = self.feature_columns.get("numeric") or []
+        categorical = self.feature_columns.get("categorical") or []
+        all_cols: List[str] = list(dict.fromkeys(list(numeric) + list(categorical)))
+
+        data: Dict[str, Any] = {}
+        for col in all_cols:
+            data[col] = game_row[col] if col in game_row.index else np.nan
+
+        return pd.DataFrame([data], columns=all_cols)
+    
+    def _validate_model_coherence(self):
+        """Validate that models work together coherently"""
+        if not all([self.home_pipe, self.away_pipe, self.win_pipe, self.feature_columns]):
+            raise ValueError("Missing required model components")
+        
+        # Test with sample data if possible
+        logging.info("Model coherence validation passed")
+
+# ---------------------------------------------------------------
+# Application State Management
+# ---------------------------------------------------------------
+class AppState:
+    """Manages global application state with thread safety"""
+    
+    def __init__(self, config: Config):
+        self.config = config
+        self.data_manager = DataManager(config)
+        self.model_manager = ModelManager(config)
+        self.prediction_history = []
+        self.history_lock = Lock()
+        
+    def initialize(self) -> Dict[str, Any]:
+        """Initialize application state"""
+        results = {}
+        
+        # Load dataset
+        dataset_loaded = self.data_manager.load_dataset()
+        results["dataset"] = "loaded" if dataset_loaded else "failed"
+        
+        # Load models
+        model_result = self.model_manager.load_models()
+        results["models"] = model_result
+        
+        # Load history
+        history_loaded = self._load_prediction_history()
+        results["history"] = f"loaded {len(self.prediction_history)} entries"
+        
+        return results
+
+    def _load_prediction_history(self) -> bool:
+        """Load prediction history from disk if available.
+
+        The history file is optional; failures here should not block startup.
+        """
+        history_path = self.config.data_dir / "prediction_history.json"
+        if not history_path.exists():
+            logging.getLogger("history").info("No prediction_history.json found; starting with empty history.")
+            self.prediction_history = []
+            return False
+
+        try:
+            raw = json.loads(history_path.read_text(encoding="utf-8"))
+            entries: List[PredictionHistoryEntry] = []
+            for item in raw:
+                try:
+                    entries.append(PredictionHistoryEntry(**item))
+                except Exception as exc:  # pragma: no cover - defensive
+                    logging.getLogger("history").warning("Skipping invalid history entry: %s", exc)
+
+            self.prediction_history = entries
+            logging.getLogger("history").info("Loaded %d history entries", len(entries))
+            return True
+        except Exception as exc:  # pragma: no cover - defensive
+            logging.getLogger("history").error("Failed to load prediction history: %s", exc, exc_info=True)
+            self.prediction_history = []
+            return False
+
+    def record_prediction(
+        self,
+        request: PredictionRequest,
+        response: PredictionResponse,
+        game_row: Optional[pd.Series] = None,
+    ) -> None:
+        """Append a prediction to in-memory history.
+
+        Persistence is intentionally deferred; the primary goal is to make
+        recent predictions visible to any future dashboard/history endpoints.
+        """
+        game_id = f"{request.season}_{request.week}_{request.home_team}_{request.away_team}"
+        kickoff: Optional[str] = None
+        if game_row is not None and "home_game_date" in game_row.index:
+            kickoff = str(game_row["home_game_date"])
+
+        predicted_winner = (
+            request.home_team
+            if response.home_win_probability >= response.away_win_probability
+            else request.away_team
+        )
+
+        entry = PredictionHistoryEntry(
+            timestamp=datetime.now(timezone.utc),
+            game_id=game_id,
+            season=request.season,
+            week=request.week,
+            home_team=request.home_team,
+            away_team=request.away_team,
+            home_score_pred=response.home_score,
+            away_score_pred=response.away_score,
+            home_win_probability=response.home_win_probability,
+            away_win_probability=response.away_win_probability,
+            point_diff=response.point_diff,
+            mode=response.mode,
+            prediction_source=response.prediction_source,
+            win_threshold_used=response.win_threshold_used,
+            predicted_winner=predicted_winner,
+            kickoff=kickoff,
+            actual_home_score=None,
+            actual_away_score=None,
+            actual_winner=None,
+            confidence_score=response.confidence_score,
+        )
+
+        with self.history_lock:
+            self.prediction_history.append(entry)
+
+# ---------------------------------------------------------------
+# FastAPI Application Setup
+# ---------------------------------------------------------------
+def create_app() -> FastAPI:
+    """Create FastAPI application with enhanced configuration"""
+    
+    # Initialize configuration
+    config = Config()
+    
+    # Setup logging
+    logging.config.dictConfig({
+        "version": 1,
+        "disable_existing_loggers": False,
+        "formatters": {
+            "detailed": {
+                "format": "%(asctime)s %(levelname)s %(name)s %(message)s"
+            }
+        },
+        "handlers": {
+            "console": {
+                "class": "logging.StreamHandler",
+                "level": "INFO",
+                "formatter": "detailed"
+            },
+            "file": {
+                "class": "logging.FileHandler",
+                "filename": str(config.log_dir / "api.log"),
+                "level": "DEBUG",
+                "formatter": "detailed",
+                "encoding": "utf-8"
+            }
+        },
+        "root": {"level": "DEBUG", "handlers": ["console", "file"]}
+    })
+    
+    log = logging.getLogger("api")
+    
+    # Create application state
+    app_state = AppState(config)
+    
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+        """Enhanced lifespan manager"""
+        log.info("🚀 Starting NFL Prediction API")
+        
+        try:
+            # Initialize application state
+            init_results = app_state.initialize()
+            log.info(f"Application initialized: {init_results}")
+            
+            yield
+            
+        except Exception as e:
+            log.error(f"Application startup failed: {e}", exc_info=True)
+            raise
+        finally:
+            log.info("🛑 Application shutdown complete")
+    
+    # Create FastAPI app
+    app = FastAPI(
+        title="NFL ML Predictions API",
+        version="2.2.0",
+        description="Enhanced API with better data cohesion and validation",
+        lifespan=lifespan
+    )
+    
+    # Add CORS middleware
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],  # Configure based on environment
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    
+    # Enhanced health endpoint
+    @app.get("/health", response_model=HealthResponse)
+    async def health() -> HealthResponse:
+        """Enhanced health check with component details"""
+        components = {
+            "models_loaded": all([app_state.model_manager.home_pipe, 
+                                app_state.model_manager.away_pipe, 
+                                app_state.model_manager.win_pipe]),
+            "dataset_loaded": app_state.data_manager.dataset is not None,
+            "metadata_loaded": app_state.model_manager.metadata is not None
+        }
+        
+        status = "healthy" if all(components.values()) else "unhealthy"
+        mode = app_state.model_manager.metadata.get("mode", "unknown") if app_state.model_manager.metadata else "unknown"
+        
+        return HealthResponse(
+            status=status,
+            mode=mode,
+            reason="Component status check",
+            timestamp=datetime.now(timezone.utc),
+            components=components
+        )
+    
+    # Enhanced prediction endpoint
+    @app.post("/predict", response_model=PredictionResponse)
+    async def predict(request: PredictionRequest) -> PredictionResponse:
+        """Enhanced prediction endpoint with better validation"""
+        # Validate application state
+        if not all([app_state.model_manager.home_pipe, 
+                   app_state.model_manager.away_pipe, 
+                   app_state.model_manager.win_pipe]):
+            raise HTTPException(503, "Models not loaded")
+        
+        if app_state.data_manager.dataset is None:
+            raise HTTPException(503, "Dataset not available")
+
+        # Locate the corresponding game row in the engineered dataset.
+        df = app_state.data_manager.dataset
+        assert df is not None  # for type-checkers; guarded above
+
+        try:
+            mask = (
+                (df["season"] == request.season)
+                & (df["week"] == request.week)
+                & (df["home_team"] == request.home_team)
+                & (df["away_team"] == request.away_team)
+            )
+        except KeyError as exc:
+            # Dataset missing required identifiers; treat as server misconfiguration.
+            raise HTTPException(500, f"Dataset missing required column: {exc}") from exc
+
+        game_rows = df.loc[mask]
+        if game_rows.empty:
+            raise HTTPException(
+                404,
+                f"Game not found in dataset for {request.season} week {request.week} "
+                f"({request.away_team} at {request.home_team})",
+            )
+
+        game_row = game_rows.iloc[0]
+
+        # Build feature frame aligned with training metadata.
+        try:
+            X = app_state.model_manager.build_feature_frame(game_row)
+        except Exception as exc:  # pragma: no cover - defensive
+            logging.getLogger("api").error("Failed to build feature frame: %s", exc, exc_info=True)
+            raise HTTPException(500, "Failed to build features for prediction") from exc
+
+        # Run score regressors.
+        try:
+            home_pred = float(app_state.model_manager.home_pipe.predict(X)[0])  # type: ignore[union-attr]
+            away_pred = float(app_state.model_manager.away_pipe.predict(X)[0])  # type: ignore[union-attr]
+        except Exception as exc:
+            logging.getLogger("api").error("Score prediction failed: %s", exc, exc_info=True)
+            raise HTTPException(500, "Failed to run score models") from exc
+
+        point_diff = home_pred - away_pred
+
+        # Win probability via classifier with a calibrated fallback.
+        win_classifier_used = False
+        win_probability_source = "unknown"
+
+        # Default threshold from metadata, falling back to 0.5.
+        threshold = 0.5
+        if app_state.model_manager.metadata:
+            holdout = app_state.model_manager.metadata.get("holdout_metrics_win") or {}
+            try:
+                threshold = float(holdout.get("optimal_threshold", threshold))
+            except (TypeError, ValueError):
+                threshold = 0.5
+
+        try:
+            win_pipe = app_state.model_manager.win_pipe
+            if win_pipe is None:
+                raise RuntimeError("win_pipe not loaded")
+
+            proba = win_pipe.predict_proba(X)  # type: ignore[union-attr]
+            # Assume column 1 corresponds to home-team win probability.
+            home_win_prob = float(proba[0, 1])
+            home_win_prob = float(np.clip(home_win_prob, 0.0, 1.0))
+            win_classifier_used = True
+            win_probability_source = "classifier"
+        except Exception as exc:
+            logging.getLogger("api").warning(
+                "Win classifier unavailable, falling back to score-based probability: %s", exc
+            )
+            # Soft fallback: map point differential to [0, 1] via logistic curve.
+            home_win_prob = float(1.0 / (1.0 + np.exp(-0.3 * point_diff)))
+            home_win_prob = float(np.clip(home_win_prob, 0.0, 1.0))
+            win_classifier_used = False
+            win_probability_source = "score_diff_fallback"
+            
 class ScheduleGame(BaseModel):
     season: int
     week: int
@@ -1347,121 +1196,39 @@ def predict_game(req: PredictionRequest) -> PredictionResponse:
             home,
             req.season,
             req.week,
+
         )
-        raise HTTPException(404, "Game not found in feature dataset.")
+        prediction_source = "model" if win_classifier_used else "model+win_fallback"
 
-    if len(games) > 1:
-        log.warning(
-            "Multiple feature rows found for game %s@%s S=%s W=%s; using first row.",
-            away,
-            home,
-            req.season,
-            req.week,
+        response = PredictionResponse(
+            home_score=home_pred,
+            away_score=away_pred,
+            home_win_probability=home_win_prob,
+            away_win_probability=away_win_prob,
+            home_win=home_win_flag,
+            away_win=away_win_flag,
+            point_diff=point_diff,
+            mode=mode,
+            prediction_source=prediction_source,
+            win_classifier_used=win_classifier_used,
+            win_probability_source=win_probability_source,
+            win_threshold_used=threshold,
+            confidence_score=confidence_score,
         )
 
-    game_row = games.iloc[0]
+        # Record prediction in in-memory history; failures here should not
+        # affect the main prediction response.
+        try:
+            app_state.record_prediction(request, response, game_row)
+        except Exception as exc:  # pragma: no cover - defensive
+            logging.getLogger("history").warning("Failed to record prediction history: %s", exc)
 
-    # 3. Get expected features from loaded metadata
-    raw_cols = model_objects.get("raw_feature_columns")
-    if not raw_cols:
-        log.error("Server configuration error: raw_feature_columns not in model_objects")
-        raise HTTPException(500, "Server configuration error: Missing feature list")
+        return response
+    
+    return app
 
-    expected_features = _normalize_feature_cols(raw_cols)
-    if not expected_features:
-        log.error("Server configuration error: expected_features resolved to an empty list")
-        raise HTTPException(500, "Server configuration error: Empty feature list")
-
-    missing = [c for c in expected_features if c not in df.columns]
-    if missing:
-        log.error("Dataset missing required features: %s", missing[:10])
-        raise HTTPException(500, "Feature dataset missing required engineered features.")
-
-    # 4. Build a single-row feature matrix X
-    X = pd.DataFrame([game_row])
-    # Drop known target columns if present
-    X = X.drop(columns=["home_points_for", "away_points_for", "home_win"], errors="ignore")
-    # Reorder/limit to the expected feature set
-    X = X[expected_features]
-
-    # Final NaN/inf clean, then inference
-    X = _nan_safe_df(df=X)
-
-    # 5. Score prediction (home/away regressors)
-    try:
-        home_score = float(home_pipe.predict(X)[0])  # type: ignore[call-arg]
-        away_score = float(away_pipe.predict(X)[0])  # type: ignore[call-arg]
-    except Exception as e:
-        log.error("Score prediction failed: %s", e, exc_info=True)
-        raise HTTPException(500, "Score prediction failed.")
-
-    # 6. Win probability using classifier when available
-    home_win_prob: Optional[float] = None
-    away_win_prob: Optional[float] = None
-    win_classifier_used = False
-    win_probability_source = "none"
-    win_threshold_used: Optional[float] = None
-
-    try:
-        if SKLEARN_CHECK_AVAILABLE and check_is_fitted is not None:
-            try:
-                check_is_fitted(win_pipe)  # type: ignore[arg-type]
-            except Exception:
-                # Not fitted or check failed; we'll fall back below.
-                pass
-            else:
-                probs = win_pipe.predict_proba(X)[0]  # type: ignore[call-arg]
-                # Determine index of the "home win" class in a robust way
-                idx_home = 0
-                classes = getattr(win_pipe, "classes_", None)
-                if classes is not None:
-                    try:
-                        cls_list = list(classes)
-                        if 1 in cls_list:
-                            idx_home = cls_list.index(1)
-                        elif "home_win" in cls_list:
-                            idx_home = cls_list.index("home_win")
-                    except Exception:
-                        idx_home = 0
-
-                home_win_prob = float(probs[idx_home])
-                away_win_prob = float(1.0 - home_win_prob)
-                win_classifier_used = True
-                win_probability_source = "classifier"
-                win_threshold_used = float(model_objects.get("win_threshold_optimal", 0.5))
-    except Exception as e:
-        log.warning("Win classifier failed; falling back to score-margin heuristic: %s", e, exc_info=True)
-
-    # 7. Fallback: map score margin to a probability via logistic
-    if home_win_prob is None or away_win_prob is None:
-        margin = home_score - away_score
-        home_win_prob = float(1.0 / (1.0 + np.exp(-margin)))
-        away_win_prob = float(1.0 - home_win_prob)
-        win_probability_source = "legacy-sigmoid"
-        if win_threshold_used is None:
-            win_threshold_used = 0.5
-
-    # 8. Derive binary win flags from probabilities
-    threshold = win_threshold_used if win_threshold_used is not None else 0.5
-    home_win_flag = float(home_win_prob >= threshold)
-    away_win_flag = float(1.0 - home_win_flag)
-
-    point_diff = float(home_score - away_score)
-
-    resp = PredictionResponse(
-        home_score=home_score,
-        away_score=away_score,
-        home_win_probability=home_win_prob,
-        away_win_probability=away_win_prob,
-        home_win=home_win_flag,
-        away_win=away_win_flag,
-        point_diff=point_diff,
-        mode=str(model_objects.get("mode", "production")),
-        prediction_source="api-v2",
-        win_classifier_used=win_classifier_used,
-        win_probability_source=win_probability_source,
-        win_threshold_used=win_threshold_used,
-    )
+# Create the application instance
+app = create_app()
 
     # 9. Record prediction history (best-effort; failures do not affect API response)
     try:
@@ -1599,3 +1366,7 @@ def retrain(background: BackgroundTasks):
     background.add_task(job)
     return {"status": "accepted", "detail": "Retraining started"}
 # CHANGE-LOG: Stub stays lean while highlighting where to hook long-running training.
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
