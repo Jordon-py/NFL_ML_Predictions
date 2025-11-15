@@ -30,14 +30,14 @@ import "./TeamGrid.css";
  */
 
 /**
- * getKey
- * Generates a unique, stable key for a game object.
+ * generateGameKey
+ * Generates a unique, stable identifier for a game object.
  * Prefers backend-provided game_id; falls back to a composite key of season, week, home_abbr, and away_abbr.
- * @param {Object} g - Game object
+ * @param {Object} game - Game object
  * @returns {string} Unique key for the game
  */
-export function getKey(g) {
-  return g?.game_id ?? [g?.season, g?.week, g?.home_abbr, g?.away_abbr].filter(Boolean).join("-");
+export function generateGameKey(game) {
+  return game?.game_id ?? [game?.season, game?.week, game?.home_abbr, game?.away_abbr].filter(Boolean).join("-");
 }
 
 export default function TeamGrid({
@@ -51,32 +51,35 @@ export default function TeamGrid({
 }) {
   // Filter to the requested week and keep order stable
   // NOTE: For optimal memoization, ensure 'games' is a stable reference upstream (e.g., useMemo/useState in parent).
-  const weekGames = useMemo(() => {
-    const filtered = games.filter((g) => Number(g?.week) === Number(week));
+  const gamesForCurrentWeek = useMemo(() => {
+    const filteredGames = games.filter((game) => Number(game?.week) === Number(week));
     // Sort by kickoff ascending if timestamp present; fallback keeps original order
-    return [...filtered].sort((a, b) => {
-      const ta = Date.parse(a.kickoff || a.kickoff_ts_utc || a.kickoff_iso || '') || 0;
-      const tb = Date.parse(b.kickoff || b.kickoff_ts_utc || b.kickoff_iso || '') || 0;
-      return ta - tb;
+    return [...filteredGames].sort((gameA, gameB) => {
+      const kickoffA = Date.parse(gameA.kickoff || gameA.kickoff_ts_utc || gameA.kickoff_iso || '') || 0;
+      const kickoffB = Date.parse(gameB.kickoff || gameB.kickoff_ts_utc || gameB.kickoff_iso || '') || 0;
+      return kickoffA - kickoffB;
     });
   }, [games, week]);
+
+  const totalGamesMessage = gamesForCurrentWeek.length 
+    ? `${gamesForCurrentWeek.length} matchups` 
+    : "No games found for this week";
 
   return (
     <section className="team-grid">
       <header className="team-grid__header">
         <h2 className="team-grid__title">Week {week} Games</h2>
-        <p className="team-grid__subtitle">
-          {weekGames.length ? `${weekGames.length} matchups` : "No games found for this week"}
-        </p>
+        <p className="team-grid__subtitle">{totalGamesMessage}</p>
       </header>
 
       <div className="team-grid-cards" role="list">
-        {weekGames.map((game, index) => {
-          const key = getKey(game);
-          const isLoading = loading[key] || false;
-          const error = errors[key] || null;
+        {gamesForCurrentWeek.map((game, index) => {
+          const gameKey = generateGameKey(game);
+          const isGameLoading = loading[gameKey] || false;
+          const gameError = errors[gameKey] || null;
+          const gamePrediction = predictions[gameKey] || null;
 
-          const matchup = {
+          const matchupData = {
             away_team: game.away_abbr,
             home_team: game.home_abbr,
             // Prefer kickoff_ts_utc (most precise, UTC timestamp), then kickoff_iso (ISO string), then fallback to kickoff (legacy/local format) if others unavailable.
@@ -85,28 +88,26 @@ export default function TeamGrid({
             home_logo: teams[game.home_abbr]?.logoUrl,
           };
 
-          const prediction = predictions[key] || null;
           // Extract status logic for clarity and maintainability
-          const status = isLoading
+          const predictionStatus = isGameLoading
             ? "Predicting…"
-            : error
+            : gameError
               ? "Error"
-              : prediction
+              : gamePrediction
                 ? "Predicted"
                 : "Ready";
+
           // The CSS variable '--i' is used by TeamGrid.css to enable staggered animations or grid ordering effects for each card.
           return (
-            <div key={key} className="grid-item" style={{ "--i": index }} role="listitem">
+            <div key={gameKey} className="grid-item" style={{ "--i": index }} role="listitem">
               <Card
                 index={index}
-                matchup={matchup}
-                prediction={prediction}
-                loading={isLoading}
-                error={error}
-                // Optional cosmetics you can customize or remove:
+                matchup={matchupData}
+                prediction={gamePrediction}
+                loading={isGameLoading}
+                error={gameError}
                 title={`${game.away_abbr} @ ${game.home_abbr}`}
-                status={status}
-                // Click triggers prediction if provided
+                status={predictionStatus}
                 onClick={onPredict ? () => onPredict(game) : undefined}
               />
             </div>

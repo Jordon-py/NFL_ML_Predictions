@@ -13,7 +13,7 @@ import HistoryChart from "../components/HistoryChart";
 import { getNextWeekSchedule, getPredictionHistory, getStatusOverview } from "../api/client";
 import styles from "./StatsPage.module.css";
 
-const toGameKey = (game) => [game?.season, game?.week, game?.home_abbr || game?.home_team, game?.away_abbr || game?.away_team]
+const generateGameKey = (game) => [game?.season, game?.week, game?.home_abbr || game?.home_team, game?.away_abbr || game?.away_team]
   .filter(Boolean)
   .join("-");
 
@@ -38,81 +38,84 @@ function SummaryCard({ title, value, subtext, intent = "default" }) {
 
 export default function StatsPage() {
   const predictionState = usePredictions();
-  const [schedule, setSchedule] = useState([]);
-  const [historyPayload, setHistoryPayload] = useState({ entries: [], total: 0 });
-  const [overview, setOverview] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [upcomingSchedule, setUpcomingSchedule] = useState([]);
+  const [historyData, setHistoryData] = useState({ entries: [], total: 0 });
+  const [statusOverview, setStatusOverview] = useState(null);
+  const [isPageLoading, setIsPageLoading] = useState(true);
+  const [pageError, setPageError] = useState(null);
 
   useEffect(() => {
-    let active = true;
-    const hydrate = async () => {
+    let isComponentMounted = true;
+    
+    const loadPageData = async () => {
       try {
-        setLoading(true);
-        const [scheduleData, historyData, overviewData] = await Promise.all([
+        setIsPageLoading(true);
+        const [scheduleData, historyResponse, overviewData] = await Promise.all([
           getNextWeekSchedule(),
           getPredictionHistory(50),
           getStatusOverview(),
         ]);
-        if (!active) return;
-        setSchedule(Array.isArray(scheduleData) ? scheduleData : []);
-        setHistoryPayload(historyData || { entries: [], total: 0 });
-        setOverview(overviewData || null);
-        setError(null);
+        if (!isComponentMounted) return;
+        
+        setUpcomingSchedule(Array.isArray(scheduleData) ? scheduleData : []);
+        setHistoryData(historyResponse || { entries: [], total: 0 });
+        setStatusOverview(overviewData || null);
+        setPageError(null);
       } catch (err) {
-        if (!active) return;
-        console.error("[StatsPage] hydrate failed", err);
-        setError("Failed to load status data. Backend may be offline.");
+        if (!isComponentMounted) return;
+        console.error("[StatsPage] loadPageData failed", err);
+        setPageError("Failed to load status data. Backend may be offline.");
       } finally {
-        if (active) setLoading(false);
+        if (isComponentMounted) setIsPageLoading(false);
       }
     };
-    hydrate();
-    return () => { active = false; };
+    
+    loadPageData();
+    return () => { isComponentMounted = false; };
   }, []);
 
-  const history = useMemo(() => {
-    if (Array.isArray(historyPayload?.entries) && historyPayload.entries.length) return historyPayload.entries;
+  const predictionHistoryEntries = useMemo(() => {
+    if (Array.isArray(historyData?.entries) && historyData.entries.length) return historyData.entries;
     return Array.isArray(predictionState?.history) ? predictionState.history : [];
-  }, [historyPayload, predictionState?.history]);
+  }, [historyData, predictionState?.history]);
 
-  const historyMap = useMemo(() => {
-    const map = new Map();
-    history.forEach((entry) => {
-      if (entry?.game_id) map.set(entry.game_id, entry);
+  const predictionsByGameKey = useMemo(() => {
+    const keyToPredictionMap = new Map();
+    predictionHistoryEntries.forEach((entry) => {
+      if (entry?.game_id) keyToPredictionMap.set(entry.game_id, entry);
     });
-    return map;
-  }, [history]);
+    return keyToPredictionMap;
+  }, [predictionHistoryEntries]);
 
-  const health = overview?.health || predictionState?.health;
-  const datasetStats = overview?.dataset || {};
-  const historyMetrics = overview?.history?.metrics || { total_predictions: history.length };
-  const scheduleList = Array.isArray(schedule) ? schedule : [];
+  const backendHealth = statusOverview?.health || predictionState?.health;
+  const datasetStatistics = statusOverview?.dataset || {};
+  const historyMetrics = statusOverview?.history?.metrics || { total_predictions: predictionHistoryEntries.length };
+  const scheduleGames = Array.isArray(upcomingSchedule) ? upcomingSchedule : [];
 
-  const renderSchedule = () => {
-    if (loading) return <LoadingSpinner label="Loading status" />;
-    if (error) return <div className={styles.error}>{error}</div>;
-    if (scheduleList.length === 0) return <p className={styles.empty}>No future games detected in the schedule file.</p>;
+  const renderScheduleList = () => {
+    if (isPageLoading) return <LoadingSpinner label="Loading status" />;
+    if (pageError) return <div className={styles.error}>{pageError}</div>;
+    if (scheduleGames.length === 0) return <p className={styles.empty}>No future games detected in the schedule file.</p>;
 
     return (
       <ul className={styles.scheduleList}>
-        {scheduleList.map((game) => {
-          const key = toGameKey(game);
-          const prediction = historyMap.get(key);
+        {scheduleGames.map((game) => {
+          const gameKey = generateGameKey(game);
+          const gamePrediction = predictionsByGameKey.get(gameKey);
           const kickoffDate = game?.kickoff ? new Date(game.kickoff) : null;
-          const kickoffLabel = kickoffDate ? kickoffDate.toLocaleString() : "TBD";
+          const kickoffDisplayText = kickoffDate ? kickoffDate.toLocaleString() : "TBD";
 
           return (
-            <li key={key} className={styles.scheduleItem}>
+            <li key={gameKey} className={styles.scheduleItem}>
               <div className={styles.gameInfo}>
                 <span>{game.away_abbr || game.away_team} @ {game.home_abbr || game.home_team}</span>
-                <span className={styles.kickoffTime}>{kickoffLabel}</span>
+                <span className={styles.kickoffTime}>{kickoffDisplayText}</span>
               </div>
-              {prediction ? (
+              {gamePrediction ? (
                 <div className={styles.predictionDetails}>
-                  <p>Home win: {Math.round((prediction.home_win_probability ?? 0) * 100)}%</p>
-                  <p>Away win: {Math.round((prediction.away_win_probability ?? 0) * 100)}%</p>
-                  <p className={styles.pointDiff}>Diff: {prediction.point_diff?.toFixed?.(1) ?? prediction.point_diff} pts</p>
+                  <p>Home win: {Math.round((gamePrediction.home_win_probability ?? 0) * 100)}%</p>
+                  <p>Away win: {Math.round((gamePrediction.away_win_probability ?? 0) * 100)}%</p>
+                  <p className={styles.pointDiff}>Diff: {gamePrediction.point_diff?.toFixed?.(1) ?? gamePrediction.point_diff} pts</p>
                 </div>
               ) : (
                 <p className={styles.pendingNote}>No prediction recorded yet.</p>
@@ -124,13 +127,13 @@ export default function StatsPage() {
     );
   };
 
-  const winRate = typeof historyMetrics?.win_rate === "number"
+  const predictionWinRate = typeof historyMetrics?.win_rate === "number"
     ? `${Math.round(historyMetrics.win_rate * 100)}%`
     : "n/a";
 
   return (
     <>
-      <NavBar state={{ ...predictionState, health }} />
+      <NavBar state={{ ...predictionState, health: backendHealth }} />
       <div className={styles.statsPage}>
         <header className={styles.pageHeader}>
           <h1 className={styles.h1}>Prediction Status Page</h1>
@@ -140,30 +143,30 @@ export default function StatsPage() {
         <section className={styles.summaryGrid}>
           <SummaryCard
             title="Backend Health"
-            value={health?.status ?? "unknown"}
-            subtext={health?.reason}
-            intent={health?.status === "healthy" ? "ok" : health?.status === "unhealthy" ? "error" : "default"}
+            value={backendHealth?.status ?? "unknown"}
+            subtext={backendHealth?.reason}
+            intent={backendHealth?.status === "healthy" ? "ok" : backendHealth?.status === "unhealthy" ? "error" : "default"}
           />
           <SummaryCard
             title="Dataset rows"
-            value={datasetStats?.rows ?? "—"}
-            subtext={datasetStats?.path ?? "path unknown"}
+            value={datasetStatistics?.rows ?? "—"}
+            subtext={datasetStatistics?.path ?? "path unknown"}
           />
           <SummaryCard
             title="Predictions recorded"
-            value={historyMetrics?.total_predictions ?? history.length}
-            subtext={`Win rate: ${winRate}`}
+            value={historyMetrics?.total_predictions ?? predictionHistoryEntries.length}
+            subtext={`Win rate: ${predictionWinRate}`}
           />
         </section>
 
         <section className={styles.scheduleSection}>
           <h2 className={styles.h2}>Next Week Schedule</h2>
-          {renderSchedule()}
+          {renderScheduleList()}
         </section>
 
         <section className={styles.historySection}>
           <h2 className={styles.h2}>Historical Predictions</h2>
-          <HistoryChart history={history} state={predictionState} />
+          <HistoryChart history={predictionHistoryEntries} state={predictionState} />
         </section>
       </div>
     </>
