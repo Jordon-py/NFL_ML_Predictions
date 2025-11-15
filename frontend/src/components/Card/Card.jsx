@@ -12,7 +12,7 @@ import styles from "./Card.module.css";
  *  - progress?: number (0..100)
  *  - loading?: boolean
  *  - error?: string
- *  - index?: number (stagger)
+ *  - index?: number (stagger animation index)
  *  - onClick?: () => void
  */
 export default function Card({
@@ -32,17 +32,25 @@ export default function Card({
   const { away_team, home_team, kickoff, away_logo, home_logo } = matchup;
   const hasPrediction = !!prediction;
 
-  const pct = (v) =>
-    typeof v === "number" && isFinite(v) ? Math.round(v * 100) : null;
+  const formatProbabilityAsPercentage = (probabilityValue) =>
+    typeof probabilityValue === "number" && isFinite(probabilityValue) 
+      ? Math.round(probabilityValue * 100) 
+      : null;
+
+  const cardClassNames = [
+    styles.card,
+    hasPrediction ? styles.hasPrediction : "",
+    loading ? styles.isLoading : "",
+    error ? styles.isError : "",
+  ].join(" ");
+
+  const kickoffDisplayTime = kickoff ? new Date(kickoff).toLocaleString() : "TBD";
+  const shouldShowTopBar = title || status || icon;
+  const hasScoreDetails = prediction?.home_score != null || prediction?.away_score != null || prediction?.point_diff != null;
 
   return (
     <article
-      className={[
-        styles.card,
-        hasPrediction ? styles.hasPrediction : "",
-        loading ? styles.isLoading : "",
-        error ? styles.isError : "",
-      ].join(" ")}
+      className={cardClassNames}
       style={{ ["--i"]: index }}
       tabIndex={0}
       role="button"
@@ -51,7 +59,7 @@ export default function Card({
       onKeyDown={(e) => (e.key === "Enter" ? onClick?.(e) : null)}
     >
       {/* Top bar: optional icon/title/status */}
-      {(title || status || icon) && (
+      {shouldShowTopBar && (
         <div className={styles.topBar}>
           <div className={styles.left}>
             {icon && <span className={styles.icon} aria-hidden>{icon}</span>}
@@ -75,7 +83,7 @@ export default function Card({
         </div>
         <div className={styles.meta}>
           <time className={styles.kickoff} dateTime={kickoff}>
-            {kickoff ? new Date(kickoff).toLocaleString() : "TBD"}
+            {kickoffDisplayTime}
           </time>
         </div>
       </header>
@@ -87,15 +95,23 @@ export default function Card({
           <p className={styles.errorMsg} role="status">{error}</p>
         ) : hasPrediction ? (
           <div className={styles.predictionBody}>
-            <div className={styles.probRow}><span>Home</span><b>{pct(prediction.home_win_probability)}%</b></div>
-            <div className={styles.probRow}><span>Away</span><b>{pct(prediction.away_win_probability)}%</b></div>
+            <div className={styles.probRow}>
+              <span>Home</span>
+              <b>{formatProbabilityAsPercentage(prediction.home_win_probability)}%</b>
+            </div>
+            <div className={styles.probRow}>
+              <span>Away</span>
+              <b>{formatProbabilityAsPercentage(prediction.away_win_probability)}%</b>
+            </div>
             {/* Optional numeric details if present */}
-            {(prediction.home_score != null || prediction.away_score != null || prediction.point_diff != null) && (
+            {hasScoreDetails && (
               <div className={styles.detailRow}>
                 <span>Score</span>
                 <b>
                   {away_team} {prediction.away_score ?? "—"} – {prediction.home_score ?? "—"} {home_team}
-                  {prediction.point_diff != null && <em className={styles.diff}> • Δ {prediction.point_diff.toFixed?.(1) ?? prediction.point_diff}</em>}
+                  {prediction.point_diff != null && (
+                    <em className={styles.diff}> • Δ {prediction.point_diff.toFixed?.(1) ?? prediction.point_diff}</em>
+                  )}
                 </b>
               </div>
             )}
@@ -108,7 +124,10 @@ export default function Card({
       {/* Optional progress meter */}
       {typeof progress === "number" && isFinite(progress) && (
         <div className={styles.progressTrack} aria-hidden>
-          <div className={styles.progressBar} style={{ width: `${Math.max(0, Math.min(100, progress))}%` }} />
+          <div 
+            className={styles.progressBar} 
+            style={{ width: `${Math.max(0, Math.min(100, progress))}%` }} 
+          />
         </div>
       )}
     </article>
