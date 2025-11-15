@@ -11,35 +11,31 @@ Key ideas:
   - Layout and styling come from Dashboard.module.css via CSS Modules.
 */
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo } from "react";
 import { usePredictions } from "../../PredictionContext";
 import TeamGrid from "../Card/TeamGrid.jsx";
 import PredictionResult from "../PredictionResult.jsx";
 import HistoryChart from "../HistoryChart.jsx";
 import NavBar from "../NavBar/NavBar.jsx";
-// @ts-ignore - CSS module import for JS/JSX file
+// @ts-ignore -- CSS module is resolved by Vite; types are not required here.
 import styles from "./Dashboard.module.css";
-import { predictGame, getNextWeekSchedule } from "../../api/client.js";
-import { useParams } from "react-router-dom";
-
-
-const LS_KEY = "prediction_history";
 
 /**
- * loadHistoryLocal
- * ----------------
- * Helper that safely retrieves any previously stored prediction history
- * from localStorage. This lets the dashboard still render "something"
- * if the context is empty (e.g. on a fresh reload before the backend responds).
+ * Dashboard — layout-only container using CSS Modules.
+ * Cleans up context shape handling and avoids inline styles.
  */
-function loadHistoryLocal() {
+const PREDICTION_HISTORY_KEY = "prediction_history";
+
+function loadPredictionHistoryFromLocalStorage() {
   try {
-    const raw = localStorage.getItem(LS_KEY);
-    if (!raw) {
+    if (typeof window === "undefined" || typeof window.localStorage === "undefined") {
+      // Server-side render or non-browser environment: nothing to load.
       return [];
     }
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    const rawHistoryData = window.localStorage.getItem(PREDICTION_HISTORY_KEY);
+    if (!rawHistoryData) return [];
+    const parsedHistory = JSON.parse(rawHistoryData);
+    return Array.isArray(parsedHistory) ? parsedHistory : [];
   } catch {
     // Corrupt or missing data should never crash the UI.
     return [];
@@ -56,115 +52,79 @@ function loadHistoryLocal() {
  *  - Render the currently selected prediction in PredictionResult
  */
 export default function DashBoard() {
-  const [thisWeekSchedule, setThisWeekSchedule] = useState([]);
-  const predictionState = usePredictions();
+  /**
+   * Raw prediction context state.
+   *
+   * Typed as `any` to keep JSX ergonomics while Pylance/TS remain active
+   * in this JS project.
+   */
+  /** @type {any} */
+  const predictionState = usePredictions() || {};
   const {
-    current,
-    history: ctxHistory,
-    schedule,
-    week,
-    teams,
-    predictions,
-    loading,
-    errors,
-    makePrediction,
-    health,
+    current: currentPrediction,
+    history: predictionHistory = [],
+    schedule: upcomingGames,
+    week: currentWeek,
+    teams: teamMetadata,
+    predictions: gamePredictions,
+    loading: loadingStates,
+    errors: errorStates,
+    makePrediction: handlePredictionRequest,
+    health: backendHealth,
   } = predictionState;
 
-  // CSS Modules mapping – keeps JSX readable while avoiding global class names.
-  const {
-    dashboard,
-    header,
-    teamGridHeader,
-    title,
-    subtitle,
-    teamMain,
-    historyChart,
-  } = styles;
-
-  // Effective history: use context first, fall back to localStorage
-  const history = useMemo(() => {
-    // Prefer the canonical history from context; fall back to any locally
-    // persisted history if the context has not yet hydrated from the backend.
-    if (Array.isArray(ctxHistory)) return ctxHistory;
-    return loadHistoryLocal();
-  }, [ctxHistory]);
-
-  // The "latest" entry is the first element of history (assumes newest-first order).
-  const latestFromHistory = history.length ? history[0] : null;
-
-  /**
-   * navState:
-   * - current: the currently selected prediction (if any),
-   *            defaulting to the latest history entry
-   * - latest:  a mirror of the latest history entry for quick access
-   * - count:   how many predictions we've stored (for small UI badges)
-   * - health:  backend / model health summary for global status display
-   *
-   * useMemo is used purely to avoid re-creating this object on every render.
-   */
-  const navState = useMemo(
-    () => ({
-      current: current ?? latestFromHistory,
-      latest: latestFromHistory,
-      count: history.length,
-      health,
-    }),
-    [current, latestFromHistory, history.length, health]
+  const historyList = useMemo(
+    () =>
+      Array.isArray(predictionHistory) && predictionHistory.length
+        ? predictionHistory
+        : loadPredictionHistoryFromLocalStorage(),
+    [predictionHistory]
   );
 
-  // Derived health strings keep JSX simple and play nicely with loose JS tooling types.
-  const healthStatus = health?.status ?? "unknown";
-  const healthReason = health?.reason ?? "initializing";
+  const mostRecentPrediction = historyList.length ? historyList[0] : null;
+  const displayedPrediction = currentPrediction ?? mostRecentPrediction;
 
-  useEffect(() => {
-    const fetchNextWeekSchedule = async () => {
-      try {
-        const nextWeekSchedule = await getNextWeekSchedule();
-        console.log("Next week schedule:", nextWeekSchedule);
-        setThisWeekSchedule(nextWeekSchedule || []);
-      } catch (error) {
-        console.error("Failed to fetch next week schedule:", error);
-        setThisWeekSchedule([]);
-      }
-    };
-
-    fetchNextWeekSchedule();
-  }, []);
+  const navigationBarState = useMemo(
+    () => ({
+      current: displayedPrediction,
+      latest: mostRecentPrediction,
+      count: historyList.length,
+      health: backendHealth,
+    }),
+    [displayedPrediction, mostRecentPrediction, historyList.length, backendHealth]
+  );
+  const isBackendHealthy = backendHealth?.status === 'healthy';
+  const healthMessage = isBackendHealthy
+    ? "Click any matchup to see predicted scores"
+    : `Models loading... predictions are temporarily disabled. Reason: ${backendHealth?.reason || 'initializing'}`;
 
   return (
     <>
-      <NavBar state={navState} />
+      <NavBar state={navigationBarState} />
 
-      <main className={dashboard}>
-        <header className={header}>
-          <div className={teamGridHeader}>
-            <h2 className={title}>Next Week&apos;s NFL Matchups</h2>
-            <p className={subtitle}>
-              {healthStatus !== "healthy"
-                ? `Models loading... predictions are temporarily disabled. Reason: ${healthReason}`
-                : "Click any matchup to see predicted scores"}
-            </p>
+      <main className={styles.dashboard}>
+        <header className={styles.header}>
+          <div className={styles.teamGridHeader}>
+            <h2 className={styles.title}>Next Week&apos;s NFL Matchups</h2>
+            <p className={styles.subtitle}>{healthMessage}</p>
           </div>
         </header>
 
-        <section className={teamMain}>
+        <section className={styles.teamMain}>
           {/* TeamGrid:
               - "schedule" comes from PredictionContext and is the canonical
                 view of games to be predicted. */}
           <TeamGrid
-            games={schedule}
-            week={week}
-            teams={teams}
-            predictions={predictions}
-            loading={loading}
-            errors={errors}
-            onPredict={() => predictGame(useParams)}
+            games={upcomingGames}
+            week={currentWeek}
+            teams={teamMetadata}
+            predictions={gamePredictions}
+            loading={loadingStates}
+            errors={errorStates}
+            onPredict={handlePredictionRequest}
           />
-
-          {/* HistoryChart visualizes model performance over past predictions. */}
-          <div className={historyChart}>
-            <HistoryChart history={history} state={predictionState} />
+          <div className={styles.historyChart}>
+            <HistoryChart history={historyList} state={predictionState} />
           </div>
         </section>
 
@@ -172,7 +132,7 @@ export default function DashBoard() {
             human-friendly layout. aria-live ensures screen readers are
             notified when the selected game changes. */}
         <section aria-live="polite">
-          <PredictionResult entry={current ?? latestFromHistory} />
+          <PredictionResult entry={displayedPrediction} />
         </section>
       </main>
     </>
