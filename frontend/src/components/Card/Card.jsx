@@ -214,7 +214,7 @@ export default function Card({
                       {' '}
                       • Δ{' '}
                       {typeof prediction.point_diff === 'number' &&
-                      typeof prediction.point_diff.toFixed === 'function'
+                        typeof prediction.point_diff.toFixed === 'function'
                         ? prediction.point_diff.toFixed(1)
                         : prediction.point_diff}
                     </em>
@@ -242,4 +242,3 @@ export default function Card({
     </article>
   );
 }
- 
