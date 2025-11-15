@@ -64,7 +64,7 @@ cd ..
 1. **Build the dataset**:
 
 ```bash
-python backend/build_csv_datasets.py --start 2014 --end 2025 --out-dir backend/data
+python backend/build_csv_datasets.py --start 2018 --end 2025 --out-dir backend/data
 ```
 
 ** 2. **Create predictive dataset** (NEW):

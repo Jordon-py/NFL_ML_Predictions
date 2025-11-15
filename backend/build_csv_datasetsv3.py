@@ -18,7 +18,7 @@ Features:
 
 Quick start
 -----------
-python build_csv_datasets.py --start 2017 --end 2025 --out-dir ./data --save-dominance-matrix
+python build_csv_datasetsv3.py --start 2018 --end 2025 --out-dir ./data --save-dominance-matrix
 
 Outputs
 -------
@@ -50,7 +50,7 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.linear_model import Ridge
 
 # Shared feature engineering utilities
-from backend.utils.feature_helpers import (
+from utils.feature_helpers import (
     make_time_key,
     _rolling_prior_stats,
     _ffill_prior_features,

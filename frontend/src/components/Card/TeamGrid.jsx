@@ -1,118 +1,148 @@
-// placeholder
-// TeamGrid.jsx — Week view integrated with prop-driven Card
-import React, { useMemo } from "react";
-import Card from "./Card.jsx";
-import "./TeamGrid.css";
+// TeamGrid.jsx
+// ------------------------------------------------------
+// Grid layout for all games in a given NFL week.
+// - Receives a `week` number and an array of `games`.
+// - Renders a responsive CSS grid of <Card /> components.
+// - Keeps empty / loading states friendly and clear.
+// ------------------------------------------------------
+
+import React from 'react';
+import Card from './Card.jsx';        // adjust path if needed
+import './TeamGrid.css';
+import { getNextWeekSchedule, predictGame } from '../../api/client.js';
+
+/** Build a stable key for a game, mirroring PredictionContext/getKey + StatsPage/toGameKey. */
+const toGameKey = (game) =>
+  game?.game_id ?? [
+    game?.season,
+    game?.week,
+    game?.home_abbr || game?.home_team,
+    game?.away_abbr || game?.away_team,
+  ]
+    .filter(Boolean)
+    .join('-');
 
 /**
- * TeamGrid (Week View)
- * Renders all games for the selected week using the futuristic Card component.
- * 
- * Visual/UX intent: Presents a responsive, animated grid of matchup cards, each styled with modern effects to highlight NFL games and prediction status for an engaging, informative user experience.
- *
- * Props:
- *  - games: Array<Game>  // full schedule array (season, week, home_abbr, away_abbr, kickoff_* etc.)
- *  - week?: number       // defaults to 10
- *  - teams?: Record<string, { logoUrl?: string, name?: string }>
- *  - predictions?: Record<string, Prediction>         // keyed by game key/id
- *  - loading?: Record<string, boolean>                // keyed by game key/id
- *  - errors?: Record<string, string>                  // keyed by game key/id
- *  - onPredict?: (game: Game) => void                 // trigger prediction for a game
- *
- * Game shape (expected):
- *  { game_id?: string, season: number, week: number,
- *    home_abbr: string, away_abbr: string,
- *    kickoff_ts_utc?: string, kickoff_iso?: string, kickoff?: string }
- *
- * Prediction shape (example):
- *  { home_win_probability: number, away_win_probability: number,
- *    home_score?: number, away_score?: number, point_diff?: number }
+ * @param {{
+ *   week?: number,
+ *   games?: Array<any>,
+ *   isLoading?: boolean,
+ *   teams?: Record<string, { name?: string; logoUrl?: string }>,
+ *   predictions?: Record<string, any>,
+ *   loading?: Record<string, boolean>,
+ *   errors?: Record<string, any>,
+ *   onPredict?: (game: any) => void,
+ * }} [props]
  */
-
-/**
- * getKey
- * Generates a unique, stable key for a game object.
- * Prefers backend-provided game_id; falls back to a composite key of season, week, home_abbr, and away_abbr.
- * @param {Object} g - Game object
- * @returns {string} Unique key for the game
- */
-export function getKey(g) {
-  return g?.game_id ?? [g?.season, g?.week, g?.home_abbr, g?.away_abbr].filter(Boolean).join("-");
-}
-
-export default function TeamGrid({
+function TeamGrid({
+  week = 10,
   games = [],
-  week = 4,
+  isLoading = false,
   teams = {},
   predictions = {},
   loading = {},
   errors = {},
   onPredict,
-}) {
-  // Filter to the requested week and keep order stable
-  // NOTE: For optimal memoization, ensure 'games' is a stable reference upstream (e.g., useMemo/useState in parent).
-  const weekGames = useMemo(() => {
-    const filtered = games.filter((g) => Number(g?.week) === Number(week));
-    // Sort by kickoff ascending if timestamp present; fallback keeps original order
-    return [...filtered].sort((a, b) => {
-      const ta = Date.parse(a.kickoff || a.kickoff_ts_utc || a.kickoff_iso || '') || 0;
-      const tb = Date.parse(b.kickoff || b.kickoff_ts_utc || b.kickoff_iso || '') || 0;
-      return ta - tb;
-    });
-  }, [games, week]);
+} = {}) {
+  const safeWeek = week ?? (games[0]?.week ?? 10);
+
+  if (isLoading) {
+    return (
+      <section className="team-grid" aria-busy="true">
+        <header className="team-grid__header">
+          <h2 className="team-grid__title">Week {safeWeek} Games</h2>
+          <p className="team-grid__subtitle">Loading schedule…</p>
+        </header>
+        <div className="team-grid__empty">
+          <div className="team-grid__spinner" />
+        </div>
+      </section>
+    );
+  }
+
+  if (!games || games.length === 0) {
+    return (
+      <section className="team-grid">
+        <header className="team-grid__header">
+          <h2 className="team-grid__title">Week {safeWeek} Games</h2>
+          <p className="team-grid__subtitle">
+            No games found for Week {safeWeek}. Try refreshing or checking your API.
+          </p>
+        </header>
+        <div className="team-grid__empty">
+          <p className="team-grid__empty-text">
+            Once the schedule loads, all Week {safeWeek} matchups will appear here.
+          </p>
+        </div>
+      </section>
+    );
+  }
 
   return (
-    <section className="team-grid">
+    <section
+      className="team-grid"
+      aria-label={`NFL Week ${safeWeek} games`}
+      data-week={safeWeek}
+    >
       <header className="team-grid__header">
-        <h2 className="team-grid__title">Week {week} Games</h2>
+        <div className="team-grid__heading">
+          <span className="team-grid__badge">Week {safeWeek}</span>
+          <h2 className="team-grid__title">Week {safeWeek} Games</h2>
+        </div>
         <p className="team-grid__subtitle">
-          {weekGames.length ? `${weekGames.length} matchups` : "No games found for this week"}
+          Showing <strong>{games.length}</strong> games scheduled.
         </p>
       </header>
 
-      <div className="team-grid-cards" role="list">
-        {weekGames.map((game, index) => {
-          const key = getKey(game);
-          const isLoading = loading[key] || false;
-          const error = errors[key] || null;
+      <div className="team-grid__grid">
+        {games.map((game, index) => {
+          const rawKey = toGameKey(game) || String(index);
 
-          const matchup = {
-            away_team: game.away_abbr,
-            home_team: game.home_abbr,
-            // Prefer kickoff_ts_utc (most precise, UTC timestamp), then kickoff_iso (ISO string), then fallback to kickoff (legacy/local format) if others unavailable.
-            kickoff: game.kickoff_ts_utc || game.kickoff_iso || game.kickoff || "",
-            away_logo: teams[game.away_abbr]?.logoUrl,
-            home_logo: teams[game.home_abbr]?.logoUrl,
+          // Look up any existing prediction + request state for this game.
+          const prediction = predictions?.[rawKey];
+          const isGameLoading = Boolean(loading?.[rawKey]);
+          const errorMessage = errors?.[rawKey] ?? null;
+
+          // Enrich the schedule row with team metadata (logos + pretty names) when available.
+          const homeAbbr = game.home_abbr || game.home_team;
+          const awayAbbr = game.away_abbr || game.away_team;
+          const homeMeta = homeAbbr && teams && teams[homeAbbr] ? teams[homeAbbr] : null;
+          const awayMeta = awayAbbr && teams && teams[awayAbbr] ? teams[awayAbbr] : null;
+
+          const enrichedGame = {
+            ...game,
+            home_logo: homeMeta?.logoUrl,
+            away_logo: awayMeta?.logoUrl,
           };
 
-          const prediction = predictions[key] || null;
-          // Extract status logic for clarity and maintainability
-          const status = isLoading
-            ? "Predicting…"
-            : error
-              ? "Error"
-              : prediction
-                ? "Predicted"
-                : "Ready";
-          // The CSS variable '--i' is used by TeamGrid.css to enable staggered animations or grid ordering effects for each card.
+          if (prediction) {
+            enrichedGame.home_pred_score =
+              prediction.home_score ?? prediction.home_score_pred ?? null;
+            enrichedGame.away_pred_score =
+              prediction.away_score ?? prediction.away_score_pred ?? null;
+            enrichedGame.home_win_probability =
+              prediction.home_win_probability ?? prediction.probs?.home ?? null;
+          }
+
+          const handleClick = () => {
+            if (typeof onPredict === 'function' && !isGameLoading) {
+              onPredict(game);
+            }
+          };
+
           return (
-            <div key={key} className="grid-item" style={{ "--i": index }} role="listitem">
-              <Card
-                index={index}
-                matchup={matchup}
-                prediction={prediction}
-                loading={isLoading}
-                error={error}
-                // Optional cosmetics you can customize or remove:
-                title={`${game.away_abbr} @ ${game.home_abbr}`}
-                status={status}
-                // Click triggers prediction if provided
-                onClick={onPredict ? () => onPredict(game) : undefined}
-              />
-            </div>
+            <Card
+              key={rawKey}
+              game={enrichedGame}
+              isLoading={isGameLoading}
+              error={errorMessage}
+              onClick={handleClick}
+            />
           );
         })}
       </div>
     </section>
   );
 }
+
+export default TeamGrid;

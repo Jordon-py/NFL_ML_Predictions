@@ -929,6 +929,43 @@ def _resolve_schedule_path() -> Path:
     log.warning("No schedule file found; returning DEFAULT_SCHEDULE path (may not exist): %s", DEFAULT_SCHEDULE)
     return DEFAULT_SCHEDULE
 
+# Simple in-memory cache for the schedule CSV to avoid re-reading the same
+# file on every request. The cache is invalidated automatically when the
+# underlying file's modification time changes.
+SCHEDULE_CACHE_PATH: Optional[Path] = None
+SCHEDULE_CACHE_MTIME: Optional[float] = None
+SCHEDULE_CACHE_DF: Optional[pd.DataFrame] = None
+
+
+def _load_schedule_df(spath: Path) -> pd.DataFrame:
+  """Load the schedule CSV with a lightweight mtime-aware cache.
+
+  This keeps per-request latency low for /schedule/next-week and
+  /predict/next-week while still picking up changes when the schedule
+  file is updated on disk.
+  """
+  global SCHEDULE_CACHE_PATH, SCHEDULE_CACHE_MTIME, SCHEDULE_CACHE_DF
+
+  try:
+      stat = spath.stat()
+  except FileNotFoundError:
+      # Let callers handle the missing-file case consistently.
+      raise
+
+  mtime = stat.st_mtime
+  if (
+      SCHEDULE_CACHE_PATH == spath
+      and SCHEDULE_CACHE_MTIME == mtime
+      and SCHEDULE_CACHE_DF is not None
+  ):
+      return SCHEDULE_CACHE_DF.copy()
+
+  df = pd.read_csv(spath)
+  SCHEDULE_CACHE_PATH = spath
+  SCHEDULE_CACHE_MTIME = mtime
+  SCHEDULE_CACHE_DF = df
+  return df.copy()
+
 def get_current_nfl_context() -> Dict[str, Any]:
     now = datetime.now()
     cur_season = now.year if now.month >= 8 else now.year - 1
@@ -1082,7 +1119,11 @@ def get_next_week_schedule() -> List[ScheduleGame]:
              os.getenv('SCHEDULE_PATH'), DEFAULT_SCHEDULE, spath, spath.exists())
     if not spath.exists():
         raise HTTPException(status_code=503, detail=f"Schedule not available on server (missing file): {spath}")
-    df = pd.read_csv(spath)
+    try:
+        df = _load_schedule_df(spath)
+    except Exception as e:
+        log.error("Failed to load schedule CSV: %s", e, exc_info=True)
+        raise HTTPException(500, "Failed to load schedule data from server.")
     for col in ("home_team", "away_team"):
         if col in df.columns:
             df[col] = df[col].astype(str).str.strip().replace(TEAM_CODE_FIX)
@@ -1264,8 +1305,12 @@ def predict_next_week() -> Dict[str, Any]:
         spath = _resolve_schedule_path()
         if not spath.exists():
             raise HTTPException(503, f"Schedule data not available on server (missing file): {spath}")
-        
-        s = pd.read_csv(spath)
+
+        try:
+            s = _load_schedule_df(spath)
+        except Exception as e:
+            log.error("Failed to load schedule CSV for next-week predictions: %s", e, exc_info=True)
+            raise HTTPException(500, "Failed to load schedule data for next-week predictions.")
         games = s[(s["season"] == ctx["next_prediction_season"]) & (s["week"] == ctx["next_prediction_week"])]
         
         if games.empty:
@@ -1312,6 +1357,9 @@ def predict_next_week() -> Dict[str, Any]:
             "total_games": len(out),
             "successful_predictions": sum(1 for p in out if "prediction" in p),
         }
+    except HTTPException:
+        # Let explicit HTTP errors (e.g., 503 for missing schedule data) propagate unchanged.
+        raise
     except Exception as e:
         log.error("Next-week prediction error: %s", e, exc_info=True)
         raise HTTPException(500, "Failed to process next week predictions.")

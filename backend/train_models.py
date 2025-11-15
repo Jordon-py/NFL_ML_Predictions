@@ -20,6 +20,7 @@ import argparse
 import json
 import logging
 import os
+from pathlib import Path
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
 from typing import List, Tuple, Dict, cast, Any
@@ -46,25 +47,25 @@ from joblib import dump
 # -----------------------
 # Configuration
 # -----------------------
-load_dotenv(dotenv_path="backend/.env", verbose=True)
+load_dotenv(dotenv_path="./.env", verbose=True)
 
-SERVE_FRONTEND=os.getenv('SERVE_FRONTEND')
-CORS_ORIGINS=os.getenv('CORS_ORIGINS')
-NODE_ENV=os.getenv('NODE_ENV')
-HP_N_ITER=int(os.getenv('HP_N_ITER', '100'))  # Default to 100 if not set or invalid
-CV_SPLITS=int(os.getenv('CV_SPLITS', '5'))  # Default to 5
-RANDOM_SEED=int(os.getenv('RANDOM_SEED', '42'))  # Default to 42
-N_SPLITS=int(os.getenv('N_SPLITS', '5'))  # Default to 5
-N_JOBS = int(os.getenv('N_JOBS', '-1'))  # limit parallelism to avoid memory spikes
+SERVE_FRONTEND = os.getenv("SERVE_FRONTEND")
+CORS_ORIGINS = os.getenv("CORS_ORIGINS")
+NODE_ENV = os.getenv("NODE_ENV")
+HP_N_ITER = int(os.getenv("HP_N_ITER", "100"))  # Default to 100 if not set or invalid
+CV_SPLITS = int(os.getenv("CV_SPLITS", "5"))  # Default to 5
+RANDOM_SEED = int(os.getenv("RANDOM_SEED", "42"))  # Default to 42
+# If N_SPLITS is not provided, fall back to CV_SPLITS to keep CV configuration consistent.
+N_SPLITS = int(os.getenv("N_SPLITS", str(CV_SPLITS)))
+# Limit parallelism to avoid memory spikes during RandomizedSearch; override via N_JOBS env if needed.
+N_JOBS = int(os.getenv("N_JOBS", "-1"))
 
 print(N_JOBS, NODE_ENV, SERVE_FRONTEND, CORS_ORIGINS)
-# ----------Developement enviorment -----------
-DEV_ORIGINS=os.getenv('DEV_ORIGINS', 'http://localhost:3000')
+# ----------Development environment -----------
+DEV_ORIGINS = os.getenv("DEV_ORIGINS", "http://localhost:3000")
 
-TRAIN_DATASET_FILE=os.getenv(
-    'TRAIN_DATASET_FILE',
-    'C:/Users/iProg/OneDrive/Documents/Football_predict/nfl_prediction_system/NFL_ML_Predictions/backend/data/game_features.csv'
-    )
+# Fast dev flag: when true, skip hyperparameter search and train single models.
+FAST_DEV_TRAIN = os.getenv("FAST_DEV_TRAIN", "0") == "1"
 
 TARGET_HOME = "home_points_for"
 TARGET_AWAY = "away_points_for"
@@ -126,6 +127,55 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
 )
 log = logging.getLogger("train_models")
+
+# Base directories for resolving dataset paths and outputs
+BASE_DIR = Path(__file__).resolve().parent
+DATA_DIR = BASE_DIR / "data"
+
+
+def _resolve_default_dataset_path() -> str:
+    """Determine the default training dataset CSV.
+
+    Priority:
+      1) TRAIN_DATASET_FILE env var if it points to an existing file.
+      2) Latest game_features_*.csv in backend/data (by modification time).
+      3) Legacy merge_dominance.csv in backend/data.
+    """
+    env_path = os.getenv("TRAIN_DATASET_FILE")
+    if env_path:
+        env_path = env_path.strip()
+        if env_path:
+            candidate = Path(env_path)
+            if not candidate.is_absolute():
+                # If the env path is relative, prefer resolving it from the backend folder.
+                if env_path.startswith("backend/") or env_path.startswith("backend\\"):
+                    candidate = BASE_DIR.parent / env_path
+                else:
+                    candidate = BASE_DIR / env_path
+            if candidate.exists():
+                log.info("Using training dataset from TRAIN_DATASET_FILE=%s", candidate)
+                return str(candidate)
+            log.warning(
+                "TRAIN_DATASET_FILE=%s does not exist; falling back to auto-detected dataset.",
+                env_path,
+            )
+
+    if DATA_DIR.exists():
+        game_feature_files = list(DATA_DIR.glob("game_features_*.csv"))
+        if game_feature_files:
+            latest = max(game_feature_files, key=lambda p: p.stat().st_mtime)
+            log.info("Using latest game_features CSV for training: %s", latest)
+            return str(latest)
+
+    legacy = DATA_DIR / "merge_dominance.csv"
+    if legacy.exists():
+        log.info("Falling back to legacy merge_dominance.csv dataset: %s", legacy)
+        return str(legacy)
+
+    raise FileNotFoundError(
+        f"No training dataset found. Expected a game_features_*.csv or merge_dominance.csv in {DATA_DIR} "
+        "or a valid TRAIN_DATASET_FILE env override."
+    )
 
 
 @dataclass
@@ -196,8 +246,10 @@ def _make_preprocessor(num_cols: List[str], cat_cols: List[str]) -> ColumnTransf
     cat_pipe = Pipeline(
         steps=[
             ("imputer", SimpleImputer(strategy="most_frequent")),
-            # Keep OHE sparse to reduce memory footprint; downstream estimators must accept sparse
-            ("ohe", OneHotEncoder(handle_unknown="ignore", sparse_output=True)),
+            # Use dense one-hot output so downstream estimators like HistGradientBoostingRegressor
+            # receive a dense design matrix. LogisticRegression also handles dense inputs efficiently
+            # at this feature scale.
+            ("ohe", OneHotEncoder(handle_unknown="ignore", sparse_output=False)),
         ]
     )
     return ColumnTransformer(
@@ -205,7 +257,9 @@ def _make_preprocessor(num_cols: List[str], cat_cols: List[str]) -> ColumnTransf
             ("num", num_pipe, num_cols),  
             ("cat", cat_pipe, cat_cols),
         ],
-        sparse_threshold=0.0,  # Force dense output
+        # Force a dense combined feature matrix; some sklearn estimators in this pipeline
+        # (e.g. HistGradientBoostingRegressor) do not accept sparse X.
+        sparse_threshold=0.0,
     )
 
 
@@ -221,13 +275,32 @@ def _split_for_calibration(tscv: TimeSeriesSplit, X: pd.DataFrame, y: pd.Series)
 
 
 def _fit_regression(
-    X: pd.DataFrame, y: pd.Series, pre: ColumnTransformer, random_state: int, n_jobs: int = N_JOBS
+    X: pd.DataFrame,
+    y: pd.Series,
+    pre: ColumnTransformer,
+    random_state: int,
+    n_jobs: int = N_JOBS,
+    use_search: bool = True,
 ) -> Pipeline:
+    """Fit a regression model with optional hyperparameter search.
+
+    When use_search=False, trains a single HistGradientBoostingRegressor pipeline
+    without RandomizedSearchCV for faster development iterations.
+    """
+    base_pipeline = Pipeline(
+        [
+            ("pre", pre),
+            ("reg", HistGradientBoostingRegressor(random_state=random_state)),
+        ]
+    )
+
+    if not use_search:
+        base_pipeline.fit(X, y)
+        logging.info("Fitted regression model without hyperparameter search (fast dev mode).")
+        return cast(Pipeline, base_pipeline)
+
     rs = RandomizedSearchCV(
-        estimator=Pipeline([
-            ('pre', pre),
-            ('reg', HistGradientBoostingRegressor(random_state=random_state))
-        ]),
+        estimator=base_pipeline,
         param_distributions=REG_PARAM_DISTS,
         cv=TimeSeriesSplit(n_splits=N_SPLITS),
         scoring="neg_mean_absolute_error",
@@ -238,31 +311,62 @@ def _fit_regression(
         refit=True,
     )
     rs.fit(X, y)
-    logging.info('%s rs', rs)
+    logging.info("%s rs", rs)
     return cast(Pipeline, rs.best_estimator_)
 
 
 def _fit_classifier(
-    X: pd.DataFrame, y: pd.Series, pre: ColumnTransformer, random_state: int, n_jobs: int = N_JOBS
+    X: pd.DataFrame,
+    y: pd.Series,
+    pre: ColumnTransformer,
+    random_state: int,
+    n_jobs: int = N_JOBS,
+    use_search: bool = True,
 ) -> Tuple[Pipeline, Dict[str, Any]]:
+    """Fit a classifier with optional hyperparameter search.
+
+    When use_search=False, trains a single LogisticRegression pipeline without
+    RandomizedSearchCV and computes metrics on the full dataset for quick feedback.
+    """
+    base_pipeline = Pipeline(
+        [
+            ("pre", pre),
+            ("clf", LogisticRegression(random_state=random_state, max_iter=1000)),
+        ]
+    )
+
+    if not use_search:
+        base_pipeline.fit(X, y)
+        logging.info("Fitted classifier without hyperparameter search (fast dev mode).")
+        pred_proba = base_pipeline.predict_proba(X)[:, 1]
+        auc = roc_auc_score(y, pred_proba)
+        brier = brier_score_loss(y, pred_proba)
+        logloss = log_loss(y, pred_proba)
+        holdout_metrics = {
+            "roc_auc": auc,
+            "brier_score": brier,
+            "log_loss": logloss,
+            "optimal_threshold": 0.5,
+            "optimal_threshold_f1": 0.5,
+            "optimal_threshold_acc": 0.5,
+        }
+        return cast(Pipeline, base_pipeline), holdout_metrics
+
     rs = RandomizedSearchCV(
-        estimator=Pipeline([
-            ('pre', pre),
-            ('clf', LogisticRegression(random_state=random_state, max_iter=1000))
-        ]),
+        estimator=base_pipeline,
         param_distributions=CLF_PARAM_DISTS,
         cv=TimeSeriesSplit(n_splits=N_SPLITS),
         scoring="neg_log_loss",
         n_jobs=n_jobs,
         random_state=random_state,
         verbose=2,
-    n_iter=min(HP_N_ITER, len(list(CLF_PARAM_DISTS.values())[0]) * 5),
+        n_iter=min(HP_N_ITER, len(list(CLF_PARAM_DISTS.values())[0]) * 5),
         refit=True,
     )
     rs.fit(X, y)
-    logging.info('%s rs', rs)
+    logging.info("%s rs", rs)
     best_pipeline = cast(Pipeline, rs.best_estimator_)
-    
+
     # Compute holdout metrics using the last fold
     tscv = TimeSeriesSplit(n_splits=N_SPLITS)
     train_idx, _, holdout_idx = _split_for_calibration(tscv, X, y)
@@ -270,7 +374,7 @@ def _fit_classifier(
     auc = roc_auc_score(y.iloc[holdout_idx], pred_proba)
     brier = brier_score_loss(y.iloc[holdout_idx], pred_proba)
     logloss = log_loss(y.iloc[holdout_idx], pred_proba)
-    
+
     holdout_metrics = {
         "roc_auc": auc,
         "brier_score": brier,
@@ -279,7 +383,7 @@ def _fit_classifier(
         "optimal_threshold_f1": 0.5,
         "optimal_threshold_acc": 0.5,
     }
-    
+
     return best_pipeline, holdout_metrics
 
 
@@ -292,10 +396,15 @@ def _dataset_sort(df: pd.DataFrame) -> pd.DataFrame:
     return df.sort_values(TIME_KEYS).reset_index(drop=True)
 
 
-def main(data_path: str, out_dir: str) -> None:
+def main(data_path: str, out_dir: str, n_jobs: int = N_JOBS, fast_dev: bool = False) -> None:
     np.random.seed(RANDOM_SEED)
 
-    df = pd.read_csv(data_path)
+    log.info("Loading training dataset from %s", data_path)
+    dataset_path = Path(data_path)
+    if not dataset_path.exists():
+        raise FileNotFoundError(f"Training dataset not found at: {dataset_path}")
+
+    df = pd.read_csv(dataset_path)
     _ensure_columns(df, TIME_KEYS + [TARGET_HOME, TARGET_AWAY, CLASS_LABEL])
     if df.empty:
         raise RuntimeError(f"Dataset is empty: {data_path}")
@@ -334,15 +443,34 @@ def main(data_path: str, out_dir: str) -> None:
 
     # Fit models (time-aware CV inside)
     log.info("Fitting home points regressor")
-    # Allow user to override parallel jobs via env or CLI
-    n_jobs = N_JOBS
-    home_model = _fit_regression(X, y_home, pre, RANDOM_SEED, n_jobs=n_jobs)
+    home_model = _fit_regression(
+        X,
+        y_home,
+        pre,
+        RANDOM_SEED,
+        n_jobs=n_jobs,
+        use_search=not fast_dev,
+    )
     log.info('%s home_model', home_model)
     log.info("Fitting away points regressor")
-    away_model = _fit_regression(X, y_away, pre, RANDOM_SEED, n_jobs=n_jobs)
+    away_model = _fit_regression(
+        X,
+        y_away,
+        pre,
+        RANDOM_SEED,
+        n_jobs=n_jobs,
+        use_search=not fast_dev,
+    )
 
     log.info("Fitting win classifier")
-    win_model, win_holdout_metrics = _fit_classifier(X, y_win, pre, RANDOM_SEED, n_jobs=n_jobs)
+    win_model, win_holdout_metrics = _fit_classifier(
+        X,
+        y_win,
+        pre,
+        RANDOM_SEED,
+        n_jobs=n_jobs,
+        use_search=not fast_dev,
+    )
 
     # Quick in-sample sanity MAE (for monitoring only)
     mae_home = _evaluate_regression(home_model, X, y_home)
@@ -364,7 +492,7 @@ def main(data_path: str, out_dir: str) -> None:
         n_features_categorical=len(cat_cols),
         cv_n_splits=N_SPLITS,
         random_seed=RANDOM_SEED,
-        production_ready=True or False,
+        production_ready=True,
         dataset_hash=_dataset_hash(df),
     )
 
@@ -394,11 +522,41 @@ def main(data_path: str, out_dir: str) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train leak-free NFL models with time-aware CV.")
-    parser.add_argument("--data", type=str, default="./backend/data/merge_dominance.csv", help="Path to features CSV (default: merge_dominance.csv).")
-    parser.add_argument("--out", type=str, default="models", help="Output directory for artifacts and reports.")
-    parser.add_argument("--n-jobs", type=int, default=N_JOBS, help="Number of parallel jobs to use for CV (default from N_JOBS env)")
-    parser.add_argument("--hp-niter", type=int, default=HP_N_ITER, help="Number of RandomizedSearchCV iterations (overrides HP_N_ITER env)")
+    parser.add_argument(
+        "--data",
+        type=str,
+        default=None,
+        help=(
+            "Path to features CSV. If omitted, uses TRAIN_DATASET_FILE env or "
+            "auto-detects the latest game_features_*.csv in backend/data."
+        ),
+    )
+    parser.add_argument(
+        "--out",
+        type=str,
+        default="models",
+        help="Output directory for artifacts and reports (default: models).",
+    )
+    parser.add_argument(
+        "--n-jobs",
+        type=int,
+        default=N_JOBS,
+        help="Number of parallel jobs to use for CV (default from N_JOBS env)",
+    )
+    parser.add_argument(
+        "--hp-niter",
+        type=int,
+        default=HP_N_ITER,
+        help="Number of RandomizedSearchCV iterations (overrides HP_N_ITER env)",
+    )
+    parser.add_argument(
+        "--fast-dev",
+        action="store_true",
+        help="Enable fast dev mode (skip hyperparameter search and fit single models).",
+    )
     args = parser.parse_args()
     # Allow quick runs by overriding HP_N_ITER when provided on CLI
     HP_N_ITER = int(args.hp_niter)
-    main(args.data, args.out)
+    dataset_path = args.data or _resolve_default_dataset_path()
+    fast_dev_flag = FAST_DEV_TRAIN or args.fast_dev
+    main(dataset_path, args.out, n_jobs=args.n_jobs, fast_dev=fast_dev_flag)
