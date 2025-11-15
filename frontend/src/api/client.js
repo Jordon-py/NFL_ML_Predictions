@@ -88,21 +88,40 @@ function isValidAbsoluteUrl(maybeUrl) {
 }
 
 // Base URL resolution with strong guards against invalid env strings
+/**
+ * Resolve the effective API base URL for the current environment.
+ *
+ * Rules:
+ * - In dev (localhost) → return an empty string so calls are relative and
+ *   can be proxied by Vite to the backend.
+ * - In production (non-localhost) → prefer VITE_API_BASE if it looks like
+ *   a full http(s) URL; otherwise fall back to a baked-in backend URL.
+ *
+ * This keeps dev setup simple while making Vercel/Heroku deployment explicit.
+ *
+ * @returns {string} Base URL ("" for same-origin relative calls).
+ */
 function resolveApiBase() {
-  const herokuFallback = "https://nfl-predict-ecf5a5bd34fe.herokuapp.com"; 
+  const herokuFallback = "https://nfl-predict-ecf5a5bd34fe.herokuapp.com";
   /** @type {any} */
   const meta = import.meta;
   const fromEnvRaw = (meta && meta.env && meta.env.VITE_API_BASE) || "";
   const fromEnv = normalizeBase(fromEnvRaw);
-  const host = (typeof window !== "undefined" && window.location && window.location.hostname) || "";
+  const host =
+    (typeof window !== "undefined" &&
+      window.location &&
+      window.location.hostname) ||
+    "";
   const isLocalHost = /^(localhost|127\.0\.0\.1)$/i.test(host);
 
   // DEV: rely on Vite proxy; use relative URLs only
-  if (isLocalHost) 
-    return herokuFallback;
+  // When running on localhost, use a relative base so Vite can proxy
+  // API calls to the backend (configured in vite.config.js).
+  if (isLocalHost)
+    return "";
 
   // PROD: only trust env if it looks like a full http(s) URL
-  if (fromEnv && isValidAbsoluteUrl(fromEnv)) 
+  if (fromEnv && isValidAbsoluteUrl(fromEnv))
     return fromEnv;
 
   // If env exists but invalid, log once and fall back
@@ -111,9 +130,13 @@ function resolveApiBase() {
     const w = window;
     if (!w.__NFL_API_BASE_INVALID_WARNED__) {
       try {
-        console.error(`[NFL-ML] Ignoring invalid VITE_API_BASE=\"${fromEnvRaw}\". It must start with http(s) and contain no spaces.`);
+        console.error(
+          `[NFL-ML] Ignoring invalid VITE_API_BASE="${fromEnvRaw}". It must start with http(s) and contain no spaces.`
+        );
         w.__NFL_API_BASE_INVALID_WARNED__ = true;
-      } catch { }
+      } catch {
+        // ignore logging failures
+      }
     }
   }
 
@@ -123,14 +146,21 @@ function resolveApiBase() {
     const w2 = window;
     if (!w2.__NFL_API_BASE_FALLBACK_WARNED__) {
       try {
-        console.warn("[NFL-ML] Using Heroku API fallback. Set Vercel env VITE_API_BASE to your backend URL.");
+        console.warn(
+          "[NFL-ML] Using Heroku API fallback. Set Vercel env VITE_API_BASE to your backend URL."
+        );
         w2.__NFL_API_BASE_FALLBACK_WARNED__ = true;
-      } catch { }
+      } catch {
+        // ignore logging failures
+      }
     }
   }
+
   return herokuFallback;
 }
+
 export const API_BASE = resolveApiBase();
+
 
 // ---------- Error type ----------
 export class ApiError extends Error {
@@ -313,11 +343,36 @@ export function toPredictionRequest({ homeTeam, awayTeam, season, week, home_abb
 }
 
 // ---------- Public API ----------
+// ---------- Public API ----------
+/**
+ * Create a strongly-typed-ish API client bound to a base URL.
+ *
+ * The returned object exposes high-level methods that mirror the
+ * FastAPI backend routes (health, schedule, predictions, history,
+ * training). This keeps the rest of the frontend free of low-level
+ * fetch/retry logic.
+ *
+ * @param {string} [base] Optional API base URL. Defaults to API_BASE,
+ *   which is resolved from Vite env + window.location.
+ * @returns {{
+ *   getHealth: () => Promise<any>,
+ *   getHealthStatus: () => Promise<any>,
+ *   getTrainingReport: () => Promise<any>,
+ *   getCalibrationReport: () => Promise<any>,
+ *   getNextWeekSchedule: () => Promise<any>,
+ *   predictNextWeek: () => Promise<any>,
+ *   predictGame: (params: any) => Promise<any>,
+ *   getPredictionHistory: (limit?: number) => Promise<any>,
+ *   getStatusOverview: (limit?: number) => Promise<any>,
+ *   startTraining: () => Promise<any>
+ * }}
+ */
 export function createApi(base = API_BASE) {
   /** @param {string} p @param {{ timeoutMs?: number, retries?: number, cacheTtlMs?: number }} [o] */
   const _get = (p, o) => api(joinUrl(base, p), { ...o, method: "GET" }, o);
   /** @param {string} p @param {any} b @param {{ timeoutMs?: number, retries?: number, cacheTtlMs?: number }} [o] */
-  const _post = (p, b, o) => api(joinUrl(base, p), { ...o, method: "POST", body: JSON.stringify(b) }, o);
+  const _post = (p, b, o) =>
+    api(joinUrl(base, p), { ...o, method: "POST", body: JSON.stringify(b) }, o);
 
   return {
     /** Health endpoint. Uses a tiny cache (2s) to avoid spamming */
@@ -327,7 +382,8 @@ export function createApi(base = API_BASE) {
     getCalibrationReport: () => _get("/report/calibration"),
 
     /** Next-week endpoints are stable within a session → short cache helps */
-    getNextWeekSchedule: () => _get("/schedule/next-week", { cacheTtlMs: 15000 }),
+    getNextWeekSchedule: () =>
+      _get("/schedule/next-week", { cacheTtlMs: 15000 }),
     predictNextWeek: () => _get("/predict/next-week"),
 
     /** Single-game prediction (validated) */
@@ -335,8 +391,10 @@ export function createApi(base = API_BASE) {
     predictGame: (params) => _post("/predict", toPredictionRequest(params)),
 
     /** History + status endpoints */
-    getPredictionHistory: (limit = 50) => _get(`/history?limit=${limit}`, { cacheTtlMs: 5000 }),
-    getStatusOverview: (limit = 5) => _get(`/status/overview?limit=${limit}`, { cacheTtlMs: 10000 }),
+    getPredictionHistory: (limit = 50) =>
+      _get(`/history?limit=${limit}`, { cacheTtlMs: 5000 }),
+    getStatusOverview: (limit = 5) =>
+      _get(`/status/overview?limit=${limit}`, { cacheTtlMs: 10000 }),
 
     /** Training control */
     startTraining: () => _post("/retrain", {}),
@@ -345,8 +403,9 @@ export function createApi(base = API_BASE) {
 
 // Default instance (uses resolved API_BASE)
 export const apiClient = createApi();
-
 // Named exports for direct import convenience
+// These mirror the methods on the default `apiClient` instance so that
+// components can either import the whole client or just the calls they use.
 export const getNextWeekSchedule = apiClient.getNextWeekSchedule;
 export const predictGame = apiClient.predictGame;
 export const predictNextWeek = apiClient.predictNextWeek;
@@ -359,16 +418,26 @@ export const getPredictionHistory = apiClient.getPredictionHistory;
 export const getStatusOverview = apiClient.getStatusOverview;
 
 // ---------- Helper to present ApiError nicely in UI ----------
-/** @param {unknown} err */
+/**
+ * Turn any thrown error into a short, human-readable message for the UI.
+ *
+ * Prefer using this instead of stringifying errors directly in components.
+ * It knows about ApiError, AbortError, and network (TypeError) cases.
+ *
+ * @param {unknown} err Any value thrown from API calls or other logic.
+ * @returns {string} A concise description that can be shown in toasts, banners,
+ *   or inline error labels.
+ */
 export function explainApiError(err) {
   if (!err) return "Unknown error";
   if (err instanceof ApiError) {
     const p = err.payload;
     const detail = (p && (p.detail || p.message)) || "";
     const at = err.url ? ` @ ${err.url}` : "";
-    return `[${err.status}] ${err.message}${detail ? ` — ${detail}` : ""}${at}`;
+    return `[${err.status}] ${err.message}${detail ? ` — ${detail}` : ""
+      }${at}`;
   }
-  if (/** @type {any} */(err)?.name === "AbortError") return "Request timed out";
+  if (/** @type {any} */ (err)?.name === "AbortError") return "Request timed out";
   if (err instanceof TypeError) return "Network error";
   return String(/** @type {any} */(err)?.message || err);
 }

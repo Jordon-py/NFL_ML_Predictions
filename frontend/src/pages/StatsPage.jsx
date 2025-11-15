@@ -7,7 +7,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { usePredictions } from "../PredictionContext";
 import NavBar from "../components/NavBar/NavBar.jsx";
-import HistoryChart from "../components/HistoryChart";
+import HistoryChart from "../components/HistoryChart.jsx";
 import {
   getNextWeekSchedule,
   getPredictionHistory,
@@ -56,16 +56,19 @@ function SummaryCard({ title, value, subtext, intent = "default" }) {
 }
 
 export default function StatsPage() {
+  /** @type {any} */
   const predictionState = usePredictions();
 
   // Remote payloads from the backend
-  const [schedule, setSchedule] = useState([]);
+  const [schedule, setSchedule] = useState(
+    /** @type {any[]} */([])
+  );
   const [historyPayload, setHistoryPayload] = useState({ entries: [], total: 0 });
   const [overview, setOverview] = useState(null);
 
   // Local UI state
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [isPageLoading, setIsPageLoading] = useState(true);
+  const [pageError, setPageError] = useState(/** @type {string | null} */ (null));
 
   /**
    * Initial hydration:
@@ -78,8 +81,8 @@ export default function StatsPage() {
 
     const hydrate = async () => {
       try {
-        setLoading(true);
-        const [scheduleData, historyData, overviewData] = await Promise.all([
+        setIsPageLoading(true);
+        const [scheduleData, historyResponse, overviewData] = await Promise.all([
           getNextWeekSchedule(),
           getPredictionHistory(50),
           getStatusOverview(),
@@ -88,15 +91,15 @@ export default function StatsPage() {
         if (!active) return;
 
         setSchedule(Array.isArray(scheduleData) ? scheduleData : []);
-        setHistoryPayload(historyData || { entries: [], total: 0 });
+        setHistoryPayload(historyResponse || { entries: [], total: 0 });
         setOverview(overviewData || null);
-        setError(null);
+        setPageError(null);
       } catch (err) {
         if (!active) return;
-        console.error("[StatsPage] hydrate failed", err);
-        setError("Failed to load status data. Backend may be offline.");
+        console.error("[StatsPage] loadPageData failed", err);
+        setPageError("Failed to load status data. Backend may be offline.");
       } finally {
-        if (active) setLoading(false);
+        if (active) setIsPageLoading(false);
       }
     };
 
@@ -131,7 +134,9 @@ export default function StatsPage() {
   const historyMap = useMemo(() => {
     const map = new Map();
 
-    history.forEach((entry) => {
+    history.forEach(
+      /** @param {any} entry */
+      (entry) => {
       if (!entry) return;
 
       // Primary key: stable ID from the backend, if present
@@ -144,20 +149,26 @@ export default function StatsPage() {
       if (compositeKey) {
         map.set(compositeKey, entry);
       }
-    });
+      }
+    );
 
     return map;
   }, [history]);
 
   // Prefer backend overview; fall back to context health if overview is missing.
-  const health = overview?.health || predictionState?.health;
-  const datasetStats = overview?.dataset || {};
-  const historyMetrics = overview?.history?.metrics || {
+  /** @type {any} */
+  const overviewData = overview || {};
+  // @ts-ignore - overviewData is a plain JSON-like object from the backend.
+  const health = overviewData.health || predictionState?.health;
+  const datasetStatistics = overviewData.dataset || {};
+  const historyMetrics = overviewData.history?.metrics || {
     total_predictions: history.length,
   };
+  /** @type {any[]} */
   const scheduleList = Array.isArray(schedule) ? schedule : [];
 
-  const winRate =
+  const predictionHistoryEntries = history;
+  const predictionWinRate =
     typeof historyMetrics?.win_rate === "number"
       ? `${Math.round(historyMetrics.win_rate * 100)}%`
       : "n/a";
@@ -167,9 +178,9 @@ export default function StatsPage() {
    * - Each row shows matchup + kickoff time
    * - If we have a matching prediction, show win probabilities and margin
    */
-  const renderSchedule = () => {
-    if (loading) return <LoadingSpinner label="Loading status" />;
-    if (error) return <div className={styles.error}>{error}</div>;
+  const renderScheduleList = () => {
+    if (isPageLoading) return <LoadingSpinner label="Loading status" />;
+    if (pageError) return <div className={styles.error}>{pageError}</div>;
     if (scheduleList.length === 0) {
       return (
         <p className={styles.empty}>
@@ -242,6 +253,7 @@ export default function StatsPage() {
   return (
     <>
       {/* Propagate latest health into the NavBar so the whole app reflects status */}
+      {/* @ts-ignore - predictionState is a JS object from context; we allow spreading here. */}
       <NavBar state={{ ...predictionState, health }} />
 
       <div className={styles.statsPage}>
@@ -267,19 +279,19 @@ export default function StatsPage() {
           />
           <SummaryCard
             title="Dataset rows"
-            value={datasetStats?.rows ?? "—"}
-            subtext={datasetStats?.path ?? "path unknown"}
+            value={datasetStatistics?.rows ?? "—"}
+            subtext={datasetStatistics?.path ?? "path unknown"}
           />
           <SummaryCard
             title="Predictions recorded"
-            value={historyMetrics?.total_predictions ?? history.length}
-            subtext={`Win rate: ${winRate}`}
+            value={historyMetrics?.total_predictions ?? predictionHistoryEntries.length}
+            subtext={`Win rate: ${predictionWinRate}`}
           />
         </section>
 
         <section className={styles.scheduleSection}>
           <h2 className={styles.h2}>Next Week Schedule</h2>
-          {renderSchedule()}
+          {renderScheduleList()}
         </section>
 
         <section className={styles.historySection}>
