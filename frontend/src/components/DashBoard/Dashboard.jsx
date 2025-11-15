@@ -10,131 +10,212 @@ Key ideas:
   - localStorage is used only as a fallback history source if context is empty.
   - Layout and styling come from Dashboard.module.css via CSS Modules.
 */
-
-import React, { useMemo } from "react";
-import { usePredictions } from "../../PredictionContext";
-import TeamGrid from "../Card/TeamGrid.jsx";
-import PredictionResult from "../PredictionResult.jsx";
-import HistoryChart from "../HistoryChart.jsx";
-import NavBar from "../NavBar/NavBar.jsx";
-// @ts-ignore -- CSS module is resolved by Vite; types are not required here.
-import styles from "./Dashboard.module.css";
-
 /**
- * Dashboard — layout-only container using CSS Modules.
- * Cleans up context shape handling and avoids inline styles.
+ * Enhanced Dashboard with better data cohesion and state management
  */
-const PREDICTION_HISTORY_KEY = "prediction_history";
 
-function loadPredictionHistoryFromLocalStorage() {
-  try {
-    if (typeof window === "undefined" || typeof window.localStorage === "undefined") {
-      // Server-side render or non-browser environment: nothing to load.
-      return [];
+import React, { useMemo, useCallback } from 'react';
+import { usePredictions } from '../../PredictionContext';
+import TeamGrid from '../Card/TeamGrid';
+import PredictionResult from '../PredictionResult';
+import HistoryChart from '../HistoryChart';
+import NavBar from '../NavBar/NavBar';
+import LoadingState from '../LoadingState';
+import ErrorDisplay from '../ErrorDisplay';
+
+// Custom hooks for better data separation
+/**
+ * Derive the dashboard-friendly view of PredictionContext state.
+ *
+ * @returns {{ isLoading: boolean, error: any, data: any }}
+ */
+function useDashboardData() {
+  const context = /** @type {any} */ (usePredictions());
+
+  return useMemo(() => {
+    if (!context) {
+      return {
+        isLoading: true,
+        error: new Error('Prediction context not available'),
+        data: null
+      };
     }
-    const rawHistoryData = window.localStorage.getItem(PREDICTION_HISTORY_KEY);
-    if (!rawHistoryData) return [];
-    const parsedHistory = JSON.parse(rawHistoryData);
-    return Array.isArray(parsedHistory) ? parsedHistory : [];
-  } catch {
-    // Corrupt or missing data should never crash the UI.
-    return [];
-  }
+
+    const {
+      current,
+      history = [],
+      schedule = [],
+      week,
+      teams = {},
+      predictions = {},
+      loading = {},
+      errors = {},
+      makePrediction,
+      health: contextHealth
+    } = context;
+
+    // Merge health information
+    const mergedHealth = contextHealth || { status: 'unknown' };
+
+    // Transform data for consistency
+    const transformedHistory = Array.isArray(history)
+      ? history
+      : [];
+
+    const transformedGames = Array.isArray(schedule)
+      ? schedule.map(game => ({
+        ...game,
+        id: game.id
+          || game.game_id
+          || `${(game.home_abbr || game.home_team || '').trim()}-${(game.away_abbr || game.away_team || '').trim()}-${game.week}`,
+        status: game.status || 'scheduled'
+      }))
+      : [];
+
+    const isGlobalLoading = transformedGames.length === 0 && !errors.global;
+
+    return {
+      isLoading: Boolean(loading.global || isGlobalLoading),
+      error: errors.global || null,
+      data: {
+        currentPrediction: current,
+        predictionHistory: transformedHistory,
+        upcomingGames: transformedGames,
+        currentWeek: week || (transformedGames[0]?.week ?? 1),
+        teamMetadata: teams,
+        gamePredictions: predictions,
+        health: mergedHealth,
+        actions: {
+          makePrediction
+        }
+      }
+    };
+  }, [context]);
 }
 
 /**
- * Dashboard component
+ * Build a compact navigation summary from dashboard data.
  *
- * Responsibility:
- *  - Read state from PredictionContext (current prediction, schedule, etc.)
- *  - Provide a "nav state" snapshot to NavBar
- *  - Lay out TeamGrid + HistoryChart side-by-side
- *  - Render the currently selected prediction in PredictionResult
+ * @param {any} dashboardData
  */
-export default function DashBoard() {
-  /**
-   * Raw prediction context state.
-   *
-   * Typed as `any` to keep JSX ergonomics while Pylance/TS remain active
-   * in this JS project.
-   */
-  /** @type {any} */
-  const predictionState = usePredictions() || {};
+function useNavigationState(dashboardData) {
+  return useMemo(() => {
+    if (!dashboardData) {
+      return {
+        current: null,
+        latest: null,
+        count: 0,
+        health: { status: 'unknown' }
+      };
+    }
+
+    const { currentPrediction, predictionHistory, health } = dashboardData;
+    const latestPrediction = predictionHistory.length > 0 ? predictionHistory[0] : null;
+
+    return {
+      current: currentPrediction,
+      latest: latestPrediction,
+      count: predictionHistory.length,
+      health
+    };
+  }, [dashboardData]);
+}
+
+// Main Dashboard Component
+export default function Dashboard() {
+  const { isLoading, error, data } = useDashboardData();
+  const navState = useNavigationState(data);
+
+  // Memoized event handlers
+  const handlePredictionRequest = useCallback((/** @type {any} */ gameData) => {
+    if (!data?.actions?.makePrediction) {
+      console.error('Prediction action not available');
+      return;
+    }
+
+    try {
+      data.actions.makePrediction(gameData);
+    } catch (err) {
+      console.error('Prediction request failed:', err);
+    }
+  }, [data]);
+
+  // Early returns for loading and error states
+  if (isLoading) {
+    return <LoadingState message="Loading dashboard data..." />;
+  }
+
+  if (error) {
+    return (
+      <ErrorDisplay
+        error={error}
+        onRetry={() => window.location.reload()}
+      />
+    );
+  }
+
+  if (!data) {
+    return <ErrorDisplay error={new Error('No data available')} />;
+  }
+
   const {
-    current: currentPrediction,
-    history: predictionHistory = [],
-    schedule: upcomingGames,
-    week: currentWeek,
-    teams: teamMetadata,
-    predictions: gamePredictions,
-    loading: loadingStates,
-    errors: errorStates,
-    makePrediction: handlePredictionRequest,
-    health: backendHealth,
-  } = predictionState;
+    upcomingGames,
+    currentWeek,
+    teamMetadata,
+    gamePredictions,
+    predictionHistory,
+    currentPrediction,
+    health
+  } = data;
 
-  const historyList = useMemo(
-    () =>
-      Array.isArray(predictionHistory) && predictionHistory.length
-        ? predictionHistory
-        : loadPredictionHistoryFromLocalStorage(),
-    [predictionHistory]
-  );
-
-  const mostRecentPrediction = historyList.length ? historyList[0] : null;
-  const displayedPrediction = currentPrediction ?? mostRecentPrediction;
-
-  const navigationBarState = useMemo(
-    () => ({
-      current: displayedPrediction,
-      latest: mostRecentPrediction,
-      count: historyList.length,
-      health: backendHealth,
-    }),
-    [displayedPrediction, mostRecentPrediction, historyList.length, backendHealth]
-  );
-  const isBackendHealthy = backendHealth?.status === 'healthy';
+  const isBackendHealthy = health.status === 'healthy';
   const healthMessage = isBackendHealthy
     ? "Click any matchup to see predicted scores"
-    : `Models loading... predictions are temporarily disabled. Reason: ${backendHealth?.reason || 'initializing'}`;
+    : `Backend issue: ${health.reason || 'Service unavailable'}`;
 
   return (
-    <>
-      <NavBar state={navigationBarState} />
+    <div className="dashboard-layout">
+      <NavBar state={navState} />
 
-      <main className={styles.dashboard}>
-        <header className={styles.header}>
-          <div className={styles.teamGridHeader}>
-            <h2 className={styles.title}>Next Week&apos;s NFL Matchups</h2>
-            <p className={styles.subtitle}>{healthMessage}</p>
+      <main className="dashboard-main">
+        <header className="dashboard-header">
+          <div className="header-content">
+            <h1 className="dashboard-title">
+              NFL Predictions - Week {currentWeek}
+            </h1>
+            <p className="dashboard-subtitle">
+              {healthMessage}
+            </p>
           </div>
         </header>
 
-        <section className={styles.teamMain}>
-          {/* TeamGrid:
-              - "schedule" comes from PredictionContext and is the canonical
-                view of games to be predicted. */}
-          <TeamGrid
-            games={upcomingGames}
-            week={currentWeek}
-            teams={teamMetadata}
-            predictions={gamePredictions}
-            loading={loadingStates}
-            errors={errorStates}
-            onPredict={handlePredictionRequest}
-          />
-          <div className={styles.historyChart}>
-            <HistoryChart history={historyList} state={predictionState} />
+        <section className="dashboard-content">
+          <div className="content-grid">
+            <div className="team-grid-section">
+              <TeamGrid
+                games={upcomingGames}
+                week={currentWeek}
+                teams={teamMetadata}
+                predictions={gamePredictions}
+                onPredict={handlePredictionRequest}
+              />
+            </div>
+
+            <div className="history-section">
+              <HistoryChart
+                history={predictionHistory}
+                state={currentPrediction}
+              />
+            </div>
           </div>
         </section>
 
-        {/* PredictionResult reads a single "entry" and renders it in a
-            human-friendly layout. aria-live ensures screen readers are
-            notified when the selected game changes. */}
-        <section aria-live="polite">
-          <PredictionResult entry={displayedPrediction} />
+        <section className="prediction-results-section" aria-live="polite">
+          <PredictionResult
+            entry={currentPrediction}
+          />
         </section>
       </main>
-    </>
+    </div>
   );
-};
+}

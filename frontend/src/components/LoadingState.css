@@ -1,0 +1,33 @@
+:root {
+    /* These reference the global palette; adjust here if theme changes. */
+    --loading-bg: lch(98% 4 250);
+    --loading-border: lch(90% 5 250);
+    --loading-accent: lch(70% 60 40);
+    --loading-text: lch(25% 10 260);
+}
+
+.loading-state {
+    padding: 1.5rem;
+    text-align: center;
+}
+
+.loading-state__spinner {
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 50%;
+    border: 2px solid var(--loading-border);
+    border-top-color: var(--loading-accent);
+    margin: 0 auto 0.75rem;
+    animation: loading-spin 0.9s linear infinite;
+}
+
+.loading-state__message {
+    color: var(--loading-text);
+    font-size: 0.95rem;
+}
+
+@keyframes loading-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
