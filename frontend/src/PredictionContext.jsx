@@ -28,11 +28,11 @@ import React, {
 } from 'react';
 import { getNextWeekSchedule, predictGame, getHealthStatus, getPredictionHistory } from './api/client';
 
-const KEY = "prediction_history";
-const MAX_HISTORY = 100;
+const PREDICTION_HISTORY_KEY = "prediction_history";
+const MAX_HISTORY_ENTRIES = 100;
 
 // Generate unique key for a game
-function getKey(game) {
+function generateGameKey(game) {
   return game?.game_id ?? [game?.season, game?.week, game?.home_abbr, game?.away_abbr].filter(Boolean).join("-");
 }
 
@@ -65,7 +65,7 @@ function reducer(state, action) {
     case SET_CURRENT:
       return { ...state, current: action.payload };
     case PUSH_HISTORY:
-      return { ...state, history: [action.payload, ...state.history].slice(0, MAX_HISTORY) };
+      return { ...state, history: [action.payload, ...state.history].slice(0, MAX_HISTORY_ENTRIES) };
     case RESET_HISTORY:
       return { ...state, history: [] };
     case SET_SCHEDULE:
@@ -91,7 +91,7 @@ function reducer(state, action) {
     }
     case SET_HISTORY: {
       const incoming = Array.isArray(action.payload) ? action.payload : [];
-      return { ...state, history: incoming.slice(0, MAX_HISTORY) };
+      return { ...state, history: incoming.slice(0, MAX_HISTORY_ENTRIES) };
     }
     case SET_TEAMS: {
       const next = action.payload && typeof action.payload === 'object' ? action.payload : {};
@@ -103,11 +103,11 @@ function reducer(state, action) {
 }
 
 // Safe hydration from localStorage
-function loadHistory() {
+function loadPredictionHistoryFromStorage() {
   try {
-    const raw = localStorage.getItem(KEY);
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    const rawHistoryData = localStorage.getItem(PREDICTION_HISTORY_KEY);
+    const parsedHistory = JSON.parse(rawHistoryData);
+    return Array.isArray(parsedHistory) ? parsedHistory : [];
   } catch {
     return [];
   }
@@ -139,7 +139,7 @@ const Ctx = createContext(null);
 
 export function PredictionProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, initialState, (s) => ({
-    ...s, history: loadHistory()
+    ...s, history: loadPredictionHistoryFromStorage()
   }));
 
   // Actions
@@ -203,9 +203,9 @@ export function PredictionProvider({ children }) {
   // Hydrate history from backend (falls back to localStorage seed when API unavailable)
   useEffect(() => {
     let active = true;
-    const hydrate = async () => {
+    const loadHistoryFromBackend = async () => {
       try {
-        const payload = await getPredictionHistory(MAX_HISTORY);
+        const payload = await getPredictionHistory(MAX_HISTORY_ENTRIES);
         if (!active || !payload) return;
         const entries = Array.isArray(payload.entries) ? payload.entries : [];
         setHistoryState(entries);
@@ -213,8 +213,8 @@ export function PredictionProvider({ children }) {
         console.warn('[PredictionContext] History fetch failed, using local cache.', err);
       }
     };
-    hydrate();
-    const id = setInterval(hydrate, 60000);
+    loadHistoryFromBackend();
+    const id = setInterval(loadHistoryFromBackend, 60000);
     return () => { active = false; clearInterval(id); };
   }, [setHistoryState]);
 
@@ -256,9 +256,9 @@ export function PredictionProvider({ children }) {
     if (healthStatus !== 'healthy') {
       console.info('[PredictionContext] Backend health pending; attempting prediction anyway.');
     }
-    const key = getKey(game);
-    setLoading(key, true);
-    setError(key, null);
+    const gameKey = generateGameKey(game);
+    setLoading(gameKey, true);
+    setError(gameKey, null);
 
     try {
       const prediction = await predictGame({
@@ -268,22 +268,22 @@ export function PredictionProvider({ children }) {
         week: game.week
       });
 
-      setPrediction(key, prediction);
+      setPrediction(gameKey, prediction);
       pushHistory({ ...prediction, timestamp: new Date().toISOString(), game });
       console.log(`[PredictionContext] Prediction for ${game.away_abbr}@${game.home_abbr}:`, prediction);
     } catch (err) {
       const errorMsg = err?.message || String(err);
-      setError(key, errorMsg);
+      setError(gameKey, errorMsg);
       console.error(`[PredictionContext] Prediction failed for ${game.away_abbr}@${game.home_abbr}:`, err);
     } finally {
-      setLoading(key, false);
+      setLoading(gameKey, false);
     }
   }, [healthStatus, healthReason, setLoading, setError, setPrediction, pushHistory]);
 
-  // Persist
+  // Persist history to localStorage
   useEffect(() => {
     try {
-      localStorage.setItem(KEY, JSON.stringify(state.history));
+      localStorage.setItem(PREDICTION_HISTORY_KEY, JSON.stringify(state.history));
     } catch { }
   }, [state.history]);
 

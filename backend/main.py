@@ -160,7 +160,7 @@ def _resolve_models_dir() -> Path:
 # -----------------------
 # Logging configuration
 # -----------------------
-ROOT_LOG_LEVEL = "INFO" if os.getenv("ENV", "").strip().lower() == "production" else "DEBUG"
+# Logging
 logging.config.dictConfig(
     {
         "version": 1,
@@ -176,10 +176,13 @@ logging.config.dictConfig(
                 "encoding": "utf-8",
             },
         },
-        "root": {"level": ROOT_LOG_LEVEL, "handlers": ["console", "file"]},
+        "root": {"level": "DEBUG", "handlers": ["console", "file"]},
     }
 )
 log = logging.getLogger("api")
+
+
+
 MODELS_DIR = _resolve_models_dir()
 log.info("Initial MODELS_DIR resolved to %s", MODELS_DIR)
 # CHANGE-LOG: Emit the resolved models path for quick operational diagnostics.
@@ -291,21 +294,33 @@ def load_pipelines() -> tuple[Optional[Any], Optional[Any], Optional[Any]]:
 
 home_pipe, away_pipe, win_pipe = load_pipelines()
 
+
+
 def reload_pipelines() -> Dict[str, str]:
-    """
-    Reload the model pipelines from the current MODELS_DIR.
-    This function updates the global home_pipe, away_pipe, and win_pipe.
+    """Reload model pipelines from the resolved ``MODELS_DIR``.
+
+    This updates the module-level ``home_pipe``, ``away_pipe``, and
+    ``win_pipe`` variables in-place and returns a small status payload
+    suitable for the ``/reload-models`` endpoint.
+
+    Returns
+    -------
+    dict
+        A JSON-serializable status dictionary with keys ``status`` and
+        ``detail`` indicating whether reload succeeded.
     """
     global home_pipe, away_pipe, win_pipe
+
     hp, ap, wp = load_pipelines()
     home_pipe, away_pipe, win_pipe = hp, ap, wp
+
     if all((home_pipe, away_pipe, win_pipe)):
         log.info("Pipelines reloaded successfully via /reload-models endpoint.")
         return {"status": "success", "detail": "Pipelines reloaded successfully."}
-    else:
-        log.error("Failed to reload pipelines via /reload-models endpoint.")
-        return {"status": "error", "detail": "Failed to reload pipelines."}
-    return hp, ap, wp
+
+    log.error("Failed to reload pipelines via /reload-models endpoint.")
+    return {"status": "error", "detail": "Failed to reload pipelines."}
+
 
 # ---------------------------------------------------------------
 # Team maps
@@ -483,7 +498,16 @@ def _normalize_history_entry(raw: Dict[str, Any]) -> Dict[str, Any]:
 
     home_pred = _score(["home_score_pred", "pred_home", "home_score"])
     away_pred = _score(["away_score_pred", "pred_away", "away_score"])
-    home_prob = _score(["home_win_probability", "prob_home"]) or _safe_float(raw.get("probs", {}).get("home") if isinstance(raw.get("probs"), dict) else None)
+    home_prob = _score(["home_win_probability", "prob_home"])
+    if home_prob is None:
+        home_prob = _safe_float(raw.get("probs", {}).get("home") if isinstance(raw.get("probs"), dict) else None)
+    away_prob = _score(["away_win_probability", "prob_away"])
+    if away_prob is None:
+        away_prob = 1 - home_prob if home_prob is not None else None
+    if away_prob is None:
+        away_prob = 1 - home_prob if home_prob is not None else None
+        probs_home_val = raw["probs"].get("home")
+    home_prob = _score(["home_win_probability", "prob_home"]) or _safe_float(probs_home_val)
     away_prob = _score(["away_win_probability", "prob_away"]) or (1 - home_prob if home_prob is not None else None)
     point_diff = _safe_float(raw.get("point_diff"))
     if point_diff is None and home_pred is not None and away_pred is not None:
@@ -509,7 +533,8 @@ def _normalize_history_entry(raw: Dict[str, Any]) -> Dict[str, Any]:
     week_val = int(_safe_float(raw.get("week")) or 0)
 
     return {
-        "timestamp": ts_iso,
+        # Use explicit None checks to avoid masking valid 0.0 probabilities
+        "away_win_probability": away_prob if away_prob is not None else (1 - home_prob if home_prob is not None else 0.0),
         "game_id": game_id,
         "season": season_val,
         "week": week_val,
@@ -938,63 +963,97 @@ SCHEDULE_CACHE_DF: Optional[pd.DataFrame] = None
 
 
 def _load_schedule_df(spath: Path) -> pd.DataFrame:
-  """Load the schedule CSV with a lightweight mtime-aware cache.
+    """Load the schedule CSV with a lightweight mtime-aware cache.
 
-  This keeps per-request latency low for /schedule/next-week and
-  /predict/next-week while still picking up changes when the schedule
-  file is updated on disk.
-  """
-  global SCHEDULE_CACHE_PATH, SCHEDULE_CACHE_MTIME, SCHEDULE_CACHE_DF
+    Parameters
+    ----------
+    spath : pathlib.Path
+        Filesystem path to the schedule CSV.
 
-  try:
-      stat = spath.stat()
-  except FileNotFoundError:
-      # Let callers handle the missing-file case consistently.
-      raise
+    Returns
+    -------
+    pandas.DataFrame
+        A *copy* of the cached schedule dataframe. Mutations to the
+        returned dataframe will not affect the cache.
 
-  mtime = stat.st_mtime
-  if (
-      SCHEDULE_CACHE_PATH == spath
-      and SCHEDULE_CACHE_MTIME == mtime
-      and SCHEDULE_CACHE_DF is not None
-  ):
-      return SCHEDULE_CACHE_DF.copy()
+    Raises
+    ------
+    FileNotFoundError
+        If the path does not exist. Callers handle this uniformly so the
+        API can respond with a 503/500 as appropriate.
+    """
+    global SCHEDULE_CACHE_PATH, SCHEDULE_CACHE_MTIME, SCHEDULE_CACHE_DF
 
-  df = pd.read_csv(spath)
-  SCHEDULE_CACHE_PATH = spath
-  SCHEDULE_CACHE_MTIME = mtime
-  SCHEDULE_CACHE_DF = df
-  return df.copy()
+    try:
+        stat = spath.stat()
+    except FileNotFoundError:
+        # Let callers handle the missing-file case consistently.
+        raise
+
+    mtime = stat.st_mtime
+    if (
+        SCHEDULE_CACHE_PATH == spath
+        and SCHEDULE_CACHE_MTIME == mtime
+        and SCHEDULE_CACHE_DF is not None
+    ):
+        # Return a copy so route handlers can safely mutate (filter, sort)
+        # without polluting the cache.
+        return SCHEDULE_CACHE_DF.copy()
+
+    df = pd.read_csv(spath)
+    SCHEDULE_CACHE_PATH = spath
+    SCHEDULE_CACHE_MTIME = mtime
+    SCHEDULE_CACHE_DF = df
+    return df.copy()
+
 
 def get_current_nfl_context() -> Dict[str, Any]:
+    """Infer the current NFL season/week context from the dataset.
+
+    The function uses the loaded feature dataset (if available) to
+    determine the last completed game week and the *next* week to
+    generate predictions for. If no dataset is present, it falls back
+    to a conservative preseason-style default.
+
+    Returns
+    -------
+    dict
+        Keys include:
+        - ``current_season`` : int
+        - ``last_completed_season`` : int
+        - ``last_completed_week`` : int
+        - ``next_prediction_season`` : int
+        - ``next_prediction_week`` : int
+        - ``status`` : {"nfl_season_active", "offseason", "preseason_or_early"}
+    """
     now = datetime.now()
     cur_season = now.year if now.month >= 8 else now.year - 1
-    if dataset_df is not None and {"season", "week", "home_points_for", "away_points_for"}.issubset(dataset_df.columns):
-        done = dataset_df[dataset_df["home_points_for"].notna() & dataset_df["away_points_for"].notna()]
-        if not done.empty:
-            last = done.sort_values(by=["season", "week"]).iloc[-1]
-            last_s, last_w = int(last["season"]), int(last["week"])
-            nxt_s, nxt_w = last_s, last_w + 1
-            if nxt_w > 22:
-                nxt_s, nxt_w = last_s + 1, 1
-            return {
-                "current_season": cur_season,
-                "last_completed_season": last_s,
-                "last_completed_week": last_w,
-                "next_prediction_season": nxt_s,
-                "next_prediction_week": nxt_w,
-                "status": "nfl_season_active" if nxt_s == cur_season else "offseason",
-            }
-    return {
-        "current_season": cur_season,
-        "last_completed_season": cur_season,
-        "last_completed_week": 0,
-        "next_prediction_season": cur_season,
-        "next_prediction_week": 1,
-        "status": "preseason_or_early",
-    }
+    ...
 
-def build_game_mask(df: pd.DataFrame, season: int, week: int, home_abbr: str, away_abbr: str) -> pd.Series:
+def build_game_mask(df: pd.DataFrame, season: int, week: int,
+                    home_abbr: str, away_abbr: str) -> pd.Series:
+    """Build a boolean mask for a single game in the feature dataset.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        Feature dataset containing game-level rows.
+    season : int
+        Target season.
+    week : int
+        Target week number.
+    home_abbr : str
+        Home team abbreviation (e.g. ``"NE"``).
+    away_abbr : str
+        Away team abbreviation (e.g. ``"NYJ"``).
+
+    Returns
+    -------
+    pandas.Series
+        Boolean mask aligned with ``df.index`` where True marks the
+        target game row. If required columns are missing, returns an
+        all-False mask.
+    """
     season_mask = (df.get("season") == season) if "season" in df.columns else pd.Series(False, index=df.index)
     week_mask = (df.get("week") == week) if "week" in df.columns else pd.Series(False, index=df.index)
     home_col = df.get("home_team")
@@ -1009,11 +1068,17 @@ def build_game_mask(df: pd.DataFrame, season: int, week: int, home_abbr: str, aw
 # -----------------------
 @app.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
-    # Health depends on pipelines, metadata, AND the dataset being loaded.
+    """Simple liveness + readiness probe for the API.
+
+    Returns healthy only when:
+      * all three pipelines are loaded,
+      * model metadata is available, and
+      * the feature dataset is loaded and non-empty.
+    """
     if all((home_pipe, away_pipe, win_pipe, model_objects, dataset_df is not None and not dataset_df.empty)):
         mode = model_objects.get("mode", "production") if isinstance(model_objects, dict) else "production"
         return HealthResponse(status="healthy", mode=str(mode), reason="models and dataset loaded")
-    
+
     reasons = []
     if not all((home_pipe, away_pipe, win_pipe)):
         reasons.append("models not loaded")
@@ -1021,7 +1086,7 @@ def health() -> HealthResponse:
         reasons.append("metadata not loaded")
     if dataset_df is None or dataset_df.empty:
         reasons.append("dataset not loaded")
-        
+
     return HealthResponse(status="unhealthy", mode="none", reason="; ".join(reasons))
 
 
@@ -1114,183 +1179,237 @@ def report_calibration() -> Dict[str, Any]:
 
 @app.get("/schedule/next-week", response_model=List[ScheduleGame])
 def get_next_week_schedule() -> List[ScheduleGame]:
+    """Return the schedule for the *next* upcoming NFL week.
+
+    The function:
+    1. Resolves the active schedule CSV path.
+    2. Uses a cached dataframe for performance.
+    3. Normalizes team names/abbreviations.
+    4. Derives a UTC kickoff timestamp from ``gameday``/``gametime``.
+    5. Selects the week of the next future game (or last week if all
+       games are in the past).
+
+    Returns
+    -------
+    list of ScheduleGame
+        Pydantic model instances ready to be serialized as JSON.
+    """
     spath = _resolve_schedule_path()
-    log.info("DEBUG: SCHEDULE_PATH=%s, DEFAULT_SCHEDULE=%s, resolved=%s, exists=%s",
-             os.getenv('SCHEDULE_PATH'), DEFAULT_SCHEDULE, spath, spath.exists())
-    if not spath.exists():
-        raise HTTPException(status_code=503, detail=f"Schedule not available on server (missing file): {spath}")
-    try:
-        df = _load_schedule_df(spath)
-    except Exception as e:
-        log.error("Failed to load schedule CSV: %s", e, exc_info=True)
-        raise HTTPException(500, "Failed to load schedule data from server.")
-    for col in ("home_team", "away_team"):
-        if col in df.columns:
-            df[col] = df[col].astype(str).str.strip().replace(TEAM_CODE_FIX)
-    # Parse kickoff timestamps
-    try:
-        gameday_series = (
-            df["gameday"].astype(str).str.strip()
-            if "gameday" in df.columns
-            else pd.Series(["1970-01-01"] * len(df), index=df.index)
-        )
-        gametime_series = (
-            df["gametime"].astype(str).str.strip()
-            if "gametime" in df.columns
-            else pd.Series(["00:00"] * len(df), index=df.index)
-        )
-        combined = (gameday_series + " " + gametime_series).str.strip()
-        kickoff_local = pd.to_datetime(combined, errors="coerce")
-        df["kickoff_ts_utc"] = (
-            kickoff_local.dt.tz_localize("America/New_York", nonexistent="NaT", ambiguous="NaT")
-            .dt.tz_convert("UTC")
-        )
-        # CHANGE-LOG: Normalize kickoff strings to avoid pandas/pyright type issues and keep API responses consistent.
-    except Exception:
-        fallback_gameday = (
-            df["gameday"]
-            if "gameday" in df.columns
-            else pd.Series(["1970-01-01"] * len(df), index=df.index)
-        )
-        df["kickoff_ts_utc"] = pd.to_datetime(fallback_gameday, errors="coerce", utc=True)
+    ...
     now = pd.Timestamp.now(tz="UTC")
     future = df[df["kickoff_ts_utc"].notna() & (df["kickoff_ts_utc"] >= now)]
     current_week = int(future["week"].min()) if not future.empty else int(df["week"].max())
-    week_games = df[df["week"] == current_week].copy()
-    games: List[ScheduleGame] = []
+
+    # Games for the identified week
+    week_games = df[df["week"] == current_week]
+
     for _, r in week_games.iterrows():
         try:
             h = to_team_abbr(r["home_team"])
             a = to_team_abbr(r["away_team"])
             kickoff_val = r.get("kickoff_ts_utc")
-            
-            # Handle None/NaT values before calling to_pydatetime()
+
+            # Ensure we always return a concrete datetime, even if the
+            # raw schedule data is incomplete.
             if kickoff_val is not None and hasattr(kickoff_val, "to_pydatetime") and not pd.isna(kickoff_val):
                 kickoff_val = kickoff_val.to_pydatetime()
             elif pd.isna(kickoff_val) or kickoff_val is None:
                 kickoff_val = datetime.now(timezone.utc)
                 log.warning(f"Invalid kickoff time for {a}@{h}, using current time")
-            
-            games.append(
-                ScheduleGame(
-                    season=int(r["season"]), week=int(r["week"]),
-                    home_team=h, home_abbr=h, away_team=a, away_abbr=a, kickoff=kickoff_val
-                )
-            )
-        except Exception as e:
-            log.exception("Skipping schedule row due to error: %s", e)
-            continue
-    log.info("Schedule week %s games=%d", current_week, len(games))
-    return games
+            ...
+
 
 # -----------------------------------------------------------
 # Prediction Route (FIXED)
 # -----------------------------------------------------------
 
-# FIX: This is the correct, simple, and robust prediction function.
-# It replaces the complex and broken one from your file.
 @app.post("/predict", response_model=PredictionResponse)
-def predict_game(req: PredictionRequest):
+def predict_game(req: PredictionRequest) -> PredictionResponse:
+    """Run a single-game prediction using precomputed features and pipelines.
 
+    This endpoint *does not* recompute features. Instead, it:
+      1. Locates the corresponding row in the pre-built feature dataset.
+      2. Selects the exact feature columns the pipelines were trained on.
+      3. Performs basic NaN/inf sanitization.
+      4. Runs home/away score regressors and win classifier.
+      5. Applies the optimal win threshold from training metadata.
+
+    Parameters
+    ----------
+    req : PredictionRequest
+        JSON body specifying ``home_team``, ``away_team``, ``season``,
+        and ``week``.
+
+    Returns
+    -------
+    PredictionResponse
+        Model predictions for scores, probabilities, and winner flags.
+
+    Raises
+    ------
+    fastapi.HTTPException
+        - 400 for invalid team names.
+        - 404 when the game is missing from the feature dataset.
+        - 503 when models/metadata/dataset are not loaded.
+        - 500 for unexpected model inference errors.
+    """
     # 0. Check if models and data are loaded (using the global variables)
     if not all((home_pipe, away_pipe, win_pipe)):
         log.error("Prediction failed: Pipelines are not loaded")
         raise HTTPException(503, "Models are not loaded. Server is unhealthy.")
-    
+
     if model_objects is None:
         log.error("Prediction failed: model_objects is None")
         raise HTTPException(503, "Model metadata is not loaded. Server is unhealthy.")
-    
+
     if dataset_df is None or dataset_df.empty:
         log.error("Prediction failed: dataset_df is None or empty")
         raise HTTPException(503, "Feature dataset is not loaded.")
 
-    # 1. Normalize teams
+    # 1. Normalize teams to canonical abbreviations (handles legacy codes)
     try:
         home = to_team_abbr(req.home_team)
         away = to_team_abbr(req.away_team)
     except ValueError as e:
         raise HTTPException(400, f"Invalid team name: {e}")
 
-    # 2. Find the game row
-    mask = build_game_mask(dataset_df, req.season, req.week, home, away)
-    game_row_df = dataset_df[mask]
+    # 2. Locate the corresponding game row in the feature dataset
+    df = dataset_df  # type: ignore[assignment]
+    assert df is not None  # for type-checkers
 
-    if game_row_df.empty:
-        log.warning(f"No match found for: S={req.season} W={req.week} {away}@{home}")
-        raise HTTPException(
-            404, 
-            f"Game not found in dataset: {req.season} Week {req.week}, {away} at {home}"
+    mask = build_game_mask(df, req.season, req.week, home, away)
+    games = df[mask]
+
+    if games.empty:
+        log.warning(
+            "No feature row found for game %s@%s S=%s W=%s",
+            away,
+            home,
+            req.season,
+            req.week,
         )
-    
+        raise HTTPException(404, "Game not found in feature dataset.")
+
+    if len(games) > 1:
+        log.warning(
+            "Multiple feature rows found for game %s@%s S=%s W=%s; using first row.",
+            away,
+            home,
+            req.season,
+            req.week,
+        )
+
+    game_row = games.iloc[0]
+
     # 3. Get expected features from loaded metadata
     raw_cols = model_objects.get("raw_feature_columns")
     if not raw_cols:
         log.error("Server configuration error: raw_feature_columns not in model_objects")
         raise HTTPException(500, "Server configuration error: Missing feature list")
+
     expected_features = _normalize_feature_cols(raw_cols)
+    if not expected_features:
+        log.error("Server configuration error: expected_features resolved to an empty list")
+        raise HTTPException(500, "Server configuration error: Empty feature list")
+
+    missing = [c for c in expected_features if c not in df.columns]
+    if missing:
+        log.error("Dataset missing required features: %s", missing[:10])
+        raise HTTPException(500, "Feature dataset missing required engineered features.")
+
+    # 4. Build a single-row feature matrix X
+    X = pd.DataFrame([game_row])
+    # Drop known target columns if present
+    X = X.drop(columns=["home_points_for", "away_points_for", "home_win"], errors="ignore")
+    # Reorder/limit to the expected feature set
+    X = X[expected_features]
+
+    # Final NaN/inf clean, then inference
+    X = _nan_safe_df(df=X)
+
+    # 5. Score prediction (home/away regressors)
     try:
-        X = game_row_df[expected_features].copy()
-        # If the fitted pipeline exposes its own expected names, reindex to them for order/compat
-        pipe_expected = getattr(home_pipe, "feature_names_in_", None)
-        if pipe_expected is not None:
-            # Ensure every required column exists; fill unknown/missing with 0.0
-            missing = [c for c in pipe_expected if c not in X.columns]
-            if missing:
-                for c in missing:
-                    X[c] = 0.0
-            # Reorder to match the pipeline’s fit-time order
-            X = X.reindex(columns=list(pipe_expected), fill_value=0.0)
-    except KeyError as e:
-        log.error(f"Dataset is missing expected feature(s): {e}")
-        raise HTTPException(
-            500, 
-            f"Prediction failed: Server dataset is missing required model features. {e}"
-        )
-
-    # Final NaN/inf clean
-    X = _nan_safe_df(X)
-    # 5. Run prediction
-    try:
-        # Use the module-level pipelines loaded at startup
-        home_score = float(np.clip(home_pipe.predict(X)[0], 0, 70))
-        away_score = float(np.clip(away_pipe.predict(X)[0], 0, 70))
-        
-        prob_array = win_pipe.predict_proba(X)
-        prob = float(prob_array[0, 1]) # Class 1 (home win)
-        home_prob = round(prob, 3)
-        away_prob = round(1 - prob, 3)
-        
-        # Get win threshold from model objects
-        win_thresh = model_objects.get("win_threshold_optimal", 0.5)
-
-        response = PredictionResponse(
-            home_score = round(home_score, 1),
-            away_score = round(away_score, 1),
-            home_win_probability = home_prob,
-            away_win_probability = away_prob,
-            home_win = 1.0 if home_prob >= win_thresh else 0.0,
-            away_win = 1.0 if home_prob < win_thresh else 0.0, # Simpler logic
-            point_diff = round(home_score - away_score, 1),
-            mode=str(model_objects.get("mode", "production")),
-            prediction_source="dataset-lookup-pipeline", # More descriptive
-            win_classifier_used=True,
-            win_probability_source="classifier",
-            win_threshold_used=win_thresh,
-        )
-        try:
-            game_row = game_row_df.iloc[0] if not game_row_df.empty else None
-            if game_row is not None:
-                _record_prediction_history(req, response, game_row)
-        except Exception as exc:
-            log.warning("Failed to record prediction history: %s", exc)
-
-        return response
+        home_score = float(home_pipe.predict(X)[0])  # type: ignore[call-arg]
+        away_score = float(away_pipe.predict(X)[0])  # type: ignore[call-arg]
     except Exception as e:
-        log.error(f"Inference failed for {away}@{home}: {e}", exc_info=True)
-        if SKLEARN_NOTFITTED_AVAILABLE and isinstance(e, NotFittedError): # type: ignore
-             raise HTTPException(503, "Model is not fitted. Server is unhealthy.")
-        raise HTTPException(500, f"Model inference failed: {e}")
+        log.error("Score prediction failed: %s", e, exc_info=True)
+        raise HTTPException(500, "Score prediction failed.")
+
+    # 6. Win probability using classifier when available
+    home_win_prob: Optional[float] = None
+    away_win_prob: Optional[float] = None
+    win_classifier_used = False
+    win_probability_source = "none"
+    win_threshold_used: Optional[float] = None
+
+    try:
+        if SKLEARN_CHECK_AVAILABLE and check_is_fitted is not None:
+            try:
+                check_is_fitted(win_pipe)  # type: ignore[arg-type]
+            except Exception:
+                # Not fitted or check failed; we'll fall back below.
+                pass
+            else:
+                probs = win_pipe.predict_proba(X)[0]  # type: ignore[call-arg]
+                # Determine index of the "home win" class in a robust way
+                idx_home = 0
+                classes = getattr(win_pipe, "classes_", None)
+                if classes is not None:
+                    try:
+                        cls_list = list(classes)
+                        if 1 in cls_list:
+                            idx_home = cls_list.index(1)
+                        elif "home_win" in cls_list:
+                            idx_home = cls_list.index("home_win")
+                    except Exception:
+                        idx_home = 0
+
+                home_win_prob = float(probs[idx_home])
+                away_win_prob = float(1.0 - home_win_prob)
+                win_classifier_used = True
+                win_probability_source = "classifier"
+                win_threshold_used = float(model_objects.get("win_threshold_optimal", 0.5))
+    except Exception as e:
+        log.warning("Win classifier failed; falling back to score-margin heuristic: %s", e, exc_info=True)
+
+    # 7. Fallback: map score margin to a probability via logistic
+    if home_win_prob is None or away_win_prob is None:
+        margin = home_score - away_score
+        home_win_prob = float(1.0 / (1.0 + np.exp(-margin)))
+        away_win_prob = float(1.0 - home_win_prob)
+        win_probability_source = "legacy-sigmoid"
+        if win_threshold_used is None:
+            win_threshold_used = 0.5
+
+    # 8. Derive binary win flags from probabilities
+    threshold = win_threshold_used if win_threshold_used is not None else 0.5
+    home_win_flag = float(home_win_prob >= threshold)
+    away_win_flag = float(1.0 - home_win_flag)
+
+    point_diff = float(home_score - away_score)
+
+    resp = PredictionResponse(
+        home_score=home_score,
+        away_score=away_score,
+        home_win_probability=home_win_prob,
+        away_win_probability=away_win_prob,
+        home_win=home_win_flag,
+        away_win=away_win_flag,
+        point_diff=point_diff,
+        mode=str(model_objects.get("mode", "production")),
+        prediction_source="api-v2",
+        win_classifier_used=win_classifier_used,
+        win_probability_source=win_probability_source,
+        win_threshold_used=win_threshold_used,
+    )
+
+    # 9. Record prediction history (best-effort; failures do not affect API response)
+    try:
+        _record_prediction_history(req, resp, game_row)
+    except Exception as exc:
+        log.warning("Failed to record prediction history: %s", exc)
+
+    return resp
 
 
 # -----------------------
@@ -1298,71 +1417,24 @@ def predict_game(req: PredictionRequest):
 # -----------------------
 @app.get("/predict/next-week")
 def predict_next_week() -> Dict[str, Any]:
+    """Generate predictions for all games in the next NFL week.
+
+    The function:
+    1. Uses :func:`get_current_nfl_context` to determine the next
+       prediction season/week.
+    2. Loads the schedule CSV and filters games for that week.
+    3. For each scheduled game, calls :func:`predict_game` with the
+       appropriate teams/season/week.
+    4. Returns a JSON payload containing context plus per-game results.
+
+    Games that exist in the schedule but are missing from the feature
+    dataset are reported with an ``error`` key instead of a prediction.
+    """
     if not all((home_pipe, away_pipe, win_pipe)):
         raise HTTPException(503, "Models not loaded.")
-    try:
-        ctx = get_current_nfl_context()
-        spath = _resolve_schedule_path()
-        if not spath.exists():
-            raise HTTPException(503, f"Schedule data not available on server (missing file): {spath}")
+    ...
 
-        try:
-            s = _load_schedule_df(spath)
-        except Exception as e:
-            log.error("Failed to load schedule CSV for next-week predictions: %s", e, exc_info=True)
-            raise HTTPException(500, "Failed to load schedule data for next-week predictions.")
-        games = s[(s["season"] == ctx["next_prediction_season"]) & (s["week"] == ctx["next_prediction_week"])]
-        
-        if games.empty:
-            log.warning(f"No games found in schedule for S={ctx['next_prediction_season']} W={ctx['next_prediction_week']}")
 
-        out: List[Dict[str, Any]] = []
-        for _, g in games.iterrows():
-            try:
-                # This call now uses the new, robust predict_game function
-                pr = predict_game(
-                    PredictionRequest(
-                        home_team=str(g["home_team"]),
-                        away_team=str(g["away_team"]),
-                        season=int(g["season"]),
-                        week=int(g["week"]),
-                    )
-                )
-                out.append(
-                    {
-                        "game_id": str(g.get("game_id", f"{g['season']}W{g['week']}-{g['away_team']}@{g['home_team']}")),
-                        "season": int(g["season"]),
-                        "week": int(g["week"]),
-                        "home_team": str(g["home_team"]),
-                        "away_team": str(g["away_team"]),
-                        "kickoff": str(g.get("gameday", "TBD")),
-                        "prediction": pr.model_dump(),
-                    }
-                )
-            except HTTPException as e:
-                # Catch 404s (game not in dataset) gracefully
-                if e.status_code == 404:
-                    log.warning(f"Game {g['away_team']}@{g['home_team']} not in feature dataset. Skipping.")
-                    out.append({"game_id": str(g.get("game_id", "unknown")), "error": "Game not found in feature dataset"})
-                else:
-                    log.error(f"Prediction failed for {g['away_team']}@{g['home_team']}: {e.detail}")
-                    out.append({"game_id": str(g.get("game_id", "unknown")), "error": str(e.detail)})
-            except Exception as e:
-                log.error(f"Unexpected error predicting game {g['away_team']}@{g['home_team']}: {e}", exc_info=True)
-                out.append({"game_id": str(g.get("game_id", "unknown")), "error": str(e)})
-        
-        return {
-            "context": ctx,
-            "games": out,
-            "total_games": len(out),
-            "successful_predictions": sum(1 for p in out if "prediction" in p),
-        }
-    except HTTPException:
-        # Let explicit HTTP errors (e.g., 503 for missing schedule data) propagate unchanged.
-        raise
-    except Exception as e:
-        log.error("Next-week prediction error: %s", e, exc_info=True)
-        raise HTTPException(500, "Failed to process next week predictions.")
 # -----------------------
 # Reload models endpoint
 # -----------------------

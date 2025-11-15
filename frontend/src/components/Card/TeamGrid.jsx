@@ -7,11 +7,16 @@
 // ------------------------------------------------------
 
 import React from 'react';
-import Card from './Card.jsx';        // adjust path if needed
+import Card from './Card.jsx';        // presentational card for a single matchup
 import './TeamGrid.css';
-import { getNextWeekSchedule, predictGame } from '../../api/client.js';
 
-/** Build a stable key for a game, mirroring PredictionContext/getKey + StatsPage/toGameKey. */
+/**
+ * Build a stable key for a game, mirroring PredictionContext/generateGameKey
+ * and StatsPage/toGameKey.
+ *
+ * @param {any} game
+ * @returns {string}
+ */
 const toGameKey = (game) =>
   game?.game_id ?? [
     game?.season,
@@ -133,9 +138,11 @@ function TeamGrid({
           return (
             <Card
               key={rawKey}
-              game={enrichedGame}
-              isLoading={isGameLoading}
+              matchup={enrichedGame}
+              prediction={prediction}
+              loading={isGameLoading}
               error={errorMessage}
+              index={index}
               onClick={handleClick}
             />
           );
