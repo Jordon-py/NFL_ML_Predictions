@@ -52,7 +52,7 @@ import logging
 import logging.config
 import os
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from threading import Lock
 from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple
@@ -125,6 +125,138 @@ class PredictionHistoryEntry(BaseModel):
     actual_away_score: Optional[float] = None
     actual_winner: Optional[str] = None
     confidence_score: Optional[float] = None  # New field
+
+
+def get_current_nfl_context(reference: Optional[datetime] = None) -> Dict[str, Any]:
+    """Return the current NFL season context for schedule heuristics.
+
+    Repository Guardian note: this helper centralizes the once-inline
+    "what week is it?" logic so that schedule endpoints can stay synced to the
+    real calendar rather than defaulting to the first row of the dataset.
+    """
+
+    now = reference or datetime.now(timezone.utc)
+
+    # NFL season flips in August; anything earlier belongs to the prior year.
+    season = now.year if now.month >= 8 else now.year - 1
+
+    if now.month in {1, 2}:
+        phase = "postseason"
+    elif 3 <= now.month <= 7:
+        phase = "offseason"
+    elif now.month == 8:
+        phase = "preseason"
+    else:
+        phase = "regular"
+
+    season_start = datetime(season, 9, 1, tzinfo=timezone.utc)
+    approx_week = 1
+    if now >= season_start:
+        weeks_since = ((now - season_start).days // 7) + 1
+        approx_week = max(1, min(22, weeks_since))
+    elif phase == "postseason":
+        approx_week = 21
+
+    return {
+        "season": season,
+        "phase": phase,
+        "approx_week": int(approx_week),
+        "timestamp": now.isoformat(),
+    }
+
+
+def _select_schedule_scope(df: pd.DataFrame, now: Optional[datetime] = None) -> Tuple[int, int, Dict[str, Any]]:
+    """Choose which season/week to expose via `/schedule/next-week`.
+
+    Preference order:
+        1. Earliest kickoff time that has not yet started (within a small grace window).
+        2. Calendar context (current season + nearest upcoming week).
+        3. Latest season/week present in the dataset.
+
+    Returns (season, week, metadata).
+    """
+
+    if df is None or df.empty:
+        raise ValueError("Schedule dataset not available")
+
+    now = now or datetime.now(timezone.utc)
+    working = df.copy()
+    working["season_num"] = pd.to_numeric(working.get("season"), errors="coerce")
+    working["week_num"] = pd.to_numeric(working.get("week"), errors="coerce")
+
+    selection: Dict[str, Any] = {"strategy": "unknown"}
+
+    def _as_int(value: Any) -> Optional[int]:
+        if pd.isna(value):
+            return None
+        try:
+            return int(float(value))
+        except (TypeError, ValueError):
+            return None
+
+    # 1) Use kickoff timestamps when available so "next week" truly means upcoming games.
+    if "home_game_date" in working.columns:
+        kickoff = pd.to_datetime(working["home_game_date"], errors="coerce", utc=True)
+        working["kickoff_dt"] = kickoff
+        grace_window = timedelta(hours=4)
+        future_rows = (
+            working.loc[(kickoff.notna()) & (kickoff >= now - grace_window)]
+            .sort_values("kickoff_dt")
+        )
+        if not future_rows.empty:
+            row = future_rows.iloc[0]
+            season_val = _as_int(row.get("season_num"))
+            week_val = _as_int(row.get("week_num"))
+            if season_val is not None and week_val is not None:
+                selection.update(
+                    {
+                        "strategy": "kickoff_date",
+                        "note": "nearest future kickoff",
+                        "kickoff": row["kickoff_dt"].isoformat()
+                        if pd.notna(row["kickoff_dt"])
+                        else None,
+                    }
+                )
+                return season_val, week_val, selection
+
+    # 2) Fall back to calendar context when kickoff data is insufficient.
+    context = get_current_nfl_context(now)
+    context_season = context["season"]
+    approx_week = int(context["approx_week"])
+    season_rows = working.loc[working["season_num"] == context_season]
+    if not season_rows.empty:
+        weeks = sorted({_as_int(val) for val in season_rows["week_num"] if not pd.isna(val)})
+        weeks = [w for w in weeks if w is not None]
+        if weeks:
+            week_candidates = [w for w in weeks if w >= approx_week]
+            target_week = week_candidates[0] if week_candidates else weeks[-1]
+            selection.update(
+                {
+                    "strategy": "calendar_context",
+                    "phase": context["phase"],
+                    "approx_week": approx_week,
+                }
+            )
+            return context_season, target_week, selection
+
+    # 3) Absolute fallback: latest available season/week in the dataset.
+    seasons = sorted({_as_int(val) for val in working["season_num"].dropna()})
+    seasons = [s for s in seasons if s is not None]
+    if seasons:
+        fallback_season = seasons[-1]
+        rows = working.loc[working["season_num"] == fallback_season]
+        weeks = sorted({_as_int(val) for val in rows["week_num"].dropna()})
+        weeks = [w for w in weeks if w is not None]
+        if weeks:
+            selection.update(
+                {
+                    "strategy": "dataset_tail",
+                    "note": "using latest available season/week",
+                }
+            )
+            return fallback_season, weeks[-1], selection
+
+    raise ValueError("Unable to determine target week from dataset")
 
 # ---------------------------------------------------------------
 # Configuration & Constants with Better Validation
@@ -380,22 +512,43 @@ class ModelManager:
                 return {"status": "error", "error": str(e)}
     
     def _load_pipelines(self) -> Tuple[Any, Any, Any]:
-        """Load model pipelines with error handling"""
-        pipelines = {}
-        
-        for name in ["home_pipe", "away_pipe", "win_pipe"]:
-            try:
-                pipeline_path = self.config.models_dir / f"{name}.joblib"
-                if pipeline_path.exists():
+        """Load model pipelines with error handling.
+
+        Repository Guardian note: Earlier revisions expected legacy filenames
+        (`home_pipe.joblib`, etc.) that no longer exist in the models directory,
+        generating noisy startup errors even though the modern artifacts were in
+        place (`home_model.joblib`, `win_clf_calibrated.joblib`). This loader now
+        resolves each logical pipeline against a list of known filenames so that
+        startup succeeds without manual symlinks.
+        """
+        pipelines: Dict[str, Any] = {}
+
+        filename_candidates = {
+            "home_pipe": ["home_pipe.joblib", "home_model.joblib"],
+            "away_pipe": ["away_pipe.joblib", "away_model.joblib"],
+            "win_pipe": ["win_pipe.joblib", "win_model.joblib", "win_clf_calibrated.joblib"],
+        }
+
+        for name, candidates in filename_candidates.items():
+            pipelines[name] = None
+            for candidate in candidates:
+                pipeline_path = self.config.models_dir / candidate
+                if not pipeline_path.exists():
+                    continue
+                try:
                     pipelines[name] = joblib.load(pipeline_path)
-                    logging.info(f"✓ Loaded {name}")
-                else:
-                    logging.error(f"✗ Pipeline not found: {pipeline_path}")
-                    pipelines[name] = None
-            except Exception as e:
-                logging.error(f"✗ Failed to load {name}: {e}")
-                pipelines[name] = None
-        
+                    logging.info("✓ Loaded %s from %s", name, pipeline_path.name)
+                    break
+                except Exception as exc:  # pragma: no cover - defensive load guard
+                    logging.error("✗ Failed to load %s from %s: %s", name, pipeline_path, exc)
+
+            if pipelines[name] is None:
+                logging.error(
+                    "✗ Pipeline not found for %s (looked for: %s)",
+                    name,
+                    ", ".join(candidates),
+                )
+
         return pipelines["home_pipe"], pipelines["away_pipe"], pipelines["win_pipe"]
 
     def _load_metadata(self) -> Optional[Dict[str, Any]]:
@@ -628,7 +781,7 @@ def create_app() -> FastAPI:
     async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         """Enhanced lifespan manager"""
         log.info("🚀 Starting NFL Prediction API")
-        
+        load_dotenv(dotenv_path="backend/.env")
         try:
             # Initialize application state
             init_results = app_state.initialize()
@@ -654,9 +807,9 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],  # Configure based on environment
-        allow_credentials=True,
+        allow_credentials=False,
         allow_methods=["*"],
-        allow_headers=["*"],
+        allow_headers=["Access-Control-Allow-Origin"],
     )
     
     # Enhanced health endpoint
@@ -681,6 +834,107 @@ def create_app() -> FastAPI:
             timestamp=datetime.now(timezone.utc),
             components=components
         )
+
+    # -----------------------------------------------------------
+    # Schedule Endpoints
+    # -----------------------------------------------------------
+    @app.get("/schedule/next-week")
+    async def get_next_week_schedule() -> List[Dict[str, Any]]:
+        """Return the upcoming week's schedule as a simple list of games.
+
+        This primarily exists to support the React dashboard. Instead of
+        blindly returning the smallest week in the dataset (which skewed toward
+        archival 2018 rows), the handler now relies on kickoff timestamps and a
+        calendar-aware fallback to surface the true "next" slate.
+        """
+        df = app_state.data_manager.dataset
+        if df is None or df.empty:
+            raise HTTPException(503, "Schedule dataset not available")
+
+        try:
+            target_season, target_week, selection = _select_schedule_scope(df)
+        except ValueError as exc:  # pragma: no cover - defensive guard
+            raise HTTPException(503, str(exc)) from exc
+
+        numeric_season = pd.to_numeric(df.get("season"), errors="coerce")
+        numeric_week = pd.to_numeric(df.get("week"), errors="coerce")
+        week_rows = df.loc[(numeric_season == target_season) & (numeric_week == target_week)].copy()
+        if week_rows.empty:
+            raise HTTPException(404, f"No games found for season {target_season} week {target_week}")
+
+        week_rows = week_rows.assign(
+            season_num=pd.to_numeric(week_rows.get("season"), errors="coerce"),
+            week_num=pd.to_numeric(week_rows.get("week"), errors="coerce"),
+        )
+
+        logging.getLogger("api").info(
+            "Schedule scope -> season=%s week=%s via %s",
+            target_season,
+            target_week,
+            selection.get("strategy"),
+        )
+
+        # Normalise into a compact schedule shape for the frontend.
+        games: List[Dict[str, Any]] = []
+        for _, row in week_rows.iterrows():
+            kickoff_iso: Optional[str] = None
+            if "home_game_date" in row.index:
+                kickoff_dt = pd.to_datetime(row.get("home_game_date"), errors="coerce", utc=True)
+                kickoff_iso = kickoff_dt.isoformat() if pd.notna(kickoff_dt) else None
+
+            season_val = row.get("season_num")
+            season_val = (
+                target_season if pd.isna(season_val) else int(season_val)
+            )
+            week_val = row.get("week_num")
+            week_val = target_week if pd.isna(week_val) else int(week_val)
+            home_team = str(row.get("home_team", "")).upper()
+            away_team = str(row.get("away_team", "")).upper()
+
+            games.append(
+                {
+                    "season": season_val,
+                    "week": week_val,
+                    "home_team": home_team,
+                    "away_team": away_team,
+                    "home_abbr": home_team,
+                    "away_abbr": away_team,
+                    "game_id": str(
+                        row.get(
+                            "game_id",
+                            f"{season_val}_{week_val}_{home_team}_{away_team}",
+                        )
+                    ),
+                    "kickoff": kickoff_iso,
+                    "venue": row.get("stadium_name") or row.get("stadium"),
+                    "network": row.get("tv_network") or row.get("network"),
+                })
+
+        return games
+
+    # -----------------------------------------------------------
+    # Prediction History Endpoint
+    # -----------------------------------------------------------
+    @app.get("/history")
+    async def get_prediction_history(limit: int = 100) -> Dict[str, Any]:
+        """Return recent prediction history entries.
+
+        The frontend uses this to hydrate its history chart. Entries are
+        served in reverse chronological order (most recent first).
+        """
+        # Defensive bounds on limit to avoid accidental overload.
+        safe_limit = max(1, min(int(limit or 100), 500))
+
+        with app_state.history_lock:
+            entries = list(app_state.prediction_history)[-safe_limit:]
+
+        # Ensure newest-first ordering.
+        entries = sorted(entries, key=lambda e: e.timestamp, reverse=True)
+
+        return {
+            "entries": [json.loads(e.json()) for e in entries],
+            "count": len(entries),
+        }
     
     # Enhanced prediction endpoint
     @app.post("/predict", response_model=PredictionResponse)
@@ -690,10 +944,17 @@ def create_app() -> FastAPI:
         if not all([app_state.model_manager.home_pipe, 
                    app_state.model_manager.away_pipe, 
                    app_state.model_manager.win_pipe]):
-            raise HTTPException(503, "Models not loaded")
-        
-        if app_state.data_manager.dataset is None:
-            raise HTTPException(503, "Dataset not available")
+            try:
+                home_pipe = joblib.load('backend/models/home_model.joblib')
+                away_pipe = joblib.load('backend/models/away_model.joblib')
+                win_pipe = joblib.load('backend/models/win_clf_calibrated.joblib')
+                pre = joblib.load('backend/models/preprocessing_pipeline.joblib')
+                
+                if not home_pipe: 
+                    raise HTTPException(503, "Models not loaded")
+            finally:
+                if app_state.data_manager.dataset is None:
+                    raise HTTPException(503, "Dataset not available")
 
         # Locate the corresponding game row in the engineered dataset.
         df = app_state.data_manager.dataset

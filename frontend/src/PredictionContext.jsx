@@ -28,12 +28,84 @@ import React, {
 } from 'react';
 import { getNextWeekSchedule, predictGame, getHealthStatus, getPredictionHistory } from './api/client';
 
+/**
+ * @typedef {*} PredictionResult
+ */
+
+/**
+ * @typedef {Object} Game
+ * @property {string} [game_id]
+ * @property {number} [season]
+ * @property {number} [week]
+ * @property {string} [home_abbr]
+ * @property {string} [away_abbr]
+ * @property {string} [home_team]
+ * @property {string} [away_team]
+ */
+
+/**
+ * @typedef {Object} TeamMeta
+ * @property {string} name
+ * @property {string} logoUrl
+ */
+
+/** @typedef {Record<string, TeamMeta>} TeamsMap */
+/** @typedef {Record<string, boolean>} LoadingMap */
+/** @typedef {Record<string, string | null | undefined>} ErrorMap */
+
+/**
+ * @typedef {Object} HealthState
+ * @property {"unknown" | "healthy" | "unhealthy"} status
+ * @property {string} mode
+ * @property {string} reason
+ */
+
+/** @typedef {PredictionResult & { timestamp: string, game: Game }} PredictionHistoryEntry */
+
+/**
+ * @typedef {Object} PredictionState
+ * @property {PredictionResult | null} current
+ * @property {PredictionHistoryEntry[]} history
+ * @property {Game[]} schedule
+ * @property {number} week
+ * @property {TeamsMap} teams
+ * @property {Record<string, PredictionResult>} predictions
+ * @property {LoadingMap} loading
+ * @property {ErrorMap} errors
+ * @property {HealthState} health
+ */
+
+/**
+ * @typedef {PredictionState & {
+ *   setCurrent: (prediction: PredictionResult | null) => void,
+ *   pushHistory: (entry: PredictionHistoryEntry) => void,
+ *   resetHistory: () => void,
+ *   makePrediction: (game: Game) => Promise<void>,
+ *   setHealth: (health: HealthState) => void,
+ *   count: number,
+ *   latest: PredictionHistoryEntry | null,
+ * }} PredictionContextValue
+ */
+
 const PREDICTION_HISTORY_KEY = "prediction_history";
 const MAX_HISTORY_ENTRIES = 100;
 
 // Generate unique key for a game
+/**
+ * @param {Game} game
+ * @returns {string}
+ */
 function generateGameKey(game) {
   return game?.game_id ?? [game?.season, game?.week, game?.home_abbr, game?.away_abbr].filter(Boolean).join("-");
+}
+
+/**
+ * Safely access import.meta.env without tripping TypeScript definitions.
+ * @returns {Record<string, any> | undefined}
+ */
+function getMetaEnv() {
+  const meta = typeof import.meta !== "undefined" ? /** @type {any} */ (import.meta) : undefined;
+  return meta?.env;
 }
 
 // Action types
@@ -48,6 +120,81 @@ const SET_HEALTH = 'SET_HEALTH';
 const SET_HISTORY = 'SET_HISTORY';
 const SET_TEAMS = 'SET_TEAMS';
 
+/**
+ * @typedef {Object} SetCurrentAction
+ * @property {typeof SET_CURRENT} type
+ * @property {PredictionResult | null} payload
+ */
+
+/**
+ * @typedef {Object} PushHistoryAction
+ * @property {typeof PUSH_HISTORY} type
+ * @property {PredictionHistoryEntry} payload
+ */
+
+/**
+ * @typedef {Object} ResetHistoryAction
+ * @property {typeof RESET_HISTORY} type
+ */
+
+/**
+ * @typedef {Object} SetScheduleAction
+ * @property {typeof SET_SCHEDULE} type
+ * @property {{ schedule: Game[], week: number }} payload
+ */
+
+/**
+ * @typedef {Object} SetPredictionAction
+ * @property {typeof SET_PREDICTION} type
+ * @property {{ key: string, prediction: PredictionResult }} payload
+ */
+
+/**
+ * @typedef {Object} SetLoadingAction
+ * @property {typeof SET_LOADING} type
+ * @property {{ key: string, loading: boolean }} payload
+ */
+
+/**
+ * @typedef {Object} SetErrorAction
+ * @property {typeof SET_ERROR} type
+ * @property {{ key: string, error: string | null | undefined }} payload
+ */
+
+/**
+ * @typedef {Object} SetHealthAction
+ * @property {typeof SET_HEALTH} type
+ * @property {HealthState} payload
+ */
+
+/**
+ * @typedef {Object} SetHistoryAction
+ * @property {typeof SET_HISTORY} type
+ * @property {PredictionHistoryEntry[]} payload
+ */
+
+/**
+ * @typedef {Object} SetTeamsAction
+ * @property {typeof SET_TEAMS} type
+ * @property {TeamsMap} payload
+ */
+
+/**
+ * @typedef {
+ *   | SetCurrentAction
+ *   | PushHistoryAction
+ *   | ResetHistoryAction
+ *   | SetScheduleAction
+ *   | SetPredictionAction
+ *   | SetLoadingAction
+ *   | SetErrorAction
+ *   | SetHealthAction
+ *   | SetHistoryAction
+ *   | SetTeamsAction
+ * } PredictionAction
+ */
+
+/** @type {PredictionState} */
 const initialState = {
   current: null,
   history: [],
@@ -60,6 +207,11 @@ const initialState = {
   health: { status: 'unknown', mode: 'none', reason: 'init' }
 };
 
+/**
+ * @param {PredictionState} state
+ * @param {PredictionAction} action
+ * @returns {PredictionState}
+ */
 function reducer(state, action) {
   switch (action.type) {
     case SET_CURRENT:
@@ -103,9 +255,13 @@ function reducer(state, action) {
 }
 
 // Safe hydration from localStorage
+/**
+ * @returns {PredictionHistoryEntry[]}
+ */
 function loadPredictionHistoryFromStorage() {
   try {
     const rawHistoryData = localStorage.getItem(PREDICTION_HISTORY_KEY);
+    if (!rawHistoryData) return [];
     const parsedHistory = JSON.parse(rawHistoryData);
     return Array.isArray(parsedHistory) ? parsedHistory : [];
   } catch {
@@ -115,9 +271,14 @@ function loadPredictionHistoryFromStorage() {
 
 // Lightweight CSV parser for public/data/myteamdescriptions.csv
 // Format: team_name,abbr,logo_url
+/**
+ * @param {string} text
+ * @returns {TeamsMap}
+ */
 function parseTeamsCsv(text) {
-  if (!text) return {};
+  if (!text) return /** @type {TeamsMap} */ ({});
   const lines = text.trim().split(/\r?\n/);
+  /** @type {TeamsMap} */
   const out = {};
   for (let i = 1; i < lines.length; i += 1) {
     const line = lines[i].trim();
@@ -135,32 +296,46 @@ function parseTeamsCsv(text) {
   return out;
 }
 
-const Ctx = createContext(null);
+/** @type {React.Context<PredictionContextValue | null>} */
+const Ctx = createContext(/** @type {PredictionContextValue | null} */(null));
 
+/**
+ * @param {{ children: React.ReactNode }} props
+ * @returns {React.ReactElement}
+ */
 export function PredictionProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, initialState, (s) => ({
     ...s, history: loadPredictionHistoryFromStorage()
   }));
 
   // Actions
+  /** @type {(prediction: PredictionResult | null) => void} */
   const setCurrent = useCallback((e) => dispatch({ type: SET_CURRENT, payload: e }), []);
+  /** @type {(entry: PredictionHistoryEntry) => void} */
   const pushHistory = useCallback((e) => dispatch({ type: PUSH_HISTORY, payload: e }), []);
   const resetHistory = useCallback(() => dispatch({ type: RESET_HISTORY }), []);
 
+  /** @type {(schedule: Game[], week: number) => void} */
   const setSchedule = useCallback((schedule, week) =>
     dispatch({ type: SET_SCHEDULE, payload: { schedule, week } }), []);
 
+  /** @type {(key: string, prediction: PredictionResult) => void} */
   const setPrediction = useCallback((key, prediction) =>
     dispatch({ type: SET_PREDICTION, payload: { key, prediction } }), []);
 
+  /** @type {(key: string, loading: boolean) => void} */
   const setLoading = useCallback((key, loading) =>
     dispatch({ type: SET_LOADING, payload: { key, loading } }), []);
 
+  /** @type {(key: string, error: string | null | undefined) => void} */
   const setError = useCallback((key, error) =>
     dispatch({ type: SET_ERROR, payload: { key, error } }), []);
 
+  /** @type {(health: HealthState) => void} */
   const setHealth = useCallback((h) => dispatch({ type: SET_HEALTH, payload: h }), []);
+  /** @type {(entries: PredictionHistoryEntry[]) => void} */
   const setHistoryState = useCallback((entries) => dispatch({ type: SET_HISTORY, payload: entries }), []);
+  /** @type {(teams: TeamsMap) => void} */
   const setTeams = useCallback((teams) => dispatch({ type: SET_TEAMS, payload: teams }), []);
 
   // Fetch schedule on mount
@@ -171,8 +346,9 @@ export function PredictionProvider({ children }) {
         const scheduleData = await getNextWeekSchedule();
         if (!mounted || !Array.isArray(scheduleData) || scheduleData.length === 0) return;
 
+        console.info(`[scheduleData] Fetched ${scheduleData.length} games from backend schedule API.`);
         // Extract week from first game
-        const week = scheduleData[0]?.week || 11;
+        const week = scheduleData[0]?.week || 1; // Fixed: default to 1 instead of scheduleData.;
         setSchedule(scheduleData, week);
 
         console.log(`[PredictionContext] Loaded ${scheduleData.length} games for Week ${week}`);
@@ -230,7 +406,8 @@ export function PredictionProvider({ children }) {
         const teamsMap = parseTeamsCsv(text);
         if (teamsMap && Object.keys(teamsMap).length) {
           setTeams(teamsMap);
-          if (import.meta?.env?.DEV) {
+          const env = getMetaEnv();
+          if (env?.DEV) {
             console.debug("[PredictionContext] Loaded team metadata for", Object.keys(teamsMap).length, "teams");
           }
         }
@@ -246,6 +423,7 @@ export function PredictionProvider({ children }) {
   const healthStatus = state.health?.status ?? 'unknown';
   const healthReason = state.health?.reason ?? 'health not confirmed';
 
+  /** @type {(game: Game) => Promise<void>} */
   const makePrediction = useCallback(async (game) => {
     // Only short-circuit when the backend has explicitly reported an unhealthy state;
     // if health is still `unknown` we attempt the request and let per-call errors surface.
@@ -256,29 +434,52 @@ export function PredictionProvider({ children }) {
     if (healthStatus !== 'healthy') {
       console.info('[PredictionContext] Backend health pending; attempting prediction anyway.');
     }
-    const gameKey = generateGameKey(game);
+    const homeTeam = (game.home_abbr || game.home_team || '').trim();
+    const awayTeam = (game.away_abbr || game.away_team || '').trim();
+
+    if (!homeTeam || !awayTeam) {
+      console.warn('[PredictionContext] Missing team abbreviations for prediction request.');
+      return;
+    }
+
+    const resolvedSeason = Number.isFinite(Number(game.season))
+      ? Number(game.season)
+      : Number(state.schedule[0]?.season ?? new Date().getFullYear());
+    const resolvedWeek = Number.isFinite(Number(game.week))
+      ? Number(game.week)
+      : Number(state.week ?? 1);
+
+    const normalizedGame = {
+      ...game,
+      season: resolvedSeason,
+      week: resolvedWeek,
+      home_abbr: homeTeam,
+      away_abbr: awayTeam,
+    };
+
+    const gameKey = generateGameKey(normalizedGame);
     setLoading(gameKey, true);
     setError(gameKey, null);
 
     try {
       const prediction = await predictGame({
-        homeTeam: game.home_abbr || game.home_team,
-        awayTeam: game.away_abbr || game.away_team,
-        season: game.season,
-        week: game.week
+        homeTeam,
+        awayTeam,
+        season: resolvedSeason,
+        week: resolvedWeek
       });
 
       setPrediction(gameKey, prediction);
-      pushHistory({ ...prediction, timestamp: new Date().toISOString(), game });
-      console.log(`[PredictionContext] Prediction for ${game.away_abbr}@${game.home_abbr}:`, prediction);
+      pushHistory({ ...prediction, timestamp: new Date().toISOString(), game: normalizedGame });
+      console.log(`[PredictionContext] Prediction for ${awayTeam}@${homeTeam}:`, prediction);
     } catch (err) {
-      const errorMsg = err?.message || String(err);
+      const errorMsg = err instanceof Error ? err.message : String(err);
       setError(gameKey, errorMsg);
-      console.error(`[PredictionContext] Prediction failed for ${game.away_abbr}@${game.home_abbr}:`, err);
+      console.error(`[PredictionContext] Prediction failed for ${awayTeam}@${homeTeam}:`, err);
     } finally {
       setLoading(gameKey, false);
     }
-  }, [healthStatus, healthReason, setLoading, setError, setPrediction, pushHistory]);
+  }, [healthStatus, healthReason, setLoading, setError, setPrediction, pushHistory, state.schedule, state.week]);
 
   // Persist history to localStorage
   useEffect(() => {
@@ -289,7 +490,8 @@ export function PredictionProvider({ children }) {
 
   // Tiny dev logger
   useEffect(() => {
-    if (typeof window !== "undefined" && import.meta && import.meta.env && import.meta.env.DEV) {
+    const env = getMetaEnv();
+    if (typeof window !== "undefined" && env?.DEV) {
       console.debug("[PredictionContext] state:", state);
     }
   }, [state]);
@@ -317,6 +519,9 @@ export function PredictionProvider({ children }) {
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
+/**
+ * @returns {PredictionContextValue}
+ */
 export const usePredictions = () => {
   const ctx = useContext(Ctx);
   if (!ctx) throw new Error("usePredictions must be used within PredictionProvider");

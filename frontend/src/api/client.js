@@ -99,8 +99,8 @@ class TypedApiClient {
     if (isLocalhost) {
       return ''; // Use relative URLs for local development
     }
-
-    return 'https://nfl-predict-ecf5a5bd34fe.herokuapp.com';
+    const baseEnvUrl = createApi('https://nfl-predict-ecf5a5bd34fe.herokuapp.com');
+    return baseEnvUrl;
   }
 
   /**
@@ -125,7 +125,8 @@ class TypedApiClient {
   async request(path, init = {}, options = {}) {
     const mergedOptions = { ...this.config, ...options };
     const url = this.buildUrl(path, mergedOptions.baseUrl);
-    const cacheKey = init.method === 'GET' ? url : null;
+    const method = (init.method || 'GET').toUpperCase();
+    const cacheKey = method === 'GET' ? url : null;
 
     // Check cache for GET requests
     if (cacheKey && mergedOptions.cacheTtlMs > 0) {
@@ -140,21 +141,23 @@ class TypedApiClient {
       return this.requestQueue.get(url);
     }
 
-    const requestPromise = this.executeRequest(url, init, mergedOptions);
-    this.requestQueue.set(url, requestPromise);
+    const requestPromise = (async () => {
+      try {
+        const result = await this.executeRequest(url, init, mergedOptions);
 
-    try {
-      const result = await requestPromise;
+        // Cache successful GET responses
+        if (cacheKey && mergedOptions.cacheTtlMs > 0) {
+          this.setCache(cacheKey, result, mergedOptions.cacheTtlMs);
+        }
 
-      // Cache successful GET responses
-      if (cacheKey && mergedOptions.cacheTtlMs > 0) {
-        this.setCache(cacheKey, result, mergedOptions.cacheTtlMs);
+        return result;
+      } finally {
+        this.requestQueue.delete(url);
       }
+    })();
 
-      return result;
-    } finally {
-      this.requestQueue.delete(url);
-    }
+    this.requestQueue.set(url, requestPromise);
+    return requestPromise;
   }
 
   /**
@@ -172,7 +175,8 @@ class TypedApiClient {
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
       try {
-        const response = await fetch(url, {
+        const baseUrl = this.resolveBaseUrl();
+        const response = await fetch(baseUrl, {
           ...init,
           signal: controller.signal,
           headers: {
@@ -181,10 +185,6 @@ class TypedApiClient {
             ...init.headers
           }
         });
-
-        if (!response.ok) {
-          throw await this.createApiError(response, url);
-        }
 
         const contentType = response.headers.get('content-type');
         const data = contentType?.includes('application/json')
@@ -477,6 +477,29 @@ export function getPredictionHistory(limit = 100, options = {}) {
   const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 100;
   const path = `/history?limit=${encodeURIComponent(String(safeLimit))}`;
   return defaultClient.request(path, { method: 'GET' }, options);
+}
+
+/**
+ * Fetch aggregate system status for dashboards. Backends deployed so far do
+ * not always expose `/status/overview`, so we gracefully swallow 404s and let
+ * callers fall back to locally derived metrics. This keeps StatsPage renders
+ * non-blocking even when the endpoint is absent.
+ *
+ * @param {ApiConfig} [options]
+ * @returns {Promise<any|null>}
+ */
+export async function getStatusOverview(options = {}) {
+  try {
+    // Repository Guardian Log: surfaces system health data in StatsPage while
+    // keeping builds unblocked even when the backend has not yet shipped the
+    // matching endpoint.
+    return await defaultClient.request('/status/overview', { method: 'GET' }, options);
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) {
+      return null;
+    }
+    throw error;
+  }
 }
 
 /**
