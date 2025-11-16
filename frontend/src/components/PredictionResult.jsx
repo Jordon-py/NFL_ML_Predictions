@@ -19,12 +19,62 @@
 import React from 'react';
 
 /**
+ * @typedef {Object} PredictionGame
+ * @property {number} [week]
+ * @property {number} [season]
+ * @property {string} [home_abbr]
+ * @property {string} [away_abbr]
+ * @property {string} [home_team]
+ * @property {string} [away_team]
+ */
+
+/**
+ * @typedef {Object} PredictionMetrics
+ * @property {number|null} [home_score]
+ * @property {number|null} [away_score]
+ * @property {number|null} [home_score_pred]
+ * @property {number|null} [away_score_pred]
+ * @property {number|null} [point_diff]
+ */
+
+/**
+ * @typedef {Object} PredictionProbabilities
+ * @property {number|null} [home]
+ * @property {number|null} [away]
+ * @property {number|null} [ensemble]
+ * @property {number|null} [home_win_probability]
+ * @property {number|null} [away_win_probability]
+ */
+
+/**
+ * @typedef {Object} PredictionEntry
+ * @property {PredictionGame} [game]
+ * @property {PredictionMetrics} [metrics]
+ * @property {PredictionProbabilities} [probs]
+ * @property {number} [week]
+ * @property {number} [season]
+ * @property {number} [home_score]
+ * @property {number} [away_score]
+ * @property {number} [home_score_pred]
+ * @property {number} [away_score_pred]
+ * @property {number} [point_diff]
+ * @property {number} [home_win_probability]
+ * @property {number} [away_win_probability]
+ * @property {string} [home_abbr]
+ * @property {string} [away_abbr]
+ * @property {string} [home_team]
+ * @property {string} [away_team]
+ */
+
+/** @type {PredictionEntry} */
+const EMPTY_ENTRY = {};
+
+/**
  * PredictionResult
  * ----------------
  * Displays the most recent prediction entry, including game metadata, scores, and win probabilities.
  *
- * @param {Object} props
- * @param {Object|null} props.entry - The prediction entry object, or null if unavailable.
+ * @param {{ entry: PredictionEntry | null }} props
  *   - entry.game: {Object} Game metadata (week, season, home/away abbreviations).
  *   - entry.metrics: {Object} Prediction metrics (scores, point_diff).
  *   - entry.probs: {Object} Probability metrics (home, away, ensemble).
@@ -41,7 +91,8 @@ export default function PredictionResult({ entry }) {
     );
   }
 
-  const base = entry || {};
+  /** @type {PredictionEntry} */
+  const base = entry ?? EMPTY_ENTRY;
 
   // Normalise "game" metadata regardless of whether it comes nested (entry.game)
   // or from a backend history payload (top-level season/week/home/away fields).
