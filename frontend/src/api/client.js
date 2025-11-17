@@ -478,14 +478,9 @@ export function getHealthStatus(options = {}) {
  */
 // Get the schedule for the next week from the NFL prediction backend
 export async function getNextWeekSchedule(options = {}) {
-  // 1. Create the API client pointed at your backend
-  const res = await defaultClient.request('/schedule/next-week', {
-    method: 'GET',
-    ...options, // e.g. headers, query params, etc. merged in if provided
-  });
-
-  return res.body || JSON.parse(res); // Adjust based on your backend's response structure
-
+  const res = await defaultClient.request('/schedule/next-week', { method: 'GET' }, options);
+  return res;
+}
 
 
 /**
@@ -520,7 +515,7 @@ export async function getStatusOverview(options = {}) {
     // matching endpoint.
     return await defaultClient.request('/status/overview', { method: 'GET' }, options);
   } catch (error) {
-    if (error instanceof ApiError && error.status === 404) {
+    if (error instanceof ApiError) {
       return null;
     }
     throw error;
@@ -540,24 +535,20 @@ export function predictGame(params, options = {}) {
   if (!params) {
     throw new ApiError(400, 'Prediction parameters are required');
   }
+  const { home_team, away_team, season, week } = params;
 
-  const homeRaw = params.homeTeam ?? params.home_team;
-  const awayRaw = params.awayTeam ?? params.away_team;
-
-  if (!homeRaw || !awayRaw) {
-    throw new ApiError(400, 'Home and away team are required for prediction');
+  if (!home_team || !away_team) {
+    throw new ApiError(400, 'home_team and away_team are required for prediction');
   }
 
   const payload = {
-    home_team: String(homeRaw).trim().toUpperCase(),
-    away_team: String(awayRaw).trim().toUpperCase(),
-    season: Number(params.season),
-    week: Number(params.week),
+    home_team: String(home_team).trim().toUpperCase(),
+    away_team: String(away_team).trim().toUpperCase(),
+    season: Number(season),
+    week: Number(week),
   };
 
   return defaultClient.predictGame(payload, options);
 }
 
-// Export both class and default instance for advanced use cases.
-export { TypedApiClient, ApiError };
-export default defaultClient;
+export default defaultClient
