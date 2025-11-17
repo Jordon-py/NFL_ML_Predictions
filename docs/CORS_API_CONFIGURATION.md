@@ -42,21 +42,36 @@ This document explains the CORS (Cross-Origin Resource Sharing) configuration be
 **File:** `backend/main.py`
 
 ```python
-# Get CORS origins from environment variable
-CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
-CORS_ORIGINS = [origin.strip() for origin in CORS_ORIGINS if origin.strip()]
+# Primary production mode: prefer ALLOWED_ORIGINS when RESTRICT_CORS is true
+# - ALLOWED_ORIGINS: comma-separated list of origins to allow (Heroku config)
+# - CORS_ORIGINS: legacy/compat fallback used in earlier deployments
+# - CORS_ORIGINS_REGEX: optional regex to match allowed origins (used if provided)
+
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS")
+CORS_ORIGINS = os.getenv("CORS_ORIGINS")
+CORS_ORIGINS_REGEX = os.getenv("CORS_ORIGINS_REGEX")
+RESTRICT_CORS = os.getenv("RESTRICT_CORS", "true").lower() in ("1", "true", "yes")
+
+def _parse_origins(value: Optional[str]) -> List[str]:
+  if not value:
+    return []
+  return [o.strip().rstrip('/') for o in value.replace(';', ',').split(',') if o.strip()]
+
+allowed = _parse_origins(ALLOWED_ORIGINS) if ALLOWED_ORIGINS else _parse_origins(CORS_ORIGINS)
 
 app = FastAPI(title="NFL Game Prediction API", version="2.0.0", lifespan=lifespan)
 app.add_middleware(
-    CORSMiddleware,
-    allow_origins=CORS_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+  CORSMiddleware,
+  allow_origins=allowed,
+  allow_origin_regex=CORS_ORIGINS_REGEX if CORS_ORIGINS_REGEX else None,
+  allow_credentials=True,
+  allow_methods=["*"],
+  allow_headers=["*"],
 )
 ```
 
 **Configuration Details:**
+
 - Reads from `CORS_ORIGINS` environment variable
 - Splits on comma to support multiple origins
 - Defaults to `http://localhost:3000` if not set
@@ -69,12 +84,15 @@ app.add_middleware(
 #### Root `.env` (Deployed to Heroku)
 
 ```bash
-CORS_ORIGINS=http://localhost:3000,https://localhost:3000,https://nfl-ml-predictions.vercel.app,https://nfl-predict-frontend.vercel.app
+# Production should set RESTRICT_CORS=true and ALLOWED_ORIGINS to a comma-separated list.
+RESTRICT_CORS=true
+ALLOWED_ORIGINS=http://localhost:3000,https://localhost:3000,https://nfl-ml-predictions.vercel.app,https://nfl-predict-frontend.vercel.app
 ```
 
 **Purpose:** Production configuration for Heroku backend
 
 **Allowed Origins:**
+
 - `http://localhost:3000` - Local development HTTP
 - `https://localhost:3000` - Local development HTTPS
 - `https://nfl-ml-predictions.vercel.app` - Primary production frontend
@@ -153,6 +171,7 @@ async function api(path, opts = {}) {
 ```
 
 **Key Features:**
+
 - Reads `VITE_API_URL` from environment
 - Falls back to Heroku URL if not set
 - Sets JSON content type by default
@@ -167,6 +186,7 @@ curl -X GET https://nfl-predict-ecf5a5bd34fe.herokuapp.com/health
 ```
 
 **Expected Response:**
+
 ```json
 {
   "status": "healthy",
@@ -185,6 +205,7 @@ curl -X OPTIONS https://nfl-predict-ecf5a5bd34fe.herokuapp.com/health \
 ```
 
 **Expected Headers:**
+
 ```
 Access-Control-Allow-Origin: https://nfl-ml-predictions.vercel.app
 Access-Control-Allow-Methods: *
@@ -207,6 +228,7 @@ curl -X POST https://nfl-predict-ecf5a5bd34fe.herokuapp.com/predict \
 ```
 
 **Expected Response:**
+
 ```json
 {
   "home_score": 24.5,
@@ -223,6 +245,7 @@ curl -X POST https://nfl-predict-ecf5a5bd34fe.herokuapp.com/predict \
 ### Issue: CORS Error in Browser Console
 
 **Error Message:**
+
 ```
 Access to fetch at 'https://nfl-predict-ecf5a5bd34fe.herokuapp.com/predict' 
 from origin 'https://nfl-ml-predictions.vercel.app' has been blocked by CORS policy
@@ -231,29 +254,35 @@ from origin 'https://nfl-ml-predictions.vercel.app' has been blocked by CORS pol
 **Solutions:**
 
 1. **Verify Heroku CORS_ORIGINS:**
+
    ```bash
    heroku config:get CORS_ORIGINS -a nfl-predict
    ```
 
 2. **Update CORS_ORIGINS on Heroku:**
+
    ```bash
    heroku config:set CORS_ORIGINS="http://localhost:3000,https://localhost:3000,https://nfl-ml-predictions.vercel.app,https://nfl-predict-frontend.vercel.app" -a nfl-predict
    ```
 
 3. **Restart Heroku Dyno:**
+
    ```bash
    heroku restart -a nfl-predict
    ```
 
 4. **Check Backend Logs:**
+
    ```bash
    heroku logs --tail -a nfl-predict
    ```
+
    Look for: `CORS Origins configured: [...]`
 
 ### Issue: API Request to Wrong URL
 
 **Error Message:**
+
 ```
 Failed to fetch
 ```
@@ -265,11 +294,13 @@ Failed to fetch
    - Verify `VITE_API_URL` is set correctly
 
 2. **Check Browser Console:**
+
    ```javascript
    console.log('[API Client] Using BASE_URL:', BASE_URL);
    ```
 
 3. **Rebuild Frontend:**
+
    ```bash
    npm run build --prefix frontend
    vercel --prod
@@ -278,6 +309,7 @@ Failed to fetch
 ### Issue: Missing Dataset Error
 
 **Error Message:**
+
 ```
 500 Internal Server Error: Dataset not found
 ```
@@ -285,11 +317,13 @@ Failed to fetch
 **Solution:**
 
 Generate the dataset on Heroku:
+
 ```bash
 heroku run python backend/build_csv_datasets.py --start 2016 --end 2026 --out-dir backend/data -a nfl-predict
 ```
 
 Or include dataset in git (if small enough):
+
 ```bash
 # Remove *.csv from .gitignore temporarily
 git add backend/data/merged_game_features.csv
@@ -331,7 +365,7 @@ git push heroku main
 
 ## References
 
-- FastAPI CORS Documentation: https://fastapi.tiangolo.com/tutorial/cors/
-- Vite Environment Variables: https://vitejs.dev/guide/env-and-mode.html
-- Heroku Config Vars: https://devcenter.heroku.com/articles/config-vars
-- Vercel Environment Variables: https://vercel.com/docs/environment-variables
+- FastAPI CORS Documentation: <https://fastapi.tiangolo.com/tutorial/cors/>
+- Vite Environment Variables: <https://vitejs.dev/guide/env-and-mode.html>
+- Heroku Config Vars: <https://devcenter.heroku.com/articles/config-vars>
+- Vercel Environment Variables: <https://vercel.com/docs/environment-variables>
