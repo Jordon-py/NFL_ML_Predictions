@@ -349,8 +349,10 @@ export function PredictionProvider({ children }) {
         if (!mounted || !Array.isArray(scheduleData) || scheduleData.length === 0) return;
 
         console.info(`[scheduleData] Fetched ${scheduleData.length} games from backend schedule API.`);
-        // Extract week from first game
-        const week = scheduleData[0]?.week || 1; // Fixed: default to 1 instead of scheduleData.;
+        // Extract week from first game and coerce to number. Accept several
+        // possible field names to be resilient against backend shape changes.
+        const rawWeek = scheduleData[0]?.week ?? scheduleData[0]?.week_num ?? scheduleData[0]?.weekNum;
+        const week = Number.isFinite(Number(rawWeek)) ? Number(rawWeek) : 1;
         setSchedule(scheduleData, week);
 
         console.log(`[PredictionContext] Loaded ${scheduleData.length} games for Week ${week}`);

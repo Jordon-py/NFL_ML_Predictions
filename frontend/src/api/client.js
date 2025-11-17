@@ -99,8 +99,11 @@ class TypedApiClient {
     if (isLocalhost) {
       return ''; // Use relative URLs for local development
     }
-    const baseEnvUrl = createApi('https://nfl-predict-ecf5a5bd34fe.herokuapp.com');
-    return baseEnvUrl;
+    // Default production base URL (string). Previously this returned a
+    // TypedApiClient instance which caused `baseUrl.replace` TypeErrors when
+    // `buildUrl` expected a string. Return the raw string instead.
+    const fallback = 'https://nfl-predict-ecf5a5bd34fe.herokuapp.com';
+    return fallback;
   }
 
   /**
@@ -200,7 +203,7 @@ class TypedApiClient {
         }
 
         const contentType = response.headers.get('content-type');
-        const data = contentType ? await response.json(): null;
+        const data = contentType ? await response.json() : null;
 
         return this.validateResponse(data, init.method || 'GET', url);
       } catch (error) {
@@ -230,7 +233,7 @@ class TypedApiClient {
     try {
       payload = await response.json();
     } catch {
-      payload ;
+      payload;
     }
 
     return new ApiError(
@@ -382,10 +385,14 @@ class TypedApiClient {
    * @returns {string}
    */
   buildUrl(path, baseUrl) {
-    if (path.startsWith('http')) return path;
+    // Be defensive: coerce inputs to strings and handle undefined/null.
+    const maybePath = path == null ? '' : String(path);
+    if (maybePath.startsWith('http')) return maybePath;
 
-    const normalizedBase = baseUrl.replace(/\/+$/, '');
-    const normalizedPath = path.replace(/^\/+/, '');
+    const maybeBase = baseUrl == null ? '' : String(baseUrl);
+
+    const normalizedBase = maybeBase.replace(/\/+$|^\s+|\s+$/g, '');
+    const normalizedPath = maybePath.replace(/^\/+/, '');
 
     return normalizedBase ? `${normalizedBase}/${normalizedPath}` : `/${normalizedPath}`;
   }
