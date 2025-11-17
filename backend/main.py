@@ -184,8 +184,6 @@ def _select_schedule_scope(df: pd.DataFrame, now: Optional[datetime] = None) -> 
     logger.info(msg=now)
     time = now.isoformat(timespec='auto')
     date = now.isoformat()
-    print(time)
-    print(f'NOW: MAIN.PY LINE 165  : { now }')
 
 
     if df is None or df.empty:
@@ -408,16 +406,37 @@ class DataManager:
             if candidate.exists():
                 return candidate
         
-        # Try common filenames
-        default_candidates = [
-            self.config.data_dir / "game_features_20251114.csv",
+        # Try common filenames, and also support date-stamped game_features_*.csv
+        # by selecting the newest available file if present. This prevents
+        # startup failures when a build process creates a date-stamped file.
+        default_candidates = []
+
+        # Pick a specific known file if present. This preserves explicit
+        # naming when users pin a dataset in their repo.
+        default_candidates.extend([
             self.config.data_dir / "game_features.csv",
-            self.config.data_dir / "merged_game_features.csv"
-        ]
+            self.config.data_dir / "merged_game_features.csv",
+        ])
+
+        # Look for any date-stamped game_features_*.csv and prefer the latest
+        # modification time. This mirrors how models discovery works and keeps
+        # DataManager robust across dataset updates.
+        try:
+            candidates = list(self.config.data_dir.glob("game_features_*.csv"))
+            if candidates:
+                # sort by modification time, newest first
+                candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+                # Add the most recent stamped file as the first candidate
+                default_candidates.insert(0, candidates[0])
+        except Exception:
+            # Defensive: If for some reason glob fails, fall back to defaults
+            pass
         
         for candidate in default_candidates:
-            if candidate.exists():
-                return candidate
+            # Accept Path or string-like so the code is resilient to types
+            candidate_path = Path(candidate)
+            if candidate_path.exists():
+                return candidate_path
         
         # Return default even if it doesn't exist (for error handling)
         return default_candidates[0]

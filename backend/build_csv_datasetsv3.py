@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """
 build_csv_datasets.py
 =====================
@@ -19,6 +17,19 @@ Features:
 Quick start
 -----------
 python build_csv_datasetsv3.py --start 2018 --end 2025 --out-dir ./data --save-dominance-matrix
+
+Additional quick starts (common option combinations):
+
+- Build without team encodings and skip calibration rows (useful when
+    creating numeric-only training sets or debugging):
+    python build_csv_datasetsv3.py --start 2016 --end 2025 --out-dir ./data --encode 'onehot' --no-calibration-rows --save-dominance-matrix
+
+- Build and persist pairwise dominance artifacts (matrix and human-readable log):
+    python build_csv_datasetsv3.py --start 2018 --end 2025 --out-dir ./data --save-dominance-matrix --dominance-log ./data/dominance_log.txt
+
+- Create dataset and also write a legacy root-level copy for compatibility
+    with older pipelines / CI hooks:
+    python build_csv_datasetsv3.py --start 2018 --end 2025 --out-dir ./data --legacy-root-copy
 
 Outputs
 -------
@@ -115,9 +126,9 @@ try:
     import nflreadpy as _nfl
 
     try:
-        _probe = _nfl.load_schedules(seasons=[2024])
+        _probe = _nfl.load_schedules(seasons=None)
         if hasattr(_probe, "to_pandas"):
-            _ = _probe.head(1).to_pandas()
+           print(f'_probe worked using nflreadpy: { _probe.head(3).to_pandas() }')
         NFL_BACKEND = "nflreadpy"
         nfl = _nfl
         _note_backend("Using backend 'nflreadpy'")
@@ -135,16 +146,16 @@ except Exception as e:
     _fallback_reason = f"nflreadpy import failed: {e}"
     try:
         import nfl_data_py as _nfl  # type: ignore[no-redef]
-
+    except Exception as e2:
+        nfl = None
+        _note_backend(f"No NFL backend available: {e2}", logging.ERROR)
+    else:
         nfl = _nfl
         NFL_BACKEND = "nfl_data_py"
         _note_backend(
             f"Using fallback backend '{NFL_BACKEND}' — {_fallback_reason}",
             logging.WARNING,
         )
-    except Exception as e2:
-        nfl = None
-        _note_backend(f"No NFL backend available: {e2}", logging.ERROR)
 
 
 # ---------------------------------------------------------------------
