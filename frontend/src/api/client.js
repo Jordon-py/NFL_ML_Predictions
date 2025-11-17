@@ -465,7 +465,7 @@ export function getHealthStatus(options = {}) {
   // Small cache TTL keeps the navbar and dashboard responsive while
   // avoiding excessive polling in production.
   return defaultClient.request('/health', { method: 'GET' }, {
-    cacheTtlMs: 10000,
+    cacheTtlMs: 110000,
     ...options,
   });
 }
@@ -479,30 +479,12 @@ export function getHealthStatus(options = {}) {
 // Get the schedule for the next week from the NFL prediction backend
 export async function getNextWeekSchedule(options = {}) {
   // 1. Create the API client pointed at your backend
-  const api = createApi('https://nfl-predict-ecf5a5bd34fe.herokuapp.com/');
-
-  // 2. Make the request
-  //    We set method: 'GET' and allow the caller to override/add options.
-  //    Note: CORS is controlled by the SERVER, not this options object.
-  const games = await api.request('/schedule/next-week', {
+  const res = await defaultClient.request('/schedule/next-week', {
     method: 'GET',
     ...options, // e.g. headers, query params, etc. merged in if provided
   });
 
-  // 3. Normalize the shape of the response to always be an array of games
-  if (Array.isArray(games)) {
-    // Response is already an array: [game, game, ...]
-    return games;
-  }
-
-  if (games && Array.isArray(games.games)) {
-    // Response is wrapped: { games: [game, game, ...], ... }
-    return games.games;
-  }
-
-  // Fallback: if the shape is unexpected, return an empty array
-  return [];
-}
+  return res.body || JSON.parse(res); // Adjust based on your backend's response structure
 
 
 
