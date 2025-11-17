@@ -55,7 +55,9 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from threading import Lock
+from tkinter import N
 from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple
+from venv import logger
 
 import joblib
 import numpy as np
@@ -65,6 +67,8 @@ from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, validator
+
+from .train_models import CORS_ORIGINS
 
 # ---------------------------------------------------------------
 # Enhanced Data Models with Strict Validation
@@ -175,14 +179,27 @@ def _select_schedule_scope(df: pd.DataFrame, now: Optional[datetime] = None) -> 
 
     Returns (season, week, metadata).
     """
+    if now is None:
+        now = datetime.now(timezone.utc)
+    logger.info(msg=now)
+    time = now.isoformat(timespec='auto')
+    date = now.isoformat()
+    print(time)
+    print(f'NOW: MAIN.PY LINE 165  : { now }')
+
 
     if df is None or df.empty:
-        raise ValueError("Schedule dataset not available")
+        df = pd.read_csv('backend/data/Nfl_schedule_2025_2026.csv')
+    
+    
 
-    now = now or datetime.now(timezone.utc)
+
+    
     working = df.copy()
-    working["season_num"] = pd.to_numeric(working.get("season"), errors="coerce")
-    working["week_num"] = pd.to_numeric(working.get("week"), errors="coerce")
+    # Normalised numeric season/week columns used by the selection logic below.
+    working["season_num"] = pd.to_numeric(working.get("season"), errors="coerce")  # type: ignore
+    working["week_num"] = pd.to_numeric(working.get("week"), errors="coerce")  # type: ignore
+
 
     selection: Dict[str, Any] = {"strategy": "unknown"}
 
@@ -225,8 +242,8 @@ def _select_schedule_scope(df: pd.DataFrame, now: Optional[datetime] = None) -> 
     approx_week = int(context["approx_week"])
     season_rows = working.loc[working["season_num"] == context_season]
     if not season_rows.empty:
-        weeks = sorted({_as_int(val) for val in season_rows["week_num"] if not pd.isna(val)})
-        weeks = [w for w in weeks if w is not None]
+        raw_weeks = {_as_int(val) for val in season_rows["week_num"] if not pd.isna(val)}
+        weeks = sorted(w for w in raw_weeks if w is not None)
         if weeks:
             week_candidates = [w for w in weeks if w >= approx_week]
             target_week = week_candidates[0] if week_candidates else weeks[-1]
@@ -240,13 +257,17 @@ def _select_schedule_scope(df: pd.DataFrame, now: Optional[datetime] = None) -> 
             return context_season, target_week, selection
 
     # 3) Absolute fallback: latest available season/week in the dataset.
-    seasons = sorted({_as_int(val) for val in working["season_num"].dropna()})
-    seasons = [s for s in seasons if s is not None]
+    seasons = sorted(
+        s for s in {_as_int(val) for val in working["season_num"].dropna()}
+        if s is not None
+    )
     if seasons:
         fallback_season = seasons[-1]
         rows = working.loc[working["season_num"] == fallback_season]
-        weeks = sorted({_as_int(val) for val in rows["week_num"].dropna()})
-        weeks = [w for w in weeks if w is not None]
+        weeks = sorted(
+            w for w in {_as_int(val) for val in rows["week_num"].dropna()}
+            if w is not None
+        )
         if weeks:
             selection.update(
                 {
@@ -319,9 +340,9 @@ class Config:
             return candidates[0][0]
         
         # Fallback
-        fallback = self.backend_dir / "models"
-        fallback.mkdir(parents=True, exist_ok=True)
-        return fallback
+        fallback = "backend/models"
+        Path(fallback).mkdir(parents=True, exist_ok=True)
+        return Path(fallback)
     
     def _validate_paths(self):
         """Validate critical paths exist"""
@@ -781,7 +802,7 @@ def create_app() -> FastAPI:
     async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         """Enhanced lifespan manager"""
         log.info("🚀 Starting NFL Prediction API")
-        load_dotenv(dotenv_path="backend/.env")
+        load_dotenv(dotenv_path=".env")
         try:
             # Initialize application state
             init_results = app_state.initialize()
@@ -802,15 +823,14 @@ def create_app() -> FastAPI:
         description="Enhanced API with better data cohesion and validation",
         lifespan=lifespan
     )
-    
-    # Add CORS middleware
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],  # Configure based on environment
-        allow_credentials=False,
-        allow_methods=["*"],
-        allow_headers=["Access-Control-Allow-Origin"],
-    )
+    load_dotenv(dotenv_path=".env")
+    for origin in str(object=CORS_ORIGINS).split(","):
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=[origin],
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
     
     # Enhanced health endpoint
     @app.get("/health", response_model=HealthResponse)
@@ -856,8 +876,8 @@ def create_app() -> FastAPI:
         except ValueError as exc:  # pragma: no cover - defensive guard
             raise HTTPException(503, str(exc)) from exc
 
-        numeric_season = pd.to_numeric(df.get("season"), errors="coerce")
-        numeric_week = pd.to_numeric(df.get("week"), errors="coerce")
+        numeric_season = pd.to_numeric(df.get("season"), errors="coerce") # type: ignore
+        numeric_week = pd.to_numeric(df.get("week"), errors="coerce") # type: ignore
         week_rows = df.loc[(numeric_season == target_season) & (numeric_week == target_week)].copy()
         if week_rows.empty:
             raise HTTPException(404, f"No games found for season {target_season} week {target_week}")
