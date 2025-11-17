@@ -1,5 +1,8 @@
 [
   "backend/scripts/api_test.py::test_predict_endpoint",
+  "backend/tests/test_api_endpoints.py::test_health_endpoint_returns_healthy",
+  "backend/tests/test_api_endpoints.py::test_predict_works_for_first_game_in_schedule",
+  "backend/tests/test_api_endpoints.py::test_schedule_next_week_is_not_empty",
   "backend/tests/test_feature_leak_guard.py::test_build_dataset_filters_leakage",
   "backend/tests/test_feature_leak_guard.py::test_is_leak_feature_rules",
   "backend/tests/test_simple.py::test_addition",
