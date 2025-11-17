@@ -758,16 +758,23 @@ class AppState:
         with self.history_lock:
             self.prediction_history.append(entry)
 
-# ---------------------------------------------------------------
-# FastAPI Application Setup
-# ---------------------------------------------------------------
+import os
+from contextlib import asynccontextmanager
+from typing import AsyncGenerator
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
+
+# ... your other imports (Config, AppState, logging, etc.)
+
 def create_app() -> FastAPI:
     """Create FastAPI application with enhanced configuration"""
     
     # Initialize configuration
     config = Config()
     
-    # Setup logging
+    # Setup logging (unchanged)
     logging.config.dictConfig({
         "version": 1,
         "disable_existing_loggers": False,
@@ -790,7 +797,7 @@ def create_app() -> FastAPI:
                 "encoding": "utf-8"
             }
         },
-        "root": {"level": "DEBUG", "handlers": ["console", "file"]}
+        "root": {"level": "DEBUG", "handlers": ["console", "file"]},
     })
     
     log = logging.getLogger("api")
@@ -804,12 +811,9 @@ def create_app() -> FastAPI:
         log.info("🚀 Starting NFL Prediction API")
         load_dotenv(dotenv_path=".env")
         try:
-            # Initialize application state
             init_results = app_state.initialize()
             log.info(f"Application initialized: {init_results}")
-            
             yield
-            
         except Exception as e:
             log.error(f"Application startup failed: {e}", exc_info=True)
             raise
@@ -821,17 +825,33 @@ def create_app() -> FastAPI:
         title="NFL ML Predictions API",
         version="2.2.0",
         description="Enhanced API with better data cohesion and validation",
-        lifespan=lifespan
+        lifespan=lifespan,
     )
+
+    # ---- CORS CONFIG START ----
     load_dotenv(dotenv_path=".env")
-    for origin in str(object=CORS_ORIGINS).split(","):
-        app.add_middleware(
-            CORSMiddleware,
-            allow_origins=[origin],
-            allow_methods=["*"],
-            allow_headers=["*"],
-        )
+
+    # Example: CORS_ORIGINS="http://localhost:3000,https://my-prod-frontend.com"
+    raw_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000" or "https://.*/.vercel/.app$")
     
+    # Split by comma and strip whitespace
+    origins = [o.strip() for o in raw_origins.split(",") if o.strip()]
+
+    # Single CORS middleware with all allowed origins
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=origins,       # list of allowed origins
+        allow_credentials=False,     # no auth/cookies needed
+        allow_methods=["*"],         # allow all HTTP methods
+        allow_headers=["*"],         # allow all request headers
+    )
+    # ---- CORS CONFIG END ----
+
+    # include your routers here (example):
+    # app.include_router(schedule_router, prefix="/schedule")
+
+   
+
     # Enhanced health endpoint
     @app.get("/health", response_model=HealthResponse)
     async def health() -> HealthResponse:
