@@ -175,34 +175,49 @@ class TypedApiClient {
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
       try {
-        const baseUrl = this.resolveBaseUrl();
-        const response = await fetch(baseUrl, {
+        const response = await fetch(url, {
           ...init,
           signal: controller.signal,
           headers: {
             'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            ...init.headers
-          }
+            Accept: 'application/json',
+            ...(init && init.headers ? init.headers : {}),
+          },
         });
 
-        const contentType = response.headers.get('content-type');
-        const data = contentType?.includes('application/json')
-          ? await response.json()
-          : await response.text();
+        clearTimeout(timeoutId);
 
-        return this.validateResponse(data, init.method || 'GET', url);
+        if (!response.ok) {
+          const error = await this.createApiError(response, url);
 
-      } catch (/** @type {any} */ error) {
-        if (attempt === maxRetries || !this.isRetriable(error)) {
-          throw error;
+          if (!this.isRetriable(error) || attempt === maxRetries) {
+            throw error;
+          }
+
+          const backoffMs = this.calculateBackoff(attempt, error);
+          await this.delay(backoffMs);
+          continue;
         }
 
-        await this.delay(this.calculateBackoff(attempt, error));
-      } finally {
+        const contentType = response.headers.get('content-type');
+        const data = contentType ? await response.json(): null;
+
+        return this.validateResponse(data, init.method || 'GET', url);
+      } catch (error) {
         clearTimeout(timeoutId);
+
+        // Ensure error is Error or ApiError type for isRetriable
+        const err = error instanceof Error ? error : new Error(String(error));
+        if (!this.isRetriable(err) || attempt === maxRetries) {
+          throw err;
+        }
+
+        const backoffMs = this.calculateBackoff(attempt, err);
+        await this.delay(backoffMs);
       }
     }
+
+    throw new ApiError(500, 'Request failed after maximum retries', null, url);
   }
 
   /**
@@ -215,7 +230,7 @@ class TypedApiClient {
     try {
       payload = await response.json();
     } catch {
-      payload = await response.text();
+      payload ;
     }
 
     return new ApiError(
@@ -443,7 +458,7 @@ export function getHealthStatus(options = {}) {
   // Small cache TTL keeps the navbar and dashboard responsive while
   // avoiding excessive polling in production.
   return defaultClient.request('/health', { method: 'GET' }, {
-    cacheTtlMs: 5000,
+    cacheTtlMs: 10000,
     ...options,
   });
 }
@@ -454,14 +469,35 @@ export function getHealthStatus(options = {}) {
  * @param {ApiConfig} [options]
  * @returns {Promise<any[]>}
  */
+// Get the schedule for the next week from the NFL prediction backend
 export async function getNextWeekSchedule(options = {}) {
-  const data = await defaultClient.request('/schedule/next-week', { method: 'GET' }, options);
+  // 1. Create the API client pointed at your backend
+  const api = createApi('https://nfl-predict-ecf5a5bd34fe.herokuapp.com/');
 
-  // Backend may return an array of games or a wrapped object; normalize to an array.
-  if (Array.isArray(data)) return data;
-  if (data && Array.isArray(data.games)) return data.games;
+  // 2. Make the request
+  //    We set method: 'GET' and allow the caller to override/add options.
+  //    Note: CORS is controlled by the SERVER, not this options object.
+  const games = await api.request('/schedule/next-week', {
+    method: 'GET',
+    ...options, // e.g. headers, query params, etc. merged in if provided
+  });
+
+  // 3. Normalize the shape of the response to always be an array of games
+  if (Array.isArray(games)) {
+    // Response is already an array: [game, game, ...]
+    return games;
+  }
+
+  if (games && Array.isArray(games.games)) {
+    // Response is wrapped: { games: [game, game, ...], ... }
+    return games.games;
+  }
+
+  // Fallback: if the shape is unexpected, return an empty array
   return [];
 }
+
+
 
 /**
  * Fetch recent prediction history entries.

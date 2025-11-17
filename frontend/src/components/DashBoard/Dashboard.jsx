@@ -16,6 +16,7 @@ Key ideas:
 
 import React, { useMemo, useCallback } from 'react';
 import { usePredictions } from '../../PredictionContext';
+import { predictGame } from '../../api/client';
 import TeamGrid from '../Card/TeamGrid';
 import PredictionResult from '../PredictionResult';
 import HistoryChart from '../HistoryChart';
@@ -50,7 +51,10 @@ function useDashboardData() {
       predictions = {},
       loading = {},
       errors = {},
-      makePrediction,
+      setPrediction,
+      setLoading,
+      setError,
+      pushHistory,
       health: contextHealth
     } = context;
 
@@ -86,7 +90,10 @@ function useDashboardData() {
         gamePredictions: predictions,
         health: mergedHealth,
         actions: {
-          makePrediction
+          setPrediction,
+          setLoading,
+          setError,
+          pushHistory
         }
       }
     };
@@ -127,16 +134,44 @@ export default function Dashboard() {
   const navState = useNavigationState(data);
 
   // Memoized event handlers
-  const handlePredictionRequest = useCallback((/** @type {any} */ gameData) => {
-    if (!data?.actions?.makePrediction) {
+  const handlePredictionRequest = useCallback(async (/** @type {any} */ gameData) => {
+    if (!data?.actions) {
       console.error('Prediction action not available');
       return;
     }
+    const { setPrediction, setLoading, setError, pushHistory } = data.actions;
+
+    const home = (gameData.home_abbr || gameData.home_team || '').trim();
+    const away = (gameData.away_abbr || gameData.away_team || '').trim();
+
+    if (!home || !away) {
+      console.warn('Missing team fields for prediction');
+      return;
+    }
+
+    const payload = {
+      homeTeam: home,
+      awayTeam: away,
+      season: Number(gameData.season || data.currentWeek || new Date().getFullYear()),
+      week: Number(gameData.week || data.currentWeek || 1),
+    };
+
+    const gameKey = gameData.game_id || `${payload.season}-${payload.week}-${home}-${away}`;
+
+    // Update UI state: set loading and clear errors
+    setLoading?.(gameKey, true);
+    setError?.(gameKey, null);
 
     try {
-      data.actions.makePrediction(gameData);
+      const prediction = await predictGame(payload);
+      setPrediction?.(gameKey, prediction);
+      pushHistory?.({ ...prediction, timestamp: new Date().toISOString(), game: gameData });
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setError?.(gameKey, message);
       console.error('Prediction request failed:', err);
+    } finally {
+      setLoading?.(gameKey, false);
     }
   }, [data]);
 

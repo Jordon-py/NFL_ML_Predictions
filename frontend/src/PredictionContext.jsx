@@ -1,7 +1,7 @@
 /*
 File: PredictionContext.jsx
 Purpose: Centralized React context for NFL prediction state; manages schedule fetch, prediction requests, loading/error states, and team metadata.
-Functions: PredictionProvider (React component), usePredictions (hook), fetchSchedule (API call), makePrediction (action), reducer (state updates), getKey (game identifier)
+Functions: PredictionProvider (React component), usePredictions (hook), fetchSchedule (API call), reducer (state updates), getKey (game identifier)
 Variables: schedule (games array), week (current week number), teams (team metadata), predictions (keyed by game), loading (keyed by game), errors (keyed by game), current (latest prediction), history (prediction array)
 Interacts With: api/client.js (fetch wrappers), backend /predict and /schedule endpoints, DashBoard/TeamGrid (consumers)
 
@@ -26,7 +26,7 @@ import React, {
   createContext, useContext, useMemo,
   useReducer, useCallback, useEffect
 } from 'react';
-import { getNextWeekSchedule, predictGame, getHealthStatus, getPredictionHistory } from './api/client';
+import { getNextWeekSchedule, getHealthStatus, getPredictionHistory } from './api/client';
 
 /**
  * @typedef {*} PredictionResult
@@ -80,7 +80,9 @@ import { getNextWeekSchedule, predictGame, getHealthStatus, getPredictionHistory
  *   setCurrent: (prediction: PredictionResult | null) => void,
  *   pushHistory: (entry: PredictionHistoryEntry) => void,
  *   resetHistory: () => void,
- *   makePrediction: (game: Game) => Promise<void>,
+ *   setPrediction: (key: string, prediction: PredictionResult) => void,
+ *   setLoading: (key: string, loading: boolean) => void,
+ *   setError: (key: string, error: string | null | undefined) => void,
  *   setHealth: (health: HealthState) => void,
  *   count: number,
  *   latest: PredictionHistoryEntry | null,
@@ -423,63 +425,11 @@ export function PredictionProvider({ children }) {
   const healthStatus = state.health?.status ?? 'unknown';
   const healthReason = state.health?.reason ?? 'health not confirmed';
 
-  /** @type {(game: Game) => Promise<void>} */
-  const makePrediction = useCallback(async (game) => {
-    // Only short-circuit when the backend has explicitly reported an unhealthy state;
-    // if health is still `unknown` we attempt the request and let per-call errors surface.
-    if (healthStatus === 'unhealthy') {
-      console.warn(`[PredictionContext] Backend unhealthy (${healthReason}); skipping prediction request.`);
-      return;
-    }
-    if (healthStatus !== 'healthy') {
-      console.info('[PredictionContext] Backend health pending; attempting prediction anyway.');
-    }
-    const homeTeam = (game.home_abbr || game.home_team || '').trim();
-    const awayTeam = (game.away_abbr || game.away_team || '').trim();
-
-    if (!homeTeam || !awayTeam) {
-      console.warn('[PredictionContext] Missing team abbreviations for prediction request.');
-      return;
-    }
-
-    const resolvedSeason = Number.isFinite(Number(game.season))
-      ? Number(game.season)
-      : Number(state.schedule[0]?.season ?? new Date().getFullYear());
-    const resolvedWeek = Number.isFinite(Number(game.week))
-      ? Number(game.week)
-      : Number(state.week ?? 1);
-
-    const normalizedGame = {
-      ...game,
-      season: resolvedSeason,
-      week: resolvedWeek,
-      home_abbr: homeTeam,
-      away_abbr: awayTeam,
-    };
-
-    const gameKey = generateGameKey(normalizedGame);
-    setLoading(gameKey, true);
-    setError(gameKey, null);
-
-    try {
-      const prediction = await predictGame({
-        homeTeam,
-        awayTeam,
-        season: resolvedSeason,
-        week: resolvedWeek
-      });
-
-      setPrediction(gameKey, prediction);
-      pushHistory({ ...prediction, timestamp: new Date().toISOString(), game: normalizedGame });
-      console.log(`[PredictionContext] Prediction for ${awayTeam}@${homeTeam}:`, prediction);
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : String(err);
-      setError(gameKey, errorMsg);
-      console.error(`[PredictionContext] Prediction failed for ${awayTeam}@${homeTeam}:`, err);
-    } finally {
-      setLoading(gameKey, false);
-    }
-  }, [healthStatus, healthReason, setLoading, setError, setPrediction, pushHistory, state.schedule, state.week]);
+  // Note: prediction requests are performed by UI components directly
+  // (e.g., Dashboard -> predictGame) and then the context is updated via
+  // setPrediction / pushHistory / setLoading / setError. This keeps the
+  // prediction logic outside of this context and centralizes network calls
+  // to the caller that initiates the request.
 
   // Persist history to localStorage
   useEffect(() => {
@@ -508,13 +458,16 @@ export function PredictionProvider({ children }) {
     setCurrent,
     pushHistory,
     resetHistory,
-    makePrediction,
+    // Expose setters for external callers to attach prediction results
+    setPrediction,
+    setLoading,
+    setError,
     // Direct health setter (rarely needed externally)
     setHealth,
     // Selectors
     count,
     latest,
-  }), [state, setCurrent, pushHistory, resetHistory, makePrediction, count, latest]);
+  }), [state, setCurrent, pushHistory, resetHistory, setPrediction, setLoading, setError, setHealth, count, latest]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
