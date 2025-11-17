@@ -153,3 +153,52 @@ def _impute_remaining_prior_nans(wide: pd.DataFrame) -> pd.DataFrame:
         out[c] = out[c].where(out[c].notna(), med)
 
     return out
+
+
+def ensure_actual_winner(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Ensure a consistent `home_win` boolean and an `actual_winner` column exists.
+
+    Tries to preserve current semantics from dataset builders:
+    - If `home_win` boolean exists, keep it.
+    - Else if `home_points_for`/`away_points_for` present, logical compare.
+    - Else, if `winner` present, map to boolean where matching home vs away.
+    This function returns a copy of the DataFrame with `home_win` and
+    `actual_winner` set accordingly (or `pd.NA` when undetermined).
+
+    Args:
+        df: DataFrame that may contain `home_win`, `winner` or score columns.
+
+    Returns:
+        DataFrame copy with `home_win` and `actual_winner` columns.
+    """
+    out = df.copy()
+
+    # Prefer existing boolean home_win
+    if "home_win" in out.columns:
+        win_series = pd.Series(out["home_win"], index=out.index, dtype="boolean")
+    else:
+        # If we have numeric scores, derive boolean from them
+        if {"home_points_for", "away_points_for"}.issubset(out.columns):
+            win_series = pd.Series(out["home_points_for"] > out["away_points_for"], index=out.index, dtype="boolean")
+        else:
+            # Fallback: use winner string label if present
+            if "winner" not in out.columns:
+                raise ValueError("Need either 'home_win' bool, score columns 'home_points_for'/'away_points_for', or 'winner' string column.")
+            winner_col = out["winner"]
+            if pd.api.types.is_bool_dtype(winner_col.dtype):
+                win_series = pd.Series(winner_col, index=out.index, dtype="boolean")
+            else:
+                # Map winner team string to boolean: home -> True, away -> False
+                win_series = pd.Series(pd.NA, index=out.index, dtype="boolean")
+                win_series.loc[winner_col == out["home_team"]] = True
+                win_series.loc[winner_col == out["away_team"]] = False
+
+    out["home_win"] = win_series
+
+    # Build actual_winner string column
+    actual = pd.Series(pd.NA, index=out.index, dtype="string")
+    actual.loc[out["home_win"] == True] = out.loc[out["home_win"] == True, "home_team"].astype("string")
+    actual.loc[out["home_win"] == False] = out.loc[out["home_win"] == False, "away_team"].astype("string")
+    out["actual_winner"] = actual
+    return out

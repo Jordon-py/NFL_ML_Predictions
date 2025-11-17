@@ -21,9 +21,9 @@ A single, reliable training entrypoint that:
 
 CLI
 ---
-python pipeline_enhanced.py --data path/to/enhanced_dataset.csv \
-    [--production] \
-    [--holdout-season 2025 --holdout-week 6 --holdout-week-end 9] \
+python pipeline_enhanced.py --data /data/game_features_20251117.csv /
+    [--production] /
+    [--holdout-season 2025 --holdout-week 6 --holdout-week-end 9] /
     [--splits 5 --embargo 1]
 
 Notes
@@ -112,7 +112,7 @@ class Block:
         self.t0 = 0.0
 
     def __enter__(self):
-        logging.info("\n=== %s ===", self.title)
+        logging.info("/n=== %s ===", self.title)
         self.t0 = time.perf_counter()
         return self
 
@@ -671,18 +671,18 @@ def write_training_report_txt(
     artifacts: Dict[str, str]
 ) -> None:
     lines = []
-    lines.append("# Training Report\n")
-    lines.append(f"Timestamp: {datetime.utcnow().isoformat()}Z\n")
-    lines.append(f"Dataset: {dataset_rows} rows, {dataset_cols} cols\n")
-    lines.append(f"Features used ({len(features)}): {', '.join(features)}\n\n")
+    lines.append("# Training Report/n")
+    lines.append(f"Timestamp: {datetime.utcnow().isoformat()}Z/n")
+    lines.append(f"Dataset: {dataset_rows} rows, {dataset_cols} cols/n")
+    lines.append(f"Features used ({len(features)}): {', '.join(features)}/n/n")
 
-    lines.append("## Metrics (validation means)\n")
+    lines.append("## Metrics (validation means)/n")
     lines.append(json.dumps(metrics_summary, indent=2))
-    lines.append("\n\n## Artifacts\n")
+    lines.append("/n/n## Artifacts/n")
     for k, v in artifacts.items():
         lines.append(f"- {k}: {v}")
 
-    save_path.write_text("\n".join(lines), encoding="utf-8")
+    save_path.write_text("/n".join(lines), encoding="utf-8")
     logging.info("✅ Saved: %s", save_path)
 
 
@@ -912,7 +912,7 @@ def main():
             artifacts=artifacts,
         )
 
-    print(f"\n\n🏁 Training complete — all artifacts saved to {DATA_DIR.resolve()}/\n")
+    print(f"/n/n🏁 Training complete — all artifacts saved to {DATA_DIR.resolve()}//n")
 
 
 if __name__ == "__main__":
