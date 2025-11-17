@@ -21,7 +21,7 @@ A single, reliable training entrypoint that:
 
 CLI
 ---
-python pipeline_enhanced.py --data /data/game_features_20251117.csv /
+python pipeline_enhanced_v3.py --data ./data/game_features_20251117.csv --holdout-season 2025 --holdout-week 6 --holdout-week-end 10 --splits 5 --embargo 1 /
     [--production] /
     [--holdout-season 2025 --holdout-week 6 --holdout-week-end 9] /
     [--splits 5 --embargo 1]
