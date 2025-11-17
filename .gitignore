@@ -82,17 +82,13 @@ data/
 *.csv
 *.json
 *.txt
-*.joblib
-*.pkl
-*.model
-!requirements.txt
+
 !README.md
-!backend/data/
-!backend/models/
+
 
 ## AI tooling
 .serena/
 
 ## Deployment configs
-!vercel.json
+
 node_modules
