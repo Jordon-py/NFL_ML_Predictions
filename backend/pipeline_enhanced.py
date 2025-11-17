@@ -80,7 +80,7 @@ from dataclasses import dataclass
 RANDOM_STATE = 4211
 HERE = Path(__file__).resolve().parent
 DATA_DIR = HERE / datetime.now().strftime(format="%Y%m%d") / "models"
-DATASET_PATH = HERE / "data" / "game_features_20251108.csv"
+DATASET_PATH = HERE / "data" / "./data/game_features_20251117.csv"
 # Create base models dir and a per-run directory (same date, not nested twice)
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 

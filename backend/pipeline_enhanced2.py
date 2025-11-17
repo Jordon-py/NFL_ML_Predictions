@@ -21,9 +21,9 @@ A single, reliable training entrypoint that:
 
 CLI
 ---
-python pipeline_enhanced.py --data path/to/enhanced_dataset.csv \
-    [--production] \
-    [--holdout-season 2025 --holdout-week 6 --holdout-week-end 9] \
+python pipeline_enhanced.py --data path/to/enhanced_dataset.csv /
+    [--production] /
+    [--holdout-season 2025 --holdout-week 6 --holdout-week-end 9] /
     [--splits 5 --embargo 1]
 
 Notes
@@ -79,7 +79,7 @@ class Block:
         self.name = name
 
     def __enter__(self):
-        logging.info(f"\n=== {self.name} ===")
+        logging.info(f"/n=== {self.name} ===")
         self.start = time.time()
 
     def __exit__(self, exc_type, exc, tb):
@@ -93,7 +93,7 @@ class Block:
 RANDOM_STATE = 4211
 HERE = Path(__file__).resolve().parent
 DATA_DIR = HERE / "models"
-DATASET_PATH = HERE / "data" / "game_features_20251108.csv"
+DATASET_PATH = HERE / "data" / "./game_features_20251117.csv"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 # Artifact paths (required)
@@ -117,7 +117,7 @@ class Block:
         self.title = title
         self.t0 = 0.0
     def __enter__(self):
-        logging.info("\n=== %s ===", self.title)
+        logging.info("/n=== %s ===", self.title)
         self.t0 = time.perf_counter()
         return self
     def __exit__(self, exc_type, exc, tb):
@@ -630,18 +630,18 @@ def write_training_report_txt(
     artifacts: Dict[str, str]
 ) -> None:
     lines = []
-    lines.append("# Training Report\n")
-    lines.append(f"Timestamp: {datetime.utcnow().isoformat()}Z\n")
-    lines.append(f"Dataset: {dataset_rows} rows, {dataset_cols} cols\n")
-    lines.append(f"Features used ({len(features)}): {', '.join(features)}\n\n")
+    lines.append("# Training Report/n")
+    lines.append(f"Timestamp: {datetime.utcnow().isoformat()}Z/n")
+    lines.append(f"Dataset: {dataset_rows} rows, {dataset_cols} cols/n")
+    lines.append(f"Features used ({len(features)}): {', '.join(features)}/n/n")
 
-    lines.append("## Metrics (validation means)\n")
+    lines.append("## Metrics (validation means)/n")
     lines.append(json.dumps(metrics_summary, indent=2))
-    lines.append("\n\n## Artifacts\n")
+    lines.append("/n/n## Artifacts/n")
     for k, v in artifacts.items():
         lines.append(f"- {k}: {v}")
 
-    save_path.write_text("\n".join(lines), encoding="utf-8")
+    save_path.write_text("/n".join(lines), encoding="utf-8")
     logging.info("✅ Saved: %s", save_path)
 
 
@@ -742,7 +742,7 @@ def main():
     # 1) Load & preprocess
     # --------------------
     with Block("Loading and Preprocessing Data"):
-        bundle = load_dataset(path='game_features_20251110.csv')
+        bundle = load_dataset(path=DATASET_PATH)
         df = bundle
         if args.production:
             train_mask = np.ones(len(df), dtype=bool)
@@ -840,7 +840,7 @@ def main():
             artifacts=artifacts,
         )
 
-    print(f"\n\n🏁 Training complete — all artifacts saved to {DATA_DIR.resolve()}/\n")
+    print(f"/n/n🏁 Training complete — all artifacts saved to {DATA_DIR.resolve()}//n")
 
 
 if __name__ == "__main__":
