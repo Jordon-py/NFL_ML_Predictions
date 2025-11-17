@@ -829,8 +829,24 @@ def create_app() -> FastAPI:
         log.info("🚀 Starting NFL Prediction API")
         load_dotenv(dotenv_path=".env")
         try:
-            init_results = app_state.initialize()
-            log.info(f"Application initialized: {init_results}")
+            # Only initialize if not already initialized. This makes the
+            # lifespan idempotent and avoids duplicate work when tests or
+            # other callers have already bootstrapped app_state manually
+            # (for example, when using TestClient without entering the
+            # context manager or when tests call app.state.app_state.initialize()).
+            already_loaded = False
+            try:
+                already_loaded = bool(app_state.data_manager.status.get("loaded"))
+            except Exception:
+                # Defensive: if status is not available, treat as not loaded
+                already_loaded = False
+
+            if not already_loaded:
+                init_results = app_state.initialize()
+                log.info(f"Application initialized: {init_results}")
+            else:
+                log.info("Application already initialized; skipping startup initialization")
+
             yield
         except Exception as e:
             log.error(f"Application startup failed: {e}", exc_info=True)
@@ -845,6 +861,11 @@ def create_app() -> FastAPI:
         description="Enhanced API with better data cohesion and validation",
         lifespan=lifespan,
     )
+
+    # Expose app_state for introspection (useful for tests and runtime debugging)
+    # Attaching to app.state is non-invasive and helps CI scripts verify
+    # which dataset and models are active without relying on logs.
+    app.state.app_state = app_state
 
     # ---- CORS CONFIG START ----
     # Load .env if present to ensure local development settings are available
