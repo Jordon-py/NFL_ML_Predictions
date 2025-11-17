@@ -17,6 +17,16 @@ This report documents incremental changes to the NFL_ML_Predictions repository, 
   - Quality Gates: `python -m py_compile backend/main.py` (PASS); FastAPI `TestClient` GET `/schedule/next-week` (PASS – 200 OK, 15 games returned, first matchup CLE vs BAL with kickoff `2025-11-16T00:00:00Z`).
   - Enhancement Suggestion: Expose the derived `season`, `week`, and `strategy` metadata in the response envelope (e.g., `{ games: [...], scope: {...} }`) once the frontend is ready to display schedule provenance.
 
+- Date/Time: 2025-11-16 / 06:10 UTC
+  - Files Modified: `frontend/src/PredictionContext.jsx`, `frontend/src/components/DashBoard/Dashboard.jsx`, `frontend/src/components/Card/TeamGrid.jsx`
+  - Change Description:
+    - Removed the `makePrediction()` function from `PredictionContext.jsx` to ensure the frontend does not perform prediction network requests inside the context.
+    - Updated `Dashboard.jsx` to call `predictGame()` directly from the API client when a game card is clicked; the Dashboard now handles payload assembly and network I/O.
+    - `PredictionContext` continues to store prediction results and history via `setPrediction()` and `pushHistory()` but no longer contains the API call logic.
+  - Why Made: This change enforces a clear separation of concerns—React Context becomes a pure state container while components own the user-triggered network interactions. It also prevents accidental double-calls and tests the model-serving contract explicitly when the UI triggers predictions.
+  - Impact: `TeamGrid` and `Card` remain unchanged—when a card is clicked the `Dashboard` will now perform the POST `/predict` request, then call `setPrediction` and `pushHistory` so the rest of the UI updates normally. App completion estimate: **100%** for this fix.
+  - Quality Gates: `npm run build` (PASS) and frontend smoke test (manual click) reported the `/predict` call with the expected JSON payload. `python -m py_compile backend/main.py` (PASS).
+
 - Date/Time: 2025-11-15 / 13:10 UTC
   - Files Modified: `frontend/src/components/PredictionResult.jsx`, `frontend/src/PredictionContext.jsx`, `backend/main.py`, `docs/report.md`
   - Change Description:
