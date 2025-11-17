@@ -40,3 +40,12 @@ def test_predict_works_for_first_game_in_schedule():
     resp = r2.json()
     assert "home_score" in resp and "away_score" in resp
     assert 0.0 <= resp["home_win_probability"] <= 1.0
+
+
+def test_debug_endpoint_contains_cors_configuration():
+    with TestClient(app) as client:
+        r = client.get("/debug")
+    assert r.status_code == 200
+    payload = r.json()
+    assert "cors_origins" in payload
+    assert "restrict_cors" in payload

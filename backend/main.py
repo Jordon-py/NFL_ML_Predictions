@@ -829,22 +829,56 @@ def create_app() -> FastAPI:
     )
 
     # ---- CORS CONFIG START ----
+    # Load .env if present to ensure local development settings are available
     load_dotenv(dotenv_path=".env")
 
-    # Example: CORS_ORIGINS="http://localhost:3000,https://my-prod-frontend.com"
-    raw_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000" or "https://.*/.vercel/.app$")
-    
-    # Split by comma and strip whitespace
-    origins = [o.strip() for o in raw_origins.split(",") if o.strip()]
+    # Primary deployment pattern uses RESTRICT_CORS + ALLOWED_ORIGINS
+    # Fallbacks: CORS_ORIGINS (legacy) -> default localhost dev origin
+    raw_allowed = os.getenv("ALLOWED_ORIGINS")
+    raw_origins = os.getenv("CORS_ORIGINS")
+    origin_regex = os.getenv("CORS_ORIGINS_REGEX")
+    restrict = os.getenv("RESTRICT_CORS", "true").strip().lower() in ("1", "true", "yes")
 
-    # Single CORS middleware with all allowed origins
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=origins,       # list of allowed origins
-        allow_credentials=False,     # no auth/cookies needed
-        allow_methods=["*"],         # allow all HTTP methods
-        allow_headers=["*"],         # allow all request headers
-    )
+    def _parse_origins(value: Optional[str]) -> List[str]:
+        if not value:
+            return []
+        # Allow comma- or space-separated lists; normalize by stripping trailing slash
+        parts = [p.strip().rstrip('/') for p in value.replace(';', ',').split(',') if p.strip()]
+        return parts
+
+    allowed_origins = _parse_origins(raw_allowed) if raw_allowed else _parse_origins(raw_origins)
+
+    # If restriction is enabled and no explicit origins are set, default to empty list
+    if restrict:
+        if not allowed_origins and not origin_regex:
+            logging.getLogger("api").warning("RESTRICT_CORS=true but ALLOWED_ORIGINS was not set; denying cross-origin requests by default.")
+            # Deny by only allowing no origins; callers must add environment vars.
+            allowed_origins = []
+
+    # If not restricted, allow broad origins (development friendly)
+    if not restrict and not allowed_origins:
+        allowed_origins = ["http://localhost:3000"]
+
+    logging.getLogger("api").info("Configuring CORS; restrict=%s, allowed_origins=%s, allow_origin_regex=%s", restrict, allowed_origins, origin_regex)
+
+    # Add CORS middleware. `allow_origin_regex` is optional and passed when configured.
+    if origin_regex:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=allowed_origins,
+            allow_origin_regex=origin_regex,
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
+    else:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=allowed_origins,
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
     # ---- CORS CONFIG END ----
 
     # include your routers here (example):
@@ -951,6 +985,22 @@ def create_app() -> FastAPI:
                 })
 
         return games
+
+    # Optional debug endpoint to inspect CORS configuration (helpful for CI/deploys)
+    @app.get("/debug")
+    async def debug_info() -> Dict[str, Any]:
+        """Return lightweight debug info including CORS configuration.
+
+        This endpoint is intentionally minimal and useful for CI verification
+        (e.g., scripts/verify_api_cors.py) but should not contain secrets.
+        """
+        return {
+                "cors_origins": allowed_origins,
+                "env_cors_origins": os.getenv("CORS_ORIGINS"),
+                "env_allowed_origins": os.getenv("ALLOWED_ORIGINS"),
+                "cors_regex": origin_regex,
+                "restrict_cors": restrict,
+        }
 
     # -----------------------------------------------------------
     # Prediction History Endpoint
