@@ -28,12 +28,13 @@
 
 .card:hover,
 .card:focus-within {
-  transform: translateY(-8px) scale(1.02) rotateX(0.6deg) rotateY(0.6deg);
-  box-shadow: 0 16px 40px oklch(0% 0 0 / 0.45), 0 0 22px var(--glow-accent);
+  transform: translateY(-8px) scale(1.02) rotateX(0.9deg) rotateY(0.9deg);
+  box-shadow: 0 16px 40px oklch(14.489% 0.05946 29.223 / 0.568), 0 0 22px var(--glow-accent);
+  cursor: pointer;
 }
 
 .hasPrediction {
-  animation: outlineGlow 2s ease-in-out infinite;
+  animation: outlineGlow cubic-bezier(0.075, 0.82, 0.165, 1) ease-in-out infinite;
   border-color: var(--lch-primary);
   box-shadow: 0 10px 30px oklch(0% 0 0 / 0.45), 0 0 25px var(--lch-primary);
 }

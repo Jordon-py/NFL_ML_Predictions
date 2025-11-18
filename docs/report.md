@@ -6,6 +6,15 @@ This report documents incremental changes to the NFL_ML_Predictions repository, 
 
 ## Recent Changes
 
+- Date/Time: 2025-11-18 / 09:30 UTC
+  - Files Modified: `frontend/src/types/global.d.ts`
+  - Change Description:
+    - Added `frontend/src/types/global.d.ts` to declare CSS modules and static assets to the TypeScript language server.
+    - This resolves the VS Code/TypeScript server error: "Cannot find module './Card.module.css' or its corresponding type declarations" by giving the editor a shape for CSS module imports and static assets.
+  - Why Made: Prevents noisy editor type errors and improves developer DX without affecting the runtime or build process.
+  - Impact: VS Code should no longer flag CSS module imports as missing types; Vite dev & build remain unaffected by this addition.
+  - Quality Gates: Manual: restart TypeScript server (VS Code) and `npm run dev` (frontend) — no CSS import type errors shown.
+
 - Date/Time: 2025-11-15 / 20:30 UTC
   - Files Modified: `backend/main.py`, `backend/requirements.txt`, `docs/report.md`
   - Change Description:

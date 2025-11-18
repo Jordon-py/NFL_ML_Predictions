@@ -49,7 +49,8 @@ function TeamGrid({
   errors = {},
   onPredict,
 } = {}) {
-  const safeWeek = week ?? (games[0]?.week ?? 10);
+  const safeWeek = week ?? ( games[ 0 ]?.week ?? 10 );
+  console.log(`safeWeek: --> ${safeWeek}`)
 
   if (isLoading) {
     return (
@@ -86,13 +87,13 @@ function TeamGrid({
   return (
     <section
       className="team-grid"
-      aria-label={`NFL Week ${safeWeek} games`}
+      aria-label={`NFL Week ${safeWeek}`}
       data-week={safeWeek}
     >
       <header className="team-grid__header">
         <div className="team-grid__heading">
           <span className="team-grid__badge">Week {safeWeek}</span>
-          <h2 className="team-grid__title">Week {safeWeek} Games</h2>
+          <h2 className="team-grid__title">Week {safeWeek}</h2>
         </div>
         <p className="team-grid__subtitle">
           Showing <strong>{games.length}</strong> games scheduled.
@@ -101,7 +102,8 @@ function TeamGrid({
 
       <div className="team-grid__grid">
         {games.map((game, index) => {
-          const rawKey = toGameKey(game) || String(index);
+          const rawKey = toGameKey( game ) || String( index );
+          console.log('Games: ', games, '\n', 'Game: ', game);
 
           // Look up any existing prediction + request state for this game.
           const prediction = predictions?.[rawKey];
@@ -120,7 +122,10 @@ function TeamGrid({
             away_logo: awayMeta?.logoUrl,
           };
 
-          if (prediction) {
+          if ( prediction ) {
+            console.log( 'predictions', prediction, '\n', 'enriched: ', enrichedGame )
+            enrichedGame.home_win = prediction.home_win === 1 ? homeAbbr : awayAbbr
+            enrichedGame.confidence_score = prediction.confidence_score ?? null;
             enrichedGame.home_pred_score =
               prediction.home_score ?? prediction.home_score_pred ?? null;
             enrichedGame.away_pred_score =
