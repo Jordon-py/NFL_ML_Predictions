@@ -323,11 +323,53 @@ NFL_ML_Predictions/
 
 ## API Endpoints
 
-- `GET /health` - Health check
-- `POST /predict` - Get game predictions
-- `GET /schedule/next-week` - Get upcoming games
-- `POST /retrain` - Retrain models
-- `POST /update_data` - Update data and retrain
+The backend exposes the following stable HTTP endpoints. These are the
+contracts the frontend uses (via `frontend/src/api/client.js`). If you
+deploy your own backend, ensure these paths are reachable and that CORS
+is configured to allow requests from your frontend origin.
+
+- `GET /health` — Health check. Returns a detailed JSON object describing
+    component readiness (models, dataset, metadata) and a timestamp. Useful
+    for CI, readiness probes and UI status badges.
+
+- `POST /predict` — Produce a prediction for a single scheduled game.
+    Request body (JSON):
+
+    {
+        "home_team": "SF",
+        "away_team": "SEA",
+        "season": 2025,
+        "week": 10
+    }
+
+    Response (JSON): a `PredictionResponse` object including `home_score`,
+    `away_score`, `home_win_probability`, `point_diff`, `mode`, and quality
+    metadata such as `prediction_source` and `confidence_score`.
+
+- `GET /schedule/next-week` — Returns the upcoming week's schedule as an
+    array of compact game objects: `{ season, week, home_team, away_team,
+    kickoff, venue, network, game_id }`. The handler picks the next slate
+    using kickoff timestamps when available, otherwise falls back to a
+    calendar-aware heuristic.
+
+- `GET /history?limit=N` — Recent prediction history entries (most recent
+    first). The `limit` query parameter bounds results; the API enforces a
+    max to avoid accidental overload.
+
+- `GET /debug` — Lightweight debug information (CORS/environment hints).
+
+Notes:
+
+- Some older documentation mentions `POST /retrain` or `POST /update_data`.
+    At the time of this check those administrative endpoints are not
+    implemented in `backend/main.py` (they appear in docs and hooks). The
+    frontend client (`frontend/src/api/client.js`) includes a safe `startTraining`
+    helper that will POST to `/retrain` if present and return a graceful
+    `{status: 'unsupported'}` object when the backend does not expose it.
+
+- If you need retraining automation, use `backend/train_models.py` or the
+    `scripts/` helpers to run offline retraining and then deploy the new
+    artifacts into `backend/models/`.
 =======
 backend/data/             # CSV artifacts
   team_game_base.csv
@@ -357,7 +399,9 @@ The backend and frontend are properly configured for cross-origin requests:
    heroku config:set CORS_ORIGINS="http://localhost:3000,https://localhost:3000,https://nfl-ml-predictions.vercel.app,https://nfl-predict-frontend.vercel.app" -a nfl-predict
    ```
 
-2. **Frontend API URL**: Set `VITE_API_URL` in Vercel project settings or `frontend/.env.production`
+2. **Frontend API base**: Set `VITE_API_BASE` in Vercel project settings or `frontend/.env.production`.
+
+    Note: the frontend client prefers `VITE_API_BASE`. `VITE_API_URL` is still recognized in some docs for backward compatibility but `VITE_API_BASE` is the canonical env key used by `frontend/src/api/client.js`.
 
 For detailed CORS and API configuration guide, see [docs/CORS_API_CONFIGURATION.md](docs/CORS_API_CONFIGURATION.md)
 

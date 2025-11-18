@@ -65,11 +65,13 @@
  * @property {string} [baseUrl]
  */
 
-class TypedApiClient {
+class TypedApiClient
+{
   /**
    * @param {ApiConfig} config
    */
-  constructor(config = {}) {
+  constructor ( config = {} )
+  {
     this.config = {
       timeoutMs: config.timeoutMs || 15000,
       retries: config.retries || 2,
@@ -97,21 +99,22 @@ class TypedApiClient {
   }
 
   // Enhanced URL resolution with validation
-  resolveBaseUrl() {
+  resolveBaseUrl()
+  {
     const importMeta = typeof import.meta !== 'undefined'
-      ? /** @type {{ env?: { VITE_API_BASE?: string } }} */ (import.meta)
+      ? /** @type {{ env?: { VITE_API_BASE?: string } }} */ ( import.meta )
       : { env: undefined };
 
     const envUrl = importMeta.env && typeof importMeta.env.VITE_API_BASE === 'string'
       ? importMeta.env.VITE_API_BASE
       : undefined;
-    const isLocalhost = window.location.hostname.includes('localhost');
+    const isLocalhost = window.location.hostname.includes( 'localhost' );
 
-    if (envUrl && this.isValidUrl(envUrl)) {
+    if ( envUrl && this.isValidUrl( envUrl ) ) {
       return envUrl;
     }
 
-    if (isLocalhost) {
+    if ( isLocalhost ) {
       return ''; // Use relative URLs for local development (Vite proxy)
     }
 
@@ -126,41 +129,43 @@ class TypedApiClient {
    * @param {ApiConfig} options
    * @returns {Promise<any>}
    */
-  async request(path, init = {}, options = {}) {
+  async request( path, init = {}, options = {} )
+  {
     const mergedOptions = { ...this.config, ...options };
-    const url = this.buildUrl(path, mergedOptions.baseUrl);
-    const method = (init.method || 'GET').toUpperCase();
+    const url = this.buildUrl( path, mergedOptions.baseUrl );
+    const method = ( init.method || 'GET' ).toUpperCase();
     const cacheKey = method === 'GET' ? url : null;
 
     // Check cache for GET requests
-    if (cacheKey && mergedOptions.cacheTtlMs > 0) {
-      const cached = this.getCache(cacheKey);
-      if (cached !== undefined) {
+    if ( cacheKey && mergedOptions.cacheTtlMs > 0 ) {
+      const cached = this.getCache( cacheKey );
+      if ( cached !== undefined ) {
         return cached;
       }
     }
 
     // Prevent duplicate requests
-    if (this.requestQueue.has(url)) {
-      return this.requestQueue.get(url);
+    if ( this.requestQueue.has( url ) ) {
+      return this.requestQueue.get( url );
     }
 
-    const requestPromise = (async () => {
+    const requestPromise = ( async () =>
+    {
       try {
-        const result = await this.executeRequest(url, init, mergedOptions);
+        const result = await this.executeRequest( url, init, mergedOptions );
 
         // Cache successful GET responses
-        if (cacheKey && mergedOptions.cacheTtlMs > 0) {
-          this.setCache(cacheKey, result, mergedOptions.cacheTtlMs);
+        if ( cacheKey && mergedOptions.cacheTtlMs > 0 ) {
+          this.setCache( cacheKey, result, mergedOptions.cacheTtlMs );
         }
 
         return result;
       } finally {
-        this.requestQueue.delete(url);
+        this.requestQueue.delete( url );
       }
-    })();
+    } )();
 
-    this.requestQueue.set(url, requestPromise);
+    this.requestQueue.set( url, requestPromise );
     return requestPromise;
   }
 
@@ -170,58 +175,59 @@ class TypedApiClient {
    * @param {ApiConfig} options
    * @returns {Promise<any>}
    */
-  async executeRequest(url, init, options) {
+  async executeRequest( url, init, options )
+  {
     const maxRetries = typeof options.retries === 'number' ? options.retries : 0;
     const timeoutMs = typeof options.timeoutMs === 'number' ? options.timeoutMs : this.config.timeoutMs;
 
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    for ( let attempt = 0; attempt <= maxRetries; attempt++ ) {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+      const timeoutId = setTimeout( () => controller.abort(), timeoutMs );
 
       try {
-        const response = await fetch(url, {
+        const response = await fetch( url, {
           ...init,
           signal: controller.signal,
           headers: {
             'Content-Type': 'application/json',
             Accept: 'application/json',
-            ...(init && init.headers ? init.headers : {}),
+            ...( init && init.headers ? init.headers : {} ),
           },
-        });
+        } );
 
-        clearTimeout(timeoutId);
+        clearTimeout( timeoutId );
 
-        if (!response.ok) {
-          const error = await this.createApiError(response, url);
+        if ( !response.ok ) {
+          const error = await this.createApiError( response, url );
 
-          if (!this.isRetriable(error) || attempt === maxRetries) {
+          if ( !this.isRetriable( error ) || attempt === maxRetries ) {
             throw error;
           }
 
-          const backoffMs = this.calculateBackoff(attempt, error);
-          await this.delay(backoffMs);
+          const backoffMs = this.calculateBackoff( attempt, error );
+          await this.delay( backoffMs );
           continue;
         }
 
-        const contentType = response.headers.get('content-type');
+        const contentType = response.headers.get( 'content-type' );
         const data = contentType ? await response.json() : null;
 
-        return this.validateResponse(data, init.method || 'GET', url);
-      } catch (error) {
-        clearTimeout(timeoutId);
+        return this.validateResponse( data, init.method || 'GET', url );
+      } catch ( error ) {
+        clearTimeout( timeoutId );
 
         // Ensure error is Error or ApiError type for isRetriable
-        const err = error instanceof Error ? error : new Error(String(error));
-        if (!this.isRetriable(err) || attempt === maxRetries) {
+        const err = error instanceof Error ? error : new Error( String( error ) );
+        if ( !this.isRetriable( err ) || attempt === maxRetries ) {
           throw err;
         }
 
-        const backoffMs = this.calculateBackoff(attempt, err);
-        await this.delay(backoffMs);
+        const backoffMs = this.calculateBackoff( attempt, err );
+        await this.delay( backoffMs );
       }
     }
 
-    throw new ApiError(500, 'Request failed after maximum retries', null, url);
+    throw new ApiError( 500, 'Request failed after maximum retries', null, url );
   }
 
   /**
@@ -229,7 +235,8 @@ class TypedApiClient {
    * @param {string} url
    * @returns {Promise<ApiError>}
    */
-  async createApiError(response, url) {
+  async createApiError( response, url )
+  {
     let payload;
     try {
       payload = await response.json();
@@ -252,12 +259,13 @@ class TypedApiClient {
    * @param {string} url
    * @returns {any}
    */
-  validateResponse(data, method, url) {
+  validateResponse( data, method, url )
+  {
     // Always validate prediction responses regardless of HTTP verb so
     // both POST /predict and any future GET-based prediction endpoints
     // share the same contract checks.
-    if (url.includes('/predict') && data) {
-      return this.validatePredictionResponse(data);
+    if ( url.includes( '/predict' ) && data ) {
+      return this.validatePredictionResponse( data );
     }
     return data;
   }
@@ -266,12 +274,13 @@ class TypedApiClient {
    * @param {any} data
    * @returns {PredictionResponse}
    */
-  validatePredictionResponse(data) {
-    const required = ['home_score', 'away_score', 'home_win_probability', 'point_diff'];
-    const missing = required.filter(field => data[field] === undefined);
+  validatePredictionResponse( data )
+  {
+    const required = [ 'home_score', 'away_score', 'home_win_probability', 'point_diff' ];
+    const missing = required.filter( field => data[ field ] === undefined );
 
-    if (missing.length > 0) {
-      throw new ApiError(500, `Invalid prediction response: missing ${missing.join(', ')}`);
+    if ( missing.length > 0 ) {
+      throw new ApiError( 500, `Invalid prediction response: missing ${missing.join( ', ' )}` );
     }
 
     return data;
@@ -283,33 +292,35 @@ class TypedApiClient {
    * @param {ApiConfig} options
    * @returns {Promise<PredictionResponse>}
    */
-  async predictGame(request, options = {}) {
-    this.validatePredictionRequest(request);
+  async predictGame( request, options = {} )
+  {
+    this.validatePredictionRequest( request );
 
-    return this.request('/predict', {
+    return this.request( '/predict', {
       method: 'POST',
-      body: JSON.stringify(request)
-    }, options);
+      body: JSON.stringify( request )
+    }, options );
   }
 
   /**
    * @param {PredictionRequest} request
    */
-  validatePredictionRequest(request) {
-    if (!request.home_team || !request.away_team) {
-      throw new ApiError(400, 'Home and away team are required');
+  validatePredictionRequest( request )
+  {
+    if ( !request.home_team || !request.away_team ) {
+      throw new ApiError( 400, 'Home and away team are required' );
     }
 
-    if (request.season < 2000 || request.season > 2100) {
-      throw new ApiError(400, 'Season must be between 2000 and 2100');
+    if ( request.season < 2000 || request.season > 2100 ) {
+      throw new ApiError( 400, 'Season must be between 2000 and 2100' );
     }
 
-    if (request.week < 1 || request.week > 22) {
-      throw new ApiError(400, 'Week must be between 1 and 22');
+    if ( request.week < 1 || request.week > 22 ) {
+      throw new ApiError( 400, 'Week must be between 1 and 22' );
     }
 
-    if (request.home_team === request.away_team) {
-      throw new ApiError(400, 'Home and away teams cannot be the same');
+    if ( request.home_team === request.away_team ) {
+      throw new ApiError( 400, 'Home and away teams cannot be the same' );
     }
   }
 
@@ -318,12 +329,13 @@ class TypedApiClient {
    * @param {string} key
    * @returns {any}
    */
-  getCache(key) {
-    const entry = this.cache.get(key);
-    if (!entry) return undefined;
+  getCache( key )
+  {
+    const entry = this.cache.get( key );
+    if ( !entry ) return undefined;
 
-    if (Date.now() > entry.expiresAt) {
-      this.cache.delete(key);
+    if ( Date.now() > entry.expiresAt ) {
+      this.cache.delete( key );
       return undefined;
     }
 
@@ -335,11 +347,12 @@ class TypedApiClient {
    * @param {any} data
    * @param {number} ttlMs
    */
-  setCache(key, data, ttlMs) {
-    this.cache.set(key, {
+  setCache( key, data, ttlMs )
+  {
+    this.cache.set( key, {
       expiresAt: Date.now() + ttlMs,
       data
-    });
+    } );
   }
 
   // Utility methods
@@ -347,8 +360,9 @@ class TypedApiClient {
    * @param {number} ms
    * @returns {Promise<void>}
    */
-  delay(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+  delay( ms )
+  {
+    return new Promise( resolve => setTimeout( resolve, ms ) );
   }
 
   /**
@@ -356,13 +370,14 @@ class TypedApiClient {
     * @param {Error|ApiError} error
    * @returns {number}
    */
-  calculateBackoff(attempt, error) {
+  calculateBackoff( attempt, error )
+  {
     const baseMs = 300;
     const jitter = 0.25;
     const retryAfter = error instanceof ApiError && error.retryAfterMs ? error.retryAfterMs : 0;
 
     return Math.max(
-      baseMs * Math.pow(2, attempt) * (1 + Math.random() * jitter),
+      baseMs * Math.pow( 2, attempt ) * ( 1 + Math.random() * jitter ),
       retryAfter
     );
   }
@@ -371,10 +386,11 @@ class TypedApiClient {
    * @param {Error|ApiError} error
    * @returns {boolean}
    */
-  isRetriable(error) {
-    if (error.name === 'AbortError') return true;
-    if (error instanceof TypeError) return true; // Network errors
-    if (error instanceof ApiError) {
+  isRetriable( error )
+  {
+    if ( error.name === 'AbortError' ) return true;
+    if ( error instanceof TypeError ) return true; // Network errors
+    if ( error instanceof ApiError ) {
       return error.status >= 500 || error.status === 429;
     }
     return false;
@@ -385,22 +401,24 @@ class TypedApiClient {
    * @param {string} baseUrl
    * @returns {string}
    */
-  buildUrl(path, baseUrl) {
+  buildUrl( path, baseUrl )
+  {
     // Be defensive: coerce inputs to strings and handle undefined/null.
-    const maybePath = path == null ? '' : String(path);
-    if (maybePath.startsWith('http')) return maybePath;
+    const maybePath = path == null ? '' : String( path );
+    if ( maybePath.startsWith( 'http' ) ) return maybePath;
 
-    const maybeBase = baseUrl == null ? '' : String(baseUrl);
+    const maybeBase = baseUrl == null ? '' : String( baseUrl );
 
-    const normalizedBase = maybeBase.replace(/\/+$|^\s+|\s+$/g, '');
-    const normalizedPath = maybePath.replace(/^\/+/, '');
+    const normalizedBase = maybeBase.replace( /\/+$|^\s+|\s+$/g, '' );
+    const normalizedPath = maybePath.replace( /^\/+/, '' );
 
     return normalizedBase ? `${normalizedBase}/${normalizedPath}` : `/${normalizedPath}`;
   }
 }
 
 // Enhanced Error Class
-class ApiError extends Error {
+class ApiError extends Error
+{
   /**
    * @param {number} status
    * @param {string} message
@@ -408,29 +426,31 @@ class ApiError extends Error {
    * @param {string} [url]
    * @param {Headers} [headers]
    */
-  constructor(status, message, payload, url, headers) {
-    super(message);
+  constructor ( status, message, payload, url, headers )
+  {
+    super( message );
     this.name = 'ApiError';
     this.status = status;
     this.payload = payload;
     this.url = url;
     this.headers = headers;
-    this.retryAfterMs = this.parseRetryAfter(headers);
+    this.retryAfterMs = this.parseRetryAfter( headers );
   }
 
   /**
     * @param {Headers|undefined} headers
     * @returns {number|undefined}
     */
-  parseRetryAfter(headers) {
-    const value = headers?.get('Retry-After');
-    if (!value) return undefined;
+  parseRetryAfter( headers )
+  {
+    const value = headers?.get( 'Retry-After' );
+    if ( !value ) return undefined;
 
-    const seconds = parseInt(value, 10);
-    if (!isNaN(seconds)) return seconds * 1000;
+    const seconds = parseInt( value, 10 );
+    if ( !isNaN( seconds ) ) return seconds * 1000;
 
-    const date = Date.parse(value);
-    if (!isNaN(date)) return Math.max(0, date - Date.now());
+    const date = Date.parse( value );
+    if ( !isNaN( date ) ) return Math.max( 0, date - Date.now() );
 
     return undefined;
   }
@@ -445,11 +465,12 @@ const defaultClient = new TypedApiClient();
  * @param {ApiConfig|string} [configOrBaseUrl] Either a config object or a base URL string.
  * @returns {TypedApiClient}
  */
-export function createApi(configOrBaseUrl = {}) {
-  if (typeof configOrBaseUrl === 'string') {
-    return new TypedApiClient({ baseUrl: configOrBaseUrl });
+export function createApi( configOrBaseUrl = {} )
+{
+  if ( typeof configOrBaseUrl === 'string' ) {
+    return new TypedApiClient( { baseUrl: configOrBaseUrl } );
   }
-  return new TypedApiClient(configOrBaseUrl || {});
+  return new TypedApiClient( configOrBaseUrl || {} );
 }
 
 // Named alias for the default instance used across the app.
@@ -462,13 +483,14 @@ export const apiClient = defaultClient;
  * @param {ApiConfig} [options]
  * @returns {Promise<any>}
  */
-export function getHealthStatus(options = {}) {
+export function getHealthStatus( options = {} )
+{
   // 1-minute cache TTL keeps the navbar and dashboard responsive while
   // avoiding excessive polling in production.
-  return defaultClient.request('/health', { method: 'GET' }, {
+  return defaultClient.request( '/health', { method: 'GET' }, {
     cacheTtlMs: 60000,
     ...options,
-  });
+  } );
 }
 
 /**
@@ -478,8 +500,9 @@ export function getHealthStatus(options = {}) {
  * @returns {Promise<any[]>}
  */
 // Get the schedule for the next week from the NFL prediction backend
-export async function getNextWeekSchedule(options = {}) {
-  const res = await defaultClient.request('/schedule/next-week', { method: 'GET' }, options);
+export async function getNextWeekSchedule( options = {} )
+{
+  const res = await defaultClient.request( '/schedule/next-week', { method: 'GET' }, options );
   return res;
 }
 
@@ -494,10 +517,11 @@ export async function getNextWeekSchedule(options = {}) {
  * @param {ApiConfig} [options]
  * @returns {Promise<any>}
  */
-export function getPredictionHistory(limit = 100, options = {}) {
-  const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 100;
-  const path = `/history?limit=${encodeURIComponent(String(safeLimit))}`;
-  return defaultClient.request(path, { method: 'GET' }, options);
+export function getPredictionHistory( limit = 100, options = {} )
+{
+  const safeLimit = Number.isFinite( limit ) && limit > 0 ? Math.floor( limit ) : 100;
+  const path = `/history?limit=${encodeURIComponent( String( safeLimit ) )}`;
+  return defaultClient.request( path, { method: 'GET' }, options );
 }
 
 /**
@@ -509,17 +533,43 @@ export function getPredictionHistory(limit = 100, options = {}) {
  * @param {ApiConfig} [options]
  * @returns {Promise<any|null>}
  */
-export async function getStatusOverview(options = {}) {
+export async function getStatusOverview( options = {} )
+{
   try {
     // Repository Guardian Log: surfaces system health data in StatsPage while
     // keeping builds unblocked even when the backend has not yet shipped the
     // matching endpoint.
-    return await defaultClient.request('/status/overview', { method: 'GET' }, options);
-  } catch (error) {
-    if (error instanceof ApiError) {
+    return await defaultClient.request( '/status/overview', { method: 'GET' }, options );
+  } catch ( error ) {
+    if ( error instanceof ApiError ) {
       return null;
     }
     throw error;
+  }
+}
+
+/**
+ * Trigger a retraining run on the backend if supported.
+ *
+ * Note: Not all backend deployments expose a `/retrain` endpoint. This
+ * helper will return a graceful object when the endpoint is absent so
+ * callers (hooks/UI) can handle the case without crashing the app.
+ *
+ * @param {ApiConfig} [options]
+ * @returns {Promise<{status:string, [key: string]: any}>}
+ */
+export async function startTraining( options = {} )
+{
+  try {
+    const res = await defaultClient.request( '/retrain', { method: 'POST' }, options );
+    // Expect backend to return a small status object: { status: 'queued'|'started'|'done' }
+    return res || { status: 'started' };
+  } catch ( err ) {
+    // Gracefully handle the common case where the endpoint is not implemented.
+    if ( err instanceof ApiError && err.status === 404 ) {
+      return { status: 'unsupported', message: 'Backend does not expose /retrain' };
+    }
+    throw err;
   }
 }
 
@@ -532,24 +582,25 @@ export async function getStatusOverview(options = {}) {
  * @param {ApiConfig} [options]
  * @returns {Promise<PredictionResponse>}
  */
-export function predictGame(params, options = {}) {
-  if (!params) {
-    throw new ApiError(400, 'Prediction parameters are required');
+export function predictGame( params, options = {} )
+{
+  if ( !params ) {
+    throw new ApiError( 400, 'Prediction parameters are required' );
   }
   const { home_team = params.homeTeam, away_team = params.awayTeam, season, week } = params;
 
-  if (!home_team || !away_team) {
-    throw new ApiError(400, 'home_team and away_team are required for prediction');
+  if ( !home_team || !away_team ) {
+    throw new ApiError( 400, 'home_team and away_team are required for prediction' );
   }
 
   const payload = {
-    home_team: String(home_team).trim().toUpperCase(),
-    away_team: String(away_team).trim().toUpperCase(),
-    season: Number(season),
-    week: Number(week),
+    home_team: String( home_team ).trim().toUpperCase(),
+    away_team: String( away_team ).trim().toUpperCase(),
+    season: Number( season ),
+    week: Number( week ),
   };
 
-  return defaultClient.predictGame(payload, options);
+  return defaultClient.predictGame( payload, options );
 }
 
 export default defaultClient
