@@ -24,13 +24,13 @@
 /* Root section */
 
 .team-grid {
-  width: 100%;
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 1.5rem 1rem 2.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
+    width: 100%;
+    max-width: 30rem;
+    /* margin: 0 auto; */
+    padding: 1.5rem 1rem 2.5rem;
+    display: flex;
+    /* gap: 1.5rem; */
+    flex-direction: column;
 }
 
 /* Header */
@@ -38,7 +38,7 @@
 .team-grid__header {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 0.3rem;
 }
 
 .team-grid__heading {
