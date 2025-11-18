@@ -82,13 +82,28 @@ class TypedApiClient {
     this.requestQueue = new Map();
   }
 
+  /**
+  * @param {string} url
+  * @returns {boolean}
+  */
+  isValidUrl( url )
+  {
+    try {
+      new URL( url );
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   // Enhanced URL resolution with validation
   resolveBaseUrl() {
-    // Guard against non-Vite environments where `import.meta.env` may not
-    // be declared in type definitions.
-    const meta = typeof import.meta !== 'undefined' ? /** @type {any} */ (import.meta) : {};
-    const envUrl = meta.env && typeof meta.env.VITE_API_BASE === 'string'
-      ? meta.env.VITE_API_BASE
+    const importMeta = typeof import.meta !== 'undefined'
+      ? /** @type {{ env?: { VITE_API_BASE?: string } }} */ (import.meta)
+      : { env: undefined };
+
+    const envUrl = importMeta.env && typeof importMeta.env.VITE_API_BASE === 'string'
+      ? importMeta.env.VITE_API_BASE
       : undefined;
     const isLocalhost = window.location.hostname.includes('localhost');
 
@@ -97,27 +112,13 @@ class TypedApiClient {
     }
 
     if (isLocalhost) {
-      return ''; // Use relative URLs for local development
+      return ''; // Use relative URLs for local development (Vite proxy)
     }
-    // Default production base URL (string). Previously this returned a
-    // TypedApiClient instance which caused `baseUrl.replace` TypeErrors when
-    // `buildUrl` expected a string. Return the raw string instead.
+
     const fallback = 'https://nfl-predict-ecf5a5bd34fe.herokuapp.com';
     return fallback;
   }
 
-  /**
-   * @param {string} url
-   * @returns {boolean}
-   */
-  isValidUrl(url) {
-    try {
-      new URL(url);
-      return true;
-    } catch {
-      return false;
-    }
-  }
 
   /**
    * @param {string} path
@@ -233,7 +234,7 @@ class TypedApiClient {
     try {
       payload = await response.json();
     } catch {
-      payload;
+      payload = null;
     }
 
     return new ApiError(
@@ -462,10 +463,10 @@ export const apiClient = defaultClient;
  * @returns {Promise<any>}
  */
 export function getHealthStatus(options = {}) {
-  // Small cache TTL keeps the navbar and dashboard responsive while
+  // 1-minute cache TTL keeps the navbar and dashboard responsive while
   // avoiding excessive polling in production.
   return defaultClient.request('/health', { method: 'GET' }, {
-    cacheTtlMs: 110000,
+    cacheTtlMs: 60000,
     ...options,
   });
 }
@@ -535,7 +536,7 @@ export function predictGame(params, options = {}) {
   if (!params) {
     throw new ApiError(400, 'Prediction parameters are required');
   }
-  const { home_team, away_team, season, week } = params;
+  const { home_team = params.homeTeam, away_team = params.awayTeam, season, week } = params;
 
   if (!home_team || !away_team) {
     throw new ApiError(400, 'home_team and away_team are required for prediction');
