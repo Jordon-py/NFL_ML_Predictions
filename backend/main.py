@@ -987,7 +987,7 @@ def create_app() -> FastAPI:
             target_week,
             selection.get("strategy"),
         )
-
+        tm_logo = pd.read_csv('./team_logo.csv')
         # Normalise into a compact schedule shape for the frontend.
         games: List[Dict[str, Any]] = []
         for _, row in week_rows.iterrows():
@@ -1004,6 +1004,17 @@ def create_app() -> FastAPI:
             week_val = target_week if pd.isna(week_val) else int(week_val)
             home_team = str(row.get("home_team", "")).upper()
             away_team = str(row.get("away_team", "")).upper()
+            
+            for _, logo_row in tm_logo.iterrows():
+                if home_team == logo_row['abbr']:
+                    home_abbr = logo_row['abbr']
+                    home_logo = logo_row['logo_url']
+                    home_team = logo_row['team_name']
+                if away_team == logo_row['abbr']:
+                    away_abbr = logo_row['abbr']
+                    away_logo = logo_row['logo_url']
+                    away_team = logo_row['team_name']
+
 
             games.append(
                 {
@@ -1011,8 +1022,10 @@ def create_app() -> FastAPI:
                     "week": week_val,
                     "home_team": home_team,
                     "away_team": away_team,
-                    "home_abbr": home_team,
-                    "away_abbr": away_team,
+                    "home_abbr": home_abbr,
+                    "away_abbr": away_abbr,
+                    "home_logo": home_logo,
+                    "away_logo": away_logo,
                     "game_id": str(
                         row.get(
                             "game_id",
