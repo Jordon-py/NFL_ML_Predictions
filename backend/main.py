@@ -962,10 +962,10 @@ def create_app() -> FastAPI:
         """
         df = app_state.data_manager.dataset
         if df is None or df.empty:
-            df = pd.read_csv('Nfl_schedule_2025.csv')
-       
+            df = pd.read_csv('Nfl_schedule_2025.csv', parse_dates=True)
+            print(f'schedule info: --> {df.head(10)},\n COLUMNS: --> {df.columns}')
 
-        try: 
+        try:
             target_season, target_week, selection = _select_schedule_scope(df)
         except ValueError as exc:  # pragma: no cover - defensive guard
             raise HTTPException(503, str(exc)) from exc
