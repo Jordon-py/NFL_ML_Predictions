@@ -65,7 +65,7 @@ from dotenv import load_dotenv
 from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 import nflreadpy as nfl
 
  
@@ -79,13 +79,7 @@ class PredictionRequest(BaseModel):
     season: int = Field(..., ge=2000, le=2100)
     week: int = Field(..., ge=1, le=22)
 
-    @field_validator('home_team', 'away_team')
-    def validate_team_names(cls, v):
-        if not v or not v.strip():
-            raise ValueError('Team name cannot be empty')
-        # Normalize to uppercase abbreviations to match dataset/team keys.
-        return v.strip().upper()
-
+    
 class PredictionResponse(BaseModel):
     home_score: float = Field(..., ge=0)
     away_score: float = Field(..., ge=0)
