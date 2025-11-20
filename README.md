@@ -534,7 +534,7 @@ For detailed CORS and API configuration guide, see [docs/CORS_API_CONFIGURATION.
 heroku login
 
 # Deploy backend
-git push heroku main
+git push heroku master --force
 
 # Verify deployment
 heroku logs --tail -a nfl-predict
