@@ -357,13 +357,74 @@ class Config:
 
         As per user specification, always use C:/Users/goku/Documents/NFL_ML_Predictions/backend/Nfl_schedule_2025.csv
         """
-        # Hardcoded path as specified by user
-        hardcoded_path = self.backend_dir / "./Nfl_schedule_2025.csv"
-        if hardcoded_path.exists():
-            return hardcoded_path
-        
-        # Fallback to default if hardcoded doesn't exist (shouldn't happen)
-        fallback = self.backend_dir / "data" / "./Nfl_schedule_2025.csv"
+        # Resolve schedule path robustly across environments.
+        # Search order (first match returned):
+        #  1. SCHEDULE_PATH env var (if set and exists)
+        #  2. backend/Nfl_schedule_2025.csv
+        #  3. backend/data/Nfl_schedule_2025.csv
+        #  4. repo_root/backend/data/Nfl_schedule_2025.csv
+        #  5. any file matching Nfl_schedule*.csv in data_dir (newest)
+        #  6. common container absolute paths (/app/backend/data/...)
+        #  7. fallback to data_dir/Nfl_schedule_2025.csv (may not exist)
+
+        candidates: List[Path] = []
+
+        # 1) Environment override
+        env_sched = os.getenv("SCHEDULE_PATH", "").strip()
+        if env_sched:
+            candidates.append(Path(env_sched))
+
+        # 2) Repository-local locations
+        candidates.extend([
+            self.backend_dir / "Nfl_schedule_2025.csv",
+            self.backend_dir / "data" / "Nfl_schedule_2025.csv",
+            self.repo_root / "backend" / "Nfl_schedule_2025.csv",
+            self.repo_root / "backend" / "data" / "Nfl_schedule_2025.csv",
+            self.data_dir / "Nfl_schedule_2025.csv",
+        ])
+
+        # 3) Common container absolute paths (Heroku/Docker)
+        candidates.extend([
+            Path("/app/backend/Nfl_schedule_2025.csv"),
+            Path("/app/backend/data/Nfl_schedule_2025.csv"),
+        ])
+
+        # 4) Current working directory fallbacks
+        try:
+            cwd = Path.cwd()
+            candidates.extend([
+                cwd / "backend" / "Nfl_schedule_2025.csv",
+                cwd / "data" / "Nfl_schedule_2025.csv",
+            ])
+        except Exception:
+            pass
+
+        # 5) Pattern match any schedule file inside data_dir (prefer newest)
+        try:
+            stamped = sorted(self.data_dir.glob("Nfl_schedule*.csv"), key=lambda p: p.stat().st_mtime, reverse=True)
+            for p in stamped:
+                if p not in candidates:
+                    candidates.insert(0, p)
+                    break
+        except Exception:
+            # ignore pattern errors
+            pass
+
+        # Return the first existing candidate
+        for cand in candidates:
+            try:
+                if Path(cand).exists():
+                    return Path(cand)
+            except Exception:
+                continue
+
+        # Nothing found — log attempted locations and return a sensible fallback
+        fallback = self.data_dir / "Nfl_schedule_2025.csv"
+        logging.getLogger("config").warning(
+            "Unable to locate Nfl_schedule_2025.csv; tried locations: %s. Falling back to %s",
+            ", ".join(str(p) for p in candidates),
+            fallback,
+        )
         return fallback
     
     def _validate_paths(self):

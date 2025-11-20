@@ -6,6 +6,20 @@ This report documents incremental changes to the NFL_ML_Predictions repository, 
 
 ## Recent Changes
 
+- Date/Time: 2025-11-20 / 10:15 UTC
+  - Files Modified: `backend/main.py`, `backend/requirements.txt`, `scripts/deploy.ps1`, `scripts/verify_api_cors.py`, `README.md`, `docs/report.md`
+  - Change Description:
+    - Hardcoded CORS origins in `backend/main.py` to allow `https://nfl-ml-predictions.vercel.app` and `http://localhost:3000`, with regex for Vercel subdomains.
+    - Added `starlette>=0.27.0` to `backend/requirements.txt` for CORS middleware.
+    - Updated `scripts/deploy.ps1` to set `ALLOWED_ORIGINS` and `RESTRICT_CORS=true` on Heroku.
+    - Modified `scripts/verify_api_cors.py` to expect the hardcoded origins.
+    - Updated README.md with CORS configuration details.
+    - Deployed backend to Heroku (nfl-predict-ecf5a5bd34fe.herokuapp.com) and frontend to Vercel (nfl-ml-predictions.vercel.app).
+  - Why Made: CORS 'Access-Control-Allow-Origin' header was missing in production, causing the Vercel frontend to fail requests to the Heroku backend.
+  - Impact: Health endpoint now returns 200 with proper CORS headers allowing the Vercel origin; frontend can successfully fetch from backend in production.
+  - Quality Gates: Heroku /health returns 200 with Access-Control-Allow-Origin: <https://nfl-ml-predictions.vercel.app>; Vercel frontend loads at 200 OK.
+  - Enhancement Suggestion: Monitor CORS logs for any additional origins needed.
+
 - Date/Time: 2025-11-18 / 09:30 UTC
   - Files Modified: `frontend/src/types/global.d.ts`
   - Change Description:
