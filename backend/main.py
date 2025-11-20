@@ -1141,8 +1141,10 @@ def create_app() -> FastAPI:
             if logo_path:
                 tm_logo = pd.read_csv(logo_path)
             else:
-                log = logging.getLogger("api")
-                log.warning("team_logo.csv not found; proceeding without team logos. Searched: %s", ",".join(str(p) for p in logo_candidates))
+                logging.getLogger("api").warning(
+                    "team_logo.csv not found; proceeding without team logos. Searched: %s",
+                    ",".join(str(p) for p in logo_candidates),
+                )
         except Exception as exc:
             logging.getLogger("api").warning("Failed to read team_logo.csv: %s", exc, exc_info=True)
             tm_logo = pd.DataFrame(columns=["abbr", "logo_url", "team_name"])
