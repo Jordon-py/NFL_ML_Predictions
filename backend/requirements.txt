@@ -23,6 +23,9 @@ python-dotenv>=1.0.0,<1.1.0
 
 # NFL data (may need specific version for compatibility)
 nfl-data-py>=0.3.0,<0.4.0
+# Some environment imports (backend/main.py) use the `nflreadpy` module.
+# Ensure the package is installed at runtime so Heroku dynos can import it.
+nflreadpy
 
 # Testing
 pytest>=7.0.0,<8.0.0
