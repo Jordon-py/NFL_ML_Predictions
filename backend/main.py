@@ -65,18 +65,21 @@ from dotenv import load_dotenv
 from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
+import nflreadpy as nfl
+
+ 
 
 # ---------------------------------------------------------------
 # Enhanced Data Models with Strict Validation
 # ---------------------------------------------------------------
 class PredictionRequest(BaseModel):
-    home_team: str = Field(..., min_length=2, max_length=50)
-    away_team: str = Field(..., min_length=2, max_length=50)
+    home_team: str = Field(..., min_length=2, max_length=20)
+    away_team: str = Field(..., min_length=2, max_length=20)
     season: int = Field(..., ge=2000, le=2100)
     week: int = Field(..., ge=1, le=22)
 
-    @validator('home_team', 'away_team')
+    @field_validator('home_team', 'away_team')
     def validate_team_names(cls, v):
         if not v or not v.strip():
             raise ValueError('Team name cannot be empty')
@@ -128,45 +131,7 @@ class PredictionHistoryEntry(BaseModel):
     confidence_score: Optional[float] = None  # New field
 
 
-def get_current_nfl_context(reference: Optional[datetime] = None) -> Dict[str, Any]:
-    """Return the current NFL season context for schedule heuristics.
-
-    Repository Guardian note: this helper centralizes the once-inline
-    "what week is it?" logic so that schedule endpoints can stay synced to the
-    real calendar rather than defaulting to the first row of the dataset.
-    """
-
-    now = reference or datetime.now(timezone.utc)
-
-    # NFL season flips in August; anything earlier belongs to the prior year.
-    season = now.year if now.month >= 8 else now.year - 1
-
-    if now.month in {1, 2}:
-        phase = "postseason"
-    elif 3 <= now.month <= 7:
-        phase = "offseason"
-    elif now.month == 8:
-        phase = "preseason"
-    else:
-        phase = "regular"
-
-    season_start = datetime(season, 9, 1, tzinfo=timezone.utc)
-    approx_week = 1
-    if now >= season_start:
-        weeks_since = ((now - season_start).days // 7) + 1
-        approx_week = max(1, min(22, weeks_since))
-    elif phase == "postseason":
-        approx_week = 21
-
-    return {
-        "season": season,
-        "phase": phase,
-        "approx_week": int(approx_week),
-        "timestamp": now.isoformat(),
-    }
-
-
-def _select_schedule_scope(df: pd.DataFrame, now: Optional[datetime] = None) -> Tuple[int, int, Dict[str, Any]]:
+def _select_schedule_scope(df: pd.DataFrame):
     """Choose which season/week to expose via `/schedule/next-week`.
 
     Preference order:
@@ -176,24 +141,24 @@ def _select_schedule_scope(df: pd.DataFrame, now: Optional[datetime] = None) -> 
 
     Returns (season, week, metadata).
     """
-    if now is None:
-        now = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc)
     logger.info(msg=now)
     time = now.isoformat(timespec='auto')
     date = now.isoformat()
 
 
     if df is None or df.empty:
-        df = pd.read_csv('backend/Nfl_schedule_2025.csv')
-    
-    
-
-
-    
+        df = pd.read_csv('./Nfl_schedule_2025.csv')
+        print(f'columns  : { df.columns }')
+        print(f'first five lines of dataset: { df.head() }')
+       
     working = df.copy()
-    # Normalised numeric season/week columns used by the selection logic below.
-    working["season_num"] = pd.to_numeric(working.get("season"), errors="coerce")  # type: ignore
-    working["week_num"] = pd.to_numeric(working.get("week"), errors="coerce")  # type: ignore
+    curr_season = nfl.get_current_season(roster=False)
+    curr_week = nfl.get_current_week()
+    working["season_num"] = curr_season
+    working["week_num"] = curr_week
+    
+   
 
 
     selection: Dict[str, Any] = {"strategy": "unknown"}
@@ -852,15 +817,18 @@ def create_app() -> FastAPI:
         description="Enhanced API with better data cohesion and validation",
         lifespan=lifespan,
     )
-
+    # --------------------------------------------
     # Expose app_state for introspection (useful for tests and runtime debugging)
     # Attaching to app.state is non-invasive and helps CI scripts verify
     # which dataset and models are active without relying on logs.
+    # ---------------------------------------------
     app.state.app_state = app_state
 
-    # ---- CORS CONFIG START ----
+   
+   # ---- CORS CONFIG START ----
     # Load .env if present to ensure local development settings are available
     load_dotenv(dotenv_path=".env")
+
 
     # Primary deployment pattern uses RESTRICT_CORS + ALLOWED_ORIGINS
     # Fallbacks: CORS_ORIGINS (legacy) -> default localhost dev origin
@@ -869,7 +837,7 @@ def create_app() -> FastAPI:
     origin_regex = os.getenv("CORS_ORIGINS_REGEX")
     restrict = os.getenv("RESTRICT_CORS", "true").strip().lower() in ("1", "true", "yes")
 
-    def _parse_origins(value: Optional[str]) -> List[str]:
+    def _parse_origins(value=raw_allowed) -> List[str]:
         if not value:
             return []
         # Allow comma- or space-separated lists; normalize by stripping trailing slash
@@ -883,10 +851,10 @@ def create_app() -> FastAPI:
         if not allowed_origins and not origin_regex:
             logging.getLogger("api").warning("RESTRICT_CORS=true but ALLOWED_ORIGINS was not set; denying cross-origin requests by default.")
             # Deny by only allowing no origins; callers must add environment vars.
-            allowed_origins = []
+            allowed_origins = [raw_allowed.rsplit(',')]
 
     # If not restricted, allow broad origins (development friendly)
-    if not restrict and not allowed_origins:
+    if not restrict:
         allowed_origins = ["http://localhost:3000"]
 
     logging.getLogger("api").info("Configuring CORS; restrict=%s, allowed_origins=%s, allow_origin_regex=%s", restrict, allowed_origins, origin_regex)
@@ -925,7 +893,8 @@ def create_app() -> FastAPI:
                                 app_state.model_manager.away_pipe, 
                                 app_state.model_manager.win_pipe]),
             "dataset_loaded": app_state.data_manager.dataset is not None,
-            "metadata_loaded": app_state.model_manager.metadata is not None
+            "metadata_loaded": app_state.model_manager.metadata is not None,
+            "repo_root_loaded": app_state.data_manager.config.repo_root,
         }
         
         status = "healthy" if all(components.values()) else "unhealthy"
@@ -951,7 +920,7 @@ def create_app() -> FastAPI:
         archival 2018 rows), the handler now relies on kickoff timestamps and a
         calendar-aware fallback to surface the true "next" slate.
         """
-        schedule_path = 'backend/Nfl_schedule_2025.csv'
+        schedule_path = './Nfl_schedule_2025.csv'
         df = pd.read_csv(schedule_path, parse_dates=True)
         print(f'schedule info: --> {df.head(10)},\n COLUMNS: --> {df.columns}')
 

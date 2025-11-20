@@ -408,7 +408,7 @@ export function PredictionProvider( { children } )
     const loadTeams = async () =>
     {
       try {
-        const res = await fetch( "/data/myteamdescriptions.csv" );
+        const res = await fetch( "myteamdescriptions.csv" );
         if ( !res.ok ) return;
         const text = await res.text();
         if ( !active ) return;
