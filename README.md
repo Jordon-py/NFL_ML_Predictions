@@ -370,6 +370,127 @@ Notes:
 - If you need retraining automation, use `backend/train_models.py` or the
     `scripts/` helpers to run offline retraining and then deploy the new
     artifacts into `backend/models/`.
+
+## Frontend customization (where to change UI / logo / stats)
+
+A short, practical guide for maintainers who want to tweak the frontend UI
+without hunting through the code. The paths below point to the files you will
+most commonly edit when making changes to branding, the stats/status page,
+team logos, or theme tokens.
+
+1) Site logo & favicon
+     - Favicon: `frontend/index.html` — change the `<link rel="icon">` tag.
+         * Example: replace the inline data URL with `/favicon.ico` and drop the
+             file into `frontend/public/favicon.ico`.
+     - Header / site logo: `frontend/src/components/NavBar/NavBar.jsx` +
+         `frontend/src/components/NavBar/NavBar.css` — the NavBar currently uses
+         text (`<h1>NFL Predict</h1>`). Replace that element with an image tag
+         (`<img src="/logos/brand-logo.svg" alt="Site name" />`) and add
+         responsive CSS in `NavBar.css` (or your global CSS).
+
+     Quick example (NavBar.jsx):
+     - Add your asset at `frontend/public/logos/brand-logo.svg` and then update
+         the JSX to render an `<img className="site-logo" src="/logos/brand-logo.svg" />`.
+
+2) Team logos (matchups/team badges)
+     - Frontend source of truth: `frontend/public/myteamdescriptions.csv` — a
+         simple CSV (team_name,abbr,logo_url). `PredictionContext.jsx` fetches
+         `/data/myteamdescriptions.csv` on mount and populates `teams` used by
+         `TeamGrid`/`Card` components. Edit this CSV to change or point to
+         different logo URLs.
+     - Backend fallback: `backend/team_logo.csv` — the backend schedule endpoint
+         (`/schedule/next-week`) reads this file when enriching schedule rows.
+         If you want the backend to serve embedded logo URLs, update this file
+         instead and redeploy the backend.
+     - Hosting logos locally: place static assets under `frontend/public/logos/`
+         and set `logo_url` to `/logos/<ABBR>.svg` in the CSV so the app serves
+         them with no external dependencies.
+
+3) Stats / Status ("sts") page display
+     - Primary files:
+         * `frontend/src/pages/StatsPage.jsx` — page logic (data fetch + layout)
+         * `frontend/src/pages/StatsPage.module.css` — page-specific styles
+         * `frontend/src/components/HistoryChart.jsx` — history list/chart logic
+         * `frontend/src/components/HistoryPage.jsx` — history full-page view
+
+     - To change KPIs, card layout, or which metrics are shown: edit
+         `StatsPage.jsx` (the `hydrate()` function collects schedule/history/overview)
+         and adapt the `SummaryCard` renderers and CSS in `StatsPage.module.css`.
+
+4) Team grid & per-game cards
+     - Files to edit for card layout, logo placement, and prediction info:
+         * `frontend/src/components/Card/Card.jsx`
+         * `frontend/src/components/Card/Card.module.css`
+         * `frontend/src/components/Card/TeamGrid.jsx`
+         * `frontend/src/components/Card/TeamGrid.css`
+
+     - These controls the matchup card markup, logo image elements, kickoff
+         formatting, and the section that renders prediction probabilities.
+
+5) Theme tokens, colors, and fonts
+     - Global tokens and design system variables are in:
+         * `frontend/src/styles/base.css` — primary design tokens (`:root`) such
+             as `--c-brand-1`, `--font-sans`, `--r-md`, etc. Change these to alter
+             colors, radii, fonts, shadows, and more across the app.
+         * `frontend/src/styles/theme-grid.css` — component/theme helpers used by
+             some components.
+
+     - After changing variables in `base.css`, rebuild the app to see the
+         updated theme applied everywhere.
+
+6) API base URL / dev proxy
+     - Dev proxy: `frontend/vite.config.js` — the `server.proxy` section forwards
+         `/schedule`, `/predict`, `/history`, `/health`, `/debug` to
+         `http://127.0.0.1:8000` during local development. Ensure your backend is
+         running on port **8000** for the dev proxy to work.
+     - Production base URL: `frontend/.env` (key: `VITE_API_BASE`) — set this to
+         your deployed backend (e.g., `https://nfl-predict-ecf5a5bd34fe.herokuapp.com/`).
+         The client reads `import.meta.env.VITE_API_BASE` in
+         `frontend/src/api/client.js`.
+
+7) Charts, data formatting and date/time
+     - Charts and history display are rendered by `HistoryChart.jsx`. To
+         change how timestamps or percentages are formatted, update helpers in
+         that file (e.g., `toDateOrNull`, `toWholePercent`) or the components
+         that consume the normalized data.
+
+8) Background / brand imagery
+     - The app background is referenced in `frontend/src/styles/base.css`:
+         `background-image: url('/nfl_pic.png')` — replace `frontend/public/nfl_pic.png`
+         to change the background.
+
+9) Rebuild & deploy (quick commands)
+     - Local development (Vite dev server + proxy):
+
+         ```powershell
+         cd frontend
+         npm install
+         npm run dev
+         ```
+
+     - Production build (static assets):
+
+         ```bash
+         cd frontend
+         npm run build
+         # then deploy the `frontend/dist` folder (Vercel will auto-detect)
+         ```
+
+     - The repo includes `scripts/deploy.ps1` to push backend to Heroku and
+         frontend to Vercel (it automates CORS updates and builds). See the
+         `scripts/` folder for deployment helpers.
+
+10) Troubleshooting & tips
+        - If team logos do not update after changing CSV or local files, clear
+            the browser cache or change the filename to avoid CDN cache effects.
+        - When changing API contracts, always update `frontend/src/api/client.js`
+            and adjust `vite.config.js` (proxy) and `frontend/.env` accordingly.
+        - For accessibility changes (font sizes, color contrast), prefer token
+            edits in `base.css` rather than in many component files.
+
+If you'd like, I can also add short code snippets to the README for the most
+common edits (e.g., replacing the header text with an `<img>` logo) — say
+which snippets you'd like and I'll append them.
 =======
 backend/data/             # CSV artifacts
   team_game_base.csv
