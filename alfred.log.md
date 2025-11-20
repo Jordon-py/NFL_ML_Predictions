@@ -603,6 +603,12 @@ Resolved the "Fake Predictions" (fallback) issue where the backend was failing t
 - Fixed `/predict` to reuse the trained classifier, emit game metadata for frontend mapping, and bounded history; normalized prediction history client helpers plus dashboard handler so TeamGrid and StatsPage render win probabilities reliably.
 - Updated maintenance.md with resolution summaries, To-Implement items, AI-to-Dev notes, and a user-response tracker.
 
+## 2025-11-23T06:50:53Z
+
+- Added doc headers and ASCII clean-up across backend/main.py, backend/train_models.py, and frontend dashboards/clients.
+- Fixed `/predict` to reuse the trained classifier, emit game metadata for frontend mapping, and bounded history; normalized prediction history client helpers plus dashboard handler so TeamGrid and StatsPage render win probabilities reliably.
+- Updated maintenance.md with resolution summaries, To-Implement items, AI-to-Dev notes, and a user-response tracker.
+
 ## 2025-11-06T01:25:52Z
 
 - Rebuilt `backend/data/game_features.csv` (2,748 rows) and refreshed diagnostics.
