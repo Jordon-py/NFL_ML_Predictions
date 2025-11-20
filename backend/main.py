@@ -910,15 +910,11 @@ def create_app() -> FastAPI:
             selection.get("strategy"),
         )
 
-        tm_logo = pd.read_csv("backend/team_logo.csv")
-        # Build a lookup of team abbreviation -> display name and logo URL for fast mapping.
-        logo_map = {
-            str(row["abbr"]).upper(): {
-                "team_name": row["team_name"],
-                "logo_url": row["logo_url"],
-            }
-            for _, row in tm_logo.iterrows()
-        }
+        # Team logos are loaded by the frontend from `public/myteamdescriptions.csv`.
+        # Returning abbreviations (home_abbr, away_abbr) below lets the frontend
+        # resolve logos locally without making the backend responsible for
+        # static assets. This avoids a server-side FileNotFoundError in cases
+        # where `backend/team_logo.csv` is not present in the deployment slug.
 
         # Normalise into a compact schedule shape for the frontend.
         games: List[Dict[str, Any]] = []
@@ -941,15 +937,11 @@ def create_app() -> FastAPI:
             home_raw = str(row.get("home_team", "")).upper()
             away_raw = str(row.get("away_team", "")).upper()
 
-            home_info = logo_map.get(home_raw)
-            away_info = logo_map.get(away_raw)
+            home_team = home_raw
+            home_logo = None
 
-            home_team = str(home_info["team_name"]) if home_info else home_raw
-        
-            home_logo = home_info["logo_url"] if home_info else None
-
-            away_team = str(away_info["team_name"]) if away_info else away_raw
-            away_logo = away_info["logo_url"] if away_info else None
+            away_team = away_raw
+            away_logo = None
 
             games.append(
                 {
