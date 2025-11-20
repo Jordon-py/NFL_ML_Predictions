@@ -1127,7 +1127,25 @@ def create_app() -> FastAPI:
             target_week,
             selection.get("strategy"),
         )
-        tm_logo = pd.read_csv('backend/team_logo.csv')
+        # Attempt to load team logos; if missing, continue without logos.
+        tm_logo = pd.DataFrame(columns=["abbr", "logo_url", "team_name"])
+        try:
+            logo_candidates = [
+                config.backend_dir / "team_logo.csv",
+                config.data_dir / "team_logo.csv",
+                config.repo_root / "backend" / "team_logo.csv",
+                Path("backend") / "team_logo.csv",
+                Path("team_logo.csv"),
+            ]
+            logo_path = next((p for p in logo_candidates if p.exists()), None)
+            if logo_path:
+                tm_logo = pd.read_csv(logo_path)
+            else:
+                log = logging.getLogger("api")
+                log.warning("team_logo.csv not found; proceeding without team logos. Searched: %s", ",".join(str(p) for p in logo_candidates))
+        except Exception as exc:
+            logging.getLogger("api").warning("Failed to read team_logo.csv: %s", exc, exc_info=True)
+            tm_logo = pd.DataFrame(columns=["abbr", "logo_url", "team_name"])
         # Normalise into a compact schedule shape for the frontend.
         games: List[Dict[str, Any]] = []
         for _, row in week_rows.iterrows():
