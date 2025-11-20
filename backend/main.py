@@ -351,6 +351,20 @@ class Config:
         fallback = "backend/models"
         Path(fallback).mkdir(parents=True, exist_ok=True)
         return Path(fallback)
+
+    def resolve_schedule_path(self) -> Path:
+        """Resolve the schedule file path - hardcoded to use Nfl_schedule_2025.csv in backend directory.
+
+        As per user specification, always use C:\Users\goku\Documents\NFL_ML_Predictions\backend\Nfl_schedule_2025.csv
+        """
+        # Hardcoded path as specified by user
+        hardcoded_path = self.backend_dir / "Nfl_schedule_2025.csv"
+        if hardcoded_path.exists():
+            return hardcoded_path
+        
+        # Fallback to default if hardcoded doesn't exist (shouldn't happen)
+        fallback = self.backend_dir / "data" / "Nfl_schedule_2025_2026.csv"
+        return fallback
     
     def _validate_paths(self):
         """Validate critical paths exist"""
@@ -880,6 +894,10 @@ def create_app() -> FastAPI:
 
     # Primary deployment pattern uses RESTRICT_CORS + ALLOWED_ORIGINS
     # Fallbacks: CORS_ORIGINS (legacy) -> default localhost dev origin
+    # We deliberately hardcode production and local dev origins here to make
+    # CORS explicit and predictable. This avoids Heroku env misconfiguration
+    # causing a missing origin list and a 500 on health checks in the wild.
+    # If you need to add more origins you can set `ALLOWED_ORIGINS` later.
     raw_allowed = os.getenv("ALLOWED_ORIGINS")
     raw_origins = os.getenv("CORS_ORIGINS")
     origin_regex = os.getenv("CORS_ORIGINS_REGEX")
@@ -892,14 +910,30 @@ def create_app() -> FastAPI:
         parts = [p.strip().rstrip('/') for p in value.replace(';', ',').split(',') if p.strip()]
         return parts
 
-    allowed_origins = _parse_origins(raw_allowed) if raw_allowed else _parse_origins(raw_origins)
+    # Hardcode the primary production origin + local dev origin as a fallback.
+    default_allowed = [
+        "https://nfl-ml-predictions.vercel.app",
+        "http://localhost:3000",
+    ]
+
+    # Keep backward compatibility: allow env var override if explicitly set.
+    allowed_origins = (
+        _parse_origins(raw_allowed)
+        if raw_allowed
+        else (_parse_origins(raw_origins) if raw_origins else default_allowed)
+    )
 
     # If restriction is enabled and no explicit origins are set, default to empty list
     if restrict:
         if not allowed_origins and not origin_regex:
-            logging.getLogger("api").warning("RESTRICT_CORS=true but ALLOWED_ORIGINS was not set; denying cross-origin requests by default.")
+            logging.getLogger(
+                "api"
+            ).warning(
+                "RESTRICT_CORS=true but ALLOWED_ORIGINS was not set; denying cross-origin requests by default."
+            )
             # Deny by only allowing no origins; callers must add environment vars.
-            allowed_origins = [raw_allowed.rsplit(',')]
+            # When restricting CORS by default we will use our default list.
+            allowed_origins = default_allowed
 
     # If not restricted, allow broad origins (development friendly)
     if not restrict:
@@ -936,13 +970,26 @@ def create_app() -> FastAPI:
     @app.get("/health", response_model=HealthResponse)
     async def health() -> HealthResponse:
         """Enhanced health check with component details"""
+        # Convert all component checks to simple booleans so the
+        # HealthResponse pydantic model (Dict[str, bool]) receives
+        # values of the correct type. Previously `repo_root` (a
+        # Path object) caused a validation error during JSON
+        # serialization which returned an HTTP 500 to callers.
+        try:
+            repo_root_path = Path(app_state.data_manager.config.repo_root)
+            repo_root_exists = repo_root_path.exists()
+        except Exception:
+            repo_root_exists = False
+
         components = {
-            "models_loaded": all([app_state.model_manager.home_pipe, 
-                                app_state.model_manager.away_pipe, 
-                                app_state.model_manager.win_pipe]),
-            "dataset_loaded": app_state.data_manager.dataset is not None,
-            "metadata_loaded": app_state.model_manager.metadata is not None,
-            "repo_root_loaded": app_state.data_manager.config.repo_root,
+            "models_loaded": bool(
+                app_state.model_manager.home_pipe
+                and app_state.model_manager.away_pipe
+                and app_state.model_manager.win_pipe
+            ),
+            "dataset_loaded": bool(app_state.data_manager.dataset is not None),
+            "metadata_loaded": bool(app_state.model_manager.metadata is not None),
+            "repo_root_loaded": bool(repo_root_exists),
         }
         
         status = "healthy" if all(components.values()) else "unhealthy"
@@ -968,8 +1015,16 @@ def create_app() -> FastAPI:
         archival 2018 rows), the handler now relies on kickoff timestamps and a
         calendar-aware fallback to surface the true "next" slate.
         """
-        schedule_path = './Nfl_schedule_2025.csv'
-        df = pd.read_csv(schedule_path, parse_dates=True)
+        # Resolve schedule path via Config so tests and deployments pick up
+        # the correct file whether it's stored in backend/data or as an
+        # application-specific artifact (e.g., legacy `backend/Nfl_schedule_2025.csv`).
+        schedule_path = str(config.resolve_schedule_path())
+        log.debug("Using schedule path: %s", schedule_path)
+        try:
+            df = pd.read_csv(schedule_path, parse_dates=True)
+        except FileNotFoundError as exc:
+            log.error("Schedule file not found at %s; expected file: backend/Nfl_schedule_2025.csv", schedule_path)
+            raise HTTPException(503, f"Schedule file not found: {schedule_path}. Expected: backend/Nfl_schedule_2025.csv") from exc
         print(f'schedule info: --> {df.head(10)},\n COLUMNS: --> {df.columns}')
 
         try:
