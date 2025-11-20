@@ -315,8 +315,10 @@ export function PredictionProvider( { children } )
   const resetHistory = useCallback( () => dispatch( { type: RESET_HISTORY } ), [] );
 
   /** @type {(schedule: Game[], week: number) => void} */
-  const setSchedule = useCallback( ( schedule, week ) =>
-    dispatch( { type: SET_SCHEDULE, payload: { schedule, week } } ), [] );
+  const setSchedule = useCallback(
+    ( schedule, week ) => dispatch( { type: SET_SCHEDULE, payload: { schedule, week } } ),
+    []
+  );
 
   /** @type {(key: string, prediction: PredictionResult) => void} */
   const setPrediction = useCallback( ( key, prediction ) =>
