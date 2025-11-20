@@ -276,7 +276,7 @@ class TypedApiClient
    */
   validatePredictionResponse( data )
   {
-    const required = [ 'home_score', 'away_score', 'home_win_probability', 'point_diff' ];
+    const required = [ 'home_score', 'away_score' ];
     const missing = required.filter( field => data[ field ] === undefined );
 
     if ( missing.length > 0 ) {
@@ -294,7 +294,6 @@ class TypedApiClient
    */
   async predictGame( request, options = {} )
   {
-    this.validatePredictionRequest( request );
 
     return this.request( '/predict', {
       method: 'POST',
