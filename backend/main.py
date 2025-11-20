@@ -355,15 +355,15 @@ class Config:
     def resolve_schedule_path(self) -> Path:
         """Resolve the schedule file path - hardcoded to use Nfl_schedule_2025.csv in backend directory.
 
-        As per user specification, always use C:\Users\goku\Documents\NFL_ML_Predictions\backend\Nfl_schedule_2025.csv
+        As per user specification, always use C:/Users/goku/Documents/NFL_ML_Predictions/backend/Nfl_schedule_2025.csv
         """
         # Hardcoded path as specified by user
-        hardcoded_path = self.backend_dir / "Nfl_schedule_2025.csv"
+        hardcoded_path = self.backend_dir / "./Nfl_schedule_2025.csv"
         if hardcoded_path.exists():
             return hardcoded_path
         
         # Fallback to default if hardcoded doesn't exist (shouldn't happen)
-        fallback = self.backend_dir / "data" / "Nfl_schedule_2025_2026.csv"
+        fallback = self.backend_dir / "data" / "./Nfl_schedule_2025.csv"
         return fallback
     
     def _validate_paths(self):
@@ -1025,7 +1025,7 @@ def create_app() -> FastAPI:
         except FileNotFoundError as exc:
             log.error("Schedule file not found at %s; expected file: backend/Nfl_schedule_2025.csv", schedule_path)
             raise HTTPException(503, f"Schedule file not found: {schedule_path}. Expected: backend/Nfl_schedule_2025.csv") from exc
-        print(f'schedule info: --> {df.head(10)},\n COLUMNS: --> {df.columns}')
+        print(f'schedule info: --> {df.head(10)},/n COLUMNS: --> {df.columns}')
 
         try:
             target_season, target_week, selection = _select_schedule_scope(df)
