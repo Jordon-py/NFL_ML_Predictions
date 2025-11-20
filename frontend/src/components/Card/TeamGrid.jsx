@@ -104,7 +104,6 @@ function TeamGrid( {
         { games.map( ( game, index ) =>
         {
           const rawKey = toGameKey( game ) || String( index );
-          console.log( 'Games: ', games, '\n', 'Game: ', game );
 
           // Look up any existing prediction + request state for this game.
           const prediction = predictions?.[ rawKey ];
@@ -121,8 +120,11 @@ function TeamGrid( {
 
           const enrichedGame = {
             ...game,
-            home_logo: homeMeta?.logoUrl,
-            away_logo: awayMeta?.logoUrl,
+            // Prefer backend-provided logo if present, otherwise use the teams
+            // mapping (from myteamdescriptions.csv) which is loaded by
+            // PredictionContext.
+            home_logo: game.home_logo || homeMeta?.logoUrl || null,
+            away_logo: game.away_logo || awayMeta?.logoUrl || null,
           };
 
           if ( prediction ) {
