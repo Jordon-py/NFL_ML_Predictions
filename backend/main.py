@@ -1,1355 +1,868 @@
 # -*- coding: utf-8 -*-
 """
-File: main.py
+File: backend/main.py
 
 Purpose:
-    FastAPI (v0.110+) entry point for the NFL prediction API. Loads ML model artifacts, exposes prediction and schedule endpoints, manages CORS, and performs startup health checks.
+    FastAPI backend for the NFL prediction dashboard.
 
-Key Functions:
-    - get_current_nfl_context
-    - health
-    - predict
-    - schedule endpoints (next_week, season, current_week)
-    - training_status
-    - lifespan (async context manager)
-    - reload_models (manual reload of model pipelines)
+    Exposes endpoints for:
+    - /health            : service + components health
+    - /status/overview   : lightweight dashboard summary
+    - /schedule/next-week: upcoming week schedule
+    - /history           : recent prediction history
+    - /predict           : single-game prediction (scores + win probabilities)
 
-Note:
-    Pipelines are loaded at module scope and will not automatically reload if the models directory changes after startup. Use the `/reload-models` endpoint to manually reload pipelines without restarting the server.
+Key design points:
+    - Loads latest game_features*.csv dataset + trained models at startup.
+    - Normalizes team codes (home/away, abbr/name) to uppercase for stable matching.
+    - Uses Pydantic models for request/response typing where it matters
+      (health + prediction).
+    - Keeps in-memory prediction history bounded for the /history endpoint.
 
-Key Variables:
-    - app (FastAPI)
-    - models (dict)
-    - preprocessor
-    - metadata
-    - CORS_ORIGINS (from environment)
-    - MODEL_DIR
-    - logger
-
-Critical Environment Variables:
-    - MODELS_DIR: Path to directory containing model artifacts (overrides auto-detection if set)
-    - DATASET_PATH: Path to the CSV file with game features (overrides default if set)
-    - SCHEDULE_PATH: Path to the NFL schedule CSV (overrides default if set)
-    - ALLOWED_ORIGINS: Comma-separated list of allowed CORS origins
-    - SERVE_FRONTEND: If "true", serves the frontend build from /frontend/build or /frontend/dist
-
-Interacts With:
-    - backend/models/*.joblib (model artifacts)
-    - backend/data/team_abbr_map.json (team abbreviation mapping)
-    - frontend API client (PredictionContext)
-    - CORS environment configuration
-
-This file is the main entry point for backend deployment and local development.
-
-Enhanced version: provides improved data cohesion, validation, and
-application state management while preserving the original API contracts.
+Notes:
+    - The prediction contract is aligned with the current React client:
+        - Request body: { home_team, away_team, season, week }
+        - Response: PredictionResponse with home_score, away_score,
+          home_win_probability, away_win_probability, point_diff, etc.
 """
-
-from __future__ import annotations
 
 import json
 import logging
-import logging.config
 import os
-from contextlib import asynccontextmanager
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
-from threading import Lock
-from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple
-from venv import logger
+from contextlib import asynccontextmanager
+from typing import List, Dict, Any, Optional, Tuple, Literal
 
+from dotenv import load_dotenv
+import uvicorn
 import joblib
 import numpy as np
 import pandas as pd
-from dotenv import load_dotenv
-from fastapi import BackgroundTasks, FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-# Prefer `nflreadpy` if present in the environment; otherwise fall back to the
-# more commonly available `nfl_data_py` package. This keeps the build
-# compatible with pydantic v1 (which is pinned by default) while allowing
-# `nflreadpy` when available locally for richer utilities.
-try:
-    import nflreadpy as nfl  # type: ignore
-    NFL_BACKEND = "nflreadpy"
-except Exception:
-    try:
-        import nfl_data_py as nfl  # type: ignore
-        NFL_BACKEND = "nfl_data_py"
-    except Exception:
-        nfl = None
-        NFL_BACKEND = None
+# -------------------------------------------------------------------
+# Logging
+# -------------------------------------------------------------------
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="[%(asctime)s] [%(levelname)s] %(message)s",
+)
+
+load_dotenv("./.env")
+
+# -------------------------------------------------------------------
+# Config & Paths
+# -------------------------------------------------------------------
+
+BASE_DIR = Path(__file__).parent.resolve()
+DATA_DIR = BASE_DIR / "data"
+MODELS_DIR = BASE_DIR / "models"
+
+# Allow overriding the schedule CSV via env; default to backend/data
+schedule_env = os.environ.get("SCHEDULE_PATH")
+SCHEDULE_PATH = Path(schedule_env) if schedule_env else (DATA_DIR / "Nfl_schedule_2025.csv")
+
+# Required model keys for /predict to be "ready"
+REQUIRED_MODELS: Tuple[str, ...] = ("home", "away", "win")
+
+# Ensure expected folders exist (safe on repeated calls)
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+MODELS_DIR.mkdir(parents=True, exist_ok=True)
+PREDICTION_STORAGE = BASE_DIR / "Predictions"
+PREDICTION_STORAGE.mkdir(parents=True, exist_ok=True)
+
+# -------------------------------------------------------------------
+# Helper Functions
+# -------------------------------------------------------------------
 
 
-def get_current_nfl_context(now: Optional[datetime] = None) -> Dict[str, Any]:
-    """Return a small context with current season and approximate week.
-
-    Where possible we rely on installed NFL backends; otherwise a simple
-    calendar heuristic is used. This function is intentionally lightweight and
-    returns a conservative ``approx_week`` to be used as a hint for the
-    schedule selection routine.
+def _coerce_season_week(df: pd.DataFrame) -> pd.DataFrame:
     """
-    now = now or datetime.now(timezone.utc)
-    # Season typically runs Aug/Sept (season label is the year it starts)
-    cur_season = now.year if now.month >= 8 else now.year - 1
+    Coerce season/week columns to integers when present.
 
-    # If nfl backend is available, prefer its helper if present
-    if nfl is not None:
-        for fn in ("get_current_season", "get_current_week"):
-            if not hasattr(nfl, fn):
-                break
-        else:
+    Handles both 'season'/'week' and 'season_num'/'week_num' variants.
+    """
+    for col in ("season", "season_num"):
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0).astype(int)
+    for col in ("week", "week_num"):
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0).astype(int)
+    return df
+
+
+def _normalize_team_columns(df: pd.DataFrame, cols=None) -> pd.DataFrame:
+    """
+    Uppercase and strip team-related columns for stable matching.
+
+    Default columns include both name and abbreviation variants.
+    """
+    if cols is None:
+        cols = ("home_team", "away_team", "home_abbr", "away_abbr")
+
+    for col in cols:
+        if col in df.columns:
+            df[col] = df[col].astype(str).str.strip().str.upper()
+    return df
+
+
+def _find_schedule_path() -> Optional[Path]:
+    """
+    Locate a schedule CSV file.
+
+    Priority:
+      1. Explicit SCHEDULE_PATH (env override or default backend/data/Nfl_schedule_2025.csv)
+      2. Any CSV in backend/data/ that looks like a schedule
+      3. Frontend public copy at ../frontend/public/nflSchedule.csv (local dev)
+    """
+    # 1) explicit path
+    if SCHEDULE_PATH.exists():
+        return SCHEDULE_PATH
+
+    # 2) search backend/data for schedule-like CSVs
+    candidates: List[Path] = []
+    for p in DATA_DIR.glob("*.csv"):
+        name = p.name.lower()
+        if "schedule" in name or name.startswith("nfl"):
+            candidates.append(p)
+    if candidates:
+        # Prefer most recently modified
+        return sorted(candidates, key=lambda p: p.stat().st_mtime, reverse=True)[0]
+
+    # 3) local dev fallback: frontend/public
+    frontend_sched = BASE_DIR.parent / "frontend" / "public" / "nflSchedule.csv"
+    if frontend_sched.exists():
+        return frontend_sched
+
+    return None
+
+
+def _calculate_win_probability(
+    win_model: Any,
+    X: pd.DataFrame,
+    h_score: float,
+    a_score: float,
+) -> Tuple[float, bool]:
+    """
+    Safely compute home-team win probability.
+
+    If the classifier is available and supports predict_proba, use it.
+    Otherwise fall back to a logistic transform of the point differential.
+    """
+    clf_used = False
+
+    if hasattr(win_model, "predict_proba"):
+        try:
+            win_prob = float(win_model.predict_proba(X)[0][1])
+            clf_used = True
+            return win_prob, clf_used
+        except Exception as clf_err:  # pragma: no cover - defensive path
+            logging.warning(
+                "[Predict] win_clf predict_proba failed, falling back: %s", clf_err
+            )
+
+    diff = h_score - a_score
+    win_prob = float(1.0 / (1.0 + np.exp(-0.3 * diff)))
+    return win_prob, clf_used
+
+
+# -------------------------------------------------------------------
+# App State
+# -------------------------------------------------------------------
+
+
+class AppState:
+    """
+    In-memory state container for:
+      - dataset : feature DataFrame used for prediction
+      - models  : dict of trained models (home / away / win)
+      - history : list of prediction results returned to clients
+    """
+
+    def __init__(self) -> None:
+        self.dataset: Optional[pd.DataFrame] = None
+        self.models: Dict[str, Any] = {}
+        # Optional shared preprocessor artifact (may be saved separately from models)
+        self.preprocessor: Optional[Any] = None
+        self.history: List[Dict[str, Any]] = []
+
+    # -------------------------
+    # Startup Loader
+    # -------------------------
+    def load(self) -> None:
+        """Load dataset + models at startup with defensive logging."""
+        self._load_dataset()
+        self._load_models()
+
+    def _load_dataset(self) -> None:
+        """Load the most recent game_features*.csv into memory."""
+        try:
+            candidates = sorted(
+                DATA_DIR.glob("game_features*.csv"),
+                key=lambda p: p.stat().st_mtime,
+                reverse=True,
+            )
+            path = candidates[0] if candidates else (DATA_DIR / "game_features.csv")
+
+            if not path.exists():
+                logging.warning("[Dataset] No dataset found at: %s", path)
+                self.dataset = None
+                return
+
+            logging.info("[Dataset] Loading dataset from: %s", path)
+            df = pd.read_csv(path)
+
+            # Normalize key columns for consistent lookups
+            df = _coerce_season_week(df)
+            df = _normalize_team_columns(df)
+
+            self.dataset = df
+            logging.info("[Dataset] Loaded %d rows", len(df))
+        except Exception as e:  # pragma: no cover - defensive
+            logging.exception("[Dataset] Error while loading dataset: %s", e)
+            self.dataset = None
+
+    def _load_models(self) -> None:
+        """Load each required model independently."""
+        self.models = {}
+        # Default model filenames (non-pipeline artifacts)
+        model_files: Dict[str, str] = {
+            "home": "home_model.joblib",
+            "away": "away_model.joblib",
+            "win": "win_clf_calibrated.joblib",
+        }
+
+        for name, filename in model_files.items():
+            # Prefer a full pipeline artifact (e.g. home_pipe.joblib) if present.
+            pipe_filename = f"{name}_pipe.joblib" if name != "win" else "win_pipe.joblib"
+            pipe_path = MODELS_DIR / pipe_filename
+            model_path = MODELS_DIR / filename
+
+            # Choose the path to load
+            if pipe_path.exists():
+                path = pipe_path
+                logging.info("[Model] Found pipeline artifact for '%s' at %s; preferring it", name, path)
+            else:
+                path = model_path
+                logging.info("[Model] Loading model '%s' from: %s", name, path)
+
+            if not path.exists():
+                logging.warning("[Model] Missing model file for '%s': %s", name, path)
+                continue
+
             try:
-                season_loc = int(nfl.get_current_season())
-                week_loc = int(nfl.get_current_week())
-                return {"season": season_loc, "approx_week": week_loc, "phase": "calendar"}
+                loaded = joblib.load(path)
+                self.models[name] = loaded
+                logging.info("[Model] Loaded '%s' successfully from %s", name, path)
+                # If this happens to be a sklearn Pipeline, log its steps for visibility
+                try:
+                    from sklearn.pipeline import Pipeline
+
+                    if isinstance(loaded, Pipeline):
+                        steps = list(getattr(loaded, "named_steps", {}).keys())
+                        logging.info("[Model] Pipeline '%s' steps: %s", name, steps)
+                except Exception:
+                    # sklearn may not be available in some analysis contexts; ignore
+                    pass
+            except Exception as e:  # pragma: no cover - defensive
+                logging.exception("[Model] Error loading '%s' from %s: %s", name, path, e)
+
+        logging.info("[Model] Loaded model keys: %s", list(self.models.keys()))
+        # Attempt to load a standalone preprocessor artifact if present. Some
+        # training runs save the fitted ColumnTransformer / preprocessor as
+        # `preprocessor.joblib` under the same models directory. If available,
+        # load it so the serving code can use it to impute / transform raw
+        # DataFrame rows prior to calling models that expect preprocessed arrays.
+        prep_path = MODELS_DIR / "preprocessor.joblib"
+        if prep_path.exists():
+            try:
+                self.preprocessor = joblib.load(prep_path)
+                logging.info("[Model] Loaded standalone preprocessor from %s", prep_path)
+            except Exception as e:  # pragma: no cover - defensive
+                logging.exception("[Model] Failed to load preprocessor %s: %s", prep_path, e)
+                self.preprocessor = None
+        else:
+            logging.info("[Model] No standalone preprocessor found at %s", prep_path)
+        # If we loaded a standalone preprocessor and some models are Pipelines
+        # that contain an unfitted preprocessor step (ColumnTransformer), try
+        # to patch the pipeline to use the standalone preprocessor. This can
+        # resolve situations where the serialized pipeline referenced an
+        # unfitted transformer in CI/CD packaging.
+        if self.preprocessor is not None:
+            try:
+                # Import sklearn classes lazily so packaging without sklearn
+                # won't fail at module import time.
+                from sklearn.pipeline import Pipeline
+                from sklearn.compose import ColumnTransformer
             except Exception:
-                # Fall through to heuristic
-                pass
+                Pipeline = None  # type: ignore
+                ColumnTransformer = None  # type: ignore
 
-    # Simple calendar-driven heuristic
-    season_start = datetime(cur_season, 9, 1, tzinfo=timezone.utc)
-    if now < season_start:
-        approx_week = 1
-        phase = "preseason"
-    else:
-        days_since = (now - season_start).days
-        approx_week = 1 + max(0, days_since // 7)
-        approx_week = max(1, min(18, approx_week))
-        phase = "regular"
+            if Pipeline is not None:
+                for mname, model in list(self.models.items()):
+                    try:
+                        if isinstance(model, Pipeline):
+                            steps = list(model.steps)
+                            replaced = False
+                            for i, (step_name, step_est) in enumerate(steps):
+                                lname = (step_name or "").lower()
+                                if lname in ("pre", "prep", "preprocessor", "preprocess"):
+                                    # If the pipeline's preprocessor is a ColumnTransformer
+                                    # but not fitted (no 'transformers_' attribute), replace
+                                    # it with the standalone preprocessor we loaded.
+                                    if (
+                                        ColumnTransformer is not None
+                                        and isinstance(step_est, ColumnTransformer)
+                                        and not hasattr(step_est, "transformers_")
+                                    ):
+                                        steps[i] = (step_name, self.preprocessor)
+                                        replaced = True
+                                        logging.info(
+                                            "[Model] Replacing unfitted preprocessor step '%s' in pipeline '%s' with standalone preprocessor",
+                                            step_name,
+                                            mname,
+                                        )
+                                        break
+                            if replaced:
+                                try:
+                                    from sklearn.pipeline import Pipeline as SKPipeline
 
-    return {"season": cur_season, "approx_week": approx_week, "phase": phase}
+                                    new_pipe = SKPipeline(steps)
+                                    self.models[mname] = new_pipe
+                                    logging.info("[Model] Patched pipeline model '%s' successfully", mname)
+                                except Exception as e:
+                                    logging.exception("[Model] Failed to rebuild pipeline for %s: %s", mname, e)
+                    except Exception:
+                        # Be defensive: do not fail model loading due to pipeline patching
+                        logging.exception("[Model] Error while attempting to inspect/patch model %s", mname)
 
- 
 
-# ---------------------------------------------------------------
-# Enhanced Data Models with Strict Validation
-# ---------------------------------------------------------------
-class PredictionRequest(BaseModel):
-    home_team: str = Field(..., min_length=2, max_length=20)
-    away_team: str = Field(..., min_length=2, max_length=20)
-    season: int = Field(..., ge=2000, le=2100)
-    week: int = Field(..., ge=1, le=22)
+state = AppState()
 
-    
-class PredictionResponse(BaseModel):
-    home_score: float = Field(..., ge=0)
-    away_score: float = Field(..., ge=0)
-    home_win_probability: float = Field(..., ge=0, le=1)
-    away_win_probability: float = Field(..., ge=0, le=1)
-    home_win: float = Field(..., ge=0, le=1)
-    away_win: float = Field(..., ge=0, le=1)
-    point_diff: float
-    mode: str
-    prediction_source: str
-    win_classifier_used: bool
-    win_probability_source: str
-    win_threshold_used: Optional[float] = Field(None, ge=0, le=1)
-    confidence_score: Optional[float] = Field(None, ge=0, le=1)  # New: prediction confidence
+# -------------------------------------------------------------------
+# FastAPI App + Lifespan
+# -------------------------------------------------------------------
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Application lifespan hook.
+
+    - On startup: load dataset + models into global state.
+    - On shutdown: log a simple message (no persistent cleanup necessary).
+    """
+    logging.info("[App] Starting up; loading dataset and models...")
+    state.load()
+    yield
+    logging.info("[App] Shutdown complete.")
+
+
+app = FastAPI(lifespan=lifespan)
+
+# CORS configuration: prefer env list; otherwise default to known origins
+_allowed = os.environ.get("ALLOWED_ORIGINS")
+if _allowed:
+    ALLOWED_ORIGINS: List[str] = [o.strip() for o in _allowed.split(",") if o.strip()]
+else:
+    ALLOWED_ORIGINS = [
+        "https://nfl-ml-predictions.vercel.app",
+        "http://localhost:3000",
+        "http://127.0.0.1:5173",
+        "nfl-predict-christopher-jordons-projects.vercel.app",
+        "https://nfl-predict-git-main-christopher-jordons-projects.vercel.app"
+
+    ]
+
+logging.info("[App] CORS allowed origins: %s", ALLOWED_ORIGINS)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# -------------------------------------------------------------------
+# Pydantic Models
+# -------------------------------------------------------------------
+
+
+class HealthComponents(BaseModel):
+    """Components section for the /health response."""
+    dataset: bool
+    models: bool
+    loaded_models: List[str] = Field(default_factory=list)
+
 
 class HealthResponse(BaseModel):
-    status: str
-    mode: str
-    reason: str
-    timestamp: datetime
-    components: Dict[str, bool]  # Detailed component health
+    """
+    Canonical health response model.
 
-class PredictionHistoryEntry(BaseModel):
-    timestamp: datetime
-    game_id: str
+    Matches README contract while being friendly to the current frontend:
+      - status   : "healthy" | "unhealthy"
+      - timestamp: auto-filled UTC timestamp
+      - mode     : e.g. "production"
+      - reason   : optional human-readable message
+      - components: dataset/models readiness
+    """
+    status: Literal["healthy", "unhealthy"]
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    mode: str = "production"
+    reason: Optional[str] = None
+    components: HealthComponents
+
+
+class PredictRequest(BaseModel):
+    """
+    Request body for /predict.
+
+    The frontend usually sends team abbreviations (e.g. "BUF", "HOU"), but
+    the backend will uppercase whatever is provided and match against the
+    normalized dataset.
+    """
+    home_team: str
+    away_team: str
+    season: int
+    week: int
+
+
+class PredictionResponse(BaseModel):
+    """
+    Canonical prediction response for /predict.
+
+    Fields are aligned with the React client (Card/TeamGrid + PredictionContext):
+      - home_score, away_score           : predicted scores
+      - home_win_probability, away_win_probability : probabilities in [0, 1]
+      - point_diff                       : home_score - away_score
+      - game_id                          : stable key used across the app
+      - generated_at                     : UTC timestamp
+      - mode                             : e.g., "production"
+      - win_classifier_used              : whether the calibrated classifier was used
+    """
     season: int
     week: int
     home_team: str
     away_team: str
-    home_score_pred: float
-    away_score_pred: float
+    game_id: str
+    home_score: float
+    away_score: float
     home_win_probability: float
     away_win_probability: float
     point_diff: float
-    mode: str
-    prediction_source: str
-    win_threshold_used: Optional[float]
-    predicted_winner: str
-    kickoff: Optional[str] = None
-    actual_home_score: Optional[float] = None
-    actual_away_score: Optional[float] = None
-    actual_winner: Optional[str] = None
-    confidence_score: Optional[float] = None  # New field
+    generated_at: datetime
+    mode: str = Field(..., description="Mode of prediction, e.g., 'production'")
+    win_classifier_used: bool = Field(
+        ..., description="Whether the win probability classifier was used"
+    )
 
 
-def _select_schedule_scope(df: pd.DataFrame):
-    """Choose which season/week to expose via `/schedule/next-week`.
+# -------------------------------------------------------------------
+# Health + Status
+# -------------------------------------------------------------------
 
-    Preference order:
-        1. Earliest kickoff time that has not yet started (within a small grace window).
-        2. Calendar context (current season + nearest upcoming week).
-        3. Latest season/week present in the dataset.
 
-    Returns (season, week, metadata).
+@app.get("/health", response_model=HealthResponse)
+def health() -> HealthResponse:
     """
-    now = datetime.now(timezone.utc)
-    logger.info(msg=now)
-    time = now.isoformat(timespec='auto')
-    date = now.isoformat()
+    Lightweight health check used by the frontend and deployment checks.
 
+    Returns component readiness + a timestamp and human-friendly reason.
+    """
+    has_dataset = state.dataset is not None
+    models_ok = all(m in state.models for m in REQUIRED_MODELS)
 
-    if df is None or df.empty:
-        df = pd.read_csv('./Nfl_schedule_2025.csv')
-        print(f'columns  : { df.columns }')
-        print(f'first five lines of dataset: { df.head() }')
-       
-    working = df.copy()
-    curr_season = nfl.get_current_season(roster=False)
-    curr_week = nfl.get_current_week()
-    working["season_num"] = curr_season
-    working["week_num"] = curr_week
-    
-   
+    status: Literal["healthy", "unhealthy"]
+    status = "healthy" if has_dataset and models_ok else "unhealthy"
 
+    reasons: List[str] = []
+    if not has_dataset:
+        reasons.append("dataset not loaded")
+    if not models_ok:
+        missing = [m for m in REQUIRED_MODELS if m not in state.models]
+        reasons.append(f"missing models: {', '.join(missing)}")
 
-    selection: Dict[str, Any] = {"strategy": "unknown"}
+    reason_str = ", ".join(reasons) if reasons else None
 
-    def _as_int(value: Any) -> Optional[int]:
-        if pd.isna(value):
-            return None
-        try:
-            return int(float(value))
-        except (TypeError, ValueError):
-            return None
-
-    # 1) Use kickoff timestamps when available so "next week" truly means upcoming games.
-    if "gameday" in working.columns:
-        kickoff = pd.to_datetime(working["gameday"], errors="coerce", utc=True)
-        working["kickoff_dt"] = kickoff
-        grace_window = timedelta(hours=4)
-        future_rows = (
-            working.loc[(kickoff.notna()) & (kickoff >= now - grace_window)]
-            .sort_values("kickoff_dt")
-        )
-        if not future_rows.empty:
-            row = future_rows.iloc[0]
-            season_val = _as_int(row.get("season_num"))
-            week_val = _as_int(row.get("week_num"))
-            if season_val is not None and week_val is not None:
-                selection.update(
-                    {
-                        "strategy": "kickoff_date",
-                        "note": "nearest future kickoff",
-                        "kickoff": row["kickoff_dt"].isoformat()
-                        if pd.notna(row["kickoff_dt"])
-                        else None,
-                    }
-                )
-                return season_val, week_val, selection
-
-    # 2) Fall back to calendar context when kickoff data is insufficient.
-    context = get_current_nfl_context(now)
-    context_season = context["season"]
-    approx_week = int(context["approx_week"])
-    season_rows = working.loc[working["season_num"] == context_season]
-    if not season_rows.empty:
-        raw_weeks = {_as_int(val) for val in season_rows["week_num"] if not pd.isna(val)}
-        weeks = sorted(w for w in raw_weeks if w is not None)
-        if weeks:
-            week_candidates = [w for w in weeks if w >= approx_week]
-            target_week = week_candidates[0] if week_candidates else weeks[-1]
-            selection.update(
-                {
-                    "strategy": "calendar_context",
-                    "phase": context["phase"],
-                    "approx_week": approx_week,
-                }
-            )
-            return context_season, target_week, selection
-
-    # 3) Absolute fallback: latest available season/week in the dataset.
-    seasons = sorted(
-        s for s in {_as_int(val) for val in working["season_num"].dropna()}
-        if s is not None
+    return HealthResponse(
+        status=status,
+        reason=reason_str,
+        components=HealthComponents(
+            dataset=has_dataset,
+            models=models_ok,
+            loaded_models=list(state.models.keys()),
+        ),
     )
-    if seasons:
-        fallback_season = seasons[-1]
-        rows = working.loc[working["season_num"] == fallback_season]
-        weeks = sorted(
-            w for w in {_as_int(val) for val in rows["week_num"].dropna()}
-            if w is not None
-        )
-        if weeks:
-            selection.update(
-                {
-                    "strategy": "dataset_tail",
-                    "note": "using latest available season/week",
-                }
-            )
-            return fallback_season, weeks[-1], selection
 
-    raise ValueError("Unable to determine target week from dataset")
 
-# ---------------------------------------------------------------
-# Configuration & Constants with Better Validation
-# ---------------------------------------------------------------
-class Config:
-    """Centralized configuration with validation"""
-    
-    def __init__(self):
-        self.backend_dir = Path(__file__).parent.resolve()
-        self.repo_root = self.backend_dir.parent
-        self._load_environment()
-        
-        # Paths with validation
-        self.data_dir = self.backend_dir / "data"
-        self.data_dir.mkdir(parents=True, exist_ok=True)
-        
-        self.log_dir = self.backend_dir / "logs"
-        self.log_dir.mkdir(parents=True, exist_ok=True)
-        
-        self.models_dir = self._resolve_models_dir()
-        self._validate_paths()
-        
-    def _load_environment(self):
-        """Load environment variables with fallbacks"""
-        env_files = [
-            self.backend_dir / ".env",
-            self.repo_root / ".env"
-        ]
-        
-        for env_file in env_files:
-            if env_file.exists():
-                load_dotenv(dotenv_path=env_file)
-                break
-    
-    def _resolve_models_dir(self) -> Path:
-        """Resolve models directory with enhanced validation"""
-        # Environment override
-        env_path = os.getenv("MODELS_DIR", "").strip()
-        if env_path:
-            candidate = Path(env_path)
-            if candidate.is_dir():
-                return candidate
-            logging.getLogger("config").warning(f"MODELS_DIR={env_path} does not exist")
-        
-        # Legacy location
-        legacy = self.backend_dir / "models"
-        if legacy.is_dir():
-            return legacy
-        
-        # Latest date-stamped directory
-        candidates = []
-        for child in self.backend_dir.iterdir():
-            if (child.is_dir() and child.name.isdigit() and len(child.name) == 8):
-                models_sub = child / "models"
-                if models_sub.is_dir():
-                    candidates.append((models_sub, models_sub.stat().st_mtime))
-        
-        if candidates:
-            candidates.sort(key=lambda x: x[1], reverse=True)
-            return candidates[0][0]
-        
-        # Fallback
-        fallback = "backend/models"
-        Path(fallback).mkdir(parents=True, exist_ok=True)
-        return Path(fallback)
+@app.get("/status/overview")
+def status_overview() -> Dict[str, Any]:
+    """
+    Summary endpoint used by StatsPage.jsx.
 
-    def resolve_schedule_path(self) -> Path:
-        """Resolve the schedule file path - hardcoded to use Nfl_schedule_2025.csv in backend directory.
-
-        As per user specification, always use C:/Users/goku/Documents/NFL_ML_Predictions/backend/Nfl_schedule_2025.csv
-        """
-        # Resolve schedule path robustly across environments.
-        # Search order (first match returned):
-        #  1. SCHEDULE_PATH env var (if set and exists)
-        #  2. backend/Nfl_schedule_2025.csv
-        #  3. backend/data/Nfl_schedule_2025.csv
-        #  4. repo_root/backend/data/Nfl_schedule_2025.csv
-        #  5. any file matching Nfl_schedule*.csv in data_dir (newest)
-        #  6. common container absolute paths (/app/backend/data/...)
-        #  7. fallback to data_dir/Nfl_schedule_2025.csv (may not exist)
-
-        candidates: List[Path] = []
-
-        # 1) Environment override
-        env_sched = os.getenv("SCHEDULE_PATH", "").strip()
-        if env_sched:
-            candidates.append(Path(env_sched))
-
-        # 2) Repository-local locations
-        candidates.extend([
-            self.backend_dir / "Nfl_schedule_2025.csv",
-            self.backend_dir / "data" / "Nfl_schedule_2025.csv",
-            self.repo_root / "backend" / "Nfl_schedule_2025.csv",
-            self.repo_root / "backend" / "data" / "Nfl_schedule_2025.csv",
-            self.data_dir / "Nfl_schedule_2025.csv",
-        ])
-
-        # 3) Common container absolute paths (Heroku/Docker)
-        candidates.extend([
-            Path("/app/backend/Nfl_schedule_2025.csv"),
-            Path("/app/backend/data/Nfl_schedule_2025.csv"),
-        ])
-
-        # 4) Current working directory fallbacks
-        try:
-            cwd = Path.cwd()
-            candidates.extend([
-                cwd / "backend" / "Nfl_schedule_2025.csv",
-                cwd / "data" / "Nfl_schedule_2025.csv",
-            ])
-        except Exception:
-            pass
-
-        # 5) Pattern match any schedule file inside data_dir (prefer newest)
-        try:
-            stamped = sorted(self.data_dir.glob("Nfl_schedule*.csv"), key=lambda p: p.stat().st_mtime, reverse=True)
-            for p in stamped:
-                if p not in candidates:
-                    candidates.insert(0, p)
-                    break
-        except Exception:
-            # ignore pattern errors
-            pass
-
-        # Return the first existing candidate
-        for cand in candidates:
-            try:
-                if Path(cand).exists():
-                    return Path(cand)
-            except Exception:
-                continue
-
-        # Nothing found — log attempted locations and return a sensible fallback
-        fallback = self.data_dir / "Nfl_schedule_2025.csv"
-        logging.getLogger("config").warning(
-            "Unable to locate Nfl_schedule_2025.csv; tried locations: %s. Falling back to %s",
-            ", ".join(str(p) for p in candidates),
-            fallback,
-        )
-        return fallback
-    
-    def _validate_paths(self):
-        """Validate critical paths exist"""
-        required_paths = {
-            "data_dir": self.data_dir,
-            "log_dir": self.log_dir,
-            "models_dir": self.models_dir
+    Returns:
+      - current health (via /health)
+      - dataset info (row count)
+      - basic history metrics (prediction count placeholder)
+    """
+    if state.dataset is not None:
+        dataset_stats = {
+            "rows": len(state.dataset),
+            "path": "game_features.csv",  # Label only; not exact filename
         }
-        
-        for name, path in required_paths.items():
-            if not path.exists():
-                logging.getLogger("config").warning(f"Required path does not exist: {name}={path}")
-
-# ---------------------------------------------------------------
-# Enhanced Data Manager Class
-# ---------------------------------------------------------------
-class DataManager:
-    """Manages dataset loading, validation, and access with thread safety"""
-    
-    def __init__(self, config: Config):
-        self.config = config
-        self._dataset: Optional[pd.DataFrame] = None
-        self._last_loaded: Optional[datetime] = None
-        self._lock = Lock()
-        self._active_path: Optional[str] = None
-        
-    def load_dataset(self) -> bool:
-        """Load dataset with enhanced validation"""
-        with self._lock:
-            try:
-                dataset_path = self._resolve_dataset_path()
-                
-                if not dataset_path.exists():
-                    logging.error(f"Dataset file not found: {dataset_path}")
-                    return False
-                
-                df = pd.read_csv(dataset_path)
-                if df.empty:
-                    logging.error("Dataset is empty")
-                    return False
-                
-                # Enhanced validation
-                df = self._validate_and_clean_dataset(df)
-                if df is None:
-                    return False
-                
-                self._dataset = df
-                self._last_loaded = datetime.now(timezone.utc)
-                self._active_path = str(dataset_path)
-                
-                logging.info(f"Dataset loaded successfully: {len(df)} rows, {df.shape[1]} columns")
-                return True
-                
-            except Exception as e:
-                logging.error(f"Failed to load dataset: {e}", exc_info=True)
-                return False
-    
-    def _resolve_dataset_path(self) -> Path:
-        """Resolve dataset path with fallbacks"""
-        env_path = os.getenv("DATASET_PATH", "").strip()
-        if env_path:
-            candidate = Path(env_path)
-            if candidate.exists():
-                return candidate
-        
-        # Try common filenames, and also support date-stamped game_features_*.csv
-        # by selecting the newest available file if present. This prevents
-        # startup failures when a build process creates a date-stamped file.
-        default_candidates = []
-
-        # Pick a specific known file if present. This preserves explicit
-        # naming when users pin a dataset in their repo.
-        default_candidates.extend([
-            self.config.data_dir / "game_features.csv",
-            self.config.data_dir / "merged_game_features.csv",
-        ])
-
-        # Look for any date-stamped game_features_*.csv and prefer the latest
-        # modification time. This mirrors how models discovery works and keeps
-        # DataManager robust across dataset updates.
-        try:
-            candidates = list(self.config.data_dir.glob("game_features_*.csv"))
-            if candidates:
-                # sort by modification time, newest first
-                candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
-                # Add the most recent stamped file as the first candidate
-                default_candidates.insert(0, candidates[0])
-        except Exception:
-            # Defensive: If for some reason glob fails, fall back to defaults
-            pass
-        
-        for candidate in default_candidates:
-            # Accept Path or string-like so the code is resilient to types
-            candidate_path = Path(candidate)
-            if candidate_path.exists():
-                return candidate_path
-        
-        # Return default even if it doesn't exist (for error handling)
-        return default_candidates[0]
-    
-    def _validate_and_clean_dataset(self, df: pd.DataFrame) -> Optional[pd.DataFrame]:
-        """Enhanced dataset validation and cleaning"""
-        try:
-            # Basic cleaning
-            df = df.dropna(how='all')
-            df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
-            
-            # Validate required columns
-            required_columns = {'home_team', 'away_team', 'season', 'week'}
-            missing_required = required_columns - set(df.columns)
-            if missing_required:
-                logging.error(f"Missing required columns: {missing_required}")
-                return None
-            
-            # Ensure home/away columns exist
-            df = self._ensure_home_away_columns(df)
-            
-            # Validate data types
-            if 'season' in df.columns:
-                df['season'] = pd.to_numeric(df['season'], errors='coerce').fillna(0).astype(int)
-            if 'week' in df.columns:
-                df['week'] = pd.to_numeric(df['week'], errors='coerce').fillna(0).astype(int)
-            
-            return df
-            
-        except Exception as e:
-            logging.error(f"Dataset validation failed: {e}", exc_info=True)
-            return None
-    
-    def _ensure_home_away_columns(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Ensure home/away columns exist with proper formatting"""
-        if {'home_team', 'away_team'}.issubset(df.columns):
-            return df
-            
-        if {'team', 'opponent_team', 'is_home'}.issubset(df.columns):
-            is_home = df['is_home'].astype(str).str.strip().str.lower().isin({'true', 't', '1', 'yes', 'y'})
-            df = df.assign(
-                home_team=np.where(is_home, df['team'], df['opponent_team']),
-                away_team=np.where(is_home, df['opponent_team'], df['team'])
-            )
-        
-        return df
-    
-    @property
-    def dataset(self) -> Optional[pd.DataFrame]:
-        with self._lock:
-            return self._dataset.copy() if self._dataset is not None else None
-    
-    @property
-    def status(self) -> Dict[str, Any]:
-        with self._lock:
-            rows = self._dataset.shape[0] if self._dataset is not None else 0
-            cols = self._dataset.shape[1] if self._dataset is not None else 0
-            return {
-                "path": self._active_path,
-                "rows": rows,
-                "columns": cols,
-                "loaded": self._dataset is not None and not self._dataset.empty,
-                "last_loaded": self._last_loaded.isoformat() if self._last_loaded else None
-            }
-
-# ---------------------------------------------------------------
-# Enhanced Model Manager
-# ---------------------------------------------------------------
-class ModelManager:
-    """Manages model loading, validation, and inference"""
-    
-    def __init__(self, config: Config):
-        self.config = config
-        self.home_pipe = None
-        self.away_pipe = None
-        self.win_pipe = None
-        self.metadata = None
-        self.feature_columns = None
-        self._load_lock = Lock()
-        
-    def load_models(self) -> Dict[str, Any]:
-        """Load models with enhanced validation"""
-        with self._load_lock:
-            result = {"status": "success", "loaded": []}
-            
-            try:
-                # Load pipelines
-                self.home_pipe, self.away_pipe, self.win_pipe = self._load_pipelines()
-                if all(p is not None for p in [self.home_pipe, self.away_pipe, self.win_pipe]):
-                    result["loaded"].extend(["home_pipe", "away_pipe", "win_pipe"])
-                else:
-                    result["status"] = "partial"
-                
-                # Load metadata
-                self.metadata = self._load_metadata()
-                if self.metadata:
-                    result["loaded"].append("metadata")
-                
-                # Load feature columns
-                self.feature_columns = self._load_feature_columns()
-                if self.feature_columns:
-                    result["loaded"].append("feature_columns")
-                
-                # Validate model coherence
-                if result["status"] == "success":
-                    self._validate_model_coherence()
-                
-                logging.info(f"Model loading completed: {result}")
-                return result
-                
-            except Exception as e:
-                logging.error(f"Model loading failed: {e}", exc_info=True)
-                return {"status": "error", "error": str(e)}
-    
-    def _load_pipelines(self) -> Tuple[Any, Any, Any]:
-        """Load model pipelines with error handling.
-
-        Repository Guardian note: Earlier revisions expected legacy filenames
-        (`home_pipe.joblib`, etc.) that no longer exist in the models directory,
-        generating noisy startup errors even though the modern artifacts were in
-        place (`home_model.joblib`, `win_clf_calibrated.joblib`). This loader now
-        resolves each logical pipeline against a list of known filenames so that
-        startup succeeds without manual symlinks.
-        """
-        pipelines: Dict[str, Any] = {}
-
-        filename_candidates = {
-            "home_pipe": ["home_pipe.joblib", "home_model.joblib"],
-            "away_pipe": ["away_pipe.joblib", "away_model.joblib"],
-            "win_pipe": ["win_pipe.joblib", "win_model.joblib", "win_clf_calibrated.joblib"],
-        }
-
-        for name, candidates in filename_candidates.items():
-            pipelines[name] = None
-            for candidate in candidates:
-                pipeline_path = self.config.models_dir / candidate
-                if not pipeline_path.exists():
-                    continue
-                try:
-                    pipelines[name] = joblib.load(pipeline_path)
-                    logging.info("✓ Loaded %s from %s", name, pipeline_path.name)
-                    break
-                except Exception as exc:  # pragma: no cover - defensive load guard
-                    logging.error("✗ Failed to load %s from %s: %s", name, pipeline_path, exc)
-
-            if pipelines[name] is None:
-                logging.error(
-                    "✗ Pipeline not found for %s (looked for: %s)",
-                    name,
-                    ", ".join(candidates),
-                )
-
-        return pipelines["home_pipe"], pipelines["away_pipe"], pipelines["win_pipe"]
-
-    def _load_metadata(self) -> Optional[Dict[str, Any]]:
-        """Load training metadata from metadata.json if present.
-
-        The metadata file describes which feature columns were used during
-        training and includes helpful diagnostics (e.g. optimal win threshold).
-        """
-        meta_path = self.config.models_dir / "metadata.json"
-        if not meta_path.exists():
-            logging.getLogger("models").warning("metadata.json not found in %s", self.config.models_dir)
-            return None
-
-        try:
-            with meta_path.open("r", encoding="utf-8") as f:
-                data: Dict[str, Any] = json.load(f)
-
-            # Derive a default mode for downstream health/prediction responses.
-            if "mode" not in data:
-                data["mode"] = os.getenv("APP_MODE", "production")
-
-            logging.getLogger("models").info("Loaded metadata from %s", meta_path)
-            return data
-        except Exception as exc:  # pragma: no cover - defensive logging
-            logging.getLogger("models").error("Failed to load metadata.json: %s", exc, exc_info=True)
-            return None
-
-    def _load_feature_columns(self) -> Optional[Dict[str, List[str]]]:
-        """Extract raw feature column names from metadata.
-
-        Metadata stores feature columns under ``raw_feature_columns`` which may
-        be either a mapping with ``numeric`` / ``categorical`` or a flat list.
-        """
-        if not self.metadata:
-            return None
-
-        raw_cols = self.metadata.get("raw_feature_columns")
-        if isinstance(raw_cols, dict):
-            numeric = list(raw_cols.get("numeric") or [])
-            categorical = list(raw_cols.get("categorical") or [])
-            return {"numeric": numeric, "categorical": categorical}
-        if isinstance(raw_cols, list):
-            return {"numeric": list(raw_cols), "categorical": []}
-
-        logging.getLogger("models").warning("raw_feature_columns missing or malformed in metadata")
-        return None
-
-    def build_feature_frame(self, game_row: pd.Series) -> pd.DataFrame:
-        """Build a one-row feature DataFrame aligned to training columns.
-
-        This takes a raw dataset row (which contains many columns) and
-        constructs a DataFrame containing only the columns that the
-        pipelines expect, adding any missing columns as NaN so that
-        sklearn's imputers can handle them.
-        """
-        if not self.feature_columns:
-            # As a conservative fallback, drop obvious non-feature columns
-            # and pass everything else through. This should still be safe
-            # because the pipelines' ColumnTransformer will select what it
-            # needs.
-            logging.getLogger("models").warning("feature_columns not set; using full row as features")
-            return pd.DataFrame([game_row.to_dict()])
-
-        numeric = self.feature_columns.get("numeric") or []
-        categorical = self.feature_columns.get("categorical") or []
-        all_cols: List[str] = list(dict.fromkeys(list(numeric) + list(categorical)))
-
-        data: Dict[str, Any] = {}
-        for col in all_cols:
-            data[col] = game_row[col] if col in game_row.index else np.nan
-
-        return pd.DataFrame([data], columns=all_cols)
-    
-    def _validate_model_coherence(self):
-        """Validate that models work together coherently"""
-        if not all([self.home_pipe, self.away_pipe, self.win_pipe, self.feature_columns]):
-            raise ValueError("Missing required model components")
-        
-        # Test with sample data if possible
-        logging.info("Model coherence validation passed")
-
-# ---------------------------------------------------------------
-# Application State Management
-# ---------------------------------------------------------------
-class AppState:
-    """Manages global application state with thread safety"""
-    
-    def __init__(self, config: Config):
-        self.config = config
-        self.data_manager = DataManager(config)
-        self.model_manager = ModelManager(config)
-        self.prediction_history = []
-        self.history_lock = Lock()
-        
-    def initialize(self) -> Dict[str, Any]:
-        """Initialize application state"""
-        results = {}
-        
-        # Load dataset
-        dataset_loaded = self.data_manager.load_dataset()
-        results["dataset"] = "loaded" if dataset_loaded else "failed"
-        
-        # Load models
-        model_result = self.model_manager.load_models()
-        results["models"] = model_result
-        
-        # Load history
-        history_loaded = self._load_prediction_history()
-        results["history"] = f"loaded {len(self.prediction_history)} entries"
-        
-        return results
-
-    def _load_prediction_history(self) -> bool:
-        """Load prediction history from disk if available.
-
-        The history file is optional; failures here should not block startup.
-        """
-        history_path = self.config.data_dir / "prediction_history.json"
-        if not history_path.exists():
-            logging.getLogger("history").info("No prediction_history.json found; starting with empty history.")
-            self.prediction_history = []
-            return False
-
-        try:
-            raw = json.loads(history_path.read_text(encoding="utf-8"))
-            entries: List[PredictionHistoryEntry] = []
-            for item in raw:
-                try:
-                    entries.append(PredictionHistoryEntry(**item))
-                except Exception as exc:  # pragma: no cover - defensive
-                    logging.getLogger("history").warning("Skipping invalid history entry: %s", exc)
-
-            self.prediction_history = entries
-            logging.getLogger("history").info("Loaded %d history entries", len(entries))
-            return True
-        except Exception as exc:  # pragma: no cover - defensive
-            logging.getLogger("history").error("Failed to load prediction history: %s", exc, exc_info=True)
-            self.prediction_history = []
-            return False
-
-    def record_prediction(
-        self,
-        request: PredictionRequest,
-        response: PredictionResponse,
-        game_row: Optional[pd.Series] = None,
-    ) -> None:
-        """Append a prediction to in-memory history.
-
-        Persistence is intentionally deferred; the primary goal is to make
-        recent predictions visible to any future dashboard/history endpoints.
-        """
-        game_id = f"{request.season}_{request.week}_{request.home_team}_{request.away_team}"
-        kickoff: Optional[str] = None
-        if game_row is not None and "home_game_date" in game_row.index:
-            kickoff = str(game_row["home_game_date"])
-
-        predicted_winner = (
-            request.home_team
-            if response.home_win_probability >= response.away_win_probability
-            else request.away_team
-        )
-
-        entry = PredictionHistoryEntry(
-            timestamp=datetime.now(timezone.utc),
-            game_id=game_id,
-            season=request.season,
-            week=request.week,
-            home_team=request.home_team,
-            away_team=request.away_team,
-            home_score_pred=response.home_score,
-            away_score_pred=response.away_score,
-            home_win_probability=response.home_win_probability,
-            away_win_probability=response.away_win_probability,
-            point_diff=response.point_diff,
-            mode=response.mode,
-            prediction_source=response.prediction_source,
-            win_threshold_used=response.win_threshold_used,
-            predicted_winner=predicted_winner,
-            kickoff=kickoff,
-            actual_home_score=None,
-            actual_away_score=None,
-            actual_winner=None,
-            confidence_score=response.confidence_score,
-        )
-
-        with self.history_lock:
-            self.prediction_history.append(entry)
-            entry.pd.to_csv(self.config.data_dir / "latest_prediction.csv", index=False)
-
-
-
-def create_app() -> FastAPI:
-    """Create FastAPI application with enhanced configuration"""
-    
-    # Initialize configuration
-    config = Config()
-    
-    # Setup logging (unchanged)
-    logging.config.dictConfig({
-        "version": 1,
-        "disable_existing_loggers": False,
-        "formatters": {
-            "detailed": {
-                "format": "%(asctime)s %(levelname)s %(name)s %(message)s"
-            }
-        },
-        "handlers": {
-            "console": {
-                "class": "logging.StreamHandler",
-                "level": "INFO",
-                "formatter": "detailed"
-            },
-            "file": {
-                "class": "logging.FileHandler",
-                "filename": str(config.log_dir / "api.log"),
-                "level": "DEBUG",
-                "formatter": "detailed",
-                "encoding": "utf-8"
-            }
-        },
-        "root": {"level": "DEBUG", "handlers": ["console", "file"]},
-    })
-    
-    log = logging.getLogger("api")
-    
-    # Create application state
-    app_state = AppState(config)
-    
-    @asynccontextmanager
-    async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-        """Enhanced lifespan manager"""
-        log.info("🚀 Starting NFL Prediction API")
-        load_dotenv(dotenv_path=".env")
-        try:
-            # Only initialize if not already initialized. This makes the
-            # lifespan idempotent and avoids duplicate work when tests or
-            # other callers have already bootstrapped app_state manually
-            # (for example, when using TestClient without entering the
-            # context manager or when tests call app.state.app_state.initialize()).
-            already_loaded = False
-            try:
-                already_loaded = bool(app_state.data_manager.status.get("loaded"))
-            except Exception:
-                # Defensive: if status is not available, treat as not loaded
-                already_loaded = False
-
-            if not already_loaded:
-                init_results = app_state.initialize()
-                log.info(f"Application initialized: {init_results}")
-            else:
-                log.info("Application already initialized; skipping startup initialization")
-
-            yield
-        except Exception as e:
-            log.error(f"Application startup failed: {e}", exc_info=True)
-            raise
-        finally:
-            log.info("🛑 Application shutdown complete")
-    
-    # Create FastAPI app
-    app = FastAPI(
-        title="NFL ML Predictions API",
-        version="2.2.0",
-        description="Enhanced API with better data cohesion and validation",
-        lifespan=lifespan,
-    )
-    # --------------------------------------------
-    # Expose app_state for introspection (useful for tests and runtime debugging)
-    # Attaching to app.state is non-invasive and helps CI scripts verify
-    # which dataset and models are active without relying on logs.
-    # ---------------------------------------------
-    app.state.app_state = app_state
-
-   
-   # ---- CORS CONFIG START ----
-    # Load .env if present to ensure local development settings are available
-    load_dotenv(dotenv_path=".env")
-
-
-    # Primary deployment pattern uses RESTRICT_CORS + ALLOWED_ORIGINS
-    # Fallbacks: CORS_ORIGINS (legacy) -> default localhost dev origin
-    # We deliberately hardcode production and local dev origins here to make
-    # CORS explicit and predictable. This avoids Heroku env misconfiguration
-    # causing a missing origin list and a 500 on health checks in the wild.
-    # If you need to add more origins you can set `ALLOWED_ORIGINS` later.
-    raw_allowed = os.getenv("ALLOWED_ORIGINS")
-    raw_origins = os.getenv("CORS_ORIGINS")
-    origin_regex = os.getenv("CORS_ORIGINS_REGEX")
-    restrict = os.getenv("RESTRICT_CORS", "true").strip().lower() in ("1", "true", "yes")
-
-    def _parse_origins(value=raw_allowed) -> List[str]:
-        if not value:
-            return []
-        # Allow comma- or space-separated lists; normalize by stripping trailing slash
-        parts = [p.strip().rstrip('/') for p in value.replace(';', ',').split(',') if p.strip()]
-        return parts
-
-    # Hardcode the primary production origin + local dev origin as a fallback.
-    default_allowed = [
-        "https://nfl-ml-predictions.vercel.app",
-        "http://localhost:3000",
-    ]
-
-    # Keep backward compatibility: allow env var override if explicitly set.
-    allowed_origins = (
-        _parse_origins(raw_allowed)
-        if raw_allowed
-        else (_parse_origins(raw_origins) if raw_origins else default_allowed)
-    )
-
-    # If restriction is enabled and no explicit origins are set, default to empty list
-    if restrict:
-        if not allowed_origins and not origin_regex:
-            logging.getLogger(
-                "api"
-            ).warning(
-                "RESTRICT_CORS=true but ALLOWED_ORIGINS was not set; denying cross-origin requests by default."
-            )
-            # Deny by only allowing no origins; callers must add environment vars.
-            # When restricting CORS by default we will use our default list.
-            allowed_origins = default_allowed
-
-    # If not restricted, allow broad origins (development friendly)
-    if not restrict:
-        allowed_origins = ["http://localhost:3000"]
-
-    logging.getLogger("api").info("Configuring CORS; restrict=%s, allowed_origins=%s, allow_origin_regex=%s", restrict, allowed_origins, origin_regex)
-
-    # Add CORS middleware. `allow_origin_regex` is optional and passed when configured.
-    if origin_regex:
-        app.add_middleware(
-            CORSMiddleware,
-            allow_origins=allowed_origins,
-            allow_origin_regex=origin_regex,
-            allow_credentials=True,
-            allow_methods=["*"],
-            allow_headers=["*"],
-        )
     else:
-        app.add_middleware(
-            CORSMiddleware,
-            allow_origins=allowed_origins,
-            allow_credentials=True,
-            allow_methods=["*"],
-            allow_headers=["*"],
-        )
-    # ---- CORS CONFIG END ----
+        dataset_stats = {"rows": 0, "path": "none"}
 
-    # include your routers here (example):
-    # app.include_router(schedule_router, prefix="/schedule")
+    return {
+        "health": health(),  # reuse typed health response
+        "dataset": dataset_stats,
+        "history": {
+            "metrics": {
+                "total_predictions": len(state.history),
+                "win_rate": 0.0,  # Placeholder until outcomes are tracked
+            }
+        },
+    }
 
-   
 
-    # Enhanced health endpoint
-    @app.get("/health", response_model=HealthResponse)
-    async def health() -> HealthResponse:
-        """Enhanced health check with component details"""
-        # Convert all component checks to simple booleans so the
-        # HealthResponse pydantic model (Dict[str, bool]) receives
-        # values of the correct type. Previously `repo_root` (a
-        # Path object) caused a validation error during JSON
-        # serialization which returned an HTTP 500 to callers.
-        try:
-            repo_root_path = Path(app_state.data_manager.config.repo_root)
-            repo_root_exists = repo_root_path.exists()
-        except Exception:
-            repo_root_exists = False
+# -------------------------------------------------------------------
+# Schedule: Next Week
+# -------------------------------------------------------------------
 
-        components = {
-            "models_loaded": bool(
-                app_state.model_manager.home_pipe
-                and app_state.model_manager.away_pipe
-                and app_state.model_manager.win_pipe
-            ),
-            "dataset_loaded": bool(app_state.data_manager.dataset is not None),
-            "metadata_loaded": bool(app_state.model_manager.metadata is not None),
-            "repo_root_loaded": bool(repo_root_exists),
-        }
-        
-        status = "healthy" if all(components.values()) else "unhealthy"
-        mode = app_state.model_manager.metadata.get("mode", "unknown") if app_state.model_manager.metadata else "unknown"
-        
-        return HealthResponse(
-            status=status,
-            mode=mode,
-            reason="Component status check",
-            timestamp=datetime.now(timezone.utc),
-            components=components
+
+@app.get("/schedule/next-week")
+def get_schedule() -> List[Dict[str, Any]]:
+    """
+    Return the schedule for the "next" NFL week based on the schedule CSV.
+
+    Logic:
+      - Resolve schedule path via _find_schedule_path().
+      - Normalize season/week + team abbreviations.
+      - If 'gameday' is present, interpret as kickoff datetime (UTC-aware).
+      - Determine the next slate using the earliest future game; fall back
+        to the latest season/week in the file if all games are in the past.
+    """
+    schedule_path = _find_schedule_path()
+    if not schedule_path:
+        raise HTTPException(
+            status_code=404,
+            detail="Schedule file not found in backend/data or frontend/public",
         )
 
-    # -----------------------------------------------------------
-    # Schedule Endpoints
-    # -----------------------------------------------------------
-    @app.get("/schedule/next-week")
-    async def get_next_week_schedule() -> List[Dict[str, Any]]:
-        """Return the upcoming week's schedule as a simple list of games.
+    logging.info("[Schedule] Loading schedule from: %s", schedule_path)
+    df = pd.read_csv(schedule_path)
 
-        This primarily exists to support the React dashboard. Instead of
-        blindly returning the smallest week in the dataset (which skewed toward
-        archival 2018 rows), the handler now relies on kickoff timestamps and a
-        calendar-aware fallback to surface the true "next" slate.
-        """
-        # Resolve schedule path via Config so tests and deployments pick up
-        # the correct file whether it's stored in backend/data or as an
-        # application-specific artifact (e.g., legacy `backend/Nfl_schedule_2025.csv`).
-        schedule_path = str(config.resolve_schedule_path())
-        log.debug("Using schedule path: %s", schedule_path)
-        try:
-            df = pd.read_csv(schedule_path, parse_dates=True)
-        except FileNotFoundError as exc:
-            log.error("Schedule file not found at %s; expected file: backend/Nfl_schedule_2025.csv", schedule_path)
-            raise HTTPException(503, f"Schedule file not found: {schedule_path}. Expected: backend/Nfl_schedule_2025.csv") from exc
-        print(f'schedule info: --> {df.head(10)},/n COLUMNS: --> {df.columns}')
+    df = _coerce_season_week(df)
+    df = _normalize_team_columns(
+        df, cols=("home_abbr", "away_abbr", "home_team", "away_team")
+    )
 
-        try:
-            target_season, target_week, selection = _select_schedule_scope(df)
-        except ValueError as exc:  # pragma: no cover - defensive guard
-            raise HTTPException(503, str(exc)) from exc
+    # Optional: convert gameday to UTC-aware datetime
+    if "gameday" in df.columns:
+        df["dt"] = pd.to_datetime(df["gameday"], utc=True, errors="coerce")
 
-        numeric_season = pd.to_numeric(df.get("season"), errors="coerce") # type: ignore
-        numeric_week = pd.to_numeric(df.get("week"), errors="coerce") # type: ignore
-        week_rows = df.loc[(numeric_season == target_season) & (numeric_week == target_week)].copy()
-        if week_rows.empty:
-            raise HTTPException(404, f"No games found for season {target_season} week {target_week}")
+    now = datetime.now(timezone.utc)
+    if "dt" in df.columns:
+        future = df[df["dt"] >= now].sort_values("dt")
+    else:
+        future = pd.DataFrame()
 
-        week_rows = week_rows.assign(
-            season_num=pd.to_numeric(week_rows.get("season"), errors="coerce"),
-            week_num=pd.to_numeric(week_rows.get("week"), errors="coerce"),
-        )
+    if not future.empty:
+        next_row = future.iloc[0]
+        target_s = int(next_row.get("season_num", next_row.get("season", 2024)))
+        target_w = int(next_row.get("week_num", next_row.get("week", 1)))
+    else:
+        # Fallback: last season/week in file
+        season_series = df.get("season", df.get("season_num"))
+        week_series = df.get("week", df.get("week_num"))
+        target_s = int(season_series.max()) if season_series is not None else 2024
+        target_w = int(week_series.max()) if week_series is not None else 1
 
-        logging.getLogger("api").info(
-            "Schedule scope -> season=%s week=%s via %s",
-            target_season,
-            target_week,
-            selection.get("strategy"),
-        )
-        tm_logo = pd.read_csv('backend/team_logo.csv')
-        # Normalise into a compact schedule shape for the frontend.
-        games: List[Dict[str, Any]] = []
-        for _, row in week_rows.iterrows():
-            kickoff_iso: Optional[str] = None
-            if "gameday" in row.index:
-                kickoff_dt = pd.to_datetime(row.get("gameday"), errors="coerce", utc=True)
-                kickoff_iso = kickoff_dt.isoformat() if pd.notna(kickoff_dt) else None
+    s_col = "season_num" if "season_num" in df.columns else "season"
+    w_col = "week_num" if "week_num" in df.columns else "week"
 
-            season_val = row.get("season_num")
-            season_val = (
-                target_season if pd.isna(season_val) else int(season_val)
-            )
-            week_val = row.get("week_num")
-            week_val = target_week if pd.isna(week_val) else int(week_val)
-            home_team = str(row.get("home_team", "")).upper()
-            away_team = str(row.get("away_team", "")).upper()
-            
-            # Initialize defaults
-            home_abbr = home_team
-            home_logo = None
-            away_abbr = away_team
-            away_logo = None
-            
-            for _, logo_row in tm_logo.iterrows():
-                if home_team == logo_row['abbr']:
-                    home_abbr = logo_row['abbr']
-                    home_logo = logo_row['logo_url']
-                    home_team = logo_row['team_name']
-                if away_team == logo_row['abbr']:
-                    away_abbr = logo_row['abbr']
-                    away_logo = logo_row['logo_url']
-                    away_team = logo_row['team_name']
+    week_df = df[(df[s_col] == target_s) & (df[w_col] == target_w)]
 
+    results: List[Dict[str, Any]] = []
+    for _, row in week_df.iterrows():
+        home_team = row.get("home_team")
+        away_team = row.get("away_team")
+        home_abbr = row.get("home_abbr", home_team)
+        away_abbr = row.get("away_abbr", away_team)
 
-            games.append(
-                {
-                    "season": season_val,
-                    "week": week_val,
-                    "home_team": home_team,
-                    "away_team": away_team,
-                    "home_abbr": home_abbr,
-                    "away_abbr": away_abbr,
-                    "home_logo": home_logo,
-                    "away_logo": away_logo,
-                    "game_id": str(
-                        row.get(
-                            "game_id",
-                            f"{season_val}_{week_val}_{home_team}_{away_team}",
-                        )
-                    ),
-                    "kickoff": kickoff_iso,
-                    "venue": row.get("stadium_name") or row.get("stadium"),
-                    "network": row.get("tv_network") or row.get("network"),
-                })
-
-        return games
-
-    # Optional debug endpoint to inspect CORS configuration (helpful for CI/deploys)
-    @app.get("/debug")
-    async def debug_info() -> Dict[str, Any]:
-        """Return lightweight debug info including CORS configuration.
-
-        This endpoint is intentionally minimal and useful for CI verification
-        (e.g., scripts/verify_api_cors.py) but should not contain secrets.
-        """
-        return {
-                "cors_origins": allowed_origins,
-                "env_cors_origins": os.getenv("CORS_ORIGINS"),
-                "env_allowed_origins": os.getenv("ALLOWED_ORIGINS"),
-                "cors_regex": origin_regex,
-                "restrict_cors": restrict,
-        }
-
-    # -----------------------------------------------------------
-    # Prediction History Endpoint
-    # -----------------------------------------------------------
-    @app.get("/history")
-    async def get_prediction_history(limit: int = 100) -> Dict[str, Any]:
-        """Return recent prediction history entries.
-
-        The frontend uses this to hydrate its history chart. Entries are
-        served in reverse chronological order (most recent first).
-        """
-        # Defensive bounds on limit to avoid accidental overload.
-        safe_limit = max(1, min(int(limit or 100), 500))
-
-        with app_state.history_lock:
-            entries = list(app_state.prediction_history)[-safe_limit:]
-
-        # Ensure newest-first ordering.
-        entries = sorted(entries, key=lambda e: e.timestamp, reverse=True)
-
-        return {
-            "entries": [json.loads(e.json()) for e in entries],
-            "count": len(entries),
-        }
-    
-    # Enhanced prediction endpoint
-    @app.post("/predict", response_model=PredictionResponse)
-    async def predict(request: PredictionRequest) -> PredictionResponse:
-        """Enhanced prediction endpoint with better validation"""
-        # Validate application state
-        if not all([app_state.model_manager.home_pipe, 
-                   app_state.model_manager.away_pipe, 
-                   app_state.model_manager.win_pipe]):
+        kickoff_val: Optional[str] = None
+        if ("dt" in row) and pd.notna(row["dt"]):
             try:
-                home_pipe = joblib.load('backend/models/home_model.joblib')
-                away_pipe = joblib.load('backend/models/away_model.joblib')
-                win_pipe = joblib.load('backend/models/win_clf_calibrated.joblib')
-                pre = joblib.load('backend/models/preprocessing_pipeline.joblib')
-                
-                if not home_pipe: 
-                    raise HTTPException(503, "Models not loaded")
-            finally:
-                if app_state.data_manager.dataset is None:
-                    raise HTTPException(503, "Dataset not available")
+                kickoff_val = row["dt"].isoformat()
+            except Exception:
+                kickoff_val = None
 
-        # Locate the corresponding game row in the engineered dataset.
-        df = app_state.data_manager.dataset
-        assert df is not None  # for type-checkers; guarded above
+        results.append(
+            {
+                "game_id": f"{target_s}_{target_w}_{home_team}_{away_team}",
+                "season": int(target_s),
+                "week": int(target_w),
+                "home_team": home_team,
+                "away_team": away_team,
+                "home_abbr": home_abbr,
+                "away_abbr": away_abbr,
+                "home_logo": row.get("home_logo"),
+                "away_logo": row.get("away_logo"),
+                "kickoff": kickoff_val,
+            }
+        )
 
+    logging.info(
+        "[Schedule] Returning %d games for season=%s week=%s",
+        len(results),
+        target_s,
+        target_w,
+    )
+    return results
+
+
+# -------------------------------------------------------------------
+# Prediction History
+# -------------------------------------------------------------------
+
+
+@app.get("/history", response_model=List[PredictionResponse])
+def get_prediction_history(
+    limit: int = Query(100, ge=1, le=1000)
+) -> List[Dict[str, Any]]:
+    """
+    Return the last N prediction results recorded in memory.
+
+    Used by StatsPage/PredictionContext as a history source.
+    """
+    if limit <= 0:
+        return []
+    return state.history[-limit:]
+
+
+# -------------------------------------------------------------------
+# Prediction Endpoint
+# -------------------------------------------------------------------
+
+
+@app.post("/predict", response_model=PredictionResponse)
+async def predict(request: PredictRequest) -> Dict[str, Any]:
+    """
+    Predict home/away score and win probability for a single game.
+
+    Workflow:
+      - Validate that dataset and models are loaded.
+      - Normalize request identifiers (team abbreviations, season/week).
+      - Lookup the corresponding dataset row.
+      - Run the regression models to get scores.
+      - Run the classifier (if present) to get win probability; otherwise
+        fall back to a logistic transform of the score differential.
+      - Record result in in-memory history and return it.
+    """
+    # Ensure backend is "ready"
+    models_ok = all(m in state.models for m in REQUIRED_MODELS)
+    if state.dataset is None or not models_ok:
+        missing = [m for m in REQUIRED_MODELS if m not in state.models]
+        raise HTTPException(
+            status_code=503,
+            detail=f"Not ready: missing models {missing}",
+        )
+
+    # Normalize identifiers for matching against dataset
+    home_team = request.home_team.strip().upper()
+    away_team = request.away_team.strip().upper()
+    season = int(request.season)
+    week = int(request.week)
+
+    df = state.dataset
+    assert df is not None  # guarded above
+
+    # Attempt to locate the specific game row
+    try:
+        row = df[
+            (df["season"] == season)
+            & (df["week"] == week)
+            & (df["home_team"] == home_team)
+            & (df["away_team"] == away_team)
+        ]
+        logging.debug(
+            "[Predict] Matched rows: %d for season=%s week=%s %s vs %s",
+            len(row),
+            season,
+            week,
+            home_team,
+            away_team,
+        )
+    except Exception as e:
+        logging.exception("[Predict] Dataset lookup failed: %s", e)
+        raise HTTPException(
+            status_code=500,
+            detail="Dataset is missing required columns for prediction.",
+        ) from e
+
+    if row.empty:
+        raise HTTPException(
+            status_code=404,
+            detail="Game data not found for given season/week/teams",
+        )
+
+    # Run models
+    try:
+        # Prepare two views of the input row:
+        #  - full_df: full row with all columns (used by preprocessors)
+        #  - numeric_df: numeric-only DataFrame used for direct regressor.predict
+        full_df = row.drop(columns=["game_id"]) if "game_id" in row.columns else row
+        numeric_df = full_df.select_dtypes(include=[np.number])
+
+        home_model = state.models["home"]
+        away_model = state.models["away"]
+        win_model = state.models.get("win")
+
+        def _safe_predict(model, full_df, numeric_df, model_name="model"):
+            """Predict with graceful fallbacks for NaNs / unfitted preprocessors.
+
+            Strategy:
+              1) Try model.predict on the full DataFrame (preserves feature names).
+              2) If that fails with a NaN / NotFitted error, try a standalone
+                 preprocessor.transform(full_df) (if available) and predict on
+                 the resulting array.
+              3) If no preprocessor is available or it fails, perform a simple
+                 median imputation on numeric columns and retry predict.
+            """
+            try:
+                # Primary path depends on whether the model is a Pipeline
+                # (which may include a preprocessor expecting a DataFrame)
+                if hasattr(model, 'named_steps') or hasattr(model, 'steps'):
+                    # Pipeline: pass full DataFrame so named transformers can run
+                    return float(model.predict(full_df)[0])
+                else:
+                    # Plain estimator (e.g., GradientBoostingRegressor): pass numeric-only array
+                    return float(model.predict(numeric_df)[0])
+            except Exception as err:
+                msg = str(err) or ""
+                logging.warning("[Predict] %s.predict failed on full_df: %s", model_name, msg)
+
+                is_nan_err = "nan" in msg.lower() or "missing value" in msg.lower() or "contains nan" in msg.lower()
+                is_notfitted = "not fitted" in msg.lower() or "notfittederror" in msg.lower()
+
+                # Only attempt fallbacks for NaN / NotFitted situations — otherwise rethrow
+                if not (is_nan_err or is_notfitted):
+                    raise
+
+                # Fallback A: use standalone preprocessor (if available) to transform the full DataFrame
+                if state.preprocessor is not None:
+                    try:
+                        X_proc = state.preprocessor.transform(full_df)
+                        return float(model.predict(X_proc)[0])
+                    except Exception as prep_err:
+                        logging.exception("[Predict] standalone preprocessor transform failed for %s: %s", model_name, prep_err)
+
+                # Fallback B: simple median imputation for numeric columns
+                try:
+                    from sklearn.impute import SimpleImputer
+
+                    # If numeric_df is empty, coerce numeric conversion and try again
+                    if numeric_df.empty:
+                        try:
+                            numeric_df_candidate = full_df.apply(lambda c: pd.to_numeric(c, errors="coerce"))
+                        except Exception:
+                            numeric_df_candidate = full_df.select_dtypes(include=[np.number])
+                    else:
+                        numeric_df_candidate = numeric_df
+
+                    if numeric_df_candidate is not None and not numeric_df_candidate.empty:
+                        imp = SimpleImputer(strategy="median")
+                        X_imp = imp.fit_transform(numeric_df_candidate)
+                        return float(model.predict(X_imp)[0])
+                except Exception as imp_err:
+                    logging.exception("[Predict] numeric imputation fallback failed for %s: %s", model_name, imp_err)
+
+                # No viable fallback — re-raise the original exception
+                raise
+
+        h_score = _safe_predict(home_model, full_df, numeric_df, "home_model")
+        a_score = _safe_predict(away_model, full_df, numeric_df, "away_model")
+
+        # Calculate win probability (the helper will attempt predict_proba and
+        # otherwise fall back to a logistic on point diff)
         try:
-            mask = (
-                (df["season"] == request.season)
-                & (df["week"] == request.week)
-                & (df["home_team"] == request.home_team)
-                & (df["away_team"] == request.away_team)
-            )
-        except KeyError as exc:
-            # Dataset missing required identifiers; treat as server misconfiguration.
-            raise HTTPException(500, f"Dataset missing required column: {exc}") from exc
-
-        game_rows = df.loc[mask]
-        if game_rows.empty:
+            win_prob, clf_used = _calculate_win_probability(win_model, full_df, h_score, a_score)
+        except Exception as win_err:
+            logging.exception("[Predict] Win-probability calculation failed: %s", win_err)
+            # If classifier fails, still return scores with a null probability
+            win_prob, clf_used = 0.5, False
+    except Exception as model_err:
+        logging.exception("[Predict] Model execution failed: %s", model_err)
+        msg = str(model_err)
+        # Provide friendlier error messages for common sklearn issues
+        if isinstance(model_err, ValueError) and "columns are missing" in msg:
             raise HTTPException(
-                404,
-                f"Game not found in dataset for {request.season} week {request.week} "
-                f"({request.away_team} at {request.home_team})",
+                status_code=400,
+                detail=f"Model input mismatch: {msg}",
+            ) from model_err
+
+        # Handle NaN / missing-value errors with a concise guidance message
+        if "contains nan" in msg.lower() or "input x contains nan" in msg.lower() or "missing value" in msg.lower():
+            friendly = (
+                "Prediction failed due to missing (NaN) values in feature inputs. "
+                "The server attempted automatic fallbacks (preprocessor or median imputation) but they failed. "
+                "Ensure the trained preprocessor artifact (backend/models/preprocessor.joblib) is present in deployment or retrain models with an imputer."
             )
+            raise HTTPException(status_code=500, detail=friendly) from model_err
 
-        game_row = game_rows.iloc[0]
+        # Default: return a concise error without dumping the sklearn stack trace
+        raise HTTPException(
+            status_code=500,
+            detail=f"Prediction failed: {msg.splitlines()[0] if msg else 'unknown error'}",
+        ) from model_err
 
-        # Build feature frame aligned with training metadata.
-        try:
-            X = app_state.model_manager.build_feature_frame(game_row)
-        except Exception as exc:  # pragma: no cover - defensive
-            logging.getLogger("api").error("Failed to build feature frame: %s", exc, exc_info=True)
-            raise HTTPException(500, "Failed to build features for prediction") from exc
+    game_id = f"{season}_{week}_{home_team}_{away_team}"
+    generated_at = datetime.now(timezone.utc)
 
-        # Run score regressors.
-        try:
-            home_pred = float(app_state.model_manager.home_pipe.predict(X)[0])  # type: ignore[union-attr]
-            away_pred = float(app_state.model_manager.away_pipe.predict(X)[0])  # type: ignore[union-attr]
-        except Exception as exc:
-            logging.getLogger("api").error("Score prediction failed: %s", exc, exc_info=True)
-            raise HTTPException(500, "Failed to run score models") from exc
+    result: Dict[str, Any] = {
+        "season": season,
+        "week": week,
+        "home_team": home_team,
+        "away_team": away_team,
+        "game_id": game_id,
+        "home_score": h_score,
+        "away_score": a_score,
+        "home_win_probability": win_prob,
+        "away_win_probability": 1.0 - win_prob,
+        "point_diff": h_score - a_score,
+        "generated_at": generated_at,
+        "mode": "production",
+        "win_classifier_used": clf_used,
+    }
 
-        point_diff = home_pred - away_pred
+    # Append to in-memory history (cap size to avoid unbounded growth)
+    state.history.append(result)
+    state.history = state.history[-500:]
 
-        # Win probability via classifier with a calibrated fallback.
-        win_classifier_used = False
-        win_probability_source = "unknown"
+    logging.info(
+        "[Predict] %s vs %s (season=%s week=%s) -> home=%.1f away=%.1f win_p=%.3f (clf_used=%s)",
+        home_team,
+        away_team,
+        season,
+        week,
+        h_score,
+        a_score,
+        win_prob,
+        clf_used,
+    )
 
-        # Default threshold from metadata, falling back to 0.5.
-        threshold = 0.5
-        if app_state.model_manager.metadata:
-            holdout = app_state.model_manager.metadata.get("holdout_metrics_win") or {}
-            try:
-                threshold = float(holdout.get("optimal_threshold", threshold))
-            except (TypeError, ValueError):
-                threshold = 0.5
+    return result
 
-        try:
-            win_pipe = app_state.model_manager.win_pipe
-            if win_pipe is None:
-                raise RuntimeError("win_pipe not loaded")
 
-            proba = win_pipe.predict_proba(X)  # type: ignore[union-attr]
-            # Assume column 1 corresponds to home-team win probability.
-            home_win_prob = float(proba[0, 1])
-            home_win_prob = float(np.clip(home_win_prob, 0.0, 1.0))
-            win_classifier_used = True
-            win_probability_source = "classifier"
-        except Exception as exc:
-            logging.getLogger("api").warning(
-                "Win classifier unavailable, falling back to score-based probability: %s", exc
-            )
-            # Soft fallback: map point differential to [0, 1] via logistic curve.
-            home_win_prob = float(1.0 / (1.0 + np.exp(-0.3 * point_diff)))
-            home_win_prob = float(np.clip(home_win_prob, 0.0, 1.0))
-            win_classifier_used = False
-            win_probability_source = "score_diff_fallback"
-
-        away_win_prob = 1.0 - home_win_prob
-
-        # Binary win indicators based on calibrated threshold.
-        home_win_flag = 1.0 if home_win_prob >= threshold else 0.0
-        away_win_flag = 1.0 - home_win_flag
-
-        # Confidence: distance from a "coin flip" (0.5) scaled to [0, 1].
-        confidence_score = float(abs(home_win_prob - 0.5) * 2.0)
-
-        mode = (
-            app_state.model_manager.metadata.get("mode", "production")
-            if app_state.model_manager.metadata
-            else "production"
-        )
-        prediction_source = "model" if win_classifier_used else "model+win_fallback"
-
-        response = PredictionResponse(
-            home_score=home_pred,
-            away_score=away_pred,
-            home_win_probability=home_win_prob,
-            away_win_probability=away_win_prob,
-            home_win=home_win_flag,
-            away_win=away_win_flag,
-            point_diff=point_diff,
-            mode=mode,
-            prediction_source=prediction_source,
-            win_classifier_used=win_classifier_used,
-            win_probability_source=win_probability_source,
-            win_threshold_used=threshold,
-            confidence_score=confidence_score,
-        )
-
-        # Record prediction in in-memory history; failures here should not
-        # affect the main prediction response.
-        try:
-            app_state.record_prediction(request, response, game_row)
-        except Exception as exc:  # pragma: no cover - defensive
-            logging.getLogger("history").warning("Failed to record prediction history: %s", exc)
-
-        return response
-    
-    return app
-
-# Create the application instance
-app = create_app()
+# -------------------------------------------------------------------
+# Entry Point
+# -------------------------------------------------------------------
 
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.environ.get("PORT", "8000"))
+    uvicorn.run(app, host="0.0.0.0", port=port)
