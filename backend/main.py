@@ -201,10 +201,27 @@ def _select_schedule_scope(df: pd.DataFrame):
         print(f'first five lines of dataset: { df.head() }')
        
     working = df.copy()
-    curr_season = nfl.get_current_season(roster=False)
-    curr_week = nfl.get_current_week()
-    working["season_num"] = curr_season
-    working["week_num"] = curr_week
+    # Prefer numeric season/week columns from the dataset when available.
+    # This avoids calling functions on optional NFL backends that may not
+    # expose the same helper APIs (e.g., `nfl_data_py` vs `nflreadpy`).
+    try:
+        if "season" in working.columns:
+            working["season_num"] = pd.to_numeric(working["season"], errors="coerce")
+        elif "season_num" in working.columns:
+            working["season_num"] = pd.to_numeric(working["season_num"], errors="coerce")
+        else:
+            working["season_num"] = pd.NA
+
+        if "week" in working.columns:
+            working["week_num"] = pd.to_numeric(working["week"], errors="coerce")
+        elif "week_num" in working.columns:
+            working["week_num"] = pd.to_numeric(working["week_num"], errors="coerce")
+        else:
+            working["week_num"] = pd.NA
+    except Exception:
+        # Defensive: ensure columns exist even if conversion fails.
+        working["season_num"] = working.get("season_num", pd.NA)
+        working["week_num"] = working.get("week_num", pd.NA)
     
    
 
