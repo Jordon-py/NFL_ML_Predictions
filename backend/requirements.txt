@@ -16,20 +16,17 @@ joblib>=1.2.0,<1.5.0
 lightgbm>=4.0.0,<4.2.0
 
 # API and data validation
-# Use Pydantic 2.x to satisfy nflreadpy and modern FastAPI compatibility.
-# FastAPI versions in this repo accept Pydantic 2.x; pin to 2.0+ to allow the
-# dependency resolver to choose a compatible 2.x release (avoids conflicts
-# with older 1.x pins that caused Heroku build failures).
-pydantic>=2.0.0,<3.0.0
+# Use a Pydantic 1.x compatible range here for maximum compatibility with the
+# current fastapi pin. If you want to adopt Pydantic v2, upgrade FastAPI and
+# verify the app and tests. For now, pining to v1 avoids dependency resolution
+# conflicts.
+pydantic>=1.8.0,<2.0.0
 
 # Environment variables
 python-dotenv>=1.0.0,<1.1.0
 
 # NFL data (may need specific version for compatibility)
 nfl-data-py>=0.3.0,<0.4.0
-# Some environment imports (backend/main.py) use the `nflreadpy` module.
-# Ensure the package is installed at runtime so Heroku dynos can import it.
-nflreadpy
 
 # Testing
 pytest>=7.0.0,<8.0.0

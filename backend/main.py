@@ -66,7 +66,61 @@ from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
-import nflreadpy as nfl
+
+# Prefer `nflreadpy` if present in the environment; otherwise fall back to the
+# more commonly available `nfl_data_py` package. This keeps the build
+# compatible with pydantic v1 (which is pinned by default) while allowing
+# `nflreadpy` when available locally for richer utilities.
+try:
+    import nflreadpy as nfl  # type: ignore
+    NFL_BACKEND = "nflreadpy"
+except Exception:
+    try:
+        import nfl_data_py as nfl  # type: ignore
+        NFL_BACKEND = "nfl_data_py"
+    except Exception:
+        nfl = None
+        NFL_BACKEND = None
+
+
+def get_current_nfl_context(now: Optional[datetime] = None) -> Dict[str, Any]:
+    """Return a small context with current season and approximate week.
+
+    Where possible we rely on installed NFL backends; otherwise a simple
+    calendar heuristic is used. This function is intentionally lightweight and
+    returns a conservative ``approx_week`` to be used as a hint for the
+    schedule selection routine.
+    """
+    now = now or datetime.now(timezone.utc)
+    # Season typically runs Aug/Sept (season label is the year it starts)
+    cur_season = now.year if now.month >= 8 else now.year - 1
+
+    # If nfl backend is available, prefer its helper if present
+    if nfl is not None:
+        for fn in ("get_current_season", "get_current_week"):
+            if not hasattr(nfl, fn):
+                break
+        else:
+            try:
+                season_loc = int(nfl.get_current_season())
+                week_loc = int(nfl.get_current_week())
+                return {"season": season_loc, "approx_week": week_loc, "phase": "calendar"}
+            except Exception:
+                # Fall through to heuristic
+                pass
+
+    # Simple calendar-driven heuristic
+    season_start = datetime(cur_season, 9, 1, tzinfo=timezone.utc)
+    if now < season_start:
+        approx_week = 1
+        phase = "preseason"
+    else:
+        days_since = (now - season_start).days
+        approx_week = 1 + max(0, days_since // 7)
+        approx_week = max(1, min(18, approx_week))
+        phase = "regular"
+
+    return {"season": cur_season, "approx_week": approx_week, "phase": phase}
 
  
 
