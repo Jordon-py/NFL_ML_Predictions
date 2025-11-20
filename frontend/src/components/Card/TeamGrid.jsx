@@ -17,15 +17,15 @@ import './TeamGrid.css';
  * @param {any} game
  * @returns {string}
  */
-const toGameKey = (game) =>
+const toGameKey = ( game ) =>
   game?.game_id ?? [
     game?.season,
     game?.week,
     game?.home_abbr || game?.home_team,
     game?.away_abbr || game?.away_team,
   ]
-    .filter(Boolean)
-    .join('-');
+    .filter( Boolean )
+    .join( '-' );
 
 /**
  * @param {{
@@ -39,7 +39,7 @@ const toGameKey = (game) =>
  *   onPredict?: (game: any) => void,
  * }} [props]
  */
-function TeamGrid({
+function TeamGrid( {
   week = 10,
   games = [],
   isLoading = false,
@@ -48,15 +48,15 @@ function TeamGrid({
   loading = {},
   errors = {},
   onPredict,
-} = {}) {
+} = {} )
+{
   const safeWeek = week ?? ( games[ 0 ]?.week ?? 10 );
-  console.log(`safeWeek: --> ${safeWeek}`)
 
-  if (isLoading) {
+  if ( isLoading ) {
     return (
       <section className="team-grid" aria-busy="true">
         <header className="team-grid__header">
-          <h2 className="team-grid__title">Week {safeWeek} Games</h2>
+          <h2 className="team-grid__title">Week { safeWeek } Games</h2>
           <p className="team-grid__subtitle">Loading schedule…</p>
         </header>
         <div className="team-grid__empty">
@@ -66,18 +66,18 @@ function TeamGrid({
     );
   }
 
-  if (!games || games.length === 0) {
+  if ( !games || games.length === 0 ) {
     return (
       <section className="team-grid">
         <header className="team-grid__header">
-          <h2 className="team-grid__title">Week {safeWeek} Games</h2>
+          <h2 className="team-grid__title">Week { safeWeek } Games</h2>
           <p className="team-grid__subtitle">
-            No games found for Week {safeWeek}. Try refreshing or checking your API.
+            No games found for Week { safeWeek }. Try refreshing or checking your API.
           </p>
         </header>
         <div className="team-grid__empty">
           <p className="team-grid__empty-text">
-            Once the schedule loads, all Week {safeWeek} matchups will appear here.
+            Once the schedule loads, all Week { safeWeek } matchups will appear here.
           </p>
         </div>
       </section>
@@ -87,34 +87,35 @@ function TeamGrid({
   return (
     <section
       className="team-grid"
-      aria-label={`NFL Week ${safeWeek}`}
-      data-week={safeWeek}
+      aria-label={ `NFL Week ${safeWeek}` }
+      data-week={ safeWeek }
     >
       <header className="team-grid__header">
         <div className="team-grid__heading">
-          <span className="team-grid__badge">Week {safeWeek}</span>
-          <h2 className="team-grid__title">Week {safeWeek}</h2>
+          <span className="team-grid__badge">Week { safeWeek }</span>
+          <h2 className="team-grid__title">Week { safeWeek }</h2>
         </div>
         <p className="team-grid__subtitle">
-          Showing <strong>{games.length}</strong> games scheduled.
+          Showing <strong>{ games.length }</strong> games scheduled.
         </p>
       </header>
 
       <div className="team-grid__grid">
-        {games.map((game, index) => {
+        { games.map( ( game, index ) =>
+        {
           const rawKey = toGameKey( game ) || String( index );
-          console.log('Games: ', games, '\n', 'Game: ', game);
+          console.log( 'Games: ', games, '\n', 'Game: ', game );
 
           // Look up any existing prediction + request state for this game.
-          const prediction = predictions?.[rawKey];
-          const isGameLoading = Boolean(loading?.[rawKey]);
-          const errorMessage = errors?.[rawKey] ?? null;
+          const prediction = predictions?.[ rawKey ];
+          const isGameLoading = Boolean( loading?.[ rawKey ] );
+          const errorMessage = errors?.[ rawKey ] ?? null;
 
           // Enrich the schedule row with team metadata (logos + pretty names) when available.
           const homeAbbr = game.home_abbr || game.home_team;
           const awayAbbr = game.away_abbr || game.away_team;
-          const homeMeta = homeAbbr && teams && teams[homeAbbr] ? teams[homeAbbr] : null;
-          const awayMeta = awayAbbr && teams && teams[awayAbbr] ? teams[awayAbbr] : null;
+          const homeMeta = homeAbbr && teams && teams[ homeAbbr ] ? teams[ homeAbbr ] : null;
+          const awayMeta = awayAbbr && teams && teams[ awayAbbr ] ? teams[ awayAbbr ] : null;
 
           const enrichedGame = {
             ...game,
@@ -123,9 +124,9 @@ function TeamGrid({
           };
 
           if ( prediction ) {
-            console.log( 'predictions', prediction, '\n', 'enriched: ', enrichedGame )
-            enrichedGame.home_win = prediction.home_win === 1 ? homeAbbr : awayAbbr
-            enrichedGame.confidence_score = prediction.confidence_score ?? null;
+            console.log( 'predictions', prediction, '\n', 'enriched: ', enrichedGame );
+
+            enrichedGame.home_win = prediction.home_win === 1 ? homeAbbr : awayAbbr;
             enrichedGame.home_pred_score =
               prediction.home_score ?? prediction.home_score_pred ?? null;
             enrichedGame.away_pred_score =
@@ -134,24 +135,25 @@ function TeamGrid({
               prediction.home_win_probability ?? prediction.probs?.home ?? null;
           }
 
-          const handleClick = () => {
-            if (typeof onPredict === 'function' && !isGameLoading) {
-              onPredict(game);
+          const handleClick = () =>
+          {
+            if ( onPredict && !isGameLoading ) {
+              onPredict( game );
             }
           };
 
           return (
             <Card
-              key={rawKey}
-              matchup={enrichedGame}
-              prediction={prediction}
-              loading={isGameLoading}
-              error={errorMessage}
-              index={index}
-              onClick={handleClick}
+              key={ rawKey }
+              matchup={ enrichedGame }
+              prediction={ prediction }
+              loading={ isGameLoading }
+              error={ errorMessage }
+              index={ index }
+              onClick={ handleClick }
             />
           );
-        })}
+        } ) }
       </div>
     </section>
   );
