@@ -4,6 +4,7 @@
 
 ### Role
 - Quickly orient AI coding agents to the NFL_ML_Predictions repository so they can make safe, small, high-value edits without breaking builds or deployments.
+ALWAYS CHECK AND UPDATE: 'NFL_ML_Predictions\alfred.log.md'
 
 ### Big Picture
 - FastAPI backend exposes prediction APIs and loads ML artifacts. React frontend (Vite) talks to backend via REST `/predict` endpoint. Data flows from CSV datasets → ML models → API responses → UI predictions.
