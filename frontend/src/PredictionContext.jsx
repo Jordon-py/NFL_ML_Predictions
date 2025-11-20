@@ -284,7 +284,7 @@ function parseTeamsCsv( text )
     const parts = line.split( "," );
     if ( parts.length < 3 ) continue;
     const [ teamName, abbr, logoUrl ] = parts;
-    const code = ( abbr || "" ).trim();
+    const code = ( abbr || "" ).trim().toUpperCase();
     if ( !code ) continue;
     out[ code ] = {
       name: ( teamName || code ).trim(),
