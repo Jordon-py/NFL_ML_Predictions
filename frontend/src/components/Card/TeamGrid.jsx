@@ -112,8 +112,10 @@ function TeamGrid( {
           const errorMessage = errors?.[ rawKey ] ?? null;
 
           // Enrich the schedule row with team metadata (logos + pretty names) when available.
-          const homeAbbr = game.home_abbr || game.home_team;
-          const awayAbbr = game.away_abbr || game.away_team;
+          // Normalize abbreviations to uppercase so they match the
+          // `teams` lookup keys created in `PredictionContext`.
+          const homeAbbr = ( game.home_abbr || game.home_team || "" ).toString().trim().toUpperCase();
+          const awayAbbr = ( game.away_abbr || game.away_team || "" ).toString().trim().toUpperCase();
           const homeMeta = homeAbbr && teams && teams[ homeAbbr ] ? teams[ homeAbbr ] : null;
           const awayMeta = awayAbbr && teams && teams[ awayAbbr ] ? teams[ awayAbbr ] : null;
 
