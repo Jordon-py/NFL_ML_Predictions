@@ -1097,11 +1097,11 @@ def create_app() -> FastAPI:
         # the correct file whether it's stored in backend/data or as an
         # application-specific artifact (e.g., legacy `backend/Nfl_schedule_2025.csv`).
         schedule_path = str(config.resolve_schedule_path())
-        log.debug("Using schedule path: %s", schedule_path)
+        logging.getLogger("api").debug("Using schedule path: %s", schedule_path)
         try:
             df = pd.read_csv(schedule_path, parse_dates=True)
         except FileNotFoundError as exc:
-            log.error("Schedule file not found at %s; expected file: backend/Nfl_schedule_2025.csv", schedule_path)
+            logging.getLogger("api").error("Schedule file not found at %s; expected file: backend/Nfl_schedule_2025.csv", schedule_path)
             raise HTTPException(503, f"Schedule file not found: {schedule_path}. Expected: backend/Nfl_schedule_2025.csv") from exc
         print(f'schedule info: --> {df.head(10)},/n COLUMNS: --> {df.columns}')
 
