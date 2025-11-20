@@ -955,6 +955,8 @@ def create_app() -> FastAPI:
                 {
                     "season": season_val,
                     "week": week_val,
+                    "home_abbr": home_raw,
+                    "away_abbr": away_raw,
                     "home_team": home_team,
                     "away_team": away_team,
                     "home_logo": home_logo,
