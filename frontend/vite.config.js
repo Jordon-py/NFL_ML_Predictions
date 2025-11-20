@@ -3,8 +3,8 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react-swc';
 
 // https://vitejs.dev/config/
-export default defineConfig({
-  plugins: [react()],
+export default defineConfig( {
+  plugins: [ react() ],
   optimizeDeps: {
     esbuildOptions: {
       // Treat .js as JSX in src when needed
@@ -17,7 +17,12 @@ export default defineConfig({
     proxy: {
       '/api': { target: 'http://127.0.0.1:8000', changeOrigin: true },
       '/schedule': { target: 'http://127.0.0.1:8000', changeOrigin: true },
-      '/predict': { target: 'http://127.0.0.1:8000', changeOrigin: true }
+      '/predict': { target: 'http://127.0.0.1:8000', changeOrigin: true },
+      // Proxy history and health endpoints to the backend so dev requests
+      // to '/history' and '/health' are forwarded (fixes 404s from Vite dev server)
+      '/history': { target: 'http://127.0.0.1:8000', changeOrigin: true },
+      '/health': { target: 'http://127.0.0.1:8000', changeOrigin: true },
+      '/debug': { target: 'http://127.0.0.1:8000', changeOrigin: true }
     }
   },
   build: {
@@ -27,4 +32,4 @@ export default defineConfig({
   resolve: {
     alias: { '@': '/src' }
   }
-});
+} );

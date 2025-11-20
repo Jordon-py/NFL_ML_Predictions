@@ -67,8 +67,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, validator
 
-from .train_models import CORS_ORIGINS
-
 # ---------------------------------------------------------------
 # Enhanced Data Models with Strict Validation
 # ---------------------------------------------------------------
@@ -186,7 +184,7 @@ def _select_schedule_scope(df: pd.DataFrame, now: Optional[datetime] = None) -> 
 
 
     if df is None or df.empty:
-        df = pd.read_csv('backend/data/Nfl_schedule_2025_2026.csv')
+        df = pd.read_csv('backend/Nfl_schedule_2025.csv')
     
     
 
@@ -209,8 +207,8 @@ def _select_schedule_scope(df: pd.DataFrame, now: Optional[datetime] = None) -> 
             return None
 
     # 1) Use kickoff timestamps when available so "next week" truly means upcoming games.
-    if "home_game_date" in working.columns:
-        kickoff = pd.to_datetime(working["home_game_date"], errors="coerce", utc=True)
+    if "gameday" in working.columns:
+        kickoff = pd.to_datetime(working["gameday"], errors="coerce", utc=True)
         working["kickoff_dt"] = kickoff
         grace_window = timedelta(hours=4)
         future_rows = (
@@ -775,16 +773,9 @@ class AppState:
 
         with self.history_lock:
             self.prediction_history.append(entry)
+            entry.pd.to_csv(self.config.data_dir / "latest_prediction.csv", index=False)
 
-import os
-from contextlib import asynccontextmanager
-from typing import AsyncGenerator
 
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from dotenv import load_dotenv
-
-# ... your other imports (Config, AppState, logging, etc.)
 
 def create_app() -> FastAPI:
     """Create FastAPI application with enhanced configuration"""
@@ -960,10 +951,9 @@ def create_app() -> FastAPI:
         archival 2018 rows), the handler now relies on kickoff timestamps and a
         calendar-aware fallback to surface the true "next" slate.
         """
-        df = app_state.data_manager.dataset
-        if df is None or df.empty:
-            df = pd.read_csv('Nfl_schedule_2025.csv', parse_dates=True)
-            print(f'schedule info: --> {df.head(10)},\n COLUMNS: --> {df.columns}')
+        schedule_path = 'backend/Nfl_schedule_2025.csv'
+        df = pd.read_csv(schedule_path, parse_dates=True)
+        print(f'schedule info: --> {df.head(10)},\n COLUMNS: --> {df.columns}')
 
         try:
             target_season, target_week, selection = _select_schedule_scope(df)
@@ -987,13 +977,13 @@ def create_app() -> FastAPI:
             target_week,
             selection.get("strategy"),
         )
-        tm_logo = pd.read_csv('./team_logo.csv')
+        tm_logo = pd.read_csv('backend/team_logo.csv')
         # Normalise into a compact schedule shape for the frontend.
         games: List[Dict[str, Any]] = []
         for _, row in week_rows.iterrows():
             kickoff_iso: Optional[str] = None
-            if "home_game_date" in row.index:
-                kickoff_dt = pd.to_datetime(row.get("home_game_date"), errors="coerce", utc=True)
+            if "gameday" in row.index:
+                kickoff_dt = pd.to_datetime(row.get("gameday"), errors="coerce", utc=True)
                 kickoff_iso = kickoff_dt.isoformat() if pd.notna(kickoff_dt) else None
 
             season_val = row.get("season_num")
@@ -1004,6 +994,12 @@ def create_app() -> FastAPI:
             week_val = target_week if pd.isna(week_val) else int(week_val)
             home_team = str(row.get("home_team", "")).upper()
             away_team = str(row.get("away_team", "")).upper()
+            
+            # Initialize defaults
+            home_abbr = home_team
+            home_logo = None
+            away_abbr = away_team
+            away_logo = None
             
             for _, logo_row in tm_logo.iterrows():
                 if home_team == logo_row['abbr']:
