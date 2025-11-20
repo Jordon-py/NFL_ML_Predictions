@@ -515,11 +515,18 @@ This project uses a split deployment architecture:
 
 The backend and frontend are properly configured for cross-origin requests:
 
-1. **Backend CORS**: Set `CORS_ORIGINS` environment variable on Heroku:
+1. **Backend CORS**: The API now ships with an explicit default CORS policy that allows the production frontend and a localhost dev origin. This makes most deployments simpler and protects users from an accidental empty ALLOWED_ORIGINS configuration.
 
-   ```bash
-   heroku config:set CORS_ORIGINS="http://localhost:3000,https://localhost:3000,https://nfl-ml-predictions.vercel.app,https://nfl-predict-frontend.vercel.app" -a nfl-predict
-   ```
+    Default allowed origins:
+
+    - `https://nfl-ml-predictions.vercel.app`
+    - `http://localhost:3000`
+
+    These defaults may be overridden using the `ALLOWED_ORIGINS` environment variable on Heroku if you need to add extra origins or enable broader access. For example, to explicitly set allowed origins on Heroku:
+
+    ```bash
+    heroku config:set ALLOWED_ORIGINS="https://nfl-ml-predictions.vercel.app,http://localhost:3000" -a nfl-predict
+    ```
 
 2. **Frontend API base**: Set `VITE_API_BASE` in Vercel project settings or `frontend/.env.production`.
 
@@ -534,7 +541,7 @@ For detailed CORS and API configuration guide, see [docs/CORS_API_CONFIGURATION.
 heroku login
 
 # Deploy backend
-git push heroku master --force
+git push heroku main
 
 # Verify deployment
 heroku logs --tail -a nfl-predict
