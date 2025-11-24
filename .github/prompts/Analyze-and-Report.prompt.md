@@ -1,5 +1,5 @@
 ---
-mode: agent
+agent: alfred-config.yml
 ---
 
 ## Primary Objective:
@@ -23,15 +23,17 @@ File Path	Type	Purpose
 /backend/train_models.py	ML Pipeline	Model training, saving, prediction logic
 /frontend/src/	React Frontend	Display of predictions, probabilities, and user interface
 /maintenance.md	Maintenance Log	Track errors, optimizations, and suggested improvements
+
 📋 Step-by-Step Instructions
+- ALWAYS CHECK AND UPDATE: 'NFL_ML_Predictions\alfred.log.md'
 1. Static Analysis and Documentation
 
 At the top of each file, insert a clear Doc Header:
 
 # File: {{filename}}
 # Purpose: {{short description}}
-# Functions: {{list of function names}}
-# Variables: {{key variables}}
+# Functions: {{list of function names and line number}}
+# Variables: {{key variables and line number}}
 # Interacts With: {{cross-file dependencies}}
 
 

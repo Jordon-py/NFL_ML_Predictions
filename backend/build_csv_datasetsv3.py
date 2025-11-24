@@ -1,3 +1,8 @@
+# File: backend/build_csv_datasetsv3.py
+# Purpose: Canonical NFL dataset builder producing leak-safe game-level features and exports for training/inference.
+# Functions: setup_logger(105), load_team_game_metrics(218), load_player_game_stats(375), load_team_weekly_stats(507), load_schedules(557), add_features(709), build_dominance_features(1188), create_elo_features(1341), create_game_features(1417), create_rolling_features(1447), create_qb_features(1547), create_target_features(1581), build_dataset(1618), parse_args(1779), main(1822)
+# Variables: ABBR_FIX(80), OUTPUT_DATASET_NAME(90), HAS_winner_BOOL(93), TIME_COLS_IN_ORDER(94), NFL_BACKEND(121)
+# Interacts With: backend/utils/feature_helpers.py, nflreadpy/nfl_data_py backends, data/pbp caches, train_models.py (consumes CSV outputs)
 """
 build_csv_datasets.py
 =====================
@@ -7,12 +12,12 @@ Production-ready builder for NFL game-level datasets (one row per game).
 **PURPOSE: DATASET BUILDING ONLY** - Model training is handled in enhanced_pipeline.py
 
 Features:
-  • Leak-free rolling features (strict shift(1) before rolling)
-  • Team-game advanced metrics (EPA, success, explosive, turnover rates)
-  • Pairwise dominance features (static table, leak-free pre-game priors, matrix values)
-  • Market context (moneyline → implied probability, spread/total, rest diffs)
-  • Optional team encodings (one-hot for home/away)
-  • Optional calibration rows for downstream harnesses
+  - Leak-free rolling features (strict shift(1) before rolling)
+  - Team-game advanced metrics (EPA, success, explosive, turnover rates)
+  - Pairwise dominance features (static table, leak-free pre-game priors, matrix values)
+  - Market context (moneyline -> implied probability, spread/total, rest diffs)
+  - Optional team encodings (one-hot for home/away)
+  - Optional calibration rows for downstream harnesses
 
 Quick start
 -----------
@@ -33,10 +38,10 @@ Additional quick starts (common option combinations):
 
 Outputs
 -------
-• CSV: {out_dir}/game_featuresYYYYMMDD.csv
-• Log: {out_dir}/build_csv_datasets.log
-• (Optional) dominance_matrix.csv
-• (Optional) game_features_metadata.json
+- CSV: {out_dir}/game_featuresYYYYMMDD.csv
+- Log: {out_dir}/build_csv_datasets.log
+- (Optional) dominance_matrix.csv
+- (Optional) game_features_metadata.json
 """
 
 from __future__ import annotations
@@ -106,7 +111,7 @@ def setup_logger(out_dir: Path) -> None:
         format="%(asctime)s %(levelname)s %(message)s",
         handlers=[logging.FileHandler(log_file, mode="w"), logging.StreamHandler()],
     )
-    logging.info("Logger initialized → %s", log_file)
+    logging.info("Logger initialized -> %s", log_file)
 
 
 # ---------------------------------------------------------------------
@@ -139,7 +144,7 @@ try:
         nfl = _nfl
         NFL_BACKEND = "nfl_data_py"
         _note_backend(
-            f"Using fallback backend '{NFL_BACKEND}' — {_fallback_reason}",
+            f"Using fallback backend '{NFL_BACKEND}' - {_fallback_reason}",
             logging.WARNING,
         )
 except Exception as e:
@@ -153,7 +158,7 @@ except Exception as e:
         nfl = _nfl
         NFL_BACKEND = "nfl_data_py"
         _note_backend(
-            f"Using fallback backend '{NFL_BACKEND}' — {_fallback_reason}",
+            f"Using fallback backend '{NFL_BACKEND}' - {_fallback_reason}",
             logging.WARNING,
         )
 

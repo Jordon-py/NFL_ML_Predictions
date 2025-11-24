@@ -1,605 +1,343 @@
-// /src/api/client.js 
-/**
- * NFL-ML API Client (Hardened + Teachable v2)
- *
- * WHY THIS FILE EXISTS
- * ---------------------
- * Frontends fail in production for three common reasons:
- * 1) Environment/base-URL confusion (local vs hosted)
- * 2) Flaky networks/timeouts without retries
- * 3) Inconsistent payloads causing 400s
- *
- * This client addresses all three with:
- * - Safe base resolution (localhost uses Vite proxy; hosted uses VITE_API_BASE or a fallback)
- * - Abortable fetch with per-attempt timeout and exponential backoff + jitter
- * - 429/503 Retry-After handling
- * - Strict request normalization for /predict to avoid server 400s
- * - Small, optional in-memory cache for GETs (TTL) to reduce chatter
- * - Rich, typed-ish errors to power helpful UI messages
- *
- * QUICK START
- * -----------
- * import { apiClient, predictGame } from "./api/client";
- * await apiClient.getHealth();
- * await predictGame({ homeTeam: "SF", awayTeam: "SEA", season: 2025, week: 10 });
- *
- * POWER TIPS
- * ----------
- * - Override base per instance: createApi("https://your-backend")
- * - Per-call opts: api(path, init, { timeoutMs: 10000, retries: 1, cacheTtlMs: 5000 })
- */
+// File: frontend/src/api/client.js
+// Purpose: Fetch client for the FastAPI backend with simple retry / timeout / (optional) cache.
+// Exports: apiClient (default), getHealthStatus, getNextWeekSchedule, getStatusOverview,
+//          getPredictionHistory, predictGame.
+// Interacts With: Backend endpoints /health, /schedule/next-week, /status/overview,
+//                 /history, /predict. Used by PredictionContext, Dashboard, StatsPage.
 
 /**
- * Enhanced NFL-ML API Client with Type Safety
+ * Minimal, explicit API client for the NFL-ML backend.
+ * - Resolves a sensible base URL for dev vs production.
+ * - Adds timeout + retry behavior around fetch.
+ * - Supports a small in-memory cache for idempotent GET requests.
  */
-
-// Type Definitions
-/**
- * @typedef {Object} PredictionRequest
- * @property {string} home_team
- * @property {string} away_team  
- * @property {number} season
- * @property {number} week
- */
-
-/**
- * @typedef {Object} PredictionResponse
- * @property {number} home_score
- * @property {number} away_score
- * @property {number} home_win_probability
- * @property {number} away_win_probability
- * @property {number} point_diff
- * @property {string} mode
- * @property {string} prediction_source
- * @property {boolean} win_classifier_used
- * @property {string} win_probability_source
- * @property {number} [win_threshold_used]
- * @property {number} [confidence_score]
- */
-
-/**
- * @typedef {Object} ApiConfig
- * @property {number} [timeoutMs]
- * @property {number} [retries]
- * @property {number} [cacheTtlMs]
- * @property {string} [baseUrl]
- */
-
 class TypedApiClient
 {
-  /**
-   * @param {ApiConfig} config
-   */
   constructor ( config = {} )
   {
     this.config = {
-      timeoutMs: config.timeoutMs || 15000,
-      retries: config.retries || 2,
-      cacheTtlMs: config.cacheTtlMs || 0,
-      baseUrl: config.baseUrl || this.resolveBaseUrl(),
-      ...config
+      timeoutMs: 15000,
+      retries: 2,
+      cacheTtlMs: 0,
+      baseUrl: this.resolveBaseUrl( config.baseUrl ),
+      ...config,
     };
 
+    /** @type {Map<string, { expiresAt: number, value: any }>} */
     this.cache = new Map();
-    this.requestQueue = new Map();
   }
 
   /**
-  * @param {string} url
-  * @returns {boolean}
-  */
-  isValidUrl( url )
+   * Decide which base URL to hit.
+   * - If VITE_API_BASE is set, always use it.
+   * - Otherwise, use localhost:8000 when running on localhost,
+   *   and the deployed Heroku URL in production.
+   */
+  resolveBaseUrl( overrideUrl )
   {
+    if ( overrideUrl ) return overrideUrl;
+
     try {
-      new URL( url );
-      return true;
-    } catch {
-      return false;
+      // Vite-style env var
+      if ( import.meta && import.meta.env && import.meta.env.VITE_API_BASE ) {
+        return import.meta.env.VITE_API_BASE;
+      }
+    } catch ( e ) {
+      // ignore; import.meta may not exist in some runtimes (tests, SSR, etc.)
     }
+
+    if ( typeof window !== "undefined" ) {
+      const host = window.location.hostname;
+      if ( host === "localhost" || host === "127.0.0.1" ) {
+        return "http://127.0.0.1:8000";
+      }
+    }
+
+    // Default production backend
+    return "https://nfl-predict-ecf5a5bd34fe.herokuapp.com";
   }
-
-  // Enhanced URL resolution with validation
-  resolveBaseUrl()
-  {
-    const importMeta = typeof import.meta !== 'undefined'
-      ? /** @type {{ env?: { VITE_API_BASE?: string } }} */ ( import.meta )
-      : { env: undefined };
-
-    const envUrl = importMeta.env && typeof importMeta.env.VITE_API_BASE === 'string'
-      ? importMeta.env.VITE_API_BASE
-      : undefined;
-    const isLocalhost = window.location.hostname.includes( 'localhost' );
-
-    if ( envUrl && this.isValidUrl( envUrl ) ) {
-      return envUrl;
-    }
-
-    if ( isLocalhost ) {
-      return ''; // Use relative URLs for local development (Vite proxy)
-    }
-
-    const fallback = 'https://nfl-predict-ecf5a5bd34fe.herokuapp.com';
-    return fallback;
-  }
-
 
   /**
-   * @param {string} path
-   * @param {RequestInit} init
-   * @param {ApiConfig} options
-   * @returns {Promise<any>}
+   * Build an absolute URL from a path or a full URL.
+   */
+  buildUrl( path )
+  {
+    if ( !path ) throw new Error( "client.buildUrl: path is required" );
+
+    // Allow callers to pass a full URL
+    if ( /^https?:\/\//i.test( path ) ) {
+      return path;
+    }
+
+    const base = ( this.config.baseUrl || "" ).replace( /\/+$/, "" );
+    const suffix = path.startsWith( "/" ) ? path : `/${path}`;
+    return `${base}${suffix}`;
+  }
+
+  /**
+   * Internal helper to read from (and optionally write to) the simple cache.
+   */
+  getCached( key, ttlMs )
+  {
+    if ( !ttlMs ) return null;
+    const now = Date.now();
+    const entry = this.cache.get( key );
+    if ( !entry ) return null;
+    if ( entry.expiresAt <= now ) {
+      this.cache.delete( key );
+      return null;
+    }
+    return entry.value;
+  }
+
+  setCached( key, value, ttlMs )
+  {
+    if ( !ttlMs ) return;
+    const expiresAt = Date.now() + ttlMs;
+    this.cache.set( key, { expiresAt, value } );
+  }
+
+  /**
+   * Core request helper with:
+   * - automatic base URL resolution
+   * - timeout via AbortController
+   * - basic retry loop on network/5xx errors
+   * - optional caching for GETs
    */
   async request( path, init = {}, options = {} )
   {
-    const mergedOptions = { ...this.config, ...options };
-    const url = this.buildUrl( path, mergedOptions.baseUrl );
-    const method = ( init.method || 'GET' ).toUpperCase();
-    const cacheKey = method === 'GET' ? url : null;
+    const merged = { ...this.config, ...options };
+    const { timeoutMs, retries, cacheTtlMs } = merged;
+    const url = this.buildUrl( path );
 
-    // Check cache for GET requests
-    if ( cacheKey && mergedOptions.cacheTtlMs > 0 ) {
-      const cached = this.getCache( cacheKey );
-      if ( cached !== undefined ) {
-        return cached;
-      }
+    const method = ( init.method || "GET" ).toUpperCase();
+    const isCacheableGet = method === "GET" && cacheTtlMs && cacheTtlMs > 0;
+    const cacheKey = isCacheableGet ? `${method}:${url}` : null;
+
+    // Cache hit for GET
+    if ( isCacheableGet && cacheKey ) {
+      const cached = this.getCached( cacheKey, cacheTtlMs );
+      if ( cached !== null ) return cached;
     }
 
-    // Prevent duplicate requests
-    if ( this.requestQueue.has( url ) ) {
-      return this.requestQueue.get( url );
-    }
+    let lastError = null;
 
-    const requestPromise = ( async () =>
-    {
-      try {
-        const result = await this.executeRequest( url, init, mergedOptions );
-
-        // Cache successful GET responses
-        if ( cacheKey && mergedOptions.cacheTtlMs > 0 ) {
-          this.setCache( cacheKey, result, mergedOptions.cacheTtlMs );
-        }
-
-        return result;
-      } finally {
-        this.requestQueue.delete( url );
-      }
-    } )();
-
-    this.requestQueue.set( url, requestPromise );
-    return requestPromise;
-  }
-
-  /**
-   * @param {string} url
-   * @param {RequestInit} init
-   * @param {ApiConfig} options
-   * @returns {Promise<any>}
-   */
-  async executeRequest( url, init, options )
-  {
-    const maxRetries = typeof options.retries === 'number' ? options.retries : 0;
-    const timeoutMs = typeof options.timeoutMs === 'number' ? options.timeoutMs : this.config.timeoutMs;
-
-    for ( let attempt = 0; attempt <= maxRetries; attempt++ ) {
+    for ( let attempt = 0; attempt <= retries; attempt++ ) {
       const controller = new AbortController();
-      const timeoutId = setTimeout( () => controller.abort(), timeoutMs );
+      const timeoutId = setTimeout(
+        () => controller.abort(),
+        timeoutMs || 15000
+      );
 
       try {
         const response = await fetch( url, {
           ...init,
           signal: controller.signal,
           headers: {
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
-            ...( init && init.headers ? init.headers : {} ),
+            "Content-Type": "application/json",
+            ...( init.headers || {} ),
           },
         } );
 
         clearTimeout( timeoutId );
 
-        if ( !response.ok ) {
-          const error = await this.createApiError( response, url );
+        const text = await response.text();
+        const body = text ? JSON.parse( text ) : null;
 
-          if ( !this.isRetriable( error ) || attempt === maxRetries ) {
-            throw error;
+        if ( !response.ok ) {
+          // Do not retry on 4xx; surface the error.
+          if ( response.status >= 400 && response.status < 500 ) {
+            const message =
+              ( body && body.detail ) ||
+              body?.message ||
+              `Request failed with status ${response.status}`;
+            throw new Error( message );
           }
 
-          const backoffMs = this.calculateBackoff( attempt, error );
-          await this.delay( backoffMs );
-          continue;
+          // For 5xx errors, fall through to retry logic below.
+          lastError = new Error(
+            `Server error ${response.status}: ${response.statusText || "Unknown error"
+            }`
+          );
+        } else {
+          // Success path
+          if ( isCacheableGet && cacheKey ) {
+            this.setCached( cacheKey, body, cacheTtlMs );
+          }
+          return body;
         }
-
-        const contentType = response.headers.get( 'content-type' );
-        const data = contentType ? await response.json() : null;
-
-        return this.validateResponse( data, init.method || 'GET', url );
-      } catch ( error ) {
+      } catch ( err ) {
         clearTimeout( timeoutId );
 
-        // Ensure error is Error or ApiError type for isRetriable
-        const err = error instanceof Error ? error : new Error( String( error ) );
-        if ( !this.isRetriable( err ) || attempt === maxRetries ) {
-          throw err;
-        }
+        lastError = err;
+        const isAbort = err && err.name === "AbortError";
+        const isLastAttempt = attempt === retries;
 
-        const backoffMs = this.calculateBackoff( attempt, err );
-        await this.delay( backoffMs );
+        if ( isLastAttempt || isAbort ) {
+          break;
+        }
       }
     }
 
-    throw new ApiError( 500, 'Request failed after maximum retries', null, url );
-  }
-
-  /**
-   * @param {Response} response
-   * @param {string} url
-   * @returns {Promise<ApiError>}
-   */
-  async createApiError( response, url )
-  {
-    let payload;
-    try {
-      payload = await response.json();
-    } catch {
-      payload = null;
+    // If we exhausted retries, throw the last error we observed.
+    if ( lastError instanceof Error ) {
+      throw lastError;
     }
-
-    return new ApiError(
-      response.status,
-      payload?.detail || payload?.message || response.statusText,
-      payload,
-      url,
-      response.headers
-    );
-  }
-
-  /**
-   * @param {any} data
-   * @param {string} method
-   * @param {string} url
-   * @returns {any}
-   */
-  validateResponse( data, method, url )
-  {
-    // Always validate prediction responses regardless of HTTP verb so
-    // both POST /predict and any future GET-based prediction endpoints
-    // share the same contract checks.
-    if ( url.includes( '/predict' ) && data ) {
-      return this.validatePredictionResponse( data );
-    }
-    return data;
-  }
-
-  /**
-   * @param {any} data
-   * @returns {PredictionResponse}
-   */
-  validatePredictionResponse( data )
-  {
-    const required = [ 'home_score', 'away_score' ];
-    const missing = required.filter( field => data[ field ] === undefined );
-
-    if ( missing.length > 0 ) {
-      throw new ApiError( 500, `Invalid prediction response: missing ${missing.join( ', ' )}` );
-    }
-
-    return data;
-  }
-
-  // Prediction-specific methods with enhanced validation
-  /**
-   * @param {PredictionRequest} request
-   * @param {ApiConfig} options
-   * @returns {Promise<PredictionResponse>}
-   */
-  async predictGame( request, options = {} )
-  {
-
-    return this.request( '/predict', {
-      method: 'POST',
-      body: JSON.stringify( request )
-    }, options );
-  }
-
-  /**
-   * @param {PredictionRequest} request
-   */
-  validatePredictionRequest( request )
-  {
-    if ( !request.home_team || !request.away_team ) {
-      throw new ApiError( 400, 'Home and away team are required' );
-    }
-
-    if ( request.season < 2000 || request.season > 2100 ) {
-      throw new ApiError( 400, 'Season must be between 2000 and 2100' );
-    }
-
-    if ( request.week < 1 || request.week > 22 ) {
-      throw new ApiError( 400, 'Week must be between 1 and 22' );
-    }
-
-    if ( request.home_team === request.away_team ) {
-      throw new ApiError( 400, 'Home and away teams cannot be the same' );
-    }
-  }
-
-  // Cache management
-  /**
-   * @param {string} key
-   * @returns {any}
-   */
-  getCache( key )
-  {
-    const entry = this.cache.get( key );
-    if ( !entry ) return undefined;
-
-    if ( Date.now() > entry.expiresAt ) {
-      this.cache.delete( key );
-      return undefined;
-    }
-
-    return entry.data;
-  }
-
-  /**
-   * @param {string} key
-   * @param {any} data
-   * @param {number} ttlMs
-   */
-  setCache( key, data, ttlMs )
-  {
-    this.cache.set( key, {
-      expiresAt: Date.now() + ttlMs,
-      data
-    } );
-  }
-
-  // Utility methods
-  /**
-   * @param {number} ms
-   * @returns {Promise<void>}
-   */
-  delay( ms )
-  {
-    return new Promise( resolve => setTimeout( resolve, ms ) );
-  }
-
-  /**
-   * @param {number} attempt
-    * @param {Error|ApiError} error
-   * @returns {number}
-   */
-  calculateBackoff( attempt, error )
-  {
-    const baseMs = 300;
-    const jitter = 0.25;
-    const retryAfter = error instanceof ApiError && error.retryAfterMs ? error.retryAfterMs : 0;
-
-    return Math.max(
-      baseMs * Math.pow( 2, attempt ) * ( 1 + Math.random() * jitter ),
-      retryAfter
-    );
-  }
-
-  /**
-   * @param {Error|ApiError} error
-   * @returns {boolean}
-   */
-  isRetriable( error )
-  {
-    if ( error.name === 'AbortError' ) return true;
-    if ( error instanceof TypeError ) return true; // Network errors
-    if ( error instanceof ApiError ) {
-      return error.status >= 500 || error.status === 429;
-    }
-    return false;
-  }
-
-  /**
-   * @param {string} path
-   * @param {string} baseUrl
-   * @returns {string}
-   */
-  buildUrl( path, baseUrl )
-  {
-    // Be defensive: coerce inputs to strings and handle undefined/null.
-    const maybePath = path == null ? '' : String( path );
-    if ( maybePath.startsWith( 'http' ) ) return maybePath;
-
-    const maybeBase = baseUrl == null ? '' : String( baseUrl );
-
-    const normalizedBase = maybeBase.replace( /\/+$|^\s+|\s+$/g, '' );
-    const normalizedPath = maybePath.replace( /^\/+/, '' );
-
-    return normalizedBase ? `${normalizedBase}/${normalizedPath}` : `/${normalizedPath}`;
+    throw new Error( "Unknown network error while calling API" );
   }
 }
 
-// Enhanced Error Class
-class ApiError extends Error
-{
-  /**
-   * @param {number} status
-   * @param {string} message
-   * @param {any} [payload]
-   * @param {string} [url]
-   * @param {Headers} [headers]
-   */
-  constructor ( status, message, payload, url, headers )
-  {
-    super( message );
-    this.name = 'ApiError';
-    this.status = status;
-    this.payload = payload;
-    this.url = url;
-    this.headers = headers;
-    this.retryAfterMs = this.parseRetryAfter( headers );
-  }
+// Shared instance used by the React app.
+const apiClient = new TypedApiClient();
 
-  /**
-    * @param {Headers|undefined} headers
-    * @returns {number|undefined}
-    */
-  parseRetryAfter( headers )
-  {
-    const value = headers?.get( 'Retry-After' );
-    if ( !value ) return undefined;
-
-    const seconds = parseInt( value, 10 );
-    if ( !isNaN( seconds ) ) return seconds * 1000;
-
-    const date = Date.parse( value );
-    if ( !isNaN( date ) ) return Math.max( 0, date - Date.now() );
-
-    return undefined;
-  }
-}
-
-// Create default instance
-const defaultClient = new TypedApiClient();
+/* -------------------------------------------------------------------------- */
+/*  Exported functions used by PredictionContext / Dashboard / StatsPage      */
+/* -------------------------------------------------------------------------- */
 
 /**
- * Factory helper: create a new API client instance.
- *
- * @param {ApiConfig|string} [configOrBaseUrl] Either a config object or a base URL string.
- * @returns {TypedApiClient}
- */
-export function createApi( configOrBaseUrl = {} )
-{
-  if ( typeof configOrBaseUrl === 'string' ) {
-    return new TypedApiClient( { baseUrl: configOrBaseUrl } );
-  }
-  return new TypedApiClient( configOrBaseUrl || {} );
-}
-
-// Named alias for the default instance used across the app.
-export const apiClient = defaultClient;
-
-/**
- * Fetch lightweight backend health status.
- * Mirrors FastAPI `/health` endpoint.
- *
- * @param {ApiConfig} [options]
- * @returns {Promise<any>}
+ * Lightweight health check for the backend.
+ * Wraps GET /health and enables a short cache to avoid spamming the server.
  */
 export function getHealthStatus( options = {} )
 {
-  // 1-minute cache TTL keeps the navbar and dashboard responsive while
-  // avoiding excessive polling in production.
-  return defaultClient.request( '/health', { method: 'GET' }, {
-    cacheTtlMs: 60000,
-    ...options,
-  } );
+  return apiClient.request(
+    "/health",
+    { method: "GET" },
+    { cacheTtlMs: 60000, ...options }
+  );
 }
 
 /**
- * Fetch the upcoming NFL week schedule from `/schedule/next-week`.
- *
- * @param {ApiConfig} [options]
- * @returns {Promise<any[]>}
+ * Fetch the next-week schedule from the backend.
+ * GET /schedule/next-week
  */
-// Get the schedule for the next week from the NFL prediction backend
-export async function getNextWeekSchedule( options = {} )
+export function getNextWeekSchedule( options = {} )
 {
-  const res = await defaultClient.request( '/schedule/next-week', { method: 'GET' }, options );
-  return res;
-}
-
-
-/**
- * Fetch recent prediction history entries.
- * The backend may expose this as `/history` or `/history/predictions`; we
- * start with the simpler `/history` contract and let the caller handle
- * missing endpoints via try/catch (see PredictionContext).
- *
- * @param {number} [limit]
- * @param {ApiConfig} [options]
- * @returns {Promise<any>}
- */
-export function getPredictionHistory( limit = 100, options = {} )
-{
-  const safeLimit = Number.isFinite( limit ) && limit > 0 ? Math.floor( limit ) : 100;
-  const path = `/history?limit=${encodeURIComponent( String( safeLimit ) )}`;
-  return defaultClient.request( path, { method: 'GET' }, options );
+  return apiClient.request( "/schedule/next-week", { method: "GET" }, options );
 }
 
 /**
- * Fetch aggregate system status for dashboards. Backends deployed so far do
- * not always expose `/status/overview`, so we gracefully swallow 404s and let
- * callers fall back to locally derived metrics. This keeps StatsPage renders
- * non-blocking even when the endpoint is absent.
- *
- * @param {ApiConfig} [options]
- * @returns {Promise<any|null>}
+ * Fetch a compact status/overview object for stats pages.
+ * GET /status/overview
+ * If the endpoint is missing or fails, returns null instead of throwing.
  */
 export async function getStatusOverview( options = {} )
 {
   try {
-    // Repository Guardian Log: surfaces system health data in StatsPage while
-    // keeping builds unblocked even when the backend has not yet shipped the
-    // matching endpoint.
-    return await defaultClient.request( '/status/overview', { method: 'GET' }, options );
-  } catch ( error ) {
-    if ( error instanceof ApiError ) {
-      return null;
-    }
-    throw error;
-  }
-}
-
-/**
- * Trigger a retraining run on the backend if supported.
- *
- * Note: Not all backend deployments expose a `/retrain` endpoint. This
- * helper will return a graceful object when the endpoint is absent so
- * callers (hooks/UI) can handle the case without crashing the app.
- *
- * @param {ApiConfig} [options]
- * @returns {Promise<{status:string, [key: string]: any}>}
- */
-export async function startTraining( options = {} )
-{
-  try {
-    const res = await defaultClient.request( '/retrain', { method: 'POST' }, options );
-    // Expect backend to return a small status object: { status: 'queued'|'started'|'done' }
-    return res || { status: 'started' };
+    return await apiClient.request(
+      "/status/overview",
+      { method: "GET" },
+      options
+    );
   } catch ( err ) {
-    // Gracefully handle the common case where the endpoint is not implemented.
-    if ( err instanceof ApiError && err.status === 404 ) {
-      return { status: 'unsupported', message: 'Backend does not expose /retrain' };
-    }
-    throw err;
+    console.warn(
+      "[api/client] Status overview endpoint failed; returning null.",
+      err
+    );
+    return null;
   }
 }
 
 /**
- * High-level prediction helper used by PredictionContext.
- * Accepts camelCase keys and normalises them to the backend's
- * snake_case request payload.
- *
- * @param {{ homeTeam?: string; awayTeam?: string; home_team?: string; away_team?: string; season: number; week: number }} params
- * @param {ApiConfig} [options]
- * @returns {Promise<PredictionResponse>}
+ * Fetch prediction history for charts and audit UI.
+ * GET /history?limit={limit}
+ * Returns a normalized shape: { entries: Array, total: number }
  */
-export function predictGame( params, options = {} )
+export async function getPredictionHistory( limit = 100, options = {} )
+{
+  const res = await apiClient.request(
+    `/history?limit=${encodeURIComponent( limit )}`,
+    { method: "GET" },
+    options
+  );
+
+  const entries = Array.isArray( res )
+    ? res
+    : Array.isArray( res?.entries )
+      ? res.entries
+      : [];
+
+  const total =
+    typeof res?.total === "number" ? res.total : entries.length;
+
+  return { entries, total };
+}
+
+/**
+ * Call the /predict endpoint for a single game.
+ *
+ * Accepts a flexible input shape:
+ *  - { home_team, away_team, season, week }
+ *  - { homeTeam, awayTeam, seasonNum, weekNum }
+ *  - a full schedule/game row with home_abbr/away_abbr + season/week
+ *
+ * Always sends the backend the canonical snake_case payload:
+ *  { home_team, away_team, season, week }
+ */
+export async function predictGame( params, options = {} )
 {
   if ( !params ) {
-    throw new ApiError( 400, 'Prediction parameters are required' );
+    throw new Error( "predictGame: params are required" );
   }
-  const { home_team = params.homeTeam, away_team = params.awayTeam, season, week } = params;
 
-  if ( !home_team || !away_team ) {
-    throw new ApiError( 400, 'home_team and away_team are required for prediction' );
+  // Normalize camelCase and various key names into the canonical ones.
+  const homeVal =
+    params.home_team ||
+    params.homeTeam ||
+    params.home_abbr ||
+    params.homeAbbr ||
+    "";
+  const awayVal =
+    params.away_team ||
+    params.awayTeam ||
+    params.away_abbr ||
+    params.awayAbbr ||
+    "";
+  const seasonVal =
+    params.season ||
+    params.season_num ||
+    params.seasonNum ||
+    params.seasonNumber;
+  const weekVal =
+    params.week ||
+    params.week_num ||
+    params.weekNum ||
+    params.weekNumber;
+
+  const season = Number( seasonVal );
+  const week = Number( weekVal );
+
+  if (
+    !homeVal ||
+    !awayVal ||
+    !Number.isFinite( season ) ||
+    !Number.isFinite( week )
+  ) {
+    throw new Error(
+      `predictGame: invalid input. Got home="${homeVal}", away="${awayVal}", season="${seasonVal}", week="${weekVal}".`
+    );
   }
 
   const payload = {
-    home_team: String( home_team ).trim().toUpperCase(),
-    away_team: String( away_team ).trim().toUpperCase(),
-    season: Number( season ),
-    week: Number( week ),
+    home_team: String( homeVal ).trim().toUpperCase(),
+    away_team: String( awayVal ).trim().toUpperCase(),
+    season,
+    week,
   };
 
-  return defaultClient.predictGame( payload, options );
+  // POST to /predict and return the parsed JSON response.
+  // Backend contract (from README):
+  // Returns a PredictionResponse including:
+  //  - home_score, away_score
+  //  - home_win_probability, point_diff
+  //  - mode, prediction_source, confidence_score, etc.
+  const res = await apiClient.request(
+    "/predict",
+    { method: "POST", body: JSON.stringify( payload ) },
+    options
+  );
+
+  return res;
 }
 
-export default defaultClient
+export default apiClient;
