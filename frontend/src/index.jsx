@@ -30,11 +30,14 @@ import './styles/theme-grid.css';  // ← load second
 import '@material/web/button/filled-button.js';
 import '@material/web/button/outlined-button.js';
 import '@material/web/checkbox/checkbox.js';
-import { BrowserRouter } from 'react-router-dom';
+
 
 
 // Grab the static DOM node that Vite injects for us.
 const rootElement = document.getElementById('root');
+if (!rootElement) {
+  throw new Error('Root element "#root" not found');
+}
 
 // React 18's concurrent root API replaces the legacy render function.
 const root = ReactDOM.createRoot(rootElement);
@@ -42,9 +45,9 @@ root.render(
   <React.StrictMode>
     <ErrorBoundary>
       <PredictionProvider>
-        <BrowserRouter>
+       
           <App />
-        </BrowserRouter>
+      
       </PredictionProvider>
     </ErrorBoundary>
   </React.StrictMode>

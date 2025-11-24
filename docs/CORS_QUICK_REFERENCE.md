@@ -17,6 +17,7 @@ CORS_ORIGINS="http://localhost:3000,https://localhost:3000,https://nfl-ml-predic
 ```
 
 **Set on Heroku:**
+
 ```bash
 heroku config:set CORS_ORIGINS="..." -a nfl-predict
 ```
@@ -24,11 +25,13 @@ heroku config:set CORS_ORIGINS="..." -a nfl-predict
 ### Frontend (Vercel)
 
 **Production:**
+
 ```bash
 VITE_API_URL=https://nfl-predict-ecf5a5bd34fe.herokuapp.com
 ```
 
 **Development:**
+
 ```bash
 VITE_API_URL=http://127.0.0.1:8000
 ```
@@ -52,12 +55,14 @@ VITE_API_URL=http://127.0.0.1:8000
 ## ✅ Quick Test Commands
 
 ### Test Backend Health
+
 ```bash
 curl https://nfl-predict-ecf5a5bd34fe.herokuapp.com/health
 # Expected: {"status":"healthy",...}
 ```
 
 ### Test CORS Headers
+
 ```bash
 curl -X OPTIONS https://nfl-predict-ecf5a5bd34fe.herokuapp.com/health \
   -H "Origin: https://nfl-ml-predictions.vercel.app" \
@@ -66,6 +71,7 @@ curl -X OPTIONS https://nfl-predict-ecf5a5bd34fe.herokuapp.com/health \
 ```
 
 ### Run Verification Script
+
 ```bash
 python scripts/verify_api_cors.py
 ```
@@ -75,12 +81,14 @@ python scripts/verify_api_cors.py
 ## 🚀 Quick Deploy
 
 ### Backend
+
 ```bash
 git push heroku main
 heroku logs --tail -a nfl-predict
 ```
 
 ### Frontend
+
 ```bash
 cd frontend && npm run build && vercel --prod
 ```
@@ -90,16 +98,19 @@ cd frontend && npm run build && vercel --prod
 ## 🐛 Common Issues
 
 ### CORS Error in Browser?
+
 1. Check: `heroku config:get CORS_ORIGINS -a nfl-predict`
 2. Update: `heroku config:set CORS_ORIGINS="..." -a nfl-predict`
 3. Restart: `heroku restart -a nfl-predict`
 
 ### API 500 Error (Dataset Missing)?
+
 ```bash
 python backend/build_csv_datasets.py --start 2016 --end 2026 --out-dir backend/data
 ```
 
 ### Wrong API URL in Frontend?
+
 - Vercel: Settings → Environment Variables → Check `VITE_API_URL`
 - Rebuild: `vercel --prod`
 

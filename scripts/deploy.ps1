@@ -42,14 +42,10 @@ Assert-Cli heroku
 Assert-Cli vercel
 Assert-Cli npm
 
-Write-Host "[2/8] Ensuring Heroku ALLOWED_ORIGINS includes Vercel + localhost..." -ForegroundColor Cyan
+Write-Host "[2/8] Ensuring Heroku ALLOWED_ORIGINS includes production + localhost (hardcoded)..." -ForegroundColor Cyan
 $origins = @(
-  'http://localhost:3000',
-  'https://localhost:3000',
-  'https://nfl-predict-frontend.vercel.app',
   'https://nfl-ml-predictions.vercel.app',
-  'https://www.nfl-predict.com',
-  $VercelProdDomain
+  'http://localhost:3000'
 ) -join ','
 heroku config:set RESTRICT_CORS=true -a $HerokuApp | Out-Host
 heroku config:set ALLOWED_ORIGINS="$origins" -a $HerokuApp | Out-Host

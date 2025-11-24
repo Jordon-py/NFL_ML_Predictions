@@ -74,6 +74,9 @@ const extractHomeWinProbability = (event) =>
     null,
   );
 
+
+ 
+
 /** Build a readable game label, or a generic entry label if no game info exists. */
 const buildGameLabel = (event, index) => {
   const g = event?.game;

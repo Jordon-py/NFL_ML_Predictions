@@ -1,3 +1,5 @@
 {
-  "backend/test_models_local.py": true
+  "backend/test_models_local.py": true,
+  "backend/tests/test_feature_leak_guard.py": true,
+  "backend/tests/test_leakage.py": true
 }

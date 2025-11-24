@@ -1,0 +1,290 @@
+/* Card.module.css — v2 Futuristic + Motion */
+/* Uses globals from base.css: fonts, --a-ease, cardPop/outlineGlow keyframes. */
+
+.card {
+  display: flex;
+  backdrop-filter: blur(6px);
+  border-radius: var(--r-md);
+  background: radial-gradient(circle at top, #0048ff28, #000622 70%);
+  color: var(--lch-text);
+  border: 1px solid lch(100 0 0 / 0.34);
+  padding: 1.5rem;
+  position: relative;
+  width: clamp(300px, 100%, 380px);
+  box-shadow: 1px 4px 8px -2px rgba(255, 253, 253, 0.883) inset,       /* hard drop (stylized) */
+              1px 2px 12px  2px rgba(0, 0, 0, 0.272);  /* soft ambient */
+
+  animation: _cardPop_yvg8j_1 0.6s var(--a-ease) calc(var(--i, 0) * 80ms) both;
+  transform-style: preserve-3d;
+  transition: transform .75s var(--a-ease), box-shadow .75s var(--a-ease), border-color .95s var(--a-ease);
+  outline: inherit;
+  --card-tilt: 130deg;
+  --glow-time: 350ms;
+  --glow-accent: lch(13.16% 45.21 326.7 / 0.594);
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-content: baseline;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.card:hover,
+.card:focus-within {
+  transform: translateY(-8px) scale(1.02) rotateX(0.9deg) rotateY(0.9deg);
+  box-shadow: 1px 4px 16px 4px oklch(14.489% 0.05946 29.223 / 0.568), 0 0 22px var(--glow-accent);
+  cursor: pointer;
+}
+
+.hasPrediction {
+  display:flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  max-width: 600px;
+  width: 100%;
+  animation: outlineGlow cubic-bezier(0.075, 0.82, 0.165, 1) ease-in-out infinite;
+  border-color: var(--lch-primary);
+  box-shadow: 0 5px 10px 8px inset oklch(0% 0 0 / 0.45), 0 0 25px var(--lch-primary);
+}
+
+.isLoading {
+  cursor: progress;
+}
+
+.isError {
+  border-color: lch(58% 78 30);
+  box-shadow: 0 0 0 1px lch(58% 78 30 / .4) inset;
+}
+
+.topBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: .25rem;
+}
+
+.left {
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+}
+
+.icon {
+  filter: drop-shadow(0 0 8px var(--lch-accent));
+}
+
+.title {
+  font-family: var(--font-tech);
+  letter-spacing: .5px;
+}
+
+.status {
+  font-size: .8rem;
+  color: var(--lch-muted);
+}
+
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: .75rem;
+  margin-bottom: 1rem;
+}
+
+.game-card_team  {
+  display: flex;
+  align-items: center;
+  justify-content:space-around;
+  gap: 1rem;
+}
+
+div.predictionBody {
+  display:flex;
+  flex-direction: column;
+  align-items: center;
+  gap: .5rem;
+  flex: 1;
+}
+
+.away {
+  align-items: flex-start;
+}
+
+.home {
+  align-items: flex-end;
+}
+
+.atSymbol {
+  font-weight: 800;
+  color: var(--lch-accent);
+  font-size: 1.4rem;
+  font-family: var(--font-tech);
+}
+
+img.game-card_logo {
+  max-width: 220px;
+  width:100%;
+  max-height: 220px;
+  height: 100%;
+  
+  object-fit: cover;
+  border-radius: 50%;
+  background: oklch(0% 0 0 / .2);
+  padding: 6px;
+  transition: transform .4s var(--a-ease), filter .4s var(--a-ease);
+  animation: fadeInVar .8s var(--a-ease) both;
+}
+
+img.game-card_logo:hover {
+  transform: scale(1.12) rotate(5deg);
+  filter: brightness(1.2) drop-shadow(0 0 12px var(--lch-primary));
+}
+
+.kickoff {
+  font-size: .9rem;
+  color: var(--lch-muted);
+  white-space: nowrap;
+  font-family: var(--font-tech);
+  animation: textFadeSlide 1s var(--a-ease) 300ms both;
+}
+
+.prediction {
+  display: flex;
+  flex-direction: column;
+  gap: .75rem;
+  margin-top: auto;
+  padding-top: .75rem;
+  border-top: 1px solid var(--lch-border);
+}
+
+.predictionBody {
+  display: grid;
+  gap: .5rem;
+}
+
+.probRow,
+.detailRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.badgeRow {
+  display: flex;
+  gap: .35rem;
+  flex-wrap: wrap;
+}
+
+.badge {
+  font-size: .75rem;
+  padding: .15rem .5rem;
+  border-radius: var(--r-sm, 4px);
+  border: 1px solid var(--lch-border);
+  background: oklch(10% 0 0 / .4);
+}
+
+.diff {
+  opacity: .85;
+  font-style: normal;
+  margin-left: .35rem;
+}
+
+.cta {
+  text-align: center;
+  font-weight: 600;
+  font-family: var(--font-tech);
+  animation: pulseSoft 2s ease-in-out infinite;
+}
+
+.errorMsg {
+  color: lch(70% 100 30);
+}
+
+/* Reset button — minimal, accessible, subtle float + outline animation */
+.reset {
+  float: right; /* visually anchor to the right side */
+  background: transparent;
+  color: var(--lch-text);
+  border: 1px solid var(--lch-border);
+  padding: 0.35rem 0.6rem;
+  border-radius: 6px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  cursor: pointer;
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+  will-change: transform;
+}
+
+.reset:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.12), 0 0 8px var(--lch-accent);
+  border-color: var(--lch-primary);
+}
+
+.reset:focus {
+  outline: none;
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--lch-accent) 12%, transparent);
+  animation: _resetFloat 3s ease-in-out infinite;
+}
+
+@keyframes _resetFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+.progressTrack {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: lch(20% 5 250 / .35);
+  overflow: hidden;
+  border-bottom-left-radius: var(--r-md);
+  border-bottom-right-radius: var(--r-md);
+}
+
+.progressBar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--lch-accent), var(--lch-primary));
+}
+
+/* Small loading indicator for when a card is fetching predictions */
+.loadingIndicator {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: oklch(0% 0 0 / 0.18);
+  border-radius: 50%;
+  border: 1px solid oklch(80% 0 0 / 0.12);
+  box-shadow: 0 0 8px var(--lch-accent);
+  z-index: 10;
+}
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.12);
+  border-top-color: var(--lch-accent);
+  animation: cardSpin 800ms linear infinite;
+}
+
+@keyframes cardSpin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Dev-only visual hint when a card receives a click (short-lived) */
+.debugClicked {
+  box-shadow: 0 0 0 4px rgba(0, 200, 255, 0.18), 0 8px 28px rgba(0, 0, 0, 0.35) !important;
+  transform: translateY(-6px) scale(1.01) !important;
+}
