@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+# File: backend/train_models.py
+# Purpose: Train leak-aware NFL prediction models and persist artifacts/metadata for backend inference.
+# Functions: _resolve_default_dataset_path(140), _ensure_columns(197), _dataset_hash(203), _drop_leaky_columns(208), _infer_features(225), _make_preprocessor(244), _split_for_calibration(271), _fit_regression(282), _fit_classifier(323), _evaluate_regression(395), _dataset_sort(400), main(405)
+# Variables: HP_N_ITER(60), CV_SPLITS(61), RANDOM_SEED(62), N_SPLITS(64), N_JOBS(66), TARGET_HOME(74), TARGET_AWAY(75), CLASS_LABEL(76), TIME_KEYS(77), LEAK_BLOCKLIST(89), REG_PARAM_DISTS(115), CLF_PARAM_DISTS(122), BASE_DIR(136), DATA_DIR(137)
+# Interacts With: backend/data/game_features*.csv, backend/models/*.joblib, backend/main.py loader via model artifacts.
 """
 File: train_models.py
 Purpose: Train ML models for NFL game predictions using time-aware cross-validation to prevent data leakage; outputs fitted models and metadata for backend/main.py inference.
@@ -60,7 +65,6 @@ N_SPLITS = int(os.getenv("N_SPLITS", str(CV_SPLITS)))
 # Limit parallelism to avoid memory spikes during RandomizedSearch; override via N_JOBS env if needed.
 N_JOBS = int(os.getenv("N_JOBS", "-1"))
 
-print(N_JOBS, NODE_ENV, SERVE_FRONTEND, CORS_ORIGINS)
 # ----------Development environment -----------
 DEV_ORIGINS = os.getenv("DEV_ORIGINS", "http://localhost:3000")
 
@@ -197,6 +201,7 @@ def _ensure_columns(df: pd.DataFrame, required: List[str]) -> None:
 
 
 def _dataset_hash(df: pd.DataFrame) -> int:
+    """Stable hash across season/week/home/away columns to track dataset identity."""
     return int(pd.util.hash_pandas_object(df[TIME_KEYS + ["home_team", "away_team"]], index=False).sum())
 
 
@@ -369,7 +374,7 @@ def _fit_classifier(
 
     # Compute holdout metrics using the last fold
     tscv = TimeSeriesSplit(n_splits=N_SPLITS)
-    train_idx, _, holdout_idx = _split_for_calibration(tscv, X, y)
+    _, _, holdout_idx = _split_for_calibration(tscv, X, y)
     pred_proba = best_pipeline.predict_proba(X.iloc[holdout_idx])[:, 1]
     auc = roc_auc_score(y.iloc[holdout_idx], pred_proba)
     brier = brier_score_loss(y.iloc[holdout_idx], pred_proba)
@@ -393,10 +398,12 @@ def _evaluate_regression(model: Pipeline, X: pd.DataFrame, y: pd.Series) -> floa
 
 
 def _dataset_sort(df: pd.DataFrame) -> pd.DataFrame:
+    """Chronologically sort dataset by TIME_KEYS."""
     return df.sort_values(TIME_KEYS).reset_index(drop=True)
 
 
 def main(data_path: str, out_dir: str, n_jobs: int = N_JOBS, fast_dev: bool = False) -> None:
+    """Train regression/classifier models and persist artifacts/metadata to disk."""
     np.random.seed(RANDOM_SEED)
 
     log.info("Loading training dataset from %s", data_path)
@@ -417,7 +424,6 @@ def main(data_path: str, out_dir: str, n_jobs: int = N_JOBS, fast_dev: bool = Fa
     y_away = df[TARGET_AWAY].copy()
     # Drop NaN values before converting to int
     y_win = df[CLASS_LABEL].copy()
-    cat = df[['home_team', 'away_team']]
     
     # Now drop leaky columns from features (but keep targets separately)
     df = _drop_leaky_columns(df)

@@ -48,9 +48,10 @@
 /* Enhancement 8: Improved contrast on dark nav; keep structure unchanged */
 .navBar {
   display: flex;
-  justify-content: space-evenly;
+  flex-direction: column;
+  justify-content: center;
   align-items: center;
-  background-color: lch(4.73% 21.38 284.18 / 0.844);
+  background: radial-gradient(circle at top, #0b112040, #020617 60%);
   color: lch(100% 0.01 296.81);
   /* improved contrast */
   padding: 1rem 1rem;
@@ -60,7 +61,7 @@
   width: 100%;
   animation: outLineGlow;
   z-index: 1000;
-  transition: background-color 1.9s, box-shadow 1.7s;
+  transition: background-color 1.9s, box-shadow 1.7s ease-in-out;
   font-family: 'Cinzel', system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
   /* Enhancement 2 */
   box-sizing: border-box;
@@ -90,7 +91,7 @@
 
 /* Enhancement 6: Sticking polish; subtle depth and border */
 .navBar.sticking {
-  background-color: rgba(0, 18, 36, 0.95);
+  background: radial-gradient(circle at top, #0b112040, #020617 60%);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   backdrop-filter: blur(7px);
   -webkit-backdrop-filter: blur(7px);
