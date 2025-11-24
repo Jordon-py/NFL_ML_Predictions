@@ -91,7 +91,8 @@ const NFL_TEAMS_MAP = {
  * @property {string} [error]
  * @property {number} [index]
  * @property {() => void} [onClick]
- * @property {Record<string, string>} [nfl_teams] - Optional override for team name map.
+ * @property {(matchup: Matchup) => void} [onReset] - Optional callback when the reset button is clicked.
+ * @property {Record<string, string>} [nfl_teams]   - Optional override for team name map.
  */
 
 /**
@@ -115,6 +116,7 @@ const NFL_TEAMS_MAP = {
  *  - error?: string
  *  - index?: number     (stagger animation index)
  *  - onClick?: () => void
+ *  - onReset?: (matchup: Matchup) => void
  *  - nfl_teams?: Record<abbr, fullName> override map
  *
  * @param {CardProps} props
@@ -139,27 +141,6 @@ export default function Card({
 
   const { away_team, home_team, kickoff, away_logo, home_logo } = matchup;
   const hasPrediction = !!prediction;
-
-  // Use a ref for the reset button and a safe handler that won't trigger
-  // the article click handler (stopPropagation). Avoid direct DOM queries
-  // and fragile `this` usage which were causing parse/runtime errors.
-  const resetButtonRef = React.useRef(null);
-
-  const handleReset = (event) => {
-    // Prevent the card's click handler from firing when resetting
-    try { event?.stopPropagation?.(); } catch (_e) { /* noop */ }
-
-    // Allow parent to provide an explicit reset handler (onReset).
-    if (typeof onReset === 'function') {
-      try { onReset(); } catch (err) { console.error('[Card] onReset handler threw', err); }
-      return;
-    }
-
-    // Fallback: if a simple onClick exists, just call it with no args.
-    if (typeof onClick === 'function') {
-      try { onClick(); } catch (err) { console.error('[Card] reset fallback onClick threw', err); }
-    }
-  };
 
   /**
    * Normalize a 0–1 probability into a rounded 0–100 integer.
@@ -286,6 +267,30 @@ export default function Card({
     }
   };
 
+  /**
+   * Handle click on the "Reset" button.
+   * - Stop the click from bubbling up to the card’s <article> onClick.
+   * - Notify the parent via `onReset(matchup)` so it can clear prediction state.
+   */
+  const handleReset = (event) => {
+    try {
+      event?.stopPropagation?.();
+    } catch (_e) {
+      /* noop */
+    }
+
+    if (typeof onReset === 'function') {
+      try {
+        // Pass the matchup so the parent knows which game to reset.
+        onReset(matchup);
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error('[Card] onReset handler threw', err);
+      }
+    }
+    // No fallback to onClick: reset is a distinct action from "open card".
+  };
+
   return (
     <article
       className={[cardClassNames, debugClicked ? styles.debugClicked : '']
@@ -380,8 +385,8 @@ export default function Card({
           </span>
         ) : hasPrediction ? (
           <>
+            {/* Reset button: clears prediction via parent handler */}
             <button
-              ref={resetButtonRef}
               type="button"
               className={styles.reset}
               onClick={handleReset}
@@ -389,6 +394,7 @@ export default function Card({
             >
               Reset
             </button>
+
             <div className={styles.predictionBody}>
               <div className={styles.badgeRow}>
                 <span className={styles.badge}>
@@ -406,8 +412,15 @@ export default function Card({
                 <div className={styles.detailRow}>
                   <span>Predicted Score:</span>
                   <b>
-                    {away_team} {Math.round(prediction.away_score) ?? '-'} -{' '}
-                    {Math.round(prediction.home_score) ?? '-'} {home_team}
+                    {away_team}{' '}
+                    {typeof prediction.away_score === 'number'
+                      ? Math.round(prediction.away_score)
+                      : '-'}{' '}
+                    -{' '}
+                    {typeof prediction.home_score === 'number'
+                      ? Math.round(prediction.home_score)
+                      : '-'}{' '}
+                    {home_team}
                     {prediction.point_diff != null && (
                       <em className={styles.diff}>
                         {' '}
