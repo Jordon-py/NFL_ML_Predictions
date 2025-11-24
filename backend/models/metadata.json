@@ -1,5 +1,5 @@
 {
-  "timestamp": "2025-11-24T05:16:49.432189Z",
+  "timestamp": "2025-11-24T07:14:50.594635Z",
   "random_state": 4211,
   "models": {
     "home_reg": {
@@ -62,17 +62,17 @@
   },
   "validation_summary": {
     "home": {
-      "MAE_mean_val": 4.435251029983578,
-      "RMSE_mean_val": 5.867277604783936
+      "MAE_mean_val": 4.38680117702732,
+      "RMSE_mean_val": 5.834973206332434
     },
     "away": {
-      "MAE_mean_val": 4.376614906498349,
-      "RMSE_mean_val": 5.575907909427983
+      "MAE_mean_val": 4.405827875262751,
+      "RMSE_mean_val": 5.6185422631993305
     },
     "win": {
-      "Brier_mean_val": 0.12342473657543938,
-      "LogLoss_mean_val": 0.3877209086064709,
-      "Acc_mean_val": 0.8235020489000068
+      "Brier_mean_val": 0.12336134778024524,
+      "LogLoss_mean_val": 0.3876837377279615,
+      "Acc_mean_val": 0.8254314656784711
     }
   },
   "feature_names": [
