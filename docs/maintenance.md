@@ -8,6 +8,7 @@ This document records the audit, fixes, and recommended follow-ups performed by 
 Recent fixes
 ------------
 
+- **2025-11-13**: Fixed dataset path mismatch preventing backend startup. Updated DEFAULT_DATASET in `backend/main.py` from `game_features_20251110.csv` to `game_features_20251111.csv` and DATASET_PATH in `backend/.env` from `game_features_20251108.csv` to `game_features_20251111.csv`. Backend now successfully loads 2481 rows, 214 columns and passes sanity prediction tests.
 - Fixed JSON merge-conflict artifacts in `backend/models/metadata.json` so FastAPI could parse metadata at startup.
 - Ensured training pipelines are used as-is (removed double preprocessor.transform call) so scikit-learn Pipelines handle preprocessing.
 - Switched default dataset used by API to `backend/data/game_features.csv` which contains engineered features the models expect.
@@ -28,9 +29,11 @@ Models were trained with engineered features (3- and 5-game priors, differential
 Documentation improvements ensure code maintainability and reduce onboarding friction. Type hints in JS files provide better IDE support without requiring full TypeScript migration. Linter error fixes prevent false positives during development.
 
 Files changed
--------------
+------------
 
-- `backend/main.py`: dataset default, _build_future_row implementation, prediction guardrails, dataset schema validation on startup, removed duplicate function.
+- `backend/main.py`: dataset path fix (DEFAULT_DATASET), dataset default,_build_future_row implementation, prediction guardrails, dataset schema validation on startup, removed duplicate function.
+- `backend/.env`: DATASET_PATH updated to correct CSV file.
+- `backend/train_models.py`: added comprehensive doc header.
 - `backend/train_models.py`: added comprehensive doc header.
 - `backend/build_csv_datasets.py`: added doc header, updated output filename reference.
 - `backend/models/metadata.json`: cleared merge conflict markers.

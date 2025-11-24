@@ -48,9 +48,10 @@
 /* Enhancement 8: Improved contrast on dark nav; keep structure unchanged */
 .navBar {
   display: flex;
-  justify-content: space-evenly;
+  flex-direction: column;
+  justify-content: center;
   align-items: center;
-  background-color: lch(4.73% 21.38 284.18 / 0.844);
+  background: radial-gradient(circle at top, #0b112040, #020617 60%);
   color: lch(100% 0.01 296.81);
   /* improved contrast */
   padding: 1rem 1rem;
@@ -60,7 +61,7 @@
   width: 100%;
   animation: outLineGlow;
   z-index: 1000;
-  transition: background-color 1.9s, box-shadow 1.7s;
+  transition: background-color 1.9s, box-shadow 1.7s ease-in-out;
   font-family: 'Cinzel', system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
   /* Enhancement 2 */
   box-sizing: border-box;
@@ -90,7 +91,7 @@
 
 /* Enhancement 6: Sticking polish; subtle depth and border */
 .navBar.sticking {
-  background-color: rgba(0, 18, 36, 0.95);
+  background: radial-gradient(circle at top, #0b112040, #020617 60%);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   backdrop-filter: blur(7px);
   -webkit-backdrop-filter: blur(7px);
@@ -124,7 +125,7 @@
 }
 
 .navBar__links a:focus-visible {
-  outline: 2px solid #0080ff;
+  outline: 2px solid var(--color-focus-ring, #0080ff);
   outline-offset: 2px;
 }
 
@@ -157,3 +158,52 @@
 /* removed duplicate 768px breakpoint */
 
 /* (Removed duplicate 768px rule in favor of a single 700px breakpoint) */
+
+/* NavBar Health Indicator Styles */
+.nav-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.health-indicator {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  transition: background-color 0.3s ease;
+}
+
+.health-indicator.health-ok {
+  background-color: var(--color-health-ok);
+  /* Green (LCH token from base.css) */
+  box-shadow: 0 0 8px var(--color-health-ok);
+}
+
+.health-indicator.health-error {
+  background-color: var(--color-health-error);
+  /* Red (LCH token from base.css) */
+  box-shadow: 0 0 8px var(--color-health-error);
+}
+
+.health-indicator.health-unknown {
+  background-color: var(--color-health-unknown);
+  /* Grey (LCH token from base.css) */
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(0.9);
+    box-shadow: 0 0 0 0 var(--color-health-unknown);
+  }
+
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 10px color-mix(in lch, var(--color-health-unknown) 0%, transparent 100%);
+  }
+
+  100% {
+    transform: scale(0.9);
+    box-shadow: 0 0 0 0 color-mix(in lch, var(--color-health-unknown) 0%, transparent 100%);
+  }
+}

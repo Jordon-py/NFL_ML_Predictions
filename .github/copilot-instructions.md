@@ -4,6 +4,7 @@
 
 ### Role
 - Quickly orient AI coding agents to the NFL_ML_Predictions repository so they can make safe, small, high-value edits without breaking builds or deployments.
+ALWAYS CHECK AND UPDATE: 'NFL_ML_Predictions\alfred.log.md'
 
 ### Big Picture
 - FastAPI backend exposes prediction APIs and loads ML artifacts. React frontend (Vite) talks to backend via REST `/predict` endpoint. Data flows from CSV datasets → ML models → API responses → UI predictions.
@@ -21,7 +22,7 @@
 
 6. **Change Discipline:** Make focused changes. Do not perform large refactors unless complexity/redundancy/errors detected. Focus on incremental improvements.
 
-7. **Self-Awareness & Reflexion:** Before completing changes, self-check: "Is this clearer? Simpler? Would a new contributor understand without explanation?"
+7. **Self-Awareness & Reflexion:** Before completing changes, self-check: "Is this clearer? Simpler? Would a new contributor understand without explanation?, DOES IT WORK!!"
 
 ### Dev Quickstart
 - Start backend (local): `cd backend && python -m venv .venv && .\.venv\Scripts\Activate.ps1 && python -m pip install -r requirements.txt && python -m uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000`
