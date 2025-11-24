@@ -5,7 +5,7 @@
   display: flex;
   backdrop-filter: blur(6px);
   border-radius: var(--r-md);
-  background-color: lch(4 14.02 260.9 / 0.6);
+  background: radial-gradient(circle at top, #0b112040, #020617 60%);
   color: var(--lch-text);
   border: 1px solid lch(100 0 0 / 0.34);
   padding: 1.5rem;
@@ -16,9 +16,9 @@
   transform-style: preserve-3d;
   transition: transform .35s var(--a-ease), box-shadow .35s var(--a-ease), border-color .35s var(--a-ease);
   outline: inherit;
-  --card-tilt: 30deg;
+  --card-tilt: 130deg;
   --glow-time: 350ms;
-  --glow-accent: lch(11 43.84 327.36 / 0.73);
+  --glow-accent: lch(16.85% 50.77 326.91 / 0.73);
   flex-direction: column;
   flex-wrap: wrap;
   align-content: baseline;
@@ -157,6 +157,20 @@
   justify-content: space-between;
 }
 
+.badgeRow {
+  display: flex;
+  gap: .35rem;
+  flex-wrap: wrap;
+}
+
+.badge {
+  font-size: .75rem;
+  padding: .15rem .5rem;
+  border-radius: var(--r-sm, 4px);
+  border: 1px solid var(--lch-border);
+  background: oklch(10% 0 0 / .4);
+}
+
 .diff {
   opacity: .85;
   font-style: normal;
@@ -189,4 +203,46 @@
 .progressBar {
   height: 100%;
   background: linear-gradient(90deg, var(--lch-accent), var(--lch-primary));
+}
+
+/* Small loading indicator for when a card is fetching predictions */
+.loadingIndicator {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: oklch(0% 0 0 / 0.18);
+  border-radius: 50%;
+  border: 1px solid oklch(80% 0 0 / 0.12);
+  box-shadow: 0 0 8px var(--lch-accent);
+  z-index: 10;
+}
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.12);
+  border-top-color: var(--lch-accent);
+  animation: cardSpin 800ms linear infinite;
+}
+
+@keyframes cardSpin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Dev-only visual hint when a card receives a click (short-lived) */
+.debugClicked {
+  box-shadow: 0 0 0 4px rgba(0, 200, 255, 0.18), 0 8px 28px rgba(0, 0, 0, 0.35) !important;
+  transform: translateY(-6px) scale(1.01) !important;
 }
