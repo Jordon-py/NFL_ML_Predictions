@@ -24,14 +24,15 @@
     "react-router-dom": "^7.9.5"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^5.16.5",
+    "@testing-library/react": "^14.0.0",
+    "@testing-library/user-event": "^14.4.3",
     "@vitejs/plugin-react-swc": "^3.5.0",
     "esbuild": "^0.25.11",
+    "jsdom": "^27.2.0",
     "typescript": "^5.6.3",
     "vite": "^7.1.12",
-    "vitest": "^4.0.13",
-    "@testing-library/react": "^14.0.0",
-    "@testing-library/jest-dom": "^5.16.5",
-    "@testing-library/user-event": "^14.4.3"
+    "vitest": "^4.0.13"
   },
   "browserslist": {
     "production": [
