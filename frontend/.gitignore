@@ -5,6 +5,7 @@ node_modules/
 .pytest_cache/v/cache/nodeids
 # Testing
 /coverage
+.md
 
 # Production
 build/
