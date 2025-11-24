@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import './NavBar.css';
-import HamburgerMenu from '../HamburgerMenu';
+import HamburgerMenu from '../Hamburger/HamburgerMenu';
 
 /**
  * NavBar.jsx
@@ -14,35 +14,46 @@ import HamburgerMenu from '../HamburgerMenu';
  *   - We call `handleScroll()` once on mount to sync initial state (in case the page loads scrolled).
  *   - Passive scroll listener + SSR guard for safety.
  */
-function NavBar() {
+function NavBar( { state = {} } )
+{
     // Keep string type to avoid changing downstream CSS expectations
-    const [isSticking, setIsSticking] = useState('');
+    const [ isSticking, setIsSticking ] = useState( '' );
+    const { health } = state;
 
     // EFFECT: toggle the "sticking" class after scrolling a small distance.
-    const handleScroll = () => {
-        if (typeof window === 'undefined') return; // SSR/defensive guard
-        setIsSticking(window.scrollY > 10 ? 'sticking' : '');
+    const handleScroll = () =>
+    {
+        if ( typeof window === 'undefined' ) return; // SSR/defensive guard
+        setIsSticking( window.scrollY > 10 ? 'sticking' : '' );
     };
 
-    useEffect(() => {
-        if (typeof window === 'undefined')
+    useEffect( () =>
+    {
+        if ( typeof window === 'undefined' )
             return;
 
         // Sync once on mount (covers initial load where user is already scrolled)
         handleScroll();
 
         // Add passive listener to avoid blocking scroll
-        window.addEventListener('scroll', handleScroll, { passive: true });
+        window.addEventListener( 'scroll', handleScroll, { passive: true } );
 
         // Cleanup on unmount - CRITICAL to prevent memory leaks
-        return () => {
-            window.removeEventListener('scroll', handleScroll);
+        return () =>
+        {
+            window.removeEventListener( 'scroll', handleScroll );
         };
-    }, []); // run once on mount
+    }, [] ); // run once on mount
+
+    const healthStatusClass = health?.status === 'healthy'
+        ? 'health-ok'
+        : health?.status === 'unhealthy'
+            ? 'health-error'
+            : 'health-unknown';
 
     return (
-        <nav className={`navBar ${isSticking}`}>
-            {/* SVG defs for the border animation – render once and reuse via ids. */}
+        <nav className={ `navBar ${isSticking}` }>
+            {/* SVG defs for the border animation – render once and reuse via ids. */ }
             <svg width="0" height="0" aria-hidden="true">
                 <defs>
                     <linearGradient id="sb3Gradient" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -72,14 +83,18 @@ function NavBar() {
                 </defs>
             </svg>
 
-            <h1>NFL Predict</h1>
-            {/* Desktop links (hidden on small screens via CSS) */}
+            <div className="nav-left">
+                <h1>NFL Predict</h1>
+                <div className={ `health-indicator ${healthStatusClass}` } title={ `Backend Status: ${health?.status} - ${health?.reason}` }></div>
+            </div>
+
+            {/* Desktop links (hidden on small screens via CSS) */ }
             <div className="navBar__links">
                 <NavLink to="/" end>Dashboard</NavLink>
                 <NavLink to="/history">History</NavLink>
                 <NavLink to="/stats">Stats</NavLink>
             </div>
-            {/* Mobile hamburger (shown on small screens via CSS) */}
+            {/* Mobile hamburger (shown on small screens via CSS) */ }
             <div className="navBar__hamburger" aria-label="Navigation menu">
                 <HamburgerMenu />
             </div>

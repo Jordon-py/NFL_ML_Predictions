@@ -13,6 +13,7 @@ from pathlib import Path
 import json
 from datetime import datetime
 
+
 # ============================================================================
 # CONFIGURATION
 # ============================================================================
@@ -22,8 +23,8 @@ class DataConfig:
     """Configuration for data paths and merge parameters"""
 
     BASE_PATH = Path(__file__).parent.parent
-    PLAYER_STATS_PATH = BASE_PATH / "player_stats.csv"
-    TEAM_STATS_PATH = BASE_PATH / "team_stats.csv"
+    PLAYER_STATS_PATH = BASE_PATH / "backend" / "pbp_cache.csv"
+    TEAM_STATS_PATH = BASE_PATH / "backend" / "game_features_20251123.csv"
     OUTPUT_PATH = BASE_PATH / "backend" / "data"
 
     # Key merge columns
@@ -236,8 +237,8 @@ def aggregate_player_stats(player_df):
         "SS": "defense",
         "S": "defense",
     }
-
-    player_df["position_group_agg"] = player_df["position"].map(position_mapping)
+    # Map positions to groups, assign "other" for unmapped positions to avoid NaN groupby issues
+    player_df["position_group_agg"] = player_df["position"].map(position_mapping).fillna("other")
 
     # Define aggregation rules
     agg_rules = {
@@ -370,8 +371,19 @@ def engineer_features(merged_df):
     # 3. Third down efficiency (if available in future iterations)
     # This would require play-by-play data
 
-    # 4. Time-based features
-    df["is_home"] = df["team"] < df["opponent_team"]  # Simple heuristic
+    # Home/away status: Use actual data if available, otherwise skip feature
+    if "is_home" in df.columns:
+        # Use existing is_home column
+        print("  ✓ Used: is_home from dataset")
+    elif "home_team" in df.columns and "team" in df.columns:
+        df["is_home"] = (df["team"] == df["home_team"]).astype(int)
+        print("  ✓ Created: is_home from home_team column")
+    elif "location" in df.columns:
+        # Some datasets use 'location' with values 'home'/'away'
+        df["is_home"] = (df["location"] == "home").astype(int)
+        print("  ✓ Created: is_home from location column")
+    else:
+        print("  ⚠️ Skipped: is_home (no reliable home/away data available)")
     print("  ✓ Created: is_home")
 
     # 5. Scoring potential

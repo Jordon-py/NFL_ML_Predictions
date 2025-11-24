@@ -19,16 +19,13 @@ import HistoryChart from './HistoryChart.jsx';
 import NavBar from './NavBar/NavBar.jsx';
 
 export default function HistoryPage() {
-  const { state } = usePredictions();
+  const predictionState = usePredictions();
+  const history = Array.isArray(predictionState?.history) ? predictionState.history : [];
 
   return (
     <>
-      <NavBar />
-        <HistoryChart
-          state={state}
-          history={Array.isArray(state?.history) ? state.history : []}
-        />
-    
+      <NavBar state={predictionState} />
+      <HistoryChart state={predictionState} history={history} />
     </>
   );
 }
