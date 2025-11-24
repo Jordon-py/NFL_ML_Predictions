@@ -10,15 +10,15 @@
   border: 1px solid lch(100 0 0 / 0.34);
   padding: 1.5rem;
   position: relative;
-  /* width: clamp(300px, 100%, 380px); */
-  box-shadow: 0 8px 24px oklch(0% 0 0 / 0.30);
+  width: clamp(300px, 100%, 380px);
+  box-shadow: 2px 8px 24px inset oklch(95.156% 0.03414 219.986);
   animation: _cardPop_yvg8j_1 0.6s var(--a-ease) calc(var(--i, 0) * 80ms) both;
   transform-style: preserve-3d;
-  transition: transform .35s var(--a-ease), box-shadow .35s var(--a-ease), border-color .35s var(--a-ease);
+  transition: transform .75s var(--a-ease), box-shadow .75s var(--a-ease), border-color .95s var(--a-ease);
   outline: inherit;
   --card-tilt: 130deg;
   --glow-time: 350ms;
-  --glow-accent: lch(16.85% 50.77 326.91 / 0.73);
+  --glow-accent: lch(13.16% 45.21 326.7 / 0.674);
   flex-direction: column;
   flex-wrap: wrap;
   align-content: baseline;
@@ -186,6 +186,38 @@
 
 .errorMsg {
   color: lch(70% 100 30);
+}
+
+/* Reset button — minimal, accessible, subtle float + outline animation */
+.reset {
+  float: right; /* visually anchor to the right side */
+  background: transparent;
+  color: var(--lch-text);
+  border: 1px solid var(--lch-border);
+  padding: 0.35rem 0.6rem;
+  border-radius: 6px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  cursor: pointer;
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+  will-change: transform;
+}
+
+.reset:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.12), 0 0 8px var(--lch-accent);
+  border-color: var(--lch-primary);
+}
+
+.reset:focus {
+  outline: none;
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--lch-accent) 12%, transparent);
+  animation: _resetFloat 3s ease-in-out infinite;
+}
+
+@keyframes _resetFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
 }
 
 .progressTrack {
