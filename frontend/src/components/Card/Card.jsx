@@ -343,7 +343,7 @@ export default function Card({
 
           {/* Abbreviation + full name (e.g., "KC — Kansas City Chiefs") */}
           <span className="game-card__name">
-            {away_team} — {awayFullName}
+           {awayFullName}
           </span>
         </div>
 
@@ -362,7 +362,7 @@ export default function Card({
           <span className="game-card__label">Home</span>
 
           <span className="game-card__name">
-            {home_team} — {homeFullName}
+           {homeFullName}
           </span>
         </div>
       </div>
@@ -426,7 +426,7 @@ export default function Card({
                         {' '}
                         diff{' '}
                         {typeof prediction.point_diff === 'number' &&
-                          typeof prediction.point_diff.toFixed === 'function'
+                        typeof prediction.point_diff.toFixed === 'function'
                           ? prediction.point_diff.toFixed(1)
                           : prediction.point_diff}
                       </em>
