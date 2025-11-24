@@ -383,7 +383,7 @@ export default function Card({
             <button
               ref={resetButtonRef}
               type="button"
-              className="reset"
+              className={styles.reset}
               onClick={handleReset}
               aria-label="Reset prediction"
             >
