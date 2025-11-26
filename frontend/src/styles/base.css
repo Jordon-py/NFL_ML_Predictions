@@ -80,7 +80,7 @@ body {
   line-height: 1.65;
 
   color: var(--c-text-on-dark);
-  background-color: lch(12.83% 51.88 298.87 / 0.689);
+  background-color: lch(0% 0 0 / 0.689);
 
   /* Background image + subtle parallax */
   background-image: url('/nfl_pic.png');
@@ -293,7 +293,7 @@ button:focus-visible,
     outline: 2px solid lch(40.92% 110.75 302.43 / 0.307);
     box-shadow:
       0 0 13px 1px lch(28.54% 35.5 274.92 / 0.402),
-      0 3px 1px 1px lch(65.22% 54.06 269.16 / 0.402) inset;
+      0 3px 3px 1px lch(65.22% 54.06 269.16 / 0.402) inset;
   }
 
   50% {
