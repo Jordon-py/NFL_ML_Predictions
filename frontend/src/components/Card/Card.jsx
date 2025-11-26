@@ -334,6 +334,7 @@ export default function Card({
             <img
               src={away_logo}
               alt={`${away_team} logo`}
+              id={styles.away_logo}
               className="game-card__logo"
               loading="lazy"
             />
@@ -354,7 +355,8 @@ export default function Card({
             <img
               src={home_logo}
               alt={`${home_team} logo`}
-              className="game-card__logo"
+              id={styles.home_logo}
+              className={styles.game-card_logo}
               loading="lazy"
             />
           )}
