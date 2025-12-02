@@ -42,6 +42,7 @@ import pandas as pd
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+import nflreadpy as nfl
 
 # -------------------------------------------------------------------
 # Logging
@@ -538,91 +539,171 @@ def status_overview() -> Dict[str, Any]:
 @app.get("/schedule/next-week")
 def get_schedule() -> List[Dict[str, Any]]:
     """
-    Return the schedule for the "next" NFL week based on the schedule CSV.
+    Return a normalized list of upcoming games for the next 7-day window.
 
-    Logic:
-      - Resolve schedule path via _find_schedule_path().
-      - Normalize season/week + team abbreviations.
-      - If 'gameday' is present, interpret as kickoff datetime (UTC-aware).
-      - Determine the next slate using the earliest future game; fall back
-        to the latest season/week in the file if all games are in the past.
+    Behavior:
+      - Prefer using `nflreadpy.load_schedules()`. If that's not available,
+        fall back to reading a CSV discovered by `_find_schedule_path()`.
+      - Parse kickoff datetimes to timezone-aware UTC `gameday` values.
+      - Attach `home_team_logo` and `away_team_logo` when a `team_logo.csv`
+        mapping is available in the `backend` data folder.
+      - If no games are in the next 7 days, try to return the next future
+        slate (earliest future season/week). If none, return the latest
+        season/week available in the file.
     """
-    schedule_path = _find_schedule_path()
-    if not schedule_path:
-        raise HTTPException(
-            status_code=404,
-            detail="Schedule file not found in backend/data or frontend/public",
-        )
+    # Load schedule dataframe (try nflreadpy first, then CSV fallback)
+    try:
+        sched = nfl.load_schedules()
+        df = sched.to_pandas()
+    except Exception:
+        sched_path = _find_schedule_path()
+        if sched_path is None:
+            logging.warning("[Schedule] No schedule source found")
+            return []
+        try:
+            df = pd.read_csv(sched_path)
+        except Exception as e:
+            logging.exception("[Schedule] Failed to read schedule CSV %s: %s", sched_path, e)
+            return []
 
-    logging.info("[Schedule] Loading schedule from: %s", schedule_path)
-    df = pd.read_csv(schedule_path)
+    if df is None or df.empty:
+        return []
 
-    df = _coerce_season_week(df)
-    df = _normalize_team_columns(
-        df, cols=("home_abbr", "away_abbr", "home_team", "away_team")
-    )
-
-    # Optional: convert gameday to UTC-aware datetime
+    # Normalize and parse
+    df = df.copy()
+    # Preserve original gameday string (useful for 'TBD' values)
     if "gameday" in df.columns:
-        df["dt"] = pd.to_datetime(df["gameday"], utc=True, errors="coerce")
+        df["_gameday_orig"] = df["gameday"]
+        df["gameday"] = pd.to_datetime(df["gameday"], errors="coerce", utc=True)
+    else:
+        # try alternate names
+        for alt in ("kickoff", "game_date", "date"):
+            if alt in df.columns:
+                df["gameday"] = pd.to_datetime(df[alt], errors="coerce", utc=True)
+                break
+
+    # Ensure season/week numeric
+    df = _coerce_season_week(df)
+
+    # Normalize team abbreviations into `home_team` / `away_team`
+    if "home_team" not in df.columns and "home" in df.columns:
+        df["home_team"] = df["home"]
+    if "away_team" not in df.columns and "away" in df.columns:
+        df["away_team"] = df["away"]
+
+    if "home_team" in df.columns:
+        df["home_team"] = df["home_team"].astype(str).str.strip().str.upper()
+    if "away_team" in df.columns:
+        df["away_team"] = df["away_team"].astype(str).str.strip().str.upper()
 
     now = datetime.now(timezone.utc)
-    if "dt" in df.columns:
-        future = df[df["dt"] >= now].sort_values("dt")
+    window_end = now + timedelta(days=7)
+
+    # Pick games in next 7 days. Use a 1-day grace backwards window to
+    # account for timezone mismatches so late-night/early-morning Monday
+    # games are not dropped.
+    mask = False
+    if "gameday" in df.columns:
+        mask = (df["gameday"] >= (now - timedelta(days=1))) & (df["gameday"] < window_end)
+        upcoming = df[mask].copy()
     else:
-        future = pd.DataFrame()
+        upcoming = pd.DataFrame()
 
-    if not future.empty:
-        next_row = future.iloc[0]
-        target_s = int(next_row.get("season_num", next_row.get("season", 2024)))
-        target_w = int(next_row.get("week_num", next_row.get("week", 1)))
-    else:
-        # Fallback: last season/week in file
-        season_series = df.get("season", df.get("season_num"))
-        week_series = df.get("week", df.get("week_num"))
-        target_s = int(season_series.max()) if season_series is not None else 2024
-        target_w = int(week_series.max()) if week_series is not None else 1
+    # If none in the next 7 days, try to find the next future slate (earliest gameday >= now)
+    if upcoming.empty:
+        future_mask = False
+        if "gameday" in df.columns:
+            future_mask = df["gameday"] >= now
+            if future_mask.any():
+                earliest = df.loc[future_mask, "gameday"].min()
+                sel = df["gameday"] == earliest
+                upcoming = df[sel].copy()
 
-    s_col = "season_num" if "season_num" in df.columns else "season"
-    w_col = "week_num" if "week_num" in df.columns else "week"
+    # If still empty, return the latest season/week in the file
+    if upcoming.empty:
+        try:
+            max_season = int(df["season"].max()) if "season" in df.columns else None
+            max_week = int(df["week"].max()) if "week" in df.columns else None
+            if max_season is not None and max_week is not None:
+                upcoming = df[(df["season"] == max_season) & (df["week"] == max_week)].copy()
+            else:
+                upcoming = df.head(10).copy()
+        except Exception:
+            upcoming = df.head(10).copy()
 
-    week_df = df[(df[s_col] == target_s) & (df[w_col] == target_w)]
+    # Load team logos mapping if available
+    logos_path_candidates = [DATA_DIR / "team_logo.csv", BASE_DIR / "team_logo.csv", BASE_DIR / "team_logos.csv"]
+    logos_df = None
+    for p in logos_path_candidates:
+        if p.exists():
+            try:
+                logos_df = pd.read_csv(p)
+                break
+            except Exception:
+                logos_df = None
+
+    logo_map = {}
+    if logos_df is not None:
+        # normalize columns (abbr, logo_url) flexible mapping
+        cols = {c.lower(): c for c in logos_df.columns}
+        abbr_col = cols.get("abbr") or cols.get("team") or cols.get("team_name")
+        url_col = cols.get("logo_url") or cols.get("logo") or cols.get("logo_url")
+        if abbr_col and url_col and abbr_col in logos_df.columns and url_col in logos_df.columns:
+            for _, r in logos_df.iterrows():
+                try:
+                    logo_map[str(r[abbr_col]).strip().upper()] = r[url_col]
+                except Exception:
+                    continue
 
     results: List[Dict[str, Any]] = []
-    for _, row in week_df.iterrows():
-        home_team = row.get("home_team")
-        away_team = row.get("away_team")
-        home_abbr = row.get("home_abbr", home_team)
-        away_abbr = row.get("away_abbr", away_team)
-
-        kickoff_val: Optional[str] = None
-        if ("dt" in row) and pd.notna(row["dt"]):
+    for _, row in upcoming.iterrows():
+        try:
+            home = str(row.get("home_team") or row.get("home") or "").strip().upper()
+            away = str(row.get("away_team") or row.get("away") or "").strip().upper()
+            season_v = int(row.get("season")) if row.get("season") is not None else None
+            week_v = int(row.get("week")) if row.get("week") is not None else None
+            gameday_val = row.get("gameday")
+            # Prefer parsed, timezone-aware gameday; if missing (NaT) try to
+            # fall back to the original string value so values like 'TBD'
+            # are preserved for the frontend.
+            kickoff_iso = None
             try:
-                kickoff_val = row["dt"].isoformat()
+                parsed = pd.to_datetime(gameday_val, errors="coerce", utc=True)
+                if pd.notnull(parsed):
+                    kickoff_iso = parsed.isoformat()
+                else:
+                    orig = row.get("_gameday_orig") or row.get("kickoff") or row.get("date") or row.get("game_date")
+                    if isinstance(orig, str) and orig.strip():
+                        kickoff_iso = orig.strip()
+                    elif orig is not None and not isinstance(orig, float):
+                        kickoff_iso = str(orig)
+                    else:
+                        kickoff_iso = None
             except Exception:
-                kickoff_val = None
+                kickoff_iso = None
 
-        results.append(
-            {
-                "game_id": f"{target_s}_{target_w}_{home_team}_{away_team}",
-                "season": int(target_s),
-                "week": int(target_w),
-                "home_team": home_team,
-                "away_team": away_team,
-                "home_abbr": home_abbr,
-                "away_abbr": away_abbr,
-                "home_logo": row.get("home_logo"),
-                "away_logo": row.get("away_logo"),
-                "kickoff": kickoff_val,
-            }
-        )
+            game_id = f"{season_v}_{week_v}_{home}_{away}" if season_v is not None and week_v is not None else f"{home}_{away}_{_}"
 
-    logging.info(
-        "[Schedule] Returning %d games for season=%s week=%s",
-        len(results),
-        target_s,
-        target_w,
-    )
+            results.append(
+                {
+                    "game_day": kickoff_iso,
+                    "game_id": game_id,
+                    "season": season_v,
+                    "week": week_v,
+                    "home_team": home,
+                    "away_team": away,
+                    "home_team_logo": logo_map.get(home),
+                    "away_team_logo": logo_map.get(away),
+                    # Backwards-compatible aliases expected by the frontend
+                    "home_logo": logo_map.get(home),
+                    "away_logo": logo_map.get(away),
+                }
+            )
+        except Exception:
+            logging.exception("[Schedule] Error while processing schedule row: %s", row)
+            continue
+
+    logging.info("[Schedule] Returning %d upcoming games", len(results))
     return results
 
 

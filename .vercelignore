@@ -14,5 +14,4 @@ backend/data/
 *.pkl
 *.md
 *.ts
-dist/
 node_modules/

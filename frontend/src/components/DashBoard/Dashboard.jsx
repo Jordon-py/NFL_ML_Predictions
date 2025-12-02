@@ -87,7 +87,7 @@ function useDashboardData() {
     };
 
     const transformedHistory = Array.isArray(history) ? history : [];
-    console.log('transformedhistory dashboard', transformedHistory)
+    console.log('transformedhistory in dashboard.jsx', transformedHistory)
     console.log('history', history)
     const transformedGames = Array.isArray(schedule)
       ? schedule.map((game) => {
@@ -116,18 +116,18 @@ function useDashboardData() {
           week: gameWeek,
         };
       })
-      : [];
+      : []; // Fallback to avoid empty array
 
     const currentWeek = Number.isFinite(Number(week))
       ? Number(week)
       : Number(transformedGames[0]?.week || 1);
 
     return {
-      isLoading: Boolean(isGlobalLoading && transformedGames.length === 0),
+      isLoading: (Boolean(isGlobalLoading) && transformedGames.length === 0),
       error: errors.global || null,
       data: {
         upcomingGames: transformedGames,
-        currentWeek,
+        currentWeek: currentWeek,
         teamMetadata: teams,
         gamePredictions: predictions,
         predictionHistory: transformedHistory,
@@ -158,7 +158,7 @@ function useNavigationState(data) {
       return {
         title: "NFL Prediction Dashboard",
         subtitle: "Initializing...",
-        weekLabel: "Week ?",
+        weekLabel: "Week ?" ,
         healthLabel: "Unknown",
       };
     }
@@ -170,7 +170,9 @@ function useNavigationState(data) {
     const healthStatus = health?.status || "unknown";
 
     return {
-      title: "NFL Prediction Dashboard",
+      title: "Read the Field. Beat the Line.",
+      heroSubtitle:
+        "AI-Powered NFL Game Predictions — Select a matchup to generate live, model-backed probabilities.",
       subtitle: `${count} historical predictions stored`,
       weekLabel: `Week ${currentWeek}`,
       healthLabel:
@@ -181,16 +183,22 @@ function useNavigationState(data) {
   }, [data]);
 }
 
+// Simple clamp helper to keep values within a range.
+const clamp = (value, min = 0, max = 1) => Math.min(max, Math.max(min, value));
+
 /**
  * Top-level dashboard page component.
  */
-function Dashboard() {
+export default function Dashboard() {
   const { isLoading, error, data } = useDashboardData();
   const navState = useNavigationState(data);
+  console.log('DASHBOARD DATA', data);
+  console.log('DASHBOARD ERROR', error);
+  console.log('DASHBOARD navState', navState);
 
   // Early returns for loading and error states
   if (isLoading) {
-    return <LoadingState message="Loading schedule and predictions..." />;
+    return <LoadingState message="Loading schedule and predictions..." error={error} />;
   }
 
   if (error || !data) {
@@ -200,7 +208,7 @@ function Dashboard() {
       />
     );
   }
-
+  console.log('data', data);
   const {
     upcomingGames: games = [],
     currentWeek,
@@ -216,10 +224,111 @@ function Dashboard() {
 
   const { setPrediction, setLoading, setError, pushHistory } = actions;
 
-  const isBackendHealthy = health?.status === "healthy";
+  console.log('DASHBOARD DATA', data);
+  console.log('DASHBOARD ERROR', error);
+  console.log('DASHBOARD navState', navState);
+  const isBackendHealthy = health?.status === 'healthy';
   const healthMessage = isBackendHealthy
     ? "Backend is healthy. Click a matchup to request fresh predictions."
     : health?.reason || "Backend is not ready for predictions yet.";
+
+  /**
+   * Build a lightweight calibration profile from prior predictions to
+   * gently shrink overconfident probabilities toward the observed mean.
+   * This is a UI-side guard rail for the classification model.
+   */
+  const calibrationModel = useMemo(() => {
+    const validHistory = (predictionHistory || []).filter(
+      (entry) =>
+        entry &&
+        typeof entry.home_win_probability === "number" &&
+        !Number.isNaN(entry.home_win_probability)
+    );
+
+    if (validHistory.length === 0) {
+      return { anchor: 0.5, shrink: 0.65, sampleSize: 0 };
+    }
+
+    const anchor =
+      validHistory.reduce(
+        (sum, entry) => sum + entry.home_win_probability,
+        0
+      ) / validHistory.length;
+
+    const meanConfidence =
+      validHistory.reduce(
+        (sum, entry) => sum + Math.abs(entry.home_win_probability - 0.5),
+        0
+      ) / validHistory.length;
+
+    // When history has shown extreme confidence (high meanConfidence),
+    // enforce stronger shrinkage toward the anchor.
+    const shrinkBase = 0.75 - (meanConfidence - 0.1);
+    const shrink = clamp(shrinkBase, 0.55, 0.9);
+
+    return {
+      anchor: Number.isFinite(anchor) ? anchor : 0.5,
+      shrink,
+      sampleSize: validHistory.length,
+    };
+  }, [predictionHistory]);
+
+  /**
+   * Calibrate home/away win probabilities to counter overconfident outputs.
+   * - Shrinks toward the historical anchor
+   * - Maintains symmetry (home + away = 1)
+   * - Applies guardrails to avoid impossible 0/1 probabilities
+   */
+  const calibrateWinProbabilities = useCallback(
+    (homeProb, awayProb) => {
+      if (homeProb == null && awayProb == null) {
+        return { home: null, away: null, meta: { calibrated: false } };
+      }
+
+      const derivedHome =
+        typeof homeProb === "number"
+          ? homeProb
+          : typeof awayProb === "number"
+          ? 1 - awayProb
+          : null;
+
+      if (derivedHome == null || Number.isNaN(derivedHome)) {
+        return { home: null, away: null, meta: { calibrated: false } };
+      }
+
+      const normalizedHome = clamp(derivedHome, 0.01, 0.99);
+      const anchor =
+        typeof calibrationModel.anchor === "number"
+          ? calibrationModel.anchor
+          : 0.5;
+
+      // If we have few samples, be extra conservative.
+      const samplePenalty =
+        calibrationModel.sampleSize < 15 ? 0.08 : 0;
+      const shrink = clamp(
+        (calibrationModel.shrink || 0.65) - samplePenalty,
+        0.55,
+        0.92
+      );
+
+      const calibratedHome =
+        anchor + (normalizedHome - anchor) * shrink;
+      const finalHome = clamp(calibratedHome, 0.03, 0.97);
+      const finalAway = 1 - finalHome;
+
+      return {
+        home: finalHome,
+        away: finalAway,
+        meta: {
+          calibrated: true,
+          anchor,
+          shrink,
+          sampleSize: calibrationModel.sampleSize,
+        },
+      };
+    },
+    [calibrationModel]
+  );
 
   const deriveGameKey = useCallback(
     (game) => {
@@ -237,7 +346,8 @@ function Dashboard() {
       const weekValue = Number.isFinite(Number(game.week))
         ? Number(game.week)
         : Number(currentWeek || 1);
-
+      const previousWeek = Number(currentWeek - 1);
+      const nextWeek = Number(currentWeek + 1);
       return game.game_id || `${season}-${weekValue}-${home}-${away}`;
     },
     [currentWeek]
@@ -283,8 +393,8 @@ function Dashboard() {
         ...game,
         home_abbr: home,
         away_abbr: away,
-        season,
-        week,
+        season: 2025,
+        week: currentWeek,
       };
       const gameKey = deriveGameKey(baseGameForKey);
 
@@ -312,8 +422,8 @@ function Dashboard() {
         const payload = {
           home_team: home,
           away_team: away,
-          season,
-          week,
+          season: 2025,
+          week: currentWeek,
         };
 
         // Debug: show the payload about to be sent so we can inspect it in DevTools.
@@ -333,23 +443,65 @@ function Dashboard() {
         const rawPrediction = await predictGame(payload);
 
         // Normalize a few common fields so Card/TeamGrid can rely on them.
-        const homeProb =
+        const rawHomeProb =
           rawPrediction?.home_win_probability ??
           rawPrediction?.prob_home ??
           rawPrediction?.probs?.home ??
           null;
-
-        const awayProb =
+        const rawAwayProb =
           rawPrediction?.away_win_probability ??
           rawPrediction?.prob_away ??
           rawPrediction?.probs?.away ??
-          (typeof homeProb === "number" ? 1 - homeProb : null);
+          null;
 
-        const homeScore =
+        // Calibrate overconfident classifier outputs before displaying.
+        const calibrated = calibrateWinProbabilities(
+          rawHomeProb,
+          rawAwayProb
+        );
+        const homeProb = calibrated.home;
+        const awayProb = calibrated.away;
+
+        // Normalize score predictions with a small heuristic when explicit
+        // score predictions are missing. If a numeric base score is available
+        // we adjust it slightly based on the win probability to give a
+        // directional estimated score. Otherwise we fall back to the
+        // provided value (which may be null).
+        const baseHomeScore =
           rawPrediction?.home_score ?? rawPrediction?.home_score_pred ?? null;
 
-        const awayScore =
+        let awayScore =
           rawPrediction?.away_score ?? rawPrediction?.away_score_pred ?? null;
+
+        // Derive a numeric homeScore when a base numeric score is available.
+        // Heuristic: boost the base score when home win probability is high,
+        // or estimate from away score when home win probability is very low.
+        let homeScore = baseHomeScore;
+        if (typeof baseHomeScore === "number" && !Number.isNaN(baseHomeScore)) {
+          if (typeof homeProb === "number") {
+            if (homeProb >= 0.8) {
+              homeScore = baseHomeScore + 5;
+              awayScore = awayScore - 2;
+            } else if (homeProb >= 0.7) {
+              homeScore = baseHomeScore + 2;
+              awayScore = awayScore - 1;
+            } else if (homeProb <= 0.6 && typeof awayScore === "number") {
+              awayScore = awayScore + 2;
+              homeScore = homeScore - 1;
+            } else if (homeProb <= 0.5 && typeof awayScore === "number") {
+              awayScore = awayScore + 5;
+              homeScore = baseHomeScore - 2;
+            } else {
+              homeScore = baseHomeScore;
+            }
+          } else {
+            homeScore = baseHomeScore;
+          }
+        } else {
+          homeScore = baseHomeScore;
+        }
+
+       
 
         const pointDiff =
           rawPrediction?.point_diff ??
@@ -369,8 +521,9 @@ function Dashboard() {
           home_score: homeScore,
           away_score: awayScore,
           point_diff: pointDiff,
+          calibration_meta: calibrated.meta,
         };
-        console.log('ENRICHEDPREDICTIONS', enrichedPrediction)
+        console.log('ENRICHED_PREDICTIONS', enrichedPrediction)
         // Store in context keyed by gameKey so TeamGrid can look it up.
         setPrediction?.(gameKey, enrichedPrediction);
 
@@ -399,6 +552,7 @@ function Dashboard() {
       setLoading,
       setError,
       pushHistory,
+      calibrateWinProbabilities,
     ]
   );
 
@@ -457,6 +611,4 @@ function Dashboard() {
       </main>
     </div>
   );
-}
-
-export default Dashboard;
+};

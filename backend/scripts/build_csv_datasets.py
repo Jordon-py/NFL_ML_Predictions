@@ -18,7 +18,6 @@ import json
 import logging
 from pathlib import Path
 import re
-import numbers
 
 import numpy as np
 import pandas as pd
@@ -57,13 +56,13 @@ def make_time_key(df: pd.DataFrame) -> pd.Series:
     return (season * 100) + week
 
 
+
 # ---------------------------------------------------------------------
 # Logging
 # ---------------------------------------------------------------------
-
-
 def setup_logger(out_dir: Path) -> None:
     """Initialize both file and console logging so CLI users get progress feedback."""
+    
     out_dir.mkdir(parents=True, exist_ok=True)
     log_file = out_dir / "build_csv_datasets.log"
     logging.basicConfig(
@@ -74,60 +73,51 @@ def setup_logger(out_dir: Path) -> None:
     logging.info("Logger initialized → %s", log_file)
 
 
+
 # ---------------------------------------------------------------------
 # Backend selection (nflreadpy preferred, fallback to nfl_data_py)
 # ---------------------------------------------------------------------
-
-NFL_BACKEND = "nfl_data_py"
-nfl = None
+NFL_BACKEND: Optional[str] = None
+nfl: Optional[str] = None
 _fallback_reason = None
-
 
 def _note_backend(msg: str, level: int = logging.INFO) -> None:
     logging.log(level, msg)
 
-
 try:
-    import nflreadpy as _nfl
-
+    import nflreadpy as nfl
+    
     try:
-        _probe = _nfl.load_schedules(seasons=[2024])
+        _probe = nfl.load_schedules(seasons=[2025])
+        print("Probing nflreadpy backend...", _probe, flush=True)
         if hasattr(_probe, "to_pandas"):
-            _ = _probe.head(1).to_pandas()
-        NFL_BACKEND = "nflreadpy"
-        nfl = _nfl
-        _note_backend("Using backend 'nflreadpy'")
+            _data = _probe.head(1).to_pandas()
+            nfl = "nflreadpy"
+            NFL_BACKEND = nfl
+        _note_backend(msg="Using backend 'nflreadpy'", level=4) 
+    
+
     except Exception as e:
         _fallback_reason = f"nflreadpy probe failed: {e}"
-        import nfl_data_py as _nfl  # type: ignore[no-redef]
-
-        nfl = _nfl
-        NFL_BACKEND = "nfl_data_py"
+        import nfl_data_py as n
+        if n is not None and nfl is None:
+            nfl = n
+            NFL_BACKEND = "nfl_data_py"
         _note_backend(
-            f"Using fallback backend '{NFL_BACKEND}' — {_fallback_reason}",
-            logging.WARNING,
+            f"Using fallback backend '{NFL_BACKEND}' — {_fallback_reason}", logging.WARNING,
         )
+    finally:
+        del _probe
+        del _data
+       
 except Exception as e:
-    _fallback_reason = f"nflreadpy import failed: {e}"
-    try:
-        import nfl_data_py as _nfl  # type: ignore[no-redef]
+    print(f"Failed to import nflreadpy: {e}", flush=True)
 
-        nfl = _nfl
-        NFL_BACKEND = "nfl_data_py"
-        _note_backend(
-            f"Using fallback backend '{NFL_BACKEND}' — {_fallback_reason}",
-            logging.WARNING,
-        )
-    except Exception as e2:
-        nfl = None
-        _note_backend(f"No NFL backend available: {e2}", logging.ERROR)
 
 
 # ---------------------------------------------------------------------
 # Utilities
 # ---------------------------------------------------------------------
-
-
 def to_pandas_safe(obj) -> pd.DataFrame:
     """Accept pandas or Polars DataFrame/LazyFrame; return pandas.DataFrame."""
     if obj.__class__.__module__.startswith("pandas"):
@@ -170,39 +160,43 @@ def _moneyline_to_prob(ml: pd.Series) -> pd.Series:
     return probs
 
 
+
 # ---------------------------------------------------------------------
 # Data loaders
 # ---------------------------------------------------------------------
-
+pbp_cache_path = Path("../pbp_cache.csv")
 
 def load_team_game_metrics(pbp_path: Path) -> pd.DataFrame:
     """Aggregate play-by-play data to per-team, per-game advanced metrics."""
     # If nflreadpy available, load directly; otherwise use cached CSV
     if nfl is not None and NFL_BACKEND == "nflreadpy":
         try:
-            seasons_to_load = list(range(2018, 2025))
+            seasons_to_load: list[int] =(
+                    [int(s) for s in input('Enter seasons to load (comma-separated, e.g., start=2010, end=2022):2010,2022\n').strip().split(',')]
+            )
+
             logging.info(
                 "Loading play-by-play via nflreadpy for seasons %s", seasons_to_load
             )
             pbp_raw = nfl.load_pbp(seasons=seasons_to_load)
             pbp = to_pandas_safe(pbp_raw)
             logging.info("Loaded %d play-by-play rows from nflreadpy", len(pbp))
+            
         except Exception as exc:
-            logging.warning(
-                "nflreadpy PBP load failed (%s); falling back to cached CSV", exc
-            )
-            pbp = None
+                logging.warning(
+                    "nflreadpy PBP load failed (%s); falling back to cached CSV", exc
+                )
+                if len(pbp.columns) == 0:
+                    raise ValueError("No columns loaded from nflreadpy PBP data")
     else:
-        pbp = None
-
-    if pbp is None:
-        if not pbp_path.exists():
-            logging.warning(
-                "Cached PBP missing at %s; advanced PBP features disabled", pbp_path
-            )
-            return pd.DataFrame(columns=["season", "week", "game_id", "team"])
-        pbp = pd.read_csv(pbp_path, low_memory=False)
-        logging.info("Loaded %d play-by-play rows from CSV", len(pbp))
+        if pbp is None:
+            if not pbp_path.exists():
+                logging.warning(
+                    "Cached PBP missing at %s; advanced PBP features disabled", pbp_path
+                )
+                return pd.DataFrame(columns=["season", "week", "game_id", "team"])
+            pbp = pd.read_csv(pbp_path, low_memory=False)
+            logging.info("Loaded %d play-by-play rows from CSV", len(pbp))
 
     # Ensure required columns exist
     required_cols = ["season", "week", "game_id", "posteam"]

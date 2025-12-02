@@ -1,21 +1,19 @@
 /* Card.module.css — v2 Futuristic + Motion */
 /* Uses globals from base.css: fonts, --a-ease, cardPop/outlineGlow keyframes. */
-img {
-  width: unset;
-  height: unset;
-}
+
 .card {
   display: flex;
   backdrop-filter: blur(6px);
   border-radius: var(--r-md);
   background: radial-gradient(circle at top, #0048ff28, #000622 70%);
   color: var(--lch-text);
-  border: 1px solid lch(100% 0.01 296.81 / 0.578);
+  border: 1px solid lch(100% 0.01 296.81 / 0.695);
   padding: 1.5rem;
   position: relative;
-  width: clamp(300px, 100%, 380px);
+  width: 100%;
+  max-width: 350px;
   box-shadow: 1px 4px 8px 2px rgba(255, 253, 253, 0.883) inset,       /* hard drop (stylized) */
-              1px 2px 12px  2px rgba(0, 0, 0, 0.272);  /* soft ambient */
+              1px 2px 4px  2px rgba(0, 0, 0, 0.272);  /* soft ambient */
 
   animation: _cardPop_yvg8j_1 0.6s var(--a-ease) calc(var(--i, 0) * 80ms) both;
   transform-style: preserve-3d;
@@ -24,11 +22,9 @@ img {
   --card-tilt: 130deg;
   --glow-time: 350ms;
   --glow-accent: lch(13.16% 45.21 326.7 / 0.594);
-  flex-direction: row;
-  flex-wrap: nowrap;
-  align-content: baseline;
+  flex-direction: column;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: stretch;
 }
 
 .card:hover,
@@ -38,15 +34,58 @@ img {
   cursor: pointer;
 }
 
+#reset-button.reset-button {
+  display:flex;
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: transparent;
+  color: var(--lch-text);
+  border: 1px solid var(--lch-border);
+  padding: 0.35rem 0.6rem;
+  border-radius: 6px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  cursor: pointer;
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+  will-change: transform;
+}
+
+#reset-button:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.12), 0 0 8px var(--lch-accent);
+  border-color: var(--lch-primary);
+}
+
 .hasPrediction {
   display:flex;
-  flex-direction: row;
-  flex-wrap: nowrap;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  width:100%;
   max-width: 600px;
-  width: 100%;
+  max-height: 900px;
   animation: outlineGlow cubic-bezier(0.075, 0.82, 0.165, 1) ease-in-out infinite;
   border-color: var(--lch-primary);
-  box-shadow: 0 5px 10px 8px inset oklch(0% 0 0 / 0.45), 0 0 25px var(--lch-primary);
+  box-shadow: 3px 3px 12px 3px inset oklch(0% 0 0), 0 0 25px var(--lch-primary);
+  transform: scale(1.03);
+}
+
+/* Animated accent outline for cards with predictions */
+.hasPrediction::after {
+  border-radius: inherit;
+  width:100%;
+  pointer-events: none;
+  z-index: 0;
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--lch-primary) 20%, transparent), 0 0 28px color-mix(in oklab, var(--lch-primary) 35%, transparent);
+  opacity: 0.9;
+  animation: predictionAccent 2.25s ease-in-out infinite;
+}
+
+@keyframes predictionAccent {
+  0% { transform: scale(0.995); box-shadow: 0 0 0 2px color-mix(in oklab, var(--lch-primary) 12%, transparent), 0 0 8px color-mix(in oklab, var(--lch-primary) 18%, transparent); }
+  50% { transform: scale(1.01); box-shadow: 0 0 0 6px color-mix(in oklab, var(--lch-primary) 28%, transparent), 0 0 28px color-mix(in oklab, var(--lch-primary) 40%, transparent); }
+  100% { transform: scale(0.995); box-shadow: 0 0 0 2px color-mix(in oklab, var(--lch-primary) 12%, transparent), 0 0 8px color-mix(in oklab, var(--lch-primary) 18%, transparent); }
 }
 
 .isLoading {
@@ -58,31 +97,43 @@ img {
   box-shadow: 0 0 0 1px lch(58% 78 30 / .4) inset;
 }
 
-.topBar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: .25rem;
+.isError .gameCardLogo {
+  width: 220px;
+  height: 220px;
+  filter: drop-shadow(0 0 12px var(--lch-primary));
 }
 
-.left {
-  display: inline-flex;
-  align-items: center;
+/* Logos inside .left or global hasPrediction variant */
+.left .gameCardLogo.hasPrediction,
+.gameCardLogo.hasPrediction {
+  width: 220px;
+  height: 220px;
   gap: .5rem;
 }
 
-.icon {
-  filter: drop-shadow(0 0 8px var(--lch-accent));
+/* Base logo container */
+.gameCardLogo {
+  width: 100%;
+  height: 100%;
+  max-width: 150px;
+  object-fit: cover;
+  border-radius: 50%;
+  background-color: radial-gradient(circle at 9.39% 50.63%, transparent 0%, transparent 100%);
+  background: radial-gradient(circle at 29.39% 70.63%, transparent 0%, transparent 100%);
+  padding: 8px;
+  transition: transform cubic-bezier(0.075, 0.82, 0.165, 1) var(--a-ease), filter .4s var(--a-ease);
 }
 
-.title {
-  font-family: var(--font-tech);
-  letter-spacing: .5px;
-}
-
+/* Status */
 .status {
   font-size: .8rem;
   color: var(--lch-muted);
+}
+
+/* Hover for logo elements (covers module and global variants) */
+.gameCardLogo:hover {
+  transform: scale(1.12) rotate(5deg);
+  filter: brightness(1.2) drop-shadow(0 0 12px var(--lch-primary));
 }
 
 .head {
@@ -103,7 +154,7 @@ div.predictionBody {
   display:flex;
   flex-direction: column;
   align-items: center;
-  gap: .5rem;
+  gap: .75rem;
   flex: 1;
 }
 
@@ -116,13 +167,14 @@ div.predictionBody {
 }
 
 .atSymbol {
+  position: relative;
   font-weight: 800;
   color: var(--lch-accent);
-  font-size: 1.4rem;
+  font-size: 2.4rem;
   font-family: var(--font-tech);
 }
 
-img#home-logo.game-card_logo {
+img#home-logo.gameCardLogo {
   max-width: 220px;
   width:100%;
   max-height: 220px;
@@ -130,13 +182,14 @@ img#home-logo.game-card_logo {
   
   object-fit: cover;
   border-radius: 50%;
-  background: oklch(0% 0 0 / .2);
+  background-color: lch(0% 0 0 / 0.504);
+  background: oklch(0% 0 0 / 0.295);
   padding: 6px;
   transition: transform .4s var(--a-ease), filter .4s var(--a-ease);
   animation: fadeInVar .8s var(--a-ease) both;
 }
 
-img#away-logo.game-card_logo {
+img#away-logo.gameCardLogo {
   max-width: 220px;
   width:100%;
   max-height: 220px;
@@ -144,51 +197,30 @@ img#away-logo.game-card_logo {
   
   object-fit: cover;
   border-radius: 50%;
-  background: oklch(0% 0 0 / .2);
+  background-color: lch(0% 0 0 / 0.504);
+  background: oklch(0% 0 0 / 0.295);
   padding: 6px;
   transition: transform .4s var(--a-ease), filter .4s var(--a-ease);
   animation: fadeInVar .8s var(--a-ease) both;
 }
-.game-card_logo.hasPrediction {
-  width: 220px;
-  height: 220px;
-  filter: drop-shadow(0 0 12px var(--lch-primary));
-}
-
-/* Ensure global and module-class variants of the logo are covered and larger */
-.game-card__logo,
-.game-card_logo {
-  width: 160px;
-  height: 160px;
-  max-width: none;
-  max-height: none;
-  object-fit: cover;
-  border-radius: 50%;
-  background: oklch(0% 0 0 / .08);
-  padding: 8px;
-  transition: transform .4s var(--a-ease), filter .4s var(--a-ease);
-}
-
-.game-card__logo.hasPrediction,
-.game-card_logo.hasPrediction {
-  width: 220px;
-  height: 220px;
+/* ensure module-only variant (single canonical logo class) */
+.gameCardLogo.hasPrediction {
+  width: 250px;
+  height: 250px;
 }
 
 @media (max-width: 600px) {
-  .game-card__logo,
-  .game-card_logo {
+  .gameCardLogo {
     width: 80px;
     height: 80px;
   }
-  .game-card__logo.hasPrediction,
-  .game-card_logo.hasPrediction {
+  .gameCardLogo.hasPrediction {
     width: 100px;
     height: 100px;
   }
 }
 
-.game-card_logo:hover {
+.gameCardLogo:hover {
   transform: scale(1.12) rotate(5deg);
   filter: brightness(1.2) drop-shadow(0 0 12px var(--lch-primary));
 }
@@ -201,9 +233,10 @@ img#away-logo.game-card_logo {
   animation: textFadeSlide 1s var(--a-ease) 300ms both;
 }
 
-.prediction {
+.hasPrediction {
   display: flex;
   flex-direction: column;
+  justify-content: space-between;
   gap: .75rem;
   margin-top: auto;
   padding-top: .75rem;
@@ -211,7 +244,7 @@ img#away-logo.game-card_logo {
 }
 
 .predictionBody {
-  display: grid;
+  display: flex;
   gap: .5rem;
 }
 
