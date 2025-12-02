@@ -215,7 +215,7 @@ class AppState:
                 path = candidates[0]
             else:
                 # Fallback default filename under data dir
-                path = DATA_DIR / "game_features.csv"
+                path = DATA_DIR / "game_features_20251201.csv"
 
             # If file missing and a DATA_URL is configured, attempt to download it
             if not path.exists():

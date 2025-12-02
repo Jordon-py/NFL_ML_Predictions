@@ -27,7 +27,7 @@ models/*.model
 
 # Data files (keep structure but not data)
 
-data/**/*.csv
+
 !data/.gitkeep
 Add backend/.venv/
 
