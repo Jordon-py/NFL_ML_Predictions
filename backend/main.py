@@ -202,9 +202,23 @@ class AppState:
     def _load_dataset(self) -> None:
         """Load the most recent game_features*.csv into memory."""
         try:
+            # Allow an explicit dataset path via env var (common in Heroku config)
+            env_ds = os.environ.get("DATASET_PATH") or os.environ.get("TRAIN_DATASET_FILE")
+            if env_ds:
+                # Resolve relative paths against the BASE_DIR (app root)
+                env_path = Path(env_ds.strip().strip("'\""))
+                if not env_path.is_absolute():
+                    env_path = (BASE_DIR / env_path).resolve()
+                logging.info("[Dataset] Checking dataset path from env: %s", env_path)
+                if env_path.exists():
+                    path = env_path
+                    logging.info("[Dataset] Using dataset from env path: %s", path)
+                else:
+                    logging.warning("[Dataset] Env dataset path does not exist: %s", env_path)
+
             # Search common locations for game_features CSVs: backend/data and backend root
             candidates = []
-            candidates.extend(list(DATA_DIR.glob("game_features*.csv")))
+            candidates.extend(list(DATA_DIR.glob("game_features_2025120*.csv")))
             candidates.extend(list(BASE_DIR.glob("game_features*.csv")))
 
             # Also search other common locations that may appear in Heroku slugs
