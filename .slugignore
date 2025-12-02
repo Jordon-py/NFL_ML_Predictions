@@ -31,4 +31,11 @@ backend/metrics/data/game_features_new.csv
 *.pyc
 .venv/
 venv/
-.pytest_cache/
+.pytest_cache
+.vercel/
+frontend/*
+!.vercel/output/
+!.json
+*/*.toml
+*.lock
+.pytest_cache/*
