@@ -1,1 +1,0 @@
-import{u as r}from"./index-DrrpvKWU.js";import{N as a,H as s}from"./NavBar-fgdYh4Ac.js";function c(){const t=r(),e=Array.isArray(t?.history)?t.history:[];return React.createElement(React.Fragment,null,React.createElement(a,{state:t}),React.createElement(s,{state:t,history:e}))}export{c as default};
