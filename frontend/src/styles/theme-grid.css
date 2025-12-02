@@ -337,3 +337,51 @@ img.team-logo:hover {
     animation: none;
   }
 }
+
+/* --- Unified logo & card visual upgrades ---------------------------------
+   These rules enhance logos and card surfaces globally so both module
+   and non-module selectors receive the same visual treatment. They are
+   intentionally additive and responsive. */
+
+.team-logo,
+img.team-logo {
+  width: clamp(4.5rem, 12vw, 8rem);
+  height: auto;
+  aspect-ratio: 1 / 1;
+  object-fit: contain;
+  border-radius: 50%;
+  padding: 6px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(0,0,0,0.06));
+  box-shadow: 0 8px 22px rgba(2,6,23,0.45), inset 0 1px 0 rgba(255,255,255,0.02);
+  transition: transform .45s var(--a-ease), filter .45s var(--a-ease), box-shadow .45s var(--a-ease);
+  will-change: transform, filter;
+}
+
+/* prediction-sizing is handled in component CSS modules (.gameCardLogo.hasPrediction) */
+
+.team-logo:hover {
+  transform: translateY(-6px) scale(1.08) rotate(3deg);
+  filter: brightness(1.12) saturate(1.06) drop-shadow(0 6px 20px var(--c-brand-1));
+}
+
+/* Glassy card accent for the team grid area — subtle gradient + border */
+section.team-main {
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.06));
+  border-radius: var(--r-lg, 12px);
+  padding: 1.25rem;
+  gap: 1rem;
+}
+
+/* Focus styles for keyboard users */
+.team-logo:focus,
+.team-logo:focus-visible,
+.team-logo:focus-visible {
+  outline: 3px solid color-mix(in oklab, var(--c-brand-1) 35%, white 10%);
+  outline-offset: 6px;
+}
+
+@media (max-width: 600px) {
+  .team-logo {
+    width: clamp(3rem, 18vw, 5.5rem);
+  }
+}

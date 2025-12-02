@@ -1,0 +1,954 @@
+[
+  {
+    "feature": "home_prior_pf_avg_3",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 22.581375946605057,
+    "std": 6.844317405014118
+  },
+  {
+    "feature": "home_prior_pa_avg_3",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 22.787767937363622,
+    "std": 6.276457192997732
+  },
+  {
+    "feature": "home_prior_win_pct_3",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 0.4894108586830958,
+    "std": 0.3164528990574584
+  },
+  {
+    "feature": "home_prior_off_epa_per_play_3",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": -0.0067558021454877755,
+    "std": 0.0968645624764002
+  },
+  {
+    "feature": "home_prior_off_success_rate_3",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 0.3323922702987567,
+    "std": 0.19014027296463193
+  },
+  {
+    "feature": "home_prior_off_explosive_rate_3",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 0.040538100493999904,
+    "std": 0.026827822509893642
+  },
+  {
+    "feature": "home_prior_off_third_down_pct_3",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 0.29944594862374785,
+    "std": 0.18469404341017195
+  },
+  {
+    "feature": "home_prior_off_pass_over_expected_3",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": -0.014693738885401137,
+    "std": 0.04393586385035031
+  },
+  {
+    "feature": "home_prior_def_success_rate_allowed_3",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 0.33346394517181294,
+    "std": 0.1900423963578444
+  },
+  {
+    "feature": "home_prior_def_explosive_rate_allowed_3",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 0.04072660167081041,
+    "std": 0.02657730401217388
+  },
+  {
+    "feature": "home_prior_def_epa_per_play_3",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 0.004744043684588082,
+    "std": 0.08661475751920084
+  },
+  {
+    "feature": "home_prior_def_takeaway_rate_3",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 0.015700803118383226,
+    "std": 0.013630707747802912
+  },
+  {
+    "feature": "home_prior_off_turnover_rate_3",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 0.016199205870239854,
+    "std": 0.013643067815668916
+  },
+  {
+    "feature": "home_prior_pf_avg_5",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 22.644904376845076,
+    "std": 5.857769483099357
+  },
+  {
+    "feature": "home_prior_pa_avg_5",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 22.799781799512257,
+    "std": 5.238478479352669
+  },
+  {
+    "feature": "home_prior_win_pct_5",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 0.4924720831728918,
+    "std": 0.2653532636992932
+  },
+  {
+    "feature": "home_prior_off_epa_per_play_5",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": -0.005544185959948002,
+    "std": 0.08406128100346544
+  },
+  {
+    "feature": "home_prior_off_success_rate_5",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 0.33288266248979786,
+    "std": 0.1894442315424963
+  },
+  {
+    "feature": "home_prior_off_explosive_rate_5",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 0.04065337591708203,
+    "std": 0.025796991287721924
+  },
+  {
+    "feature": "home_prior_off_third_down_pct_5",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 0.2999630619872413,
+    "std": 0.17979126272646423
+  },
+  {
+    "feature": "home_prior_off_pass_over_expected_5",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": -0.01400871743477459,
+    "std": 0.03993732745482866
+  },
+  {
+    "feature": "home_prior_def_success_rate_allowed_5",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 0.33362773151181896,
+    "std": 0.1891236247255913
+  },
+  {
+    "feature": "home_prior_def_explosive_rate_allowed_5",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 0.0408420319077009,
+    "std": 0.02554130692950282
+  },
+  {
+    "feature": "home_prior_def_epa_per_play_5",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 0.004275359621060873,
+    "std": 0.07317684790161151
+  },
+  {
+    "feature": "home_prior_def_takeaway_rate_5",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 0.01579264726006523,
+    "std": 0.012437923729807182
+  },
+  {
+    "feature": "home_prior_off_turnover_rate_5",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 0.01597443975959401,
+    "std": 0.012272580138409754
+  },
+  {
+    "feature": "away_prior_pf_avg_3",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 22.820241304068798,
+    "std": 6.714295252868799
+  },
+  {
+    "feature": "away_prior_pa_avg_3",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 22.607046592221796,
+    "std": 6.357571617450814
+  },
+  {
+    "feature": "away_prior_win_pct_3",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 0.5008342959825439,
+    "std": 0.3143234023543761
+  },
+  {
+    "feature": "away_prior_off_epa_per_play_3",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": -0.006877708731685215,
+    "std": 0.09271877086240835
+  },
+  {
+    "feature": "away_prior_off_success_rate_3",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 0.33293273426727815,
+    "std": 0.19063496599882676
+  },
+  {
+    "feature": "away_prior_off_explosive_rate_3",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 0.040283995418737804,
+    "std": 0.02664232963937028
+  },
+  {
+    "feature": "away_prior_off_third_down_pct_3",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 0.3000556177559923,
+    "std": 0.18473760410537035
+  },
+  {
+    "feature": "away_prior_off_pass_over_expected_3",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": -0.014434000168164221,
+    "std": 0.04424907661453053
+  },
+  {
+    "feature": "away_prior_def_success_rate_allowed_3",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 0.3335324998288712,
+    "std": 0.19069784992614458
+  },
+  {
+    "feature": "away_prior_def_explosive_rate_allowed_3",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 0.04066594273387278,
+    "std": 0.026725013745643927
+  },
+  {
+    "feature": "away_prior_def_epa_per_play_3",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 0.0029247362851105903,
+    "std": 0.08958413766144943
+  },
+  {
+    "feature": "away_prior_def_takeaway_rate_3",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 0.015576950602804864,
+    "std": 0.013781967178127784
+  },
+  {
+    "feature": "away_prior_off_turnover_rate_3",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 0.015817412411076707,
+    "std": 0.013621526320452226
+  },
+  {
+    "feature": "away_prior_pf_avg_5",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 22.74013605442177,
+    "std": 5.864063739811736
+  },
+  {
+    "feature": "away_prior_pa_avg_5",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 22.589455782312925,
+    "std": 5.250204490733813
+  },
+  {
+    "feature": "away_prior_win_pct_5",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 0.49759337697343087,
+    "std": 0.26436095085524247
+  },
+  {
+    "feature": "away_prior_off_epa_per_play_5",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": -0.008536344471213835,
+    "std": 0.0814162300002055
+  },
+  {
+    "feature": "away_prior_off_success_rate_5",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 0.3317468792569197,
+    "std": 0.1889531978403351
+  },
+  {
+    "feature": "away_prior_off_explosive_rate_5",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 0.04016981318649678,
+    "std": 0.0254580888243054
+  },
+  {
+    "feature": "away_prior_off_third_down_pct_5",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 0.2991582489781923,
+    "std": 0.179171185886067
+  },
+  {
+    "feature": "away_prior_off_pass_over_expected_5",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": -0.015034322537971684,
+    "std": 0.04063313239730056
+  },
+  {
+    "feature": "away_prior_def_success_rate_allowed_5",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 0.3325517266953372,
+    "std": 0.1889993733058916
+  },
+  {
+    "feature": "away_prior_def_explosive_rate_allowed_5",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 0.04047981502388255,
+    "std": 0.02534465179537812
+  },
+  {
+    "feature": "away_prior_def_epa_per_play_5",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 0.004658073284612878,
+    "std": 0.07532018384095208
+  },
+  {
+    "feature": "away_prior_def_takeaway_rate_5",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 0.015593682491108317,
+    "std": 0.01231317814457045
+  },
+  {
+    "feature": "away_prior_off_turnover_rate_5",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 0.01601928193563507,
+    "std": 0.01220870867591993
+  },
+  {
+    "feature": "home_minus_away_pf_avg_3",
+    "dtype": "float64",
+    "missing_pct": 0.0061609549480169425,
+    "mean": -0.24034611907529388,
+    "std": 9.054314578903531
+  },
+  {
+    "feature": "home_minus_away_pa_avg_3",
+    "dtype": "float64",
+    "missing_pct": 0.0061609549480169425,
+    "mean": 0.181841663437944,
+    "std": 8.290549869239214
+  },
+  {
+    "feature": "home_minus_away_win_pct_3",
+    "dtype": "float64",
+    "missing_pct": 0.0061609549480169425,
+    "mean": -0.011494252873563218,
+    "std": 0.42417329676118665
+  },
+  {
+    "feature": "home_minus_away_off_epa_per_play_3",
+    "dtype": "float64",
+    "missing_pct": 0.21216788602233347,
+    "mean": -0.004740519120097176,
+    "std": 0.14526233973306452
+  },
+  {
+    "feature": "home_minus_away_off_success_rate_3",
+    "dtype": "float64",
+    "missing_pct": 0.21216788602233347,
+    "mean": -0.0012079442971625065,
+    "std": 0.06118790773499587
+  },
+  {
+    "feature": "home_minus_away_off_explosive_rate_3",
+    "dtype": "float64",
+    "missing_pct": 0.21216788602233347,
+    "mean": -0.0017752493916086713,
+    "std": 0.02522145999226511
+  },
+  {
+    "feature": "home_minus_away_off_third_down_pct_3",
+    "dtype": "float64",
+    "missing_pct": 0.21216788602233347,
+    "mean": -0.0063864010136003005,
+    "std": 0.12356019309139926
+  },
+  {
+    "feature": "home_minus_away_off_pass_over_expected_3",
+    "dtype": "float64",
+    "missing_pct": 0.21216788602233347,
+    "mean": -0.0054649002583713946,
+    "std": 0.07136410519133066
+  },
+  {
+    "feature": "home_minus_away_def_success_rate_allowed_3",
+    "dtype": "float64",
+    "missing_pct": 0.21216788602233347,
+    "mean": -0.004753463072240624,
+    "std": 0.06023701787370066
+  },
+  {
+    "feature": "home_minus_away_def_explosive_rate_allowed_3",
+    "dtype": "float64",
+    "missing_pct": 0.21216788602233347,
+    "mean": -0.0025737957011177193,
+    "std": 0.025612939467443193
+  },
+  {
+    "feature": "home_minus_away_def_epa_per_play_3",
+    "dtype": "float64",
+    "missing_pct": 0.21216788602233347,
+    "mean": 0.011798645022419852,
+    "std": 0.14444229329361125
+  },
+  {
+    "feature": "home_minus_away_def_takeaway_rate_3",
+    "dtype": "float64",
+    "missing_pct": 0.21216788602233347,
+    "mean": 0.0002214856485747475,
+    "std": 0.016062155616434856
+  },
+  {
+    "feature": "home_minus_away_off_turnover_rate_3",
+    "dtype": "float64",
+    "missing_pct": 0.21216788602233347,
+    "mean": 0.0011900867349161192,
+    "std": 0.015671572504140387
+  },
+  {
+    "feature": "home_minus_away_pf_avg_5",
+    "dtype": "float64",
+    "missing_pct": 0.0061609549480169425,
+    "mean": -0.09582203280382279,
+    "std": 7.750645757990809
+  },
+  {
+    "feature": "home_minus_away_pa_avg_5",
+    "dtype": "float64",
+    "missing_pct": 0.0061609549480169425,
+    "mean": 0.2116298592276896,
+    "std": 6.784107256678378
+  },
+  {
+    "feature": "home_minus_away_win_pct_5",
+    "dtype": "float64",
+    "missing_pct": 0.0061609549480169425,
+    "mean": -0.005153041456799691,
+    "std": 0.35959766651883834
+  },
+  {
+    "feature": "home_minus_away_off_epa_per_play_5",
+    "dtype": "float64",
+    "missing_pct": 0.21216788602233347,
+    "mean": -0.006509593865591444,
+    "std": 0.1349088941974739
+  },
+  {
+    "feature": "home_minus_away_off_success_rate_5",
+    "dtype": "float64",
+    "missing_pct": 0.21216788602233347,
+    "mean": -0.001632068346119713,
+    "std": 0.05383495520452934
+  },
+  {
+    "feature": "home_minus_away_off_explosive_rate_5",
+    "dtype": "float64",
+    "missing_pct": 0.21216788602233347,
+    "mean": -0.00044664684086106603,
+    "std": 0.019743811835813318
+  },
+  {
+    "feature": "home_minus_away_off_third_down_pct_5",
+    "dtype": "float64",
+    "missing_pct": 0.21216788602233347,
+    "mean": -0.00464461915698099,
+    "std": 0.1035328655472104
+  },
+  {
+    "feature": "home_minus_away_off_pass_over_expected_5",
+    "dtype": "float64",
+    "missing_pct": 0.21216788602233347,
+    "mean": -0.0017178777260708062,
+    "std": 0.06309454588580309
+  },
+  {
+    "feature": "home_minus_away_def_success_rate_allowed_5",
+    "dtype": "float64",
+    "missing_pct": 0.21216788602233347,
+    "mean": -0.001996330484863178,
+    "std": 0.05186904495156947
+  },
+  {
+    "feature": "home_minus_away_def_explosive_rate_allowed_5",
+    "dtype": "float64",
+    "missing_pct": 0.21216788602233347,
+    "mean": 0.00014044855323685536,
+    "std": 0.0178821890201717
+  },
+  {
+    "feature": "home_minus_away_def_epa_per_play_5",
+    "dtype": "float64",
+    "missing_pct": 0.21216788602233347,
+    "mean": 0.007838635852730669,
+    "std": 0.12627005449275605
+  },
+  {
+    "feature": "home_minus_away_def_takeaway_rate_5",
+    "dtype": "float64",
+    "missing_pct": 0.21216788602233347,
+    "mean": 0.0010984706571371863,
+    "std": 0.014896080755973502
+  },
+  {
+    "feature": "home_minus_away_off_turnover_rate_5",
+    "dtype": "float64",
+    "missing_pct": 0.21216788602233347,
+    "mean": 0.0006227254377184932,
+    "std": 0.01297659905274401
+  },
+  {
+    "feature": "home_moneyline_prob",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 0.5742797711071624,
+    "std": 0.18603154653326529
+  },
+  {
+    "feature": "away_moneyline_prob",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 0.45657548439813717,
+    "std": 0.18592138926902946
+  },
+  {
+    "feature": "moneyline_prob_diff",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 0.11770428670902516,
+    "std": 0.3718724007480883
+  },
+  {
+    "feature": "spread_line",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 1.8561802079322296,
+    "std": 6.01960707623012
+  },
+  {
+    "feature": "total_line",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 45.326530612244895,
+    "std": 4.42004666170511
+  },
+  {
+    "feature": "home_rest",
+    "dtype": "int64",
+    "missing_pct": 0.0,
+    "mean": 7.474008471313054,
+    "std": 2.1048283759096638
+  },
+  {
+    "feature": "away_rest",
+    "dtype": "int64",
+    "missing_pct": 0.0,
+    "mean": 7.441663457835965,
+    "std": 2.0104091861675273
+  },
+  {
+    "feature": "rest_diff",
+    "dtype": "int64",
+    "missing_pct": 0.0,
+    "mean": 0.03234501347708895,
+    "std": 2.488578686914621
+  },
+  {
+    "feature": "home_player_team_qb_pass_yards",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 246.34039276087793,
+    "std": 74.57452950973114
+  },
+  {
+    "feature": "home_player_team_qb_pass_tds",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 1.5864458991143626,
+    "std": 1.1717774274525936
+  },
+  {
+    "feature": "home_player_team_qb_completions",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 22.093954562957258,
+    "std": 6.001959476169145
+  },
+  {
+    "feature": "home_player_team_qb_attempts",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 34.06006931074317,
+    "std": 8.538495338881896
+  },
+  {
+    "feature": "home_player_team_qb_completion_pct",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 0.6502964534274546,
+    "std": 0.09671288242329601
+  },
+  {
+    "feature": "home_player_team_rb_rush_yards",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 94.6207162110127,
+    "std": 47.453892688107956
+  },
+  {
+    "feature": "home_player_team_rb_rush_tds",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 0.7162110127069696,
+    "std": 0.844891673116223
+  },
+  {
+    "feature": "home_player_team_rb_receptions",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 4.854062379668848,
+    "std": 2.8036563426902035
+  },
+  {
+    "feature": "home_player_team_rb_receiving_yards",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 37.649595687331534,
+    "std": 27.677686757972005
+  },
+  {
+    "feature": "home_player_team_wr_targets",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 26.402772429726607,
+    "std": 7.092184139712173
+  },
+  {
+    "feature": "home_player_team_wr_receptions",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 17.099345398536773,
+    "std": 5.015124175879474
+  },
+  {
+    "feature": "home_player_team_wr_receiving_yards",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 208.22217943781285,
+    "std": 69.30122315786438
+  },
+  {
+    "feature": "home_player_team_wr_receiving_tds",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 1.3939160569888334,
+    "std": 1.1100451262912403
+  },
+  {
+    "feature": "away_player_team_qb_pass_yards",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 240.1967654986523,
+    "std": 74.56566173659097
+  },
+  {
+    "feature": "away_player_team_qb_pass_tds",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 1.4501347708894878,
+    "std": 1.1253361202121162
+  },
+  {
+    "feature": "away_player_team_qb_completions",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 21.754331921447825,
+    "std": 5.9551417636733195
+  },
+  {
+    "feature": "away_player_team_qb_attempts",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 34.16557566422796,
+    "std": 8.221444260674364
+  },
+  {
+    "feature": "away_player_team_qb_completion_pct",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 0.6364158014859002,
+    "std": 0.09894872292246908
+  },
+  {
+    "feature": "away_player_team_rb_rush_yards",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 90.26068540623797,
+    "std": 44.87029403582904
+  },
+  {
+    "feature": "away_player_team_rb_rush_tds",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 0.6314978821717366,
+    "std": 0.804861880453404
+  },
+  {
+    "feature": "away_player_team_rb_receptions",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 4.770119368502118,
+    "std": 2.6786396227075344
+  },
+  {
+    "feature": "away_player_team_rb_receiving_yards",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 36.15325375433192,
+    "std": 26.68186340590963
+  },
+  {
+    "feature": "away_player_team_wr_targets",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 26.55987678090104,
+    "std": 6.989235883603163
+  },
+  {
+    "feature": "away_player_team_wr_receptions",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 16.86445899114363,
+    "std": 5.1376991791240885
+  },
+  {
+    "feature": "away_player_team_wr_receiving_yards",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 203.59145167500964,
+    "std": 69.6787654478923
+  },
+  {
+    "feature": "away_player_team_wr_receiving_tds",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 1.255294570658452,
+    "std": 1.0664736640481909
+  },
+  {
+    "feature": "home_elo_pre",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 1504.786643434496,
+    "std": 102.52993721682694
+  },
+  {
+    "feature": "away_elo_pre",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 1503.7645636944267,
+    "std": 99.35891094312268
+  },
+  {
+    "feature": "elo_diff_pre",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 1.022079740069257,
+    "std": 139.4144249992074
+  },
+  {
+    "feature": "time_key",
+    "dtype": "int64",
+    "missing_pct": 0.0,
+    "mean": 202039.59491721218,
+    "std": 272.74850425637214
+  },
+  {
+    "feature": "home_rolling_pf_3",
+    "dtype": "float64",
+    "missing_pct": 0.0061609549480169425,
+    "mean": 22.72136122949761,
+    "std": 6.62981309330479
+  },
+  {
+    "feature": "home_rolling_pa_3",
+    "dtype": "float64",
+    "missing_pct": 0.0061609549480169425,
+    "mean": 22.9290326746739,
+    "std": 6.033163333743203
+  },
+  {
+    "feature": "home_rolling_win_pct_3",
+    "dtype": "float64",
+    "missing_pct": 0.0061609549480169425,
+    "mean": 0.4924447888415342,
+    "std": 0.31507013818726537
+  },
+  {
+    "feature": "home_rolling_pf_5",
+    "dtype": "float64",
+    "missing_pct": 0.0061609549480169425,
+    "mean": 22.785283481854577,
+    "std": 5.597106380882891
+  },
+  {
+    "feature": "home_rolling_pa_5",
+    "dtype": "float64",
+    "missing_pct": 0.0061609549480169425,
+    "mean": 22.941121012527443,
+    "std": 4.936526275659401
+  },
+  {
+    "feature": "home_rolling_win_pct_5",
+    "dtype": "float64",
+    "missing_pct": 0.0061609549480169425,
+    "mean": 0.49552499031383185,
+    "std": 0.2633174117949474
+  },
+  {
+    "feature": "home_rolling_pf_10",
+    "dtype": "float64",
+    "missing_pct": 0.0061609549480169425,
+    "mean": 22.832710651095,
+    "std": 4.771752723511779
+  },
+  {
+    "feature": "home_rolling_pa_10",
+    "dtype": "float64",
+    "missing_pct": 0.0061609549480169425,
+    "mean": 22.844573285855734,
+    "std": 3.9000084640063353
+  },
+  {
+    "feature": "home_rolling_win_pct_10",
+    "dtype": "float64",
+    "missing_pct": 0.0061609549480169425,
+    "mean": 0.4978588955923322,
+    "std": 0.21808716532073041
+  },
+  {
+    "feature": "away_rolling_pf_3",
+    "dtype": "float64",
+    "missing_pct": 0.0061609549480169425,
+    "mean": 22.961707348572904,
+    "std": 6.489447381612734
+  },
+  {
+    "feature": "away_rolling_pa_3",
+    "dtype": "float64",
+    "missing_pct": 0.0061609549480169425,
+    "mean": 22.747191011235955,
+    "std": 6.122204390162397
+  },
+  {
+    "feature": "away_rolling_win_pct_3",
+    "dtype": "float64",
+    "missing_pct": 0.0061609549480169425,
+    "mean": 0.5039390417150974,
+    "std": 0.31280516222006105
+  },
+  {
+    "feature": "away_rolling_pf_5",
+    "dtype": "float64",
+    "missing_pct": 0.0061609549480169425,
+    "mean": 22.881105514658405,
+    "std": 5.601328239751488
+  },
+  {
+    "feature": "away_rolling_pa_5",
+    "dtype": "float64",
+    "missing_pct": 0.0061609549480169425,
+    "mean": 22.729491153299755,
+    "std": 4.95505719295976
+  },
+  {
+    "feature": "away_rolling_win_pct_5",
+    "dtype": "float64",
+    "missing_pct": 0.0061609549480169425,
+    "mean": 0.5006780317706315,
+    "std": 0.2622508941658583
+  },
+  {
+    "feature": "away_rolling_pf_10",
+    "dtype": "float64",
+    "missing_pct": 0.0061609549480169425,
+    "mean": 22.817747058787354,
+    "std": 4.669533824099258
+  },
+  {
+    "feature": "away_rolling_pa_10",
+    "dtype": "float64",
+    "missing_pct": 0.0061609549480169425,
+    "mean": 22.796293118823144,
+    "std": 3.9146928071778104
+  },
+  {
+    "feature": "away_rolling_win_pct_10",
+    "dtype": "float64",
+    "missing_pct": 0.0061609549480169425,
+    "mean": 0.4990233882523692,
+    "std": 0.21380855998115672
+  },
+  {
+    "feature": "home_qb_completion_pct",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 0.6512646927196906,
+    "std": 0.09345491980014399
+  },
+  {
+    "feature": "away_qb_completion_pct",
+    "dtype": "float64",
+    "missing_pct": 0.0,
+    "mean": 0.6376370394585738,
+    "std": 0.09494720257953676
+  }
+]

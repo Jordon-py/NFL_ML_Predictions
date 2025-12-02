@@ -27,7 +27,7 @@ Additional quick starts (common option combinations):
 
 - Build without team encodings and skip calibration rows (useful when
     creating numeric-only training sets or debugging):
-    python build_csv_datasetsv3.py --start 2016 --end 2025 --out-dir ./data --encode 'onehot' --no-calibration-rows --save-dominance-matrix
+    python build_csv_datasetsv3.py --start 2014 --end 2025 --out-dir ./data --encode 'onehot' --no-calibration-rows --save-dominance-matrix --legacy-root-copy
 
 - Build and persist pairwise dominance artifacts (matrix and human-readable log):
     python build_csv_datasetsv3.py --start 2018 --end 2025 --out-dir ./data --save-dominance-matrix --dominance-log ./data/dominance_log.txt

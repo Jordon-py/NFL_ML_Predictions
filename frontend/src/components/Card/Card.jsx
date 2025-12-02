@@ -334,8 +334,8 @@ export default function Card({
             <img
               src={away_logo}
               alt={`${away_team} logo`}
-              id={styles.away_logo}
-              className="game-card__logo"
+              id="away-logo"
+              className={styles.gameCardLogo}
               loading="lazy"
             />
           )}
@@ -344,7 +344,7 @@ export default function Card({
 
           {/* Abbreviation + full name (e.g., "KC — Kansas City Chiefs") */}
           <span className="game-card__name">
-           {awayFullName}
+            {awayFullName}
           </span>
         </div>
 
@@ -355,8 +355,8 @@ export default function Card({
             <img
               src={home_logo}
               alt={`${home_team} logo`}
-              id={styles.home_logo}
-              className={styles.game-card_logo}
+              id="home-logo"
+              className={styles.gameCardLogo}
               loading="lazy"
             />
           )}
@@ -364,7 +364,7 @@ export default function Card({
           <span className="game-card__label">Home</span>
 
           <span className="game-card__name">
-           {homeFullName}
+            {homeFullName}
           </span>
         </div>
       </div>
@@ -389,8 +389,9 @@ export default function Card({
           <>
             {/* Reset button: clears prediction via parent handler */}
             <button
+              id='reset-button'
               type="button"
-              className={styles.reset}
+              className="reset"
               onClick={handleReset}
               aria-label="Reset prediction"
             >
@@ -428,7 +429,7 @@ export default function Card({
                         {' '}
                         diff{' '}
                         {typeof prediction.point_diff === 'number' &&
-                        typeof prediction.point_diff.toFixed === 'function'
+                          typeof prediction.point_diff.toFixed === 'function'
                           ? prediction.point_diff.toFixed(1)
                           : prediction.point_diff}
                       </em>

@@ -9,8 +9,10 @@
 
 #ham-button {
   background: transparent;
-  height: 48px;
+  max-height: 48px;
+  max-width: 48px;
   width: 48px;
+  height: 48px;
   border: 1px solid #007bff33;
   border-radius: 8px;
   cursor: pointer;
@@ -44,12 +46,13 @@
 .menu-panel {
   position: absolute;
   top: 100%;
-  right: 0;
-  background: var(--card-bg, #fff);
-  border: 1px solid var(--border-color, #ddd);
+  right: 10%;
+  color: lch(73.12% 76.39 84.77 / 0.929);
+  background: var(--card-bg, #091647);
+  border: 1px solid var(--border-color, #fbfbfb);
   border-radius: 6px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  min-width: 200px;
+  max-width: 200px;
   overflow: hidden;
   transition: opacity 0.3s ease, transform 0.3s ease, visibility 0.3s ease;
 }
@@ -90,8 +93,8 @@
   display: block;
   padding: 1rem 1.5rem;
   color: var(--text-color, #333);
-  text-decoration: none;
-  transition: background-color 0.2s ease, color 0.2s ease;
+  text-decoration: overline;
+  transition: background-color 0.4s ease, color 0.2s ease;
 }
 
 .menu-item a:hover {
@@ -100,17 +103,10 @@
 }
 
 .menu-item a:focus {
-  outline: 2px solid var(--accent-color, #007bff);
+  outline: 2px solid var(--accent-color, #ffce1f);
   outline-offset: -2px;
-}
 
-/* Responsive adjustments */
-@media (max-width: 768px) {
-  .hamburger-menu-container {
-    display: block;
-  }
-
-  .menu-panel {
+.menu-panel {
     min-width: 180px;
     right: -10px;
   }

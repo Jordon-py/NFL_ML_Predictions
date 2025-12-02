@@ -8,8 +8,7 @@ node_modules/
 .md
 
 # Production
-build/
-dist/
+
 
 # Misc
 .DS_Store
