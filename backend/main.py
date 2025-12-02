@@ -207,8 +207,27 @@ class AppState:
             candidates.extend(list(DATA_DIR.glob("game_features*.csv")))
             candidates.extend(list(BASE_DIR.glob("game_features*.csv")))
 
+            # Also search other common locations that may appear in Heroku slugs
+            candidates.extend(list((BASE_DIR / "data").glob("game_features*.csv")))
+            candidates.extend(list((BASE_DIR.parent / "data").glob("game_features*.csv")))
+            candidates.extend(list(Path("/app").glob("**/game_features*.csv")))
+
+            # Deduplicate while preserving order
+            seen = set()
+            deduped = []
+            for p in candidates:
+                try:
+                    key = str(p.resolve())
+                except Exception:
+                    key = str(p)
+                if key not in seen:
+                    seen.add(key)
+                    deduped.append(p)
+            candidates = deduped
+
             # Prefer the most recently modified candidate
-            candidates = sorted(candidates, key=lambda p: p.stat().st_mtime, reverse=True)
+            candidates = sorted(candidates, key=lambda p: p.stat().st_mtime if p.exists() else 0, reverse=True)
+            logging.info("[Dataset] candidate dataset files: %s", [str(p) for p in candidates])
 
             path: Path
             if candidates:
