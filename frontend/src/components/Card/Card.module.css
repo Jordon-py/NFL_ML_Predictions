@@ -1,26 +1,31 @@
 /* Card.module.css — v2 Futuristic + Motion */
 /* Uses globals from base.css: fonts, --a-ease, cardPop/outlineGlow keyframes. */
-
+img {
+  width: unset;
+  height: unset;
+}
 .card {
   display: flex;
   backdrop-filter: blur(6px);
   border-radius: var(--r-md);
-  background: radial-gradient(circle at top, #0b112040, #020617 60%);
+  background: radial-gradient(circle at top, #0048ff28, #000622 70%);
   color: var(--lch-text);
-  border: 1px solid lch(100 0 0 / 0.34);
+  border: 1px solid lch(100% 0.01 296.81 / 0.578);
   padding: 1.5rem;
   position: relative;
-  /* width: clamp(300px, 100%, 380px); */
-  box-shadow: 0 8px 24px oklch(0% 0 0 / 0.30);
+  width: clamp(300px, 100%, 380px);
+  box-shadow: 1px 4px 8px 2px rgba(255, 253, 253, 0.883) inset,       /* hard drop (stylized) */
+              1px 2px 12px  2px rgba(0, 0, 0, 0.272);  /* soft ambient */
+
   animation: _cardPop_yvg8j_1 0.6s var(--a-ease) calc(var(--i, 0) * 80ms) both;
   transform-style: preserve-3d;
-  transition: transform .35s var(--a-ease), box-shadow .35s var(--a-ease), border-color .35s var(--a-ease);
+  transition: transform .75s var(--a-ease), box-shadow .75s var(--a-ease), border-color .95s var(--a-ease);
   outline: inherit;
   --card-tilt: 130deg;
   --glow-time: 350ms;
-  --glow-accent: lch(16.85% 50.77 326.91 / 0.73);
-  flex-direction: column;
-  flex-wrap: wrap;
+  --glow-accent: lch(13.16% 45.21 326.7 / 0.594);
+  flex-direction: row;
+  flex-wrap: nowrap;
   align-content: baseline;
   justify-content: space-between;
   align-items: baseline;
@@ -29,14 +34,19 @@
 .card:hover,
 .card:focus-within {
   transform: translateY(-8px) scale(1.02) rotateX(0.9deg) rotateY(0.9deg);
-  box-shadow: 0 16px 40px oklch(14.489% 0.05946 29.223 / 0.568), 0 0 22px var(--glow-accent);
+  box-shadow: 1px 4px 16px 4px oklch(14.489% 0.05946 29.223 / 0.568), 0 0 22px var(--glow-accent);
   cursor: pointer;
 }
 
 .hasPrediction {
+  display:flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  max-width: 600px;
+  width: 100%;
   animation: outlineGlow cubic-bezier(0.075, 0.82, 0.165, 1) ease-in-out infinite;
   border-color: var(--lch-primary);
-  box-shadow: 0 10px 30px oklch(0% 0 0 / 0.45), 0 0 25px var(--lch-primary);
+  box-shadow: 0 5px 10px 8px inset oklch(0% 0 0 / 0.45), 0 0 25px var(--lch-primary);
 }
 
 .isLoading {
@@ -82,15 +92,15 @@
   margin-bottom: 1rem;
 }
 
-.teamsRow {
+.game-card_team  {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content:space-around;
   gap: 1rem;
 }
 
-.teamInfo {
-  display: flex;
+div.predictionBody {
+  display:flex;
   flex-direction: column;
   align-items: center;
   gap: .5rem;
@@ -106,24 +116,79 @@
 }
 
 .atSymbol {
-  font-weight: 600;
+  font-weight: 800;
   color: var(--lch-accent);
-  font-size: 1.2rem;
+  font-size: 1.4rem;
   font-family: var(--font-tech);
 }
 
-.teamLogo {
-  width: clamp(5rem, 15vw, 7rem);
-  aspect-ratio: 1/1;
-  object-fit: contain;
+img#home-logo.game-card_logo {
+  max-width: 220px;
+  width:100%;
+  max-height: 220px;
+  height: 100%;
+  
+  object-fit: cover;
   border-radius: 50%;
   background: oklch(0% 0 0 / .2);
-  padding: 8px;
+  padding: 6px;
   transition: transform .4s var(--a-ease), filter .4s var(--a-ease);
   animation: fadeInVar .8s var(--a-ease) both;
 }
 
-.teamLogo:hover {
+img#away-logo.game-card_logo {
+  max-width: 220px;
+  width:100%;
+  max-height: 220px;
+  height: 100%;
+  
+  object-fit: cover;
+  border-radius: 50%;
+  background: oklch(0% 0 0 / .2);
+  padding: 6px;
+  transition: transform .4s var(--a-ease), filter .4s var(--a-ease);
+  animation: fadeInVar .8s var(--a-ease) both;
+}
+.game-card_logo.hasPrediction {
+  width: 220px;
+  height: 220px;
+  filter: drop-shadow(0 0 12px var(--lch-primary));
+}
+
+/* Ensure global and module-class variants of the logo are covered and larger */
+.game-card__logo,
+.game-card_logo {
+  width: 160px;
+  height: 160px;
+  max-width: none;
+  max-height: none;
+  object-fit: cover;
+  border-radius: 50%;
+  background: oklch(0% 0 0 / .08);
+  padding: 8px;
+  transition: transform .4s var(--a-ease), filter .4s var(--a-ease);
+}
+
+.game-card__logo.hasPrediction,
+.game-card_logo.hasPrediction {
+  width: 220px;
+  height: 220px;
+}
+
+@media (max-width: 600px) {
+  .game-card__logo,
+  .game-card_logo {
+    width: 80px;
+    height: 80px;
+  }
+  .game-card__logo.hasPrediction,
+  .game-card_logo.hasPrediction {
+    width: 100px;
+    height: 100px;
+  }
+}
+
+.game-card_logo:hover {
   transform: scale(1.12) rotate(5deg);
   filter: brightness(1.2) drop-shadow(0 0 12px var(--lch-primary));
 }
@@ -186,6 +251,38 @@
 
 .errorMsg {
   color: lch(70% 100 30);
+}
+
+/* Reset button — minimal, accessible, subtle float + outline animation */
+.reset {
+  float: right; /* visually anchor to the right side */
+  background: transparent;
+  color: var(--lch-text);
+  border: 1px solid var(--lch-border);
+  padding: 0.35rem 0.6rem;
+  border-radius: 6px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  cursor: pointer;
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+  will-change: transform;
+}
+
+.reset:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.12), 0 0 8px var(--lch-accent);
+  border-color: var(--lch-primary);
+}
+
+.reset:focus {
+  outline: none;
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--lch-accent) 12%, transparent);
+  animation: _resetFloat 3s ease-in-out infinite;
+}
+
+@keyframes _resetFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
 }
 
 .progressTrack {

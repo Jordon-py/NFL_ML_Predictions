@@ -49,13 +49,11 @@ import ErrorDisplay from "../ErrorDisplay";
  *
  * @returns {{ isLoading: boolean, error: Error | null, data: DashboardData | null }}
  */
-function useDashboardData()
-{
-  const context = /** @type {any} */ ( usePredictions() );
+function useDashboardData() {
+  const context = /** @type {any} */ (usePredictions());
 
-  return useMemo( () =>
-  {
-    if ( !context ) {
+  return useMemo(() => {
+    if (!context) {
       return {
         isLoading: true,
         error: new Error(
@@ -82,28 +80,28 @@ function useDashboardData()
       pushHistory,
     } = context;
 
-    const isGlobalLoading = Boolean( loading.global );
+    const isGlobalLoading = Boolean(loading.global);
     const mergedHealth = health || {
       status: "unknown",
       reason: "no health info",
     };
 
-    const transformedHistory = Array.isArray( history ) ? history : [];
-
-    const transformedGames = Array.isArray( schedule )
-      ? schedule.map( ( game ) =>
-      {
-        const homeCode = ( game.home_abbr || game.home_team || "" )
+    const transformedHistory = Array.isArray(history) ? history : [];
+    console.log('transformedhistory dashboard', transformedHistory)
+    console.log('history', history)
+    const transformedGames = Array.isArray(schedule)
+      ? schedule.map((game) => {
+        const homeCode = (game.home_abbr || game.home_team || "")
           .toString()
           .trim()
           .toUpperCase();
-        const awayCode = ( game.away_abbr || game.away_team || "" )
+        const awayCode = (game.away_abbr || game.away_team || "")
           .toString()
           .trim()
           .toUpperCase();
-        const gameWeek = Number.isFinite( Number( game.week ) )
-          ? Number( game.week )
-          : Number( week || 1 );
+        const gameWeek = Number.isFinite(Number(game.week))
+          ? Number(game.week)
+          : Number(week || 1);
 
         const id =
           game.id ||
@@ -117,15 +115,15 @@ function useDashboardData()
           away_abbr: awayCode || game.away_abbr,
           week: gameWeek,
         };
-      } )
+      })
       : [];
 
-    const currentWeek = Number.isFinite( Number( week ) )
-      ? Number( week )
-      : Number( transformedGames[ 0 ]?.week || 1 );
+    const currentWeek = Number.isFinite(Number(week))
+      ? Number(week)
+      : Number(transformedGames[0]?.week || 1);
 
     return {
-      isLoading: Boolean( isGlobalLoading && transformedGames.length === 0 ),
+      isLoading: Boolean(isGlobalLoading && transformedGames.length === 0),
       error: errors.global || null,
       data: {
         upcomingGames: transformedGames,
@@ -145,7 +143,7 @@ function useDashboardData()
         },
       },
     };
-  }, [ context ] );
+  }, [context]);
 }
 
 /**
@@ -154,21 +152,19 @@ function useDashboardData()
  *
  * @param {DashboardData | null} data
  */
-function useNavigationState( data )
-{
-  return useMemo( () =>
-  {
-    if ( !data ) {
+function useNavigationState(data) {
+  return useMemo(() => {
+    if (!data) {
       return {
         title: "NFL Prediction Dashboard",
-        subtitle: "Initializing…",
+        subtitle: "Initializing...",
         weekLabel: "Week ?",
         healthLabel: "Unknown",
       };
     }
 
     const { currentWeek, predictionHistory, health } = data;
-    const count = Array.isArray( predictionHistory )
+    const count = Array.isArray(predictionHistory)
       ? predictionHistory.length
       : 0;
     const healthStatus = health?.status || "unknown";
@@ -182,41 +178,40 @@ function useNavigationState( data )
           ? "Backend: Healthy"
           : `Backend: ${healthStatus}`,
     };
-  }, [ data ] );
+  }, [data]);
 }
 
 /**
  * Top-level dashboard page component.
  */
-function Dashboard()
-{
+function Dashboard() {
   const { isLoading, error, data } = useDashboardData();
-  const navState = useNavigationState( data );
+  const navState = useNavigationState(data);
 
   // Early returns for loading and error states
-  if ( isLoading ) {
-    return <LoadingState message="Loading schedule and predictions…" />;
+  if (isLoading) {
+    return <LoadingState message="Loading schedule and predictions..." />;
   }
 
-  if ( error || !data ) {
+  if (error || !data) {
     return (
       <ErrorDisplay
-        error={ error || new Error( "No dashboard data available." ) }
+        error={error || new Error("No dashboard data available.")}
       />
     );
   }
 
   const {
-    upcomingGames,
+    upcomingGames: games = [],
     currentWeek,
-    teamMetadata,
-    gamePredictions,
-    predictionHistory,
+    teamMetadata: teams = {},
+    gamePredictions: predictions = {},
+    predictionHistory = [],
     currentPrediction,
     health,
-    loadingMap,
-    errorMap,
-    actions,
+    loadingMap: loading = {},
+    errorMap: errors = {},
+    actions = {},
   } = data;
 
   const { setPrediction, setLoading, setError, pushHistory } = actions;
@@ -225,6 +220,28 @@ function Dashboard()
   const healthMessage = isBackendHealthy
     ? "Backend is healthy. Click a matchup to request fresh predictions."
     : health?.reason || "Backend is not ready for predictions yet.";
+
+  const deriveGameKey = useCallback(
+    (game) => {
+      if (!game) return "";
+
+      const home = (game.home_abbr || game.home_team || "")
+        .toString()
+        .trim()
+        .toUpperCase();
+      const away = (game.away_abbr || game.away_team || "")
+        .toString()
+        .trim()
+        .toUpperCase();
+      const season = Number(game.season || new Date().getFullYear());
+      const weekValue = Number.isFinite(Number(game.week))
+        ? Number(game.week)
+        : Number(currentWeek || 1);
+
+      return game.game_id || `${season}-${weekValue}-${home}-${away}`;
+    },
+    [currentWeek]
+  );
 
   /**
    * Click handler for <TeamGrid />.
@@ -236,36 +253,47 @@ function Dashboard()
    * never called /predict when a valid game was provided.
    */
   const handlePredictionRequest = useCallback(
-    async ( game ) =>
-    {
+    async (game) => {
       // Debugging: log when Dashboard receives a request from TeamGrid/Card
       try {
         // eslint-disable-next-line no-console
-        console.debug( '[Dashboard] handlePredictionRequest called', { game } );
-      } catch ( _err ) { }
-      if ( !game ) {
+        console.debug('[Dashboard] handlePredictionRequest called', { game });
+      } catch (_err) { }
+      if (!game) {
         console.warn(
           "[Dashboard] handlePredictionRequest called without a game."
         );
         return;
       }
 
-      const home = ( game.home_abbr || game.home_team || "" )
+      const home = (game.home_abbr || game.home_team || "")
         .toString()
         .trim()
         .toUpperCase();
-      const away = ( game.away_abbr || game.away_team || "" )
+      const away = (game.away_abbr || game.away_team || "")
         .toString()
         .trim()
         .toUpperCase();
-      const season = Number( game.season || new Date().getFullYear() );
-      const week = Number.isFinite( Number( game.week ) )
-        ? Number( game.week )
-        : Number( currentWeek || 1 );
+      const season = Number(game.season || new Date().getFullYear());
+      const week = Number.isFinite(Number(game.week))
+        ? Number(game.week)
+        : Number(currentWeek || 1);
 
-      const gameKey = game.game_id || `${season}-${week}-${home}-${away}`;
+      const baseGameForKey = {
+        ...game,
+        home_abbr: home,
+        away_abbr: away,
+        season,
+        week,
+      };
+      const gameKey = deriveGameKey(baseGameForKey);
 
-      if ( !isBackendHealthy ) {
+      if (!gameKey) {
+        console.warn("[Dashboard] Could not derive game key for", game);
+        return;
+      }
+
+      if (!isBackendHealthy) {
         // Do not short-circuit here. Previously we returned early which
         // prevented any network call from being attempted when the health
         // probe had not yet reported 'healthy' (race conditions on startup).
@@ -273,12 +301,12 @@ function Dashboard()
         // the backend truly cannot answer the request the API call will fail
         // and we will set an error in the catch block below.
         // eslint-disable-next-line no-console
-        console.warn( '[Dashboard] backend health is not healthy; attempting prediction anyway', health );
+        console.warn('[Dashboard] backend health is not healthy; attempting prediction anyway', health);
       }
 
       // Mark this game as "loading" in context
-      setLoading?.( gameKey, true );
-      setError?.( gameKey, null );
+      setLoading?.(gameKey, true);
+      setError?.(gameKey, null);
 
       try {
         const payload = {
@@ -290,7 +318,7 @@ function Dashboard()
 
         // Debug: show the payload about to be sent so we can inspect it in DevTools.
         // eslint-disable-next-line no-console
-        console.debug( '[Dashboard] predictGame payload', payload );
+        console.debug('[Dashboard] predictGame payload', payload);
 
         // Persist a tiny marker so we can confirm the UI attempted a prediction
         // even when network logs are hard to observe (e.g., proxy or CORS). This
@@ -298,11 +326,11 @@ function Dashboard()
         try {
           localStorage.setItem(
             'nfl_last_predict_attempt',
-            JSON.stringify( { gameKey, payload, ts: new Date().toISOString() } )
+            JSON.stringify({ gameKey, payload, ts: new Date().toISOString() })
           );
-        } catch ( _e ) { /* ignore localStorage failures */ }
+        } catch (_e) { /* ignore localStorage failures */ }
 
-        const rawPrediction = await predictGame( payload );
+        const rawPrediction = await predictGame(payload);
 
         // Normalize a few common fields so Card/TeamGrid can rely on them.
         const homeProb =
@@ -315,7 +343,7 @@ function Dashboard()
           rawPrediction?.away_win_probability ??
           rawPrediction?.prob_away ??
           rawPrediction?.probs?.away ??
-          ( typeof homeProb === "number" ? 1 - homeProb : null );
+          (typeof homeProb === "number" ? 1 - homeProb : null);
 
         const homeScore =
           rawPrediction?.home_score ?? rawPrediction?.home_score_pred ?? null;
@@ -325,9 +353,9 @@ function Dashboard()
 
         const pointDiff =
           rawPrediction?.point_diff ??
-          ( typeof homeScore === "number" && typeof awayScore === "number"
+          (typeof homeScore === "number" && typeof awayScore === "number"
             ? homeScore - awayScore
-            : null );
+            : null);
 
         const enrichedPrediction = {
           ...rawPrediction,
@@ -344,26 +372,27 @@ function Dashboard()
         };
         console.log('ENRICHEDPREDICTIONS', enrichedPrediction)
         // Store in context keyed by gameKey so TeamGrid can look it up.
-        setPrediction?.( gameKey, enrichedPrediction );
+        setPrediction?.(gameKey, enrichedPrediction);
 
         // Push into history with an attached timestamp + game context.
-        pushHistory?.( {
+        pushHistory?.({
           ...enrichedPrediction,
           timestamp: new Date().toISOString(),
           game: { ...game, home_abbr: home, away_abbr: away, week, season },
-        } );
-      } catch ( err ) {
-        console.error( "[Dashboard] Prediction request failed", err );
+        });
+      } catch (err) {
+        console.error("[Dashboard] Prediction request failed", err);
         setError?.(
           gameKey,
           err instanceof Error ? err.message : "Prediction request failed."
         );
       } finally {
-        setLoading?.( gameKey, false );
+        setLoading?.(gameKey, false);
       }
     },
     [
       currentWeek,
+      deriveGameKey,
       health,
       isBackendHealthy,
       setPrediction,
@@ -373,15 +402,27 @@ function Dashboard()
     ]
   );
 
+  const handleResetPrediction = useCallback(
+    (game) => {
+      const gameKey = deriveGameKey(game);
+      if (!gameKey) return;
+
+      setPrediction?.(gameKey, null);
+      setError?.(gameKey, null);
+      setLoading?.(gameKey, false);
+    },
+    [deriveGameKey, setError, setLoading, setPrediction]
+  );
+
   return (
     <div className="dashboard-layout">
-      <NavBar state={ navState } />
+      <NavBar state={navState} />
 
       <main className="dashboard-main">
         <header className="dashboard-header">
           <div className="dashboard-header-content">
             <h1 className="dashboard-title">NFL Prediction Dashboard</h1>
-            <p className="dashboard-subtitle">{ healthMessage }</p>
+            <p className="dashboard-subtitle">{healthMessage}</p>
           </div>
         </header>
 
@@ -389,27 +430,29 @@ function Dashboard()
           <div className="content-grid">
             <div className="team-grid-section">
               <TeamGrid
-                games={ upcomingGames }
-                week={ currentWeek }
-                teams={ teamMetadata }
-                predictions={ gamePredictions }
-                loading={ loadingMap }
-                errors={ errorMap }
-                onPredict={ handlePredictionRequest }
+                week={currentWeek}
+                games={games}
+                teams={teams}
+                predictions={predictions}
+                loading={loading}
+                errors={errors}
+                onPredict={handlePredictionRequest}
+                onReset={handleResetPrediction}
               />
+
             </div>
 
             <div className="history-section">
               <HistoryChart
-                history={ predictionHistory }
-                state={ currentPrediction }
+                history={predictionHistory}
+                state={currentPrediction}
               />
             </div>
           </div>
         </section>
 
         <section className="prediction-results-section" aria-live="polite">
-          <PredictionResult entry={ currentPrediction } />
+          <PredictionResult entry={currentPrediction} />
         </section>
       </main>
     </div>
