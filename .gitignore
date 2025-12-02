@@ -75,19 +75,19 @@ share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-MANIFEST
+
 
 ## Data & models (allow curated assets)
-data/
-*.csv
-*.json
+
+
+
 *.txt
 
 !README.md
 
 
 ## AI tooling
-.serena/
+
 
 ## Deployment configs
 

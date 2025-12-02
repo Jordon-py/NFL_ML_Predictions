@@ -1,6 +1,6 @@
 # Python
 __pycache__/
-*.py[cod]
+
 *$py.class
 *.so
 .Python
@@ -20,16 +20,16 @@ ENV/
 *.log
 
 # Model files
-models/*.joblib
+
 models/*.pkl
 models/*.model
 !models/.gitkeep
 
 # Data files (keep structure but not data)
-data/*.csv
+
 data/**/*.csv
 !data/.gitkeep
-!data/README.md
+Add backend/.venv/
 
 # Environment
 .env
