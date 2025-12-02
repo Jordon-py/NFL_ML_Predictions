@@ -309,7 +309,7 @@ function parseTeamsCsv( text )
     const parts = line.split( "," );
     if ( parts.length < 3 ) continue;
     const [ teamName, abbr, logoUrl ] = parts;
-    const code = ( abbr || "" ).trim();
+    const code = ( abbr || "" ).trim().toUpperCase();
     if ( !code ) continue;
     out[ code ] = {
       name: ( teamName || code ).trim(),
@@ -340,8 +340,10 @@ export function PredictionProvider( { children } )
   const resetHistory = useCallback( () => dispatch( { type: RESET_HISTORY } ), [] );
 
   /** @type {(schedule: Game[], week: number) => void} */
-  const setSchedule = useCallback( ( schedule, week ) =>
-    dispatch( { type: SET_SCHEDULE, payload: { schedule, week } } ), [] );
+  const setSchedule = useCallback(
+    ( schedule, week ) => dispatch( { type: SET_SCHEDULE, payload: { schedule, week } } ),
+    []
+  );
 
   /** @type {(key: string, prediction: PredictionResult) => void} */
   const setPrediction = useCallback( ( key, prediction ) =>
