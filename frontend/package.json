@@ -6,11 +6,11 @@
   "type": "module",
   "proxy": "https://nfl-predict-ecf5a5bd34fe.herokuapp.com/",
   "scripts": {
-    "dev": "vite",
-    "start": "vite",
+    "dev": "vite --port 3000",
+    "start": "vite --port 3000",
     "build": "vite build",
     "preview": "vite preview --port 4173",
-    "test": "vitest"
+    "test": "vitest --environment jsdom"
   },
   "engines": {
     "node": "20.x",
@@ -24,10 +24,15 @@
     "react-router-dom": "^7.9.5"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^5.16.5",
+    "@testing-library/react": "^14.0.0",
+    "@testing-library/user-event": "^14.4.3",
     "@vitejs/plugin-react-swc": "^3.5.0",
     "esbuild": "^0.25.11",
+    "jsdom": "^27.2.0",
     "typescript": "^5.6.3",
-    "vite": "^7.1.12"
+    "vite": "^7.1.12",
+    "vitest": "^4.0.13"
   },
   "browserslist": {
     "production": [

@@ -1,4 +1,9 @@
-// StatsPage.jsx — Status + History dashboard
+// File: frontend/src/pages/StatsPage.jsx
+// Purpose: Status and history dashboard showing backend health, dataset stats, schedule, and recent predictions.
+// Functions: toGameKey(28), LoadingSpinner(33), SummaryCard(53), StatsPage(63)
+// Variables: historyMap(139), overviewData(165)
+// Interacts With: api/client for health/status/history/schedule, PredictionContext for fallback state.
+// StatsPage.jsx - Status + History dashboard
 // -----------------------------------------
 // Pulls real-time health, dataset, and prediction history metrics from the backend
 // while still falling back to local context data when offline. Serves as the
@@ -29,13 +34,13 @@ function LoadingSpinner({ label = "Loading" }) {
   return (
     <div className={styles.loadingContainer} role="status" aria-live="polite">
       <span className={styles.loadingSpinner} aria-hidden="true" />
-      <p>{label}…</p>
+      <p>{label}...</p>
     </div>
   );
 }
 
 /**
- * SummaryCard — small KPI card used for health / dataset / history metrics.
+ * SummaryCard - small KPI card used for health / dataset / history metrics.
  * `intent` is a semantic style hook ("ok" | "error" | "default").
  *
  * @param {{
@@ -49,7 +54,7 @@ function SummaryCard({ title, value, subtext, intent = "default" }) {
   return (
     <article className={`${styles.summaryCard} ${styles[intent] ?? ""}`}>
       <p className={styles.summaryLabel}>{title}</p>
-      <strong className={styles.summaryValue}>{value ?? "—"}</strong>
+      <strong className={styles.summaryValue}>{value ?? "-"}</strong>
       {subtext && <small className={styles.summarySubtext}>{subtext}</small>}
     </article>
   );
@@ -105,7 +110,7 @@ export default function StatsPage() {
 
     hydrate();
     return () => {
-      // guard so we don’t update state on an unmounted component
+      // guard so we don't update state on an unmounted component
       active = false;
     };
   }, []);
@@ -279,7 +284,7 @@ export default function StatsPage() {
           />
           <SummaryCard
             title="Dataset rows"
-            value={datasetStatistics?.rows ?? "—"}
+            value={datasetStatistics?.rows ?? "-"}
             subtext={datasetStatistics?.path ?? "path unknown"}
           />
           <SummaryCard

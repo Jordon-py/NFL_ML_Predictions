@@ -1,3 +1,8 @@
+// File: frontend/src/PredictionContext.jsx
+// Purpose: React context managing schedule fetch, prediction state, health polling, and history caching.
+// Functions: reducer(235), loadPredictionHistoryFromStorage(282), parseTeamsCsv(300), PredictionProvider(329), usePredictions(517)
+// Variables: PREDICTION_HISTORY_KEY(97), MAX_HISTORY_ENTRIES(98), initialState(218)
+// Interacts With: api/client endpoints, Dashboard/StatsPage consumers, localStorage for history cache.
 /*
 File: PredictionContext.jsx
 Purpose: Centralized React context for NFL prediction state; manages schedule fetch, prediction requests, loading/error states, and team metadata.
@@ -101,6 +106,26 @@ function getMetaEnv()
 {
   const meta = typeof import.meta !== "undefined" ? /** @type {any} */ ( import.meta ) : undefined;
   return meta?.env;
+}
+
+/**
+ * Build a consistent game key from either schedule rows or prediction entries.
+ * @param {any} gameLike
+ * @returns {string}
+ */
+function buildGameKey( gameLike )
+{
+  if ( !gameLike ) return "";
+  if ( typeof gameLike.game_id === "string" && gameLike.game_id.trim() ) {
+    return gameLike.game_id;
+  }
+  const parts = [
+    gameLike.season,
+    gameLike.week,
+    gameLike.home_abbr || gameLike.home_team,
+    gameLike.away_abbr || gameLike.away_team,
+  ].filter(Boolean);
+  return parts.join("-");
 }
 
 // Action types
@@ -284,7 +309,7 @@ function parseTeamsCsv( text )
     const parts = line.split( "," );
     if ( parts.length < 3 ) continue;
     const [ teamName, abbr, logoUrl ] = parts;
-    const code = ( abbr || "" ).trim();
+    const code = ( abbr || "" ).trim().toUpperCase();
     if ( !code ) continue;
     out[ code ] = {
       name: ( teamName || code ).trim(),
@@ -315,8 +340,10 @@ export function PredictionProvider( { children } )
   const resetHistory = useCallback( () => dispatch( { type: RESET_HISTORY } ), [] );
 
   /** @type {(schedule: Game[], week: number) => void} */
-  const setSchedule = useCallback( ( schedule, week ) =>
-    dispatch( { type: SET_SCHEDULE, payload: { schedule, week } } ), [] );
+  const setSchedule = useCallback(
+    ( schedule, week ) => dispatch( { type: SET_SCHEDULE, payload: { schedule, week } } ),
+    []
+  );
 
   /** @type {(key: string, prediction: PredictionResult) => void} */
   const setPrediction = useCallback( ( key, prediction ) =>
@@ -345,7 +372,8 @@ export function PredictionProvider( { children } )
     {
       try {
         const scheduleData = await getNextWeekSchedule();
-        if ( !mounted || !Array.isArray( scheduleData ) || scheduleData.length === 0 ) return;
+
+        if ( !mounted || !Array.isArray( scheduleData ) ) return;
 
         console.info( `[scheduleData] Fetched ${scheduleData.length} games from backend schedule API.` );
         // Extract week from first game and coerce to number. Accept several
@@ -392,6 +420,14 @@ export function PredictionProvider( { children } )
         if ( !active || !payload ) return;
         const entries = Array.isArray( payload.entries ) ? payload.entries : [];
         setHistoryState( entries );
+
+        // Seed predictions map so schedule grid can show prior outcomes.
+        entries.forEach( ( entry ) => {
+          const key = buildGameKey( entry );
+          if ( key ) {
+            setPrediction( key, entry );
+          }
+        } );
       } catch ( err ) {
         console.warn( '[PredictionContext] History fetch failed, using local cache.', err );
       }
@@ -399,7 +435,7 @@ export function PredictionProvider( { children } )
     loadHistoryFromBackend();
     const id = setInterval( loadHistoryFromBackend, 60000 );
     return () => { active = false; clearInterval( id ); };
-  }, [ setHistoryState ] );
+  }, [ setHistoryState, setPrediction ] );
 
   // Load team metadata (names + logo URLs) from public CSV once on mount.
   useEffect( () =>
@@ -408,7 +444,7 @@ export function PredictionProvider( { children } )
     const loadTeams = async () =>
     {
       try {
-        const res = await fetch( "/data/myteamdescriptions.csv" );
+        const res = await fetch( "myteamdescriptions.csv" );
         if ( !res.ok ) return;
         const text = await res.text();
         if ( !active ) return;
@@ -429,9 +465,6 @@ export function PredictionProvider( { children } )
   }, [ setTeams ] );
 
   // Make a prediction for a game
-  const healthStatus = state.health?.status ?? 'unknown';
-  const healthReason = state.health?.reason ?? 'health not confirmed';
-
   // Note: prediction requests are performed by UI components directly
   // (e.g., Dashboard -> predictGame) and then the context is updated via
   // setPrediction / pushHistory / setLoading / setError. This keeps the

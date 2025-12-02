@@ -306,9 +306,7 @@ def main():
     # Define expected CORS origins
     cors_origins = [
         "http://localhost:3000",
-        "https://localhost:3000",
         "https://nfl-ml-predictions.vercel.app",
-        "https://nfl-predict-frontend.vercel.app",
     ]
 
     # Run all verification tests

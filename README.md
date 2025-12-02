@@ -380,7 +380,7 @@ team logos, or theme tokens.
 
 1) Site logo & favicon
      - Favicon: `frontend/index.html` — change the `<link rel="icon">` tag.
-         * Example: replace the inline data URL with `/favicon.ico` and drop the
+         - Example: replace the inline data URL with `/favicon.ico` and drop the
              file into `frontend/public/favicon.ico`.
      - Header / site logo: `frontend/src/components/NavBar/NavBar.jsx` +
          `frontend/src/components/NavBar/NavBar.css` — the NavBar currently uses
@@ -408,10 +408,10 @@ team logos, or theme tokens.
 
 3) Stats / Status ("sts") page display
      - Primary files:
-         * `frontend/src/pages/StatsPage.jsx` — page logic (data fetch + layout)
-         * `frontend/src/pages/StatsPage.module.css` — page-specific styles
-         * `frontend/src/components/HistoryChart.jsx` — history list/chart logic
-         * `frontend/src/components/HistoryPage.jsx` — history full-page view
+         - `frontend/src/pages/StatsPage.jsx` — page logic (data fetch + layout)
+         - `frontend/src/pages/StatsPage.module.css` — page-specific styles
+         - `frontend/src/components/HistoryChart.jsx` — history list/chart logic
+         - `frontend/src/components/HistoryPage.jsx` — history full-page view
 
      - To change KPIs, card layout, or which metrics are shown: edit
          `StatsPage.jsx` (the `hydrate()` function collects schedule/history/overview)
@@ -419,20 +419,20 @@ team logos, or theme tokens.
 
 4) Team grid & per-game cards
      - Files to edit for card layout, logo placement, and prediction info:
-         * `frontend/src/components/Card/Card.jsx`
-         * `frontend/src/components/Card/Card.module.css`
-         * `frontend/src/components/Card/TeamGrid.jsx`
-         * `frontend/src/components/Card/TeamGrid.css`
+         - `frontend/src/components/Card/Card.jsx`
+         - `frontend/src/components/Card/Card.module.css`
+         - `frontend/src/components/Card/TeamGrid.jsx`
+         - `frontend/src/components/Card/TeamGrid.css`
 
      - These controls the matchup card markup, logo image elements, kickoff
          formatting, and the section that renders prediction probabilities.
 
 5) Theme tokens, colors, and fonts
      - Global tokens and design system variables are in:
-         * `frontend/src/styles/base.css` — primary design tokens (`:root`) such
+         - `frontend/src/styles/base.css` — primary design tokens (`:root`) such
              as `--c-brand-1`, `--font-sans`, `--r-md`, etc. Change these to alter
              colors, radii, fonts, shadows, and more across the app.
-         * `frontend/src/styles/theme-grid.css` — component/theme helpers used by
+         - `frontend/src/styles/theme-grid.css` — component/theme helpers used by
              some components.
 
      - After changing variables in `base.css`, rebuild the app to see the
@@ -490,8 +490,9 @@ team logos, or theme tokens.
 
 If you'd like, I can also add short code snippets to the README for the most
 common edits (e.g., replacing the header text with an `<img>` logo) — say
-which snippets you'd like and I'll append them.
+which snippets you'd like and I'll append them
 =======
+
 backend/data/             # CSV artifacts
   team_game_base.csv
   team_game_iter3.schema.json
@@ -514,11 +515,18 @@ This project uses a split deployment architecture:
 
 The backend and frontend are properly configured for cross-origin requests:
 
-1. **Backend CORS**: Set `CORS_ORIGINS` environment variable on Heroku:
+1. **Backend CORS**: The API now ships with an explicit default CORS policy that allows the production frontend and a localhost dev origin. This makes most deployments simpler and protects users from an accidental empty ALLOWED_ORIGINS configuration.
 
-   ```bash
-   heroku config:set CORS_ORIGINS="http://localhost:3000,https://localhost:3000,https://nfl-ml-predictions.vercel.app,https://nfl-predict-frontend.vercel.app" -a nfl-predict
-   ```
+    Default allowed origins:
+
+    - `https://nfl-ml-predictions.vercel.app`
+    - `http://localhost:3000`
+
+    These defaults may be overridden using the `ALLOWED_ORIGINS` environment variable on Heroku if you need to add extra origins or enable broader access. For example, to explicitly set allowed origins on Heroku:
+
+    ```bash
+    heroku config:set ALLOWED_ORIGINS="https://nfl-ml-predictions.vercel.app,http://localhost:3000" -a nfl-predict
+    ```
 
 2. **Frontend API base**: Set `VITE_API_BASE` in Vercel project settings or `frontend/.env.production`.
 
