@@ -202,17 +202,48 @@ class AppState:
     def _load_dataset(self) -> None:
         """Load the most recent game_features*.csv into memory."""
         try:
-            candidates = sorted(
-                DATA_DIR.glob("game_features*.csv"),
-                key=lambda p: p.stat().st_mtime,
-                reverse=True,
-            )
-            path = candidates[0] if candidates else (DATA_DIR / "game_features.csv")
+            # Search common locations for game_features CSVs: backend/data and backend root
+            candidates = []
+            candidates.extend(list(DATA_DIR.glob("game_features*.csv")))
+            candidates.extend(list(BASE_DIR.glob("game_features*.csv")))
 
+            # Prefer the most recently modified candidate
+            candidates = sorted(candidates, key=lambda p: p.stat().st_mtime, reverse=True)
+
+            path: Path
+            if candidates:
+                path = candidates[0]
+            else:
+                # Fallback default filename under data dir
+                path = DATA_DIR / "game_features.csv"
+
+            # If file missing and a DATA_URL is configured, attempt to download it
             if not path.exists():
-                logging.warning("[Dataset] No dataset found at: %s", path)
-                self.dataset = None
-                return
+                data_url = os.environ.get("DATA_URL")
+                if data_url:
+                    logging.info("[Dataset] No local dataset found. Attempting download from DATA_URL: %s", data_url)
+                    try:
+                        from urllib.request import urlopen
+
+                        resp = urlopen(data_url, timeout=30)
+                        if getattr(resp, 'status', None) and resp.status != 200:  # pragma: no cover - network edge
+                            logging.warning("[Dataset] DATA_URL returned status %s", resp.status)
+                        # Determine target filename
+                        fname = Path(data_url).name or "game_features.csv"
+                        dest = DATA_DIR / fname
+                        DATA_DIR.mkdir(parents=True, exist_ok=True)
+                        with open(dest, "wb") as fh:
+                            fh.write(resp.read())
+                        path = dest
+                        logging.info("[Dataset] Downloaded dataset to %s", dest)
+                    except Exception as de:  # pragma: no cover - network errors
+                        logging.exception("[Dataset] Failed to download from DATA_URL: %s", de)
+                        self.dataset = None
+                        return
+                else:
+                    logging.warning("[Dataset] No dataset found at: %s and no DATA_URL configured", path)
+                    self.dataset = None
+                    return
 
             logging.info("[Dataset] Loading dataset from: %s", path)
             df = pd.read_csv(path)
@@ -222,7 +253,7 @@ class AppState:
             df = _normalize_team_columns(df)
 
             self.dataset = df
-            logging.info("[Dataset] Loaded %d rows", len(df))
+            logging.info("[Dataset] Loaded %d rows from %s", len(df), path)
         except Exception as e:  # pragma: no cover - defensive
             logging.exception("[Dataset] Error while loading dataset: %s", e)
             self.dataset = None
