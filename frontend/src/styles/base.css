@@ -17,15 +17,15 @@
   --c-brand-1: #0080ff;
   --c-brand-2: #003264;
   --c-ink: #0f0f0f;
-  --c-ink-muted: #2c3e50;
-  --c-danger: #e74c3c;
-  --c-accent: #3498db;
-  --c-card: lch(0, 106, 255, 0.12);
+  --c-ink-muted: #2a4158;
+  --c-danger: #df1b05;
+  --c-accent: #54ade8;
+  --c-card: lch(18.91% 65.26 299.63 / 0.196);
   --c-text-on-dark: #e8edf4;
   --c-text-muted-on-dark: #c9d3e0;
 
   /* Special */
-  --glass: lch(59, 144, 255, 0.176);
+  --glass: lch(69.08% 49.28 256.85 / 0.251);
 
   /* Radii */
   --r-md: 12px;
@@ -44,7 +44,7 @@
   /* Animation defaults */
   --a-dur: 600ms;
   --a-ease: cubic-bezier(.22, .61, .36, 1);
-  --a-delay: 100ms;
+  --a-delay: 200ms;
   --a-iter: 1;
 
   /* Typography system */
@@ -61,10 +61,10 @@
   --lch-muted: lch(85% 6 250 / 0.85);
 
   /* Nav health indicators + focus rings (converted to LCH-based tokens) */
-  --color-health-ok: lch(70% 60 145);
-  --color-health-error: lch(60% 65 30);
-  --color-health-unknown: lch(70% 8 260);
-  --color-focus-ring: var(--lch-primary);
+  --color-health-ok: lch(76.57% 82.36 142.35);
+  --color-health-error: lch(44.55% 89.75 39.93);
+  --color-health-unknown: lch(33.9% 10.49 263.4);
+  --color-focus-ring: lch(92% 18.63 221.43);
 }
 
 /* --- Base & global layout ------------------------------------------------ */
@@ -76,11 +76,11 @@ body {
 
 body {
   font-family: var(--font-sans);
-  font-size: clamp(15.5px, 1.2vw + 0.5rem, 17px);
+  font-size: clamp(16.5px, 1.2vw + 0.5rem, 17px);
   line-height: 1.65;
 
   color: var(--c-text-on-dark);
-  background-color: #041c42e1;
+  background-color: lch(0% 0 0 / 0.689);
 
   /* Background image + subtle parallax */
   background-image: url('/nfl_pic.png');
@@ -89,7 +89,7 @@ body {
   background-size: cover;
   background-attachment: fixed;
 
-  text-rendering: optimizeLegibility;
+  text-rendering: geometricPrecision;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
@@ -99,9 +99,9 @@ body {
   overflow-x: hidden;
 }
 
-@media (max-width: 200px) {
+@media (max-width: 400px) {
   body {
-    background-attachment: scroll;
+    background-attachment: fixed;
   }
 
 }
@@ -112,7 +112,7 @@ h2,
 h3,
 h4 {
   font-family: var(--font-display);
-  letter-spacing: 1.5px;
+  letter-spacing: 1.7px;
 }
 
 /* App-level wrappers */
@@ -187,7 +187,7 @@ button:focus-visible,
 .a-shine {
   animation-name: shineSweep;
   animation-duration: 1.6s;
-  animation-timing-function: linear;
+  animation-timing-function: cubic-bezier(0.445, 0.05, 0.55, 0.95);
   animation-iteration-count: infinite;
   background-size: 200% 100%;
 }
@@ -293,7 +293,7 @@ button:focus-visible,
     outline: 2px solid lch(40.92% 110.75 302.43 / 0.307);
     box-shadow:
       0 0 13px 1px lch(28.54% 35.5 274.92 / 0.402),
-      0 3px 1px 1px lch(65.22% 54.06 269.16 / 0.402) inset;
+      0 3px 3px 1px lch(65.22% 54.06 269.16 / 0.402) inset;
   }
 
   50% {
