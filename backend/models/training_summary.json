@@ -1,15 +1,15 @@
 {
   "home": {
-    "MAE_mean_val": 4.38680117702732,
-    "RMSE_mean_val": 5.834973206332434
+    "MAE_mean_val": 4.44568924393891,
+    "RMSE_mean_val": 5.846431438826741
   },
   "away": {
-    "MAE_mean_val": 4.405827875262751,
-    "RMSE_mean_val": 5.6185422631993305
+    "MAE_mean_val": 4.358891796576657,
+    "RMSE_mean_val": 5.571217975673928
   },
   "win": {
-    "Brier_mean_val": 0.12336134778024524,
-    "LogLoss_mean_val": 0.3876837377279615,
-    "Acc_mean_val": 0.8254314656784711
+    "Brier_mean_val": 0.12348046894497816,
+    "LogLoss_mean_val": 0.3875384979677291,
+    "Acc_mean_val": 0.8252132239334131
   }
 }
