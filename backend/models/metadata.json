@@ -1,5 +1,5 @@
 {
-  "timestamp": "2025-11-24T07:14:50.594635Z",
+  "timestamp": "2025-12-01T16:33:55.499776Z",
   "random_state": 4211,
   "models": {
     "home_reg": {
@@ -62,17 +62,17 @@
   },
   "validation_summary": {
     "home": {
-      "MAE_mean_val": 4.38680117702732,
-      "RMSE_mean_val": 5.834973206332434
+      "MAE_mean_val": 4.44568924393891,
+      "RMSE_mean_val": 5.846431438826741
     },
     "away": {
-      "MAE_mean_val": 4.405827875262751,
-      "RMSE_mean_val": 5.6185422631993305
+      "MAE_mean_val": 4.358891796576657,
+      "RMSE_mean_val": 5.571217975673928
     },
     "win": {
-      "Brier_mean_val": 0.12336134778024524,
-      "LogLoss_mean_val": 0.3876837377279615,
-      "Acc_mean_val": 0.8254314656784711
+      "Brier_mean_val": 0.12348046894497816,
+      "LogLoss_mean_val": 0.3875384979677291,
+      "Acc_mean_val": 0.8252132239334131
     }
   },
   "feature_names": [
@@ -214,17 +214,17 @@
     "away_qb_completion_pct"
   ],
   "artifacts": {
-    "home_model": "C:\\Users\\goku\\Documents\\NFL_ML_Predictions\\backend\\20251123\\models\\home_model.joblib",
-    "away_model": "C:\\Users\\goku\\Documents\\NFL_ML_Predictions\\backend\\20251123\\models\\away_model.joblib",
-    "preprocessor": "C:\\Users\\goku\\Documents\\NFL_ML_Predictions\\backend\\20251123\\models\\preprocessor.joblib",
-    "win_clf_calibrated": "C:\\Users\\goku\\Documents\\NFL_ML_Predictions\\backend\\20251123\\models\\win_clf_calibrated.joblib",
-    "cv_fold_metrics_csv": "C:\\Users\\goku\\Documents\\NFL_ML_Predictions\\backend\\20251123\\models\\cv_fold_metrics.csv",
-    "training_summary_json": "C:\\Users\\goku\\Documents\\NFL_ML_Predictions\\backend\\20251123\\models\\training_summary.json",
-    "feature_metadata": "C:\\Users\\goku\\Documents\\NFL_ML_Predictions\\backend\\20251123\\models\\feature_metadata.json",
-    "training_report_png": "C:\\Users\\goku\\Documents\\NFL_ML_Predictions\\backend\\20251123\\models\\training_report.png",
-    "training_report_txt": "C:\\Users\\goku\\Documents\\NFL_ML_Predictions\\backend\\20251123\\models\\training_report.txt",
-    "home_pipe": "C:\\Users\\goku\\Documents\\NFL_ML_Predictions\\backend\\20251123\\models\\home_pipe.joblib",
-    "away_pipe": "C:\\Users\\goku\\Documents\\NFL_ML_Predictions\\backend\\20251123\\models\\away_pipe.joblib",
-    "win_pipe": "C:\\Users\\goku\\Documents\\NFL_ML_Predictions\\backend\\20251123\\models\\win_pipe.joblib"
+    "home_model": "C:\\Users\\goku\\Documents\\NFL_ML_Predictions\\backend\\20251201\\models\\home_model.joblib",
+    "away_model": "C:\\Users\\goku\\Documents\\NFL_ML_Predictions\\backend\\20251201\\models\\away_model.joblib",
+    "preprocessor": "C:\\Users\\goku\\Documents\\NFL_ML_Predictions\\backend\\20251201\\models\\preprocessor.joblib",
+    "win_clf_calibrated": "C:\\Users\\goku\\Documents\\NFL_ML_Predictions\\backend\\20251201\\models\\win_clf_calibrated.joblib",
+    "cv_fold_metrics_csv": "C:\\Users\\goku\\Documents\\NFL_ML_Predictions\\backend\\20251201\\models\\cv_fold_metrics.csv",
+    "training_summary_json": "C:\\Users\\goku\\Documents\\NFL_ML_Predictions\\backend\\20251201\\models\\training_summary.json",
+    "feature_metadata": "C:\\Users\\goku\\Documents\\NFL_ML_Predictions\\backend\\20251201\\models\\feature_metadata.json",
+    "training_report_png": "C:\\Users\\goku\\Documents\\NFL_ML_Predictions\\backend\\20251201\\models\\training_report.png",
+    "training_report_txt": "C:\\Users\\goku\\Documents\\NFL_ML_Predictions\\backend\\20251201\\models\\training_report.txt",
+    "home_pipe": "C:\\Users\\goku\\Documents\\NFL_ML_Predictions\\backend\\20251201\\models\\home_pipe.joblib",
+    "away_pipe": "C:\\Users\\goku\\Documents\\NFL_ML_Predictions\\backend\\20251201\\models\\away_pipe.joblib",
+    "win_pipe": "C:\\Users\\goku\\Documents\\NFL_ML_Predictions\\backend\\20251201\\models\\win_pipe.joblib"
   }
 }

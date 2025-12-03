@@ -11,6 +11,7 @@ ENV/
 env.bak/
 backend/.venv/
 backend/venv/
+nfl_env/
 
 ## Node artifacts
 node_modules/
@@ -27,6 +28,7 @@ frontend/build/
 frontend/dist/
 frontend/dist/node_modules
 frontend/.vite/
+frontend/.vercel/
 .parcel-cache/
 .vercel
 
@@ -75,7 +77,7 @@ share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-
+node_modules/
 
 ## Data & models (allow curated assets)
 
@@ -91,4 +93,6 @@ share/python-wheels/
 
 ## Deployment configs
 
+node_modules
+node_modules
 node_modules
