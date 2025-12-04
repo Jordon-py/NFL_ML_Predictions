@@ -6,7 +6,7 @@ frontend/
 
 ## Node modules (largest space saver)
 
-node_modules/
+*/node_modules/
 
 ## Development artifacts
 
@@ -39,3 +39,8 @@ frontend/*
 */*.toml
 *.lock
 .pytest_cache/*
+node_modules/*
+frontend/node_modules/*
+.DS_Store
+.env
+.env.*
