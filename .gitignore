@@ -102,3 +102,11 @@ data/
 !vercel.json
 node_modules
 
+<<<<<<< HEAD
+=======
+node_modules
+node_modules
+node_modules
+node_modules/
+frontend/node_modules/
+>>>>>>> 385c33653 (Stop tracking node_modules; ignore for future)
