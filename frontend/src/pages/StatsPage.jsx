@@ -19,7 +19,7 @@ import {
   getStatusOverview,
 } from "../api/client";
 // @ts-ignore - CSS module import for JS/JSX file
-import styles from "./StatsPage.module.css";
+import "./StatsPage.css";
 
 /**
  * Builds a stable "game key" from either a schedule row or a prediction entry.
@@ -32,8 +32,8 @@ const toGameKey = (game) =>
 
 function LoadingSpinner({ label = "Loading" }) {
   return (
-    <div className={styles.loadingContainer} role="status" aria-live="polite">
-      <span className={styles.loadingSpinner} aria-hidden="true" />
+    <div className={loadingContainer} role="status" aria-live="polite">
+      <span className={loadingSpinner} aria-hidden="true" />
       <p>{label}...</p>
     </div>
   );
@@ -52,13 +52,14 @@ function LoadingSpinner({ label = "Loading" }) {
  */
 function SummaryCard({ title, value, subtext, intent = "default" }) {
   return (
-    <article className={`${styles.summaryCard} ${styles[intent] ?? ""}`}>
-      <p className={styles.summaryLabel}>{title}</p>
-      <strong className={styles.summaryValue}>{value ?? "-"}</strong>
-      {subtext && <small className={styles.summarySubtext}>{subtext}</small>}
+    <article className={`${summaryCard} ${styles[intent] ?? ""}`}>
+      <p className={summaryLabel}>{title}</p>
+      <strong className={summaryValue}>{value ?? "-"}</strong>
+      {subtext && <small className={summarySubtext}>{subtext}</small>}
     </article>
   );
 }
+
 
 export default function StatsPage() {
   /** @type {any} */
@@ -185,17 +186,17 @@ export default function StatsPage() {
    */
   const renderScheduleList = () => {
     if (isPageLoading) return <LoadingSpinner label="Loading status" />;
-    if (pageError) return <div className={styles.error}>{pageError}</div>;
+    if (pageError) return <div className={error}>{pageError}</div>;
     if (scheduleList.length === 0) {
       return (
-        <p className={styles.empty}>
+        <p className={empty}>
           No future games detected in the schedule file.
         </p>
       );
     }
 
     return (
-      <ul className={styles.scheduleList}>
+      <ul className={scheduleList}>
         {scheduleList.map((game) => {
           const idKey = game?.game_id ?? game?.id;
           const compositeKey = toGameKey(game);
@@ -211,17 +212,17 @@ export default function StatsPage() {
             : "TBD";
 
           return (
-            <li key={idKey || compositeKey} className={styles.scheduleItem}>
-              <div className={styles.gameInfo}>
+            <li key={idKey || compositeKey} className={scheduleItem}>
+              <div className={gameInfo}>
                 <span>
                   {game.away_abbr || game.away_team} @{" "}
                   {game.home_abbr || game.home_team}
                 </span>
-                <span className={styles.kickoffTime}>{kickoffLabel}</span>
+                <span className={kickoffTime}>{kickoffLabel}</span>
               </div>
 
               {prediction ? (
-                <div className={styles.predictionDetails}>
+                <div className={predictionDetails}>
                   <p>
                     Home win:{" "}
                     {Math.round(
@@ -236,7 +237,7 @@ export default function StatsPage() {
                     )}
                     %
                   </p>
-                  <p className={styles.pointDiff}>
+                  <p className={pointDiff}>
                     Diff:{" "}
                     {prediction.point_diff?.toFixed?.(1) ??
                       prediction.point_diff}{" "}
@@ -244,7 +245,7 @@ export default function StatsPage() {
                   </p>
                 </div>
               ) : (
-                <p className={styles.pendingNote}>
+                <p className={pendingNote}>
                   No prediction recorded yet.
                 </p>
               )}
@@ -261,15 +262,15 @@ export default function StatsPage() {
       {/* @ts-ignore - predictionState is a JS object from context; we allow spreading here. */}
       <NavBar state={{ ...predictionState, health }} />
 
-      <div className={styles.statsPage}>
-        <header className={styles.pageHeader}>
-          <h1 className={styles.h1}>Prediction Status Page</h1>
-          <p className={styles.pageLead}>
+      <div className={statsPage}>
+        <header className={pageHeader}>
+          <h1 className={h1}>Prediction Status Page</h1>
+          <p className={pageLead}>
             Live backend health, dataset stats, and recorded predictions.
           </p>
         </header>
 
-        <section className={styles.summaryGrid}>
+        <section className={summaryGrid}>
           <SummaryCard
             title="Backend Health"
             value={health?.status ?? "unknown"}
@@ -294,13 +295,13 @@ export default function StatsPage() {
           />
         </section>
 
-        <section className={styles.scheduleSection}>
-          <h2 className={styles.h2}>Next Week Schedule</h2>
+        <section className={scheduleSection}>
+          <h2 className={h2}>Next Week Schedule</h2>
           {renderScheduleList()}
         </section>
 
-        <section className={styles.historySection}>
-          <h2 className={styles.h2}>Historical Predictions</h2>
+        <section className={historySection}>
+          <h2 className={h2}>Historical Predictions</h2>
           {/* HistoryChart still receives the raw history array plus context state */}
           <HistoryChart history={history} state={predictionState} />
         </section>

@@ -68,8 +68,8 @@
   margin-bottom: 0.5rem;
   background-color: #fff;
   border-radius: 5px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-  transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+  box-shadow: 0 2px 4px lch(57.33% 33.68 236.7 / 0.784);
+  transition: transform 0.4s ease-in-out, box-shadow 0.2s ease-in-out;
 }
 
 .schedule-item:hover {
