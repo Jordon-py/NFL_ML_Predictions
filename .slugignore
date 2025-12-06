@@ -44,3 +44,104 @@ frontend/node_modules/*
 .DS_Store
 .env
 .env.*
+ollama run dolphin-mistral
+## Language caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+## Virtual environments
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+backend/.venv/
+backend/venv/
+nfl_env/
+
+## Node artifacts
+node_modules/
+frontend/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+## Build outputs
+build/
+dist/
+frontend/build/
+frontend/dist/
+frontend/dist/node_modules
+frontend/.vite/
+frontend/.vercel/
+.parcel-cache/
+.vercel
+
+## Environment configuration
+.env
+.env.*
+backend/.env
+frontend/.env*
+
+## IDE & OS noise
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+## Logs & coverage
+*.log
+coverage/
+.pytest_cache/
+*.coverage
+backend/logs/
+
+## Notebook checkpoints
+.ipynb_checkpoints/
+
+## Packaging artifacts
+.slugignore
+*.so
+.Python
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+node_modules/
+
+## Data & models (allow curated assets)
+
+.bundle
+
+*.txt
+
+!README.md
+
+
+## AI tooling
+
+
+## Deployment configs
+
+node_modules
+node_modules
+node_modules
+node_modules/
+frontend/node_modules/

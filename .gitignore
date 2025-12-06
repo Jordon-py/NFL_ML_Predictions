@@ -81,7 +81,7 @@ node_modules/
 
 ## Data & models (allow curated assets)
 
-
+.bundle
 
 *.txt
 
