@@ -49,8 +49,8 @@ export default function HamburgerMenu()
           className="ham-icon"
           src="/nfl_ham2.png"
           alt="Open menu"
-          width={ 40 }
-          height={ 40 }
+          width={ 24 }
+          height={ 24 }
         />
       </button>
 

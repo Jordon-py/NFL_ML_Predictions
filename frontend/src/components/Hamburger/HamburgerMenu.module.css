@@ -7,16 +7,17 @@
 
 .button {
   background: transparent;
-  height: 48px;
-  width: 48px;
+  height: 32px;
+  width: 32px;
   border: 1px solid #007bff33;
-  border-radius: 8px;
+  border-radius: 6px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: transform 0.2s ease;
   z-index: 1000;
+  padding: 2px;
 }
 
 .buttonOpen { border-color: #007bff; }
