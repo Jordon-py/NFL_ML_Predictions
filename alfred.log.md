@@ -110,3 +110,26 @@ ModuleNotFoundError: No module named 'pydantic._internal'
 - **Commits:** 1 (`7da71c03f`)
 - **Files Changed:** `backend/main.py`
 - **Heroku Release:** v406+
+
+---
+
+## 2025-12-06T00:00Z — API Resilience & Client Alignment
+
+### Changes
+
+- Removed unused `nflreadpy` import to prevent pydantic dependency failures on Heroku.
+- Consolidated duplicate `_glob_latest` helper and removed stray example `/retrain` snippet from `main.py`.
+- Added `_infer_raw_feature_columns` to derive model features from the preprocessor or dataset when `metadata.json` is missing them; `/predict` now returns a clear 503 instead of hard-failing.
+- Set `DEFAULT_DATASET` to `backend/data/game_features.csv` (was empty path) so startup uses the engineered dataset by default.
+- API client now respects `VITE_API_BASE` **or** `VITE_API_URL`, retains a single Heroku fallback constant, and surfaces friendlier errors for metadata-related 503s and validation 422s.
+
+### Status
+
+- `/health` and `/schedule/next-week` remain healthy.
+- `/predict` will proceed when feature columns can be inferred; otherwise returns 503 with explicit retrain guidance.
+
+### Next Actions
+
+1. Retrain models to regenerate `metadata.json` with `raw_feature_columns`.
+2. Deploy backend to Heroku and frontend to Vercel after retraining.
+3. Run a quick `/predict` smoke test (KC vs HOU, 2025 W14) to verify provenance is `model`.
