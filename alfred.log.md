@@ -9,6 +9,10 @@
   - Updated `HamburgerMenu.jsx`: icon dimensions 40px → 24px
   - Fixed CSS syntax error (unclosed bracket on `:focus` selector)
 - Commit: `ea819add6` — "fix(ui): reduce hamburger menu size from 48px to 32px"
+- **Restored missing frontend API helpers** for build stability
+  - Added `getHealthStatus`, `getPredictionHistory`, `startTraining`, and `getStatusOverview` exports in `frontend/src/api/client.js`
+  - StatsPage and PredictionContext build now succeeds (`npm run build` passes)
+ - Build check: `npm run build` (frontend) now succeeds
 
 ## 2025-11-23T06:50:53Z
 
