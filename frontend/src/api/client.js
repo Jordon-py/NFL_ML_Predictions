@@ -156,12 +156,31 @@ export function createApi(base = API_BASE) {
   return {
     // Health & reports
     getHealth: () => _get("/health"),
+    // Alias used by hooks that poll training/model readiness
+    getHealthStatus: () => _get("/health"),
     getTrainingReport: () => _get("/report/training"),
     getCalibrationReport: () => _get("/report/calibration"),
 
     // Schedule & batch predictions
     getNextWeekSchedule: () => _get("/schedule/next-week"),
     predictNextWeek: () => _get("/predict/next-week"),
+
+    // Prediction history (defensive: limit defaults to 100 to cap payload)
+    getPredictionHistory: (limit = 100) => _get(`/history?limit=${Number(limit) || 100}`),
+
+    // Model training (best-effort; backend may treat as no-op if unsupported)
+    startTraining: () => _post("/train", {}),
+
+    // Backend status overview (falls back to health-only if composite endpoint missing)
+    getStatusOverview: async () => {
+      try {
+        return await _get("/status/overview");
+      } catch (err) {
+        // Graceful fallback: reuse /health payload so UI can still render
+        const health = await _get("/health").catch(() => null);
+        return { health, dataset: null, history: { metrics: {} } };
+      }
+    },
 
     // Single-game prediction
     predictGame: (params) => _post("/predict", toPredictionRequest(params)),
@@ -176,5 +195,9 @@ export const getNextWeekSchedule = apiClient.getNextWeekSchedule;
 export const predictGame = apiClient.predictGame;
 export const predictNextWeek = apiClient.predictNextWeek;
 export const getHealth = apiClient.getHealth;
+export const getHealthStatus = apiClient.getHealthStatus;
+export const getPredictionHistory = apiClient.getPredictionHistory;
+export const startTraining = apiClient.startTraining;
+export const getStatusOverview = apiClient.getStatusOverview;
 export const getTrainingReport = apiClient.getTrainingReport;
 export const getCalibrationReport = apiClient.getCalibrationReport;
