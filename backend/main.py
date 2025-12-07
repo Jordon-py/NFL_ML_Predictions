@@ -48,7 +48,6 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, AsyncGenerator, Dict, List, Optional
-
 import joblib
 import numpy as np
 import pandas as pd
@@ -88,7 +87,7 @@ LOG_DIR.mkdir(parents=True, exist_ok=True)
 # merged_game_features.csv only has raw stats and won't work with trained models
 # ---------------------------------------------------------------
 # Default dataset/schedule paths (relative to backend/data). Avoid leading slashes to prevent absolute-root resolution.
-DEFAULT_DATASET = DATA_DIR / "merge_dominance.csv"
+DEFAULT_DATASET = DATA_DIR / "game_features.csv"
 DEFAULT_SCHEDULE = DATA_DIR / "Nfl_schedule_2025_2026.csv"
 
 FRONTEND_DIR = BASE_DIR / "frontend"
@@ -329,6 +328,9 @@ def _validate_dataset_schema(df: pd.DataFrame, model_objects: Dict[str, Any]) ->
     actionable message if mismatch detected.
     """
     expected = _normalize_feature_cols(model_objects.get("raw_feature_columns", {}))
+    if not expected:
+        inferred = _infer_raw_feature_columns(model_objects, df)
+        expected = _normalize_feature_cols(inferred)
     missing = [c for c in expected if c not in df.columns]
     if missing:
         # Log a concise message and raise to prevent serving incompatible data
@@ -337,6 +339,64 @@ def _validate_dataset_schema(df: pd.DataFrame, model_objects: Dict[str, Any]) ->
             f"Dataset missing engineered features required by models: {missing[:20]}. "
             "Run the feature engineering pipeline or point DATASET_PATH to the correct file."
         )
+
+
+def _infer_raw_feature_columns(model_objects: Dict[str, Any], df: Optional[pd.DataFrame]) -> Dict[str, List[str]]:
+    """Best-effort inference for raw_feature_columns when metadata is missing.
+
+    Priority:
+      1) Respect raw_feature_columns if already present and non-empty.
+      2) Try preprocessor feature names (get_feature_names_out or feature_names_in_).
+      3) Fall back to dataset columns: numeric vs object/category.
+
+    Returns a dict with numeric/categorical lists (may be empty if nothing inferred).
+    """
+    if not isinstance(model_objects, dict):
+        return {"numeric": [], "categorical": []}
+
+    raw = model_objects.get("raw_feature_columns") or {}
+    if isinstance(raw, dict) and (raw.get("numeric") or raw.get("categorical")):
+        return {"numeric": list(raw.get("numeric", [])), "categorical": list(raw.get("categorical", []))}
+
+    # 2) Preprocessor-driven inference
+    pre = model_objects.get("preprocessor")
+    feature_names: List[str] = []
+    try:
+        if pre is not None:
+            if hasattr(pre, "get_feature_names_out"):
+                feature_names = list(pre.get_feature_names_out())
+            elif hasattr(pre, "feature_names_in_"):
+                feature_names = [str(c) for c in list(pre.feature_names_in_)]
+    except Exception:
+        feature_names = []
+
+    numeric: List[str] = []
+    categorical: List[str] = []
+
+    if feature_names:
+        # Without types, assume non-string columns in dataset are numeric; otherwise mark as categorical.
+        if df is not None and not df.empty:
+            for col in feature_names:
+                if col in df.columns:
+                    if pd.api.types.is_numeric_dtype(df[col]) and not pd.api.types.is_object_dtype(df[col]):
+                        numeric.append(col)
+                    else:
+                        categorical.append(col)
+                else:
+                    # Unknown columns default to numeric so imputers can fill NaN
+                    numeric.append(col)
+        else:
+            numeric = feature_names
+        return {"numeric": numeric, "categorical": categorical}
+
+    # 3) Dataset-driven inference
+    if df is not None and not df.empty:
+        for col in df.columns:
+            if pd.api.types.is_numeric_dtype(df[col]) and not pd.api.types.is_object_dtype(df[col]):
+                numeric.append(col)
+            else:
+                categorical.append(col)
+    return {"numeric": numeric, "categorical": categorical}
 
 
 def _sanity_predict(model_objects: Dict[str, Any], df: pd.DataFrame) -> None:
@@ -496,7 +556,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     log.info("=" * 60)
     log.info("STARTUP: NFL Prediction API v2.1.0")
     log.info("=" * 60)
-    
+
     # Load models with graceful degradation
     try:
         model_objects = load_objects()
@@ -509,14 +569,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Load dataset with fallback
     ds_path = Path(os.getenv("DATASET_PATH", str(DEFAULT_DATASET)))
     log.info("Dataset path: %s", ds_path)
-    
+
     if not ds_path.exists():
         log.warning("✗ Dataset not found at %s", ds_path)
         # Check alternate locations
         alternates = DATA_DIR / "merge_dominance.csv",
 
 
-    
+
         for alt in alternates:
             if alt.exists():
                 log.info("Found alternate dataset: %s", alt)
@@ -525,7 +585,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         else:
             log.warning("No dataset found; predictions will use synthetic features only")
             dataset_df = pd.DataFrame()
-    
+
     if ds_path.exists():
         try:
             df = pd.read_csv(ds_path)
@@ -535,16 +595,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             else:
                 df.columns = [c.strip() for c in df.columns]
                 df = _ensure_home_away(df)
-                
+
                 # Validate schema but don't crash
                 try:
                     if model_objects:
                         _validate_dataset_schema(df, model_objects)
                 except Exception as e:
                     log.warning("Dataset schema validation failed: %s", e)
-                
+
                 dataset_df = df
-                
+
                 # Sanity check with error tolerance
                 try:
                     if model_objects:
@@ -552,18 +612,18 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                         log.info("✓ Sanity prediction passed")
                 except Exception as e:
                     log.warning("Sanity prediction failed: %s; continuing", e)
-                
+
                 log.info("✓ Dataset loaded: %d rows, %d columns", len(df), df.shape[1])
         except Exception as e:
             log.error("Failed to load dataset: %s", e, exc_info=True)
             dataset_df = pd.DataFrame()
-    
+
     log.info("=" * 60)
     log.info("STARTUP COMPLETE")
     log.info("Models: %s", "✓ Loaded" if model_objects else "✗ Missing")
     log.info("Dataset: %s", "✓ Loaded" if dataset_df is not None and not dataset_df.empty else "✗ Missing")
     log.info("=" * 60)
-    
+
     try:
         yield
     finally:
@@ -634,7 +694,7 @@ class HealthResponse(BaseModel):
 class ScheduleGame(BaseModel):
     """
     Represents a scheduled NFL game, including basic details and optional ML predictions.
-    
+
     Used in the /schedule/next-week endpoint to return game info with injected predictions.
     """
     season: int
@@ -650,15 +710,6 @@ class ScheduleGame(BaseModel):
     away_win_probability: Optional[float] = None
 
 
-def _glob_latest(d: Path, pattern: str) -> Optional[Path]:
-    """Find the most recent file in a directory matching a glob pattern."""
-    try:
-        return max(d.glob(pattern), key=lambda p: p.stat().st_mtime)
-    except ValueError:
-        return None
-
-
-# Helper: return newest file matching pattern within directory. Safe and minimal.
 def _glob_latest(dir_path: Path, pattern: str) -> Optional[Path]:
     try:
         matches = sorted(dir_path.glob(pattern), key=lambda p: p.stat().st_mtime, reverse=True)
@@ -720,18 +771,6 @@ def get_current_nfl_context() -> Dict[str, Any]:
         "status": "preseason_or_early",
     }
 
-# main.py (example)
-from fastapi import BackgroundTasks
-
-@app.post("/retrain")
-def retrain(background: BackgroundTasks):
-    # enqueue long-running job; return 202-style ack immediately
-    def job():
-        # call your training script; on success write models/metadata.json etc.
-        ...
-    background.add_task(job)
-    return {"status": "accepted", "detail": "Retraining started"}
-
 def _validate_features_present(feature_names: List[str], row: pd.Series) -> List[str]:
         """
         Validate only the truly required identifiers are present before prediction.
@@ -777,7 +816,7 @@ def _build_future_row(
     global model_objects
     local = df.copy()
 
-    
+
     required_cols = [
         "season",
         "week",
@@ -1173,7 +1212,7 @@ def build_game_mask(df: pd.DataFrame, season: int, week: int, home_abbr: str, aw
 def get_next_week_schedule() -> List[ScheduleGame]:
     """
     Retrieve the list of scheduled NFL games for the upcoming week.
-    
+
     This endpoint filters the schedule CSV based on current NFL context (season/week),
     normalizes team abbreviations, and formats kickoff times. It supports frontend
     rendering of matchups and prediction requests. Depends on: get_current_nfl_context(),
@@ -1330,9 +1369,16 @@ def predict_game(payload: PredictionRequest) -> PredictionResponse:
                     exp_all = exp_num + exp_cat
             except Exception:
                 log.exception("Reloading model artifacts failed")
+
         if not exp_all:
-            log.error("Model metadata has no raw_feature_columns; cannot assemble features for prediction")
-            raise HTTPException(500, "Model metadata missing raw_feature_columns; retrain or fix metadata.json")
+            inferred = _infer_raw_feature_columns(model_objects, safe_dataset)
+            exp_num = list(inferred.get("numeric", []))
+            exp_cat = list(inferred.get("categorical", []))
+            exp_all = exp_num + exp_cat
+
+        if not exp_all:
+            log.error("Model metadata has no raw_feature_columns; returning 503 until retrained")
+            raise HTTPException(503, "Model metadata missing raw_feature_columns; retrain models or refresh metadata.json")
 
         def _get_or_default(col: str):
             # Prefer available value from 'row'
@@ -1666,7 +1712,7 @@ def predict_next_week() -> Dict[str, Any]:
                 out.append(
                     {"game_id": str(g.get("game_id", "unknown")), "error": str(e)}
                 )
-            
+
         return {
             "context": ctx,
             "games": out,
