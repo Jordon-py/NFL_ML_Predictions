@@ -51,3 +51,62 @@ Risks / Follow-ups:
 - Confirm that models are stored as full pipelines or that the prediction code applies the same preprocessing used during training.
 - If schedule times are naive local datetimes, decide whether to apply a timezone offset; optionally add `SCHEDULE_TIMEZONE_OFFSET_HOURS` env var.
 - If you want server-side enrichment of logos (home_logo/away_logo), update `backend/team_logo.csv` or the schedule CSV and re-deploy.
+
+---
+
+## 2025-12-04T19:45Z — Production Deployment Complete (Alfred Session)
+
+### Context
+
+- Backend had been returning "Application Error" on Heroku for all endpoints.
+- Rollback branch `rollback/heroku-endpoint-restore` was prepared at commit `380a0d8d4`.
+
+### Root Cause Identified
+
+Heroku logs revealed:
+
+```
+ModuleNotFoundError: No module named 'pydantic._internal'
+```
+
+**Trace:** `import nflreadpy` → requires `pydantic-settings` → incompatible pydantic version on Heroku.
+
+### Fix Applied
+
+- Removed unused `import nflreadpy as nfl` from `backend/main.py`.
+- Committed as `7da71c03f`: "fix: remove nflreadpy import causing pydantic._internal crash".
+- Force-pushed to Heroku: `git push heroku rollback/heroku-endpoint-restore:master --force`.
+
+### Deployment Results
+
+| Component | Status | URL |
+|-----------|--------|-----|
+| **Backend** | ✅ Healthy | `https://nfl-predict-ecf5a5bd34fe.herokuapp.com` |
+| **Frontend** | ✅ Live | `https://nfl-predict.vercel.app` |
+
+### Endpoint Verification
+
+| Endpoint | Status | Notes |
+|----------|--------|-------|
+| `/health` | ✅ 200 | `{"status":"healthy","mode":"production","reason":"models loaded"}` |
+| `/schedule/next-week` | ✅ 200 | Returns 14 games for Week 14 |
+| `/predict` | ⚠️ 422 | `Model metadata missing raw_feature_columns` — needs model retrain |
+
+### Frontend Updates
+
+- Ran `npm audit fix --force` — vulnerabilities reduced from 52 to 46.
+- Remaining vulnerabilities are deep transitive dependencies in dev tooling.
+- Deployed to Vercel via CLI: `npx vercel --prod --yes`.
+
+### Next Steps
+
+1. **Model Retraining** — Run `train_models.py` to regenerate metadata with `raw_feature_columns`.
+2. **Vulnerability Audit** — Review remaining npm vulnerabilities for security risk assessment.
+3. **Git Sync** — Merge `rollback/heroku-endpoint-restore` back to `master` if stable.
+
+### Session Metrics
+
+- **Time:** ~30 minutes
+- **Commits:** 1 (`7da71c03f`)
+- **Files Changed:** `backend/main.py`
+- **Heroku Release:** v406+
