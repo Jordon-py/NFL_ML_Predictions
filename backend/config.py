@@ -40,7 +40,8 @@ _load_env()
 
 
 # Data and schedule defaults (lazily loaded to avoid startup failures)
-DEFAULT_DATASET = DATA_DIR / "game_features_20251208.csv"
+# Use the latest engineered dataset in the backend root; aligns with production path.
+DEFAULT_DATASET = BACKEND_DIR / "game_features_20251208.csv"
 DEFAULT_SCHEDULE: Optional[object] = None  # Loaded on demand via load_schedule_data()
 
 

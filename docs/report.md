@@ -6,6 +6,34 @@ This report documents incremental changes to the NFL_ML_Predictions repository, 
 
 ## Recent Changes
 
+- Date/Time: 2025-12-08 / 23:30 UTC.
+  - Files Modified: `backend/.env`, `backend/config.py`, `backend/main.py`, `alfred.log.md`.
+  - Change Description:
+    - Pinned `DATASET_PATH` to `C:\\Users\\goku\\Documents\\NFL_ML_Predictions\\backend\\game_features_20251208.csv` so production loads the newest engineered dataset.
+    - Set `DEFAULT_DATASET` to the same path and expanded dataset fallbacks in `main.py` to prioritize the 20251208 CSV (backend root/data) before older archives.
+  - Why Made: Production was loading an older dataset; forcing the latest file removes stale predictions and startup warnings about missing engineered features.
+  - Impact: API startup now prefers the latest dataset automatically; reduces reliance on legacy CSVs and should improve prediction fidelity once the service restarts with the updated env.
+  - Quality Gates: Pending runtime restart to pick up `.env`; no automated tests executed for this path change.
+
+- Date/Time: 2025-12-08 / 23:55 UTC.
+  - Files Modified: `backend/main.py`, `alfred.log.md`.
+  - Change Description:
+    - Aligned feature schema handling to prefer the fitted preprocessor’s `feature_names_in_` when metadata column counts diverge, preventing startup sanity checks from failing with column-count mismatches.
+    - Dataset validation and sanity prediction now use the preprocessor’s expected columns first, reducing false-positive missing-feature warnings when newer CSVs add or remove fields.
+  - Why Made: Startup logs showed 277 vs 153 column mismatch due to stale metadata and updated CSVs; aligning to the fitted transformer restores sanity checks and keeps predictions model-aligned.
+  - Impact: Startup should pass without column-count errors when the dataset has extra columns; predictions remain bound to the model’s trained schema.
+  - Quality Gates: No automated tests run; requires backend restart (and redeploy to Heroku) to take effect.
+
+- Date/Time: 2025-12-08 / 19:05 UTC.
+  - Files Modified: `backend/config.py`, `backend/.env`, `backend/models/prod_models/*`, `backend/eval_models.py`, `backend/game_features_20251208_eval_report.md`, `alfred.log.md`.
+  - Change Description:
+    - Lazy-loaded `nflreadpy` schedule access in `config.py` to prevent Heroku startup crashes; aligned env vars with `ALLOW_ORIGIN_REGEX` and corrected dataset/schedule paths plus latest Vercel origin in `.env`.
+    - Tracked production model artifacts under `backend/models/prod_models/` so deployments load metadata/joblibs; Heroku release v435 now boots healthy and reports models loaded.
+    - Expanded `eval_models.py` with confusion-matrix diagnostics and textual report generation; produced `game_features_20251208_eval_report.md` with holdout metrics.
+  - Why Made: Heroku crashed on missing `nflreadpy` during startup and lacked bundled model artifacts; evaluation needed clearer diagnostics for production metrics.
+  - Impact: Backend production healthy at `https://nfl-predict-ecf5a5bd34fe.herokuapp.com` with `/predict` returning model-driven scores; frontend live at `https://nfl-ml-predictions.vercel.app`; evaluation report available for the 20251208 dataset.
+  - Quality Gates: Heroku deploy v435 (pass); `/predict` smoke SF vs CHI returns probabilities; `npm run build` (frontend) passes; Vercel production deploy completed.
+
 - Date/Time: 2025-12-08 / 06:35 UTC.
   - Files Modified: `backend/train_models.py`, `alfred.log.md`.
   - Change Description:
