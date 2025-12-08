@@ -6,6 +6,23 @@ This report documents incremental changes to the NFL_ML_Predictions repository, 
 
 ## Recent Changes
 
+- Date/Time: 2025-12-08 / 23:59 UTC.
+  - Files Modified: `backend/models/prod_models/*`, `backend/prod-models/models/*`, `alfred.log.md`, `docs/report.md`.
+  - Change Description:
+    - Promoted the newest production artifacts (timestamp 2025-12-08 17:05 UTC, 200 features, 2,149 rows) from `backend/prod-models/models` into the canonical `backend/models/prod_models/` directory.
+    - Ensures the API/Heroku deployment loads the latest metadata, preprocessor, score models, and calibrated classifiers instead of the older 14:52 UTC bundle.
+  - Why Made: Align the served models with the most recent training run and feature schema; prevent stale predictions caused by outdated prod bundles.
+  - Impact: After restart/redeploy, `/debug` should report the 2025-12-08 17:05 UTC metadata timestamp and 200-feature schema; predictions should reflect the refreshed artifacts.
+  - Quality Gates: No automated tests; requires backend/Heroku restart to ingest new joblibs.
+
+- Date/Time: 2025-12-09 / 00:05 UTC.
+  - Files Modified: `backend/main.py`, `alfred.log.md`, `docs/report.md`.
+  - Change Description:
+    - Exposed `win_classifier_used` in `PredictionResponse` and set it based on whether the calibrated classifier executed, allowing the frontend badge to distinguish classifier vs logistic fallback.
+  - Why Made: UI was labeling predictions as “Logistic fallback” despite the classifier running because the backend never surfaced classifier usage status.
+  - Impact: After redeploy, frontend cards should show “Classifier” when the win model is used; `prediction_source` remains available for provenance.
+  - Quality Gates: Not run; redeploy backend to apply.
+
 - Date/Time: 2025-12-08 / 23:30 UTC.
   - Files Modified: `backend/.env`, `backend/config.py`, `backend/main.py`, `alfred.log.md`.
   - Change Description:
