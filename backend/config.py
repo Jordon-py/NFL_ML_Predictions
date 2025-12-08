@@ -11,9 +11,8 @@ and supporting scripts.
 from __future__ import annotations
 import os
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 from dotenv import load_dotenv
-import nflreadpy as nfl
 # -------------------------------------
 
 # Locations
@@ -40,10 +39,21 @@ def _load_env() -> None:
 _load_env()
 
 
-# Data and schedule defaults
-df_schedule = nfl.load_schedules(2025).to_pandas()
+# Data and schedule defaults (lazily loaded to avoid startup failures)
 DEFAULT_DATASET = DATA_DIR / "game_features_20251208.csv"
-DEFAULT_SCHEDULE = df_schedule
+DEFAULT_SCHEDULE: Optional[object] = None  # Loaded on demand via load_schedule_data()
+
+
+def load_schedule_data(year: int = 2025):
+    """
+    Lazily load NFL schedule data. Called only when needed.
+    nflreadpy must be installed in the environment calling this.
+    """
+    try:
+        import nflreadpy as nfl
+        return nfl.load_schedules(year).to_pandas()
+    except ImportError:
+        return None
 
 # Feature toggles
 SERVE_FRONTEND = os.getenv("SERVE_FRONTEND", "false").strip().lower() in TRUTHY
