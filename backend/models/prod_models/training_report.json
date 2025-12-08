@@ -1,0 +1,82 @@
+{
+  "training_timestamp_utc": "2025-12-08 14:52:09 UTC",
+  "training_duration_seconds": 400.04,
+  "rows_total": 3074,
+  "rows_train": 2460,
+  "rows_holdout": 614,
+  "n_features_numeric": 149,
+  "n_features_categorical": 4,
+  "n_features_total_transformed": 277,
+  "cv_n_splits": 5,
+  "hp_n_iter": 40,
+  "random_seed": 403,
+  "dataset_hash": "8ca2570cdac0fa65",
+  "production_ready": true,
+  "home_model_metrics": {
+    "mae": 3.897380676524341,
+    "rmse": 4.986598166637209,
+    "r2": 0.7564488298036104
+  },
+  "away_model_metrics": {
+    "mae": 3.751823490132634,
+    "rmse": 4.779026838163872,
+    "r2": 0.746145101732182
+  },
+  "win_model_metrics": {
+    "accuracy": 0.998371335504886,
+    "roc_auc": 0.9999465040389451,
+    "brier_score": 0.0015437223949490448,
+    "log_loss": 0.006648628342638238,
+    "pr_auc": 0.9999552453520749,
+    "ece": 0.0002279784311551323,
+    "is_calibrated": true
+  },
+  "hist_model_metrics": {
+    "accuracy": 0.998371335504886,
+    "roc_auc": 0.999967902423367,
+    "brier_score": 0.0015629644283138252,
+    "log_loss": 0.012872586760124746,
+    "pr_auc": 0.9999732278109177,
+    "ece": 0.0022664290984406037,
+    "is_calibrated": true
+  },
+  "cv_best_params": {
+    "home_model": {
+      "reg__min_samples_leaf": 10,
+      "reg__max_leaf_nodes": 15,
+      "reg__max_depth": 3,
+      "reg__learning_rate": 0.1,
+      "reg__l2_regularization": 0.05
+    },
+    "away_model": {
+      "reg__min_samples_leaf": 10,
+      "reg__max_leaf_nodes": 15,
+      "reg__max_depth": 3,
+      "reg__learning_rate": 0.1,
+      "reg__l2_regularization": 0.05
+    },
+    "win_model": {
+      "solver": "liblinear",
+      "penalty": "l2",
+      "class_weight": "balanced",
+      "C": 1.0,
+      "algorithm": "log_reg",
+      "cv_log_loss": 0.022699797818958433,
+      "calibrated": true,
+      "calibration_method": "isotonic",
+      "calibration_cv": 5
+    },
+    "hist_model": {
+      "min_samples_leaf": 20,
+      "max_leaf_nodes": 15,
+      "max_depth": 6,
+      "learning_rate": 0.02,
+      "l2_regularization": 0.1,
+      "algorithm": "hist_gb",
+      "cv_log_loss": 0.025819390948705518,
+      "calibrated": true,
+      "calibration_method": "sigmoid",
+      "calibration_cv": 5
+    }
+  }
+}
