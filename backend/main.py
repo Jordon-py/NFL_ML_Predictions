@@ -239,7 +239,7 @@ def load_objects() -> Dict[str, Any]:
             - win_threshold_optimal: float, optimal win threshold
     """
     # Production models in backend/models/prod_models/
-    PROD_MODELS_DIR = MODELS_DIR / "prod_models"
+    PROD_MODELS_DIR = BACKEND_DIR / "prod_models" / "models"
     meta_path = PROD_MODELS_DIR / "metadata.json"
     log.debug("Loading model metadata from %s", meta_path)
     if not meta_path.exists():
