@@ -61,6 +61,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+import nflreadpy as nfl
 
 from .config import (
     ALLOW_FALLBACK_PREDICTIONS,
@@ -287,7 +288,7 @@ def load_objects() -> Dict[str, Any]:
         "win_model": win_model,
         "raw_feature_columns": raw_feature_columns,
         "feature_names_in": feature_names_in,
-        "win_threshold_optimal": meta.get("win_threshold_optimal", 0.5),
+        "win_threshold_optimal": meta.get("win_threshold_optimal", 0.48),
     }
 
 
@@ -551,7 +552,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             DEFAULT_DATASET,
             BACKEND_DIR / "game_features_20251208.csv",
             DATA_DIR / "game_features_20251208.csv",
-            DATA_DIR / "game_features_2014_2025.csv",
         )
 
         for alt in alternates:
@@ -652,6 +652,7 @@ class PredictionResponse(BaseModel):
     point_diff: float
     mode: str
     prediction_source: str
+    win_classifier_used: bool
 
 
 class HealthResponse(BaseModel):
@@ -1578,6 +1579,9 @@ def predict_game(payload: PredictionRequest) -> PredictionResponse:
         else:
             pred_source = "model"
 
+        # Signal to the frontend whether the calibrated classifier was used.
+        win_classifier_used = not win_fallback_used
+
         if not ALLOW_FALLBACK_PREDICTIONS and (feature_fallback_used or win_fallback_used):
             log.warning("Fallback prediction attempted but ALLOW_FALLBACK_PREDICTIONS=false; rejecting request")
             raise HTTPException(400, f"Prediction would use fallback logic (source={pred_source}); disallowed by server configuration")
@@ -1590,6 +1594,7 @@ def predict_game(payload: PredictionRequest) -> PredictionResponse:
             point_diff=point_diff,
             mode=mode_val,
             prediction_source=pred_source,
+            win_classifier_used=win_classifier_used,
         )
     except HTTPException:
         raise

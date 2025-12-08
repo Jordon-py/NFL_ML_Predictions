@@ -1,5 +1,17 @@
 # Alfred Activity Log
 
+## 2025-12-08T23:59:00Z
+
+- Promoted refreshed production artifacts from `backend/prod-models/models` into `backend/models/prod_models/` (metadata timestamp 2025-12-08 17:05 UTC, 200 features, 2,149 rows).
+- Purpose: ensure the API and Heroku deploy consume the latest trained models and feature schema without relying on older prod bundle.
+- Next: restart backend/Heroku release to load the new joblib set; verify `/debug` reflects the new metadata timestamp and feature count.
+
+## 2025-12-09T00:05:00Z
+
+- Added `win_classifier_used` flag to `PredictionResponse` so the frontend can distinguish calibrated classifier runs from the logistic fallback badge.
+- Purpose: stop UI from showing “Logistic fallback” when the win classifier actually ran (prediction_source still reports provenance).
+- Next: redeploy backend to Heroku; frontend badges should flip to “Classifier” on model-driven predictions.
+
 ## 2025-12-08T23:30:00Z
 
 - Pinned dataset consumption to the latest engineered file: `DATASET_PATH` now points to `C:\\Users\\goku\\Documents\\NFL_ML_Predictions\\backend\\game_features_20251208.csv` and `DEFAULT_DATASET` defaults to the same path in `config.py` for production alignment.
