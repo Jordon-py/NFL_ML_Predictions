@@ -252,6 +252,14 @@ def load_objects() -> Dict[str, Any]:
         return _resolve_case_insensitive(candidate)
 
     preprocessor = joblib.load(resolve_model_path("preprocessor", "preprocessor.joblib"))
+    feature_names_in: List[str] = []
+    try:
+        if hasattr(preprocessor, "feature_names_in_"):
+            feature_names_in = [str(c) for c in list(preprocessor.feature_names_in_)]
+        elif hasattr(preprocessor, "get_feature_names_out"):
+            feature_names_in = [str(c) for c in list(preprocessor.get_feature_names_out())]
+    except Exception:
+        feature_names_in = []
     home_model = joblib.load(resolve_model_path("home_model", "home_model.joblib"))
     away_model = joblib.load(resolve_model_path("away_model", "away_model.joblib"))
     # Fix: load win_model from path if it exists; previous code attempted to treat a loaded object as a Path.
@@ -264,13 +272,21 @@ def load_objects() -> Dict[str, Any]:
         log.warning("Failed to load win_model from %s: %s", win_model_path, exc)
         win_model = None
 
+    raw_feature_columns = meta.get("raw_feature_columns", {})
+    # If metadata columns don't match the fitted preprocessor, prefer the preprocessor's view.
+    if feature_names_in:
+        meta_count = len(_normalize_feature_cols(raw_feature_columns))
+        if not meta_count or meta_count != len(feature_names_in):
+            raw_feature_columns = {"numeric": feature_names_in, "categorical": []}
+
     return {
         "mode": meta.get("mode", "production"),
         "preprocessor": preprocessor,
         "home_model": home_model,
         "away_model": away_model,
         "win_model": win_model,
-        "raw_feature_columns": meta.get("raw_feature_columns", {}),
+        "raw_feature_columns": raw_feature_columns,
+        "feature_names_in": feature_names_in,
         "win_threshold_optimal": meta.get("win_threshold_optimal", 0.5),
     }
 
@@ -282,7 +298,8 @@ def _validate_dataset_schema(df: pd.DataFrame, model_objects: Dict[str, Any]) ->
     ensures those columns exist in the dataframe. Raises RuntimeError with
     actionable message if mismatch detected.
     """
-    expected = _normalize_feature_cols(model_objects.get("raw_feature_columns", {}))
+    feature_names_in = model_objects.get("feature_names_in") or []
+    expected = [str(c) for c in feature_names_in] if feature_names_in else _normalize_feature_cols(model_objects.get("raw_feature_columns", {}))
     if not expected:
         inferred = _infer_raw_feature_columns(model_objects, df)
         expected = _normalize_feature_cols(inferred)
@@ -372,13 +389,15 @@ def _sanity_predict(model_objects: Dict[str, Any], df: pd.DataFrame) -> None:
         sample = df.iloc[0]
         # Ensure the sample contains numeric features expected by preprocessor
         features = {}
+        feature_names_in = model_objects.get("feature_names_in") or []
         raw_cols = model_objects.get("raw_feature_columns", {})
-        # raw_cols may be a dict with numeric/categorical lists
-        cols = []
-        if isinstance(raw_cols, dict):
-            cols = raw_cols.get("numeric", []) + raw_cols.get("categorical", [])
-        elif isinstance(raw_cols, list):
-            cols = raw_cols
+        # Prefer fitted preprocessor input columns; fallback to metadata-defined raw columns.
+        cols: List[str] = list(feature_names_in) if feature_names_in else []
+        if not cols:
+            if isinstance(raw_cols, dict):
+                cols = raw_cols.get("numeric", []) + raw_cols.get("categorical", [])
+            elif isinstance(raw_cols, list):
+                cols = raw_cols
         for c in cols:
             features[c] = sample.get(c, 0)
     else:
@@ -527,10 +546,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     if not ds_path.exists():
         log.warning("✗ Dataset not found at %s", ds_path)
-        # Check alternate locations
-        alternates = DATA_DIR / "./game_features_2014_2025.csv",
-
-
+        # Check alternate locations (prioritize latest engineered dataset)
+        alternates = (
+            DEFAULT_DATASET,
+            BACKEND_DIR / "game_features_20251208.csv",
+            DATA_DIR / "game_features_20251208.csv",
+            DATA_DIR / "game_features_2014_2025.csv",
+        )
 
         for alt in alternates:
             if alt.exists():

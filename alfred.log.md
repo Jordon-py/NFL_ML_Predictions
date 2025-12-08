@@ -1,5 +1,24 @@
 # Alfred Activity Log
 
+## 2025-12-08T23:30:00Z
+
+- Pinned dataset consumption to the latest engineered file: `DATASET_PATH` now points to `C:\\Users\\goku\\Documents\\NFL_ML_Predictions\\backend\\game_features_20251208.csv` and `DEFAULT_DATASET` defaults to the same path in `config.py` for production alignment.
+- Hardened dataset fallback in `backend/main.py` to prefer the 20251208 CSV in backend root or data folder before older archives, reducing startup risks from stale files.
+- Context: Observed production loading an older dataset; this update forces the newest artifact and retains defensive fallbacks for legacy locations.
+
+## 2025-12-08T23:55:00Z
+
+- Fixed startup column-count mismatch by preferring `preprocessor.feature_names_in_` over metadata when assembling `raw_feature_columns`, ensuring sanity checks use the fitted transformer’s expected 153 columns instead of stale metadata.
+- Updated dataset schema validation and sanity prediction to rely on the fitted preprocessor’s feature list, reducing false mismatch warnings when newer CSVs add/remove columns.
+- Note: Restart backend after pull; if deploying to Heroku, rebuild/release to pick up the code changes.
+
+## 2025-12-08T19:05:00Z
+
+- Resolved Heroku startup crash by lazily loading `nflreadpy` in `backend/config.py` and redeployed (Heroku release v435) — `/health` reports healthy with production models loaded.
+- Tracked production artifacts in `backend/models/prod_models/` so model metadata/joblibs deploy with the app; `/predict` now returns model-driven scores in production.
+- Updated `backend/.env` for ops alignment: `DATASET_PATH=./data/game_features_2014_2025.csv`, `SCHEDULE_PATH=./data/Nfl_schedule_2025.csv`, `ALLOW_ORIGIN_REGEX=https://.*\.vercel\.app`, and appended the latest Vercel domain to `ALLOWED_ORIGINS`.
+- Frontend redeployed to Vercel (`https://nfl-ml-predictions.vercel.app`); smoke-tested `/predict` (SF vs CHI, 2024 W14) returning production probabilities.
+
 ## 2025-12-08T06:35:00Z
 
 - Fixed training pipeline crash in `backend/train_models.py` caused by `TrainingSummary` missing `hist_model_metrics` when saving reports.
