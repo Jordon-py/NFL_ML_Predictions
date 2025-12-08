@@ -18,6 +18,7 @@ Outputs:
     models/metadata.json               - Model metadata and feature info
     models/training_report.json        - Training summary
     models/feature_importance.json     - Feature importance rankings
+    models/prod_models/hgb_classifier.joblib
 
 Environment variables:
     HP_N_ITER     - RandomizedSearchCV iterations (default: 50)
@@ -27,7 +28,7 @@ Environment variables:
     RANDOM_SEED   - Random state for reproducibility (default: 42)
 
 Usage:
-    python train_models.py --data backend/data/game_features_2014_2025.csv --out backend/models
+    python train_models.py --data 'data/prod-models/game_features_20251208.csv' --out 'data/prod-models/models'
 """
 
 # File: backend/train_models.py
@@ -51,12 +52,19 @@ from typing import List, Tuple, Dict, cast, Any, Optional
 import numpy as np
 import pandas as pd
 from dotenv import load_dotenv
-from joblib import dump
-from sklearn.calibration import CalibratedClassifierCV, calibration_curve
+from joblib import dump, load
+import time
+
+from sklearn.base import BaseEstimator
+from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
-from sklearn.ensemble import HistGradientBoostingRegressor
-from sklearn.impute import SimpleImputer
+from sklearn.calibration import CalibratedClassifierCV, calibration_curve
 from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import HistGradientBoostingClassifier
+from sklearn.ensemble import HistGradientBoostingRegressor
+from sklearn.model_selection import RandomizedSearchCV, TimeSeriesSplit
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.impute import SimpleImputer
 from sklearn.metrics import (
     mean_absolute_error,
     mean_squared_error,
@@ -68,9 +76,7 @@ from sklearn.metrics import (
     auc,
     accuracy_score,
 )
-from sklearn.model_selection import TimeSeriesSplit, RandomizedSearchCV
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OneHotEncoder, StandardScaler
+
 
 # -----------------------
 # Configuration & Environment
@@ -143,18 +149,26 @@ LEAK_BLOCKLIST = {
 
 # Hyperparameter search spaces
 REG_PARAM_DISTS = {
-    "reg__max_depth": [None, 6, 10, 14],
-    "reg__learning_rate": [0.02, 0.05, 0.1, 0.15, 0.2],
+    "reg__max_depth": [3, 6, 10, 14],
+    "reg__learning_rate": [0.02, 0.05, 0.1, 0.15, 0.2, 0.01],
     "reg__max_leaf_nodes": [15, 31, 63, 127],
-    "reg__l2_regularization": [0.0, 0.05, 0.1, 0.15, 0.2],
+    "reg__l2_regularization": [0.02, 0.05, 0.1, 0.15, 0.2],
     "reg__min_samples_leaf": [10, 20, 30],
 }
 
 CLF_PARAM_DISTS = {
-    "clf__C": [0.001, 0.01, 0.1, 1.0, 10.0],
+    "clf__C": [0.02, 0.01, 0.1, 1.0, 0.05],
     "clf__penalty": ["l2"],
     "clf__solver": ["liblinear", "lbfgs"],
     "clf__class_weight": [None, "balanced"],
+}
+
+HIST_PARAM_DISTS = {
+    "clf__max_depth": [3, 6, 10, 14],
+    "clf__learning_rate": [0.02, 0.05, 0.1, 0.15, 0.2],
+    "clf__max_leaf_nodes": [15, 31, 63, 127],
+    "clf__l2_regularization": [0.0, 0.01, 0.05, 0.1],
+    "clf__min_samples_leaf": [10, 20, 30],
 }
 
 # Logging configuration
@@ -226,6 +240,7 @@ class TrainingSummary:
     home_model_metrics: Dict[str, float] = field(default_factory=dict)
     away_model_metrics: Dict[str, float] = field(default_factory=dict)
     win_model_metrics: Dict[str, float] = field(default_factory=dict)
+    hist_model_metrics: Dict[str, float] = field(default_factory=dict)
     cv_best_params: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -343,7 +358,7 @@ def _make_preprocessor(num_cols: List[str], cat_cols: List[str]) -> ColumnTransf
 
 def _dataset_sort(df: pd.DataFrame) -> pd.DataFrame:
     """Sort dataset chronologically by season and week."""
-    return df.sort_values(TIME_KEYS).reset_index(drop=True)
+    return df.sort_values(by=TIME_KEYS).reset_index(drop=True)
 
 
 def _get_holdout_split(X: pd.DataFrame, y: pd.Series, holdout_ratio: float = 0.15) -> Tuple[np.ndarray, np.ndarray]:
@@ -406,6 +421,21 @@ def _fit_regression(
     return cast(Pipeline, rs.best_estimator_), rs.best_params_
 
 
+
+
+from typing import Any, Dict, Tuple
+
+import time
+import pandas as pd
+from sklearn.base import BaseEstimator
+from sklearn.pipeline import Pipeline
+from sklearn.compose import ColumnTransformer
+from sklearn.calibration import CalibratedClassifierCV
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import HistGradientBoostingClassifier
+from sklearn.model_selection import RandomizedSearchCV, TimeSeriesSplit
+
+
 def _fit_classifier(
     X: pd.DataFrame,
     y: pd.Series,
@@ -413,40 +443,79 @@ def _fit_classifier(
     random_state: int,
     n_jobs: int,
     calibrate: bool = True,
-) -> Tuple[Pipeline, Dict[str, Any]]:
-    """Fit binary classifier with hyperparameter search and optional probability calibration.
+) -> Tuple[BaseEstimator, Dict[str, Any], BaseEstimator, Dict[str, Any]]:
+    """
+    Fit binary classifiers (LogReg + HistGB) with hyperparameter search,
+    model selection, and optional probability calibration.
 
-    Probability Calibration Enhancement (v2.4):
-    - Wraps the best estimator with CalibratedClassifierCV using isotonic regression
-    - Improves probability estimates so "65% win" truly reflects ~65% historical accuracy
-    - Critical for betting/prediction applications where calibrated probabilities matter
-    - Uses 5-fold cross-validation for calibration to avoid overfitting
+    Training flow:
+      1. Build two pipelines (both include `pre`):
+         - LogisticRegression
+         - HistGradientBoostingClassifier
+      2. Run RandomizedSearchCV with TimeSeriesSplit for each.
+      3. Compute CV log loss for each.
+      4. Optionally calibrate both models on the full training data:
+         - LogReg: isotonic
+         - HistGB: sigmoid
+      5. Select the winner by CV log loss.
+      6. Return:
+           winner_model, winner_params, hist_model, hist_params
 
     Args:
-        X: Feature dataframe
-        y: Target series
-        pre: Fitted preprocessor
-        random_state: Random seed for reproducibility
-        n_jobs: Parallel jobs for CV
-        calibrate: Whether to apply probability calibration (default: True)
+        X: Feature dataframe.
+        y: Target labels (binary 0/1).
+        pre: ColumnTransformer used as the shared preprocessor.
+        random_state: Random seed for reproducibility.
+        n_jobs: Parallel jobs for CV.
+        calibrate: If True, wrap both models in CalibratedClassifierCV.
 
     Returns:
-        Tuple of (fitted pipeline, best parameters including calibration info)
+        winner_model: Best model (LogReg or HistGB), optionally calibrated.
+        winner_params: Dict with tuned hyperparams + metadata for the winner.
+        hist_model: HistGradientBoosting model (always returned), calibrated
+                    if `calibrate=True`.
+        hist_params: Dict with tuned hyperparams + metadata for HistGB.
     """
     start = time.time()
     log.info("Starting classifier training...")
 
-    n_iter = min(HP_N_ITER, 32)  # Cap iterations
+    n_iter = min(HP_N_ITER, 32)
 
-    estimator = Pipeline([
-        ("pre", pre),
-        ("clf", LogisticRegression(random_state=random_state, max_iter=1000)),
-    ])
+    # 1. Candidate pipelines (both use the shared preprocessor)
+    log_reg_pipe = Pipeline(
+        [
+            ("pre", pre),
+            (
+                "clf",
+                LogisticRegression(
+                    random_state=random_state,
+                    max_iter=1000,
+                ),
+            ),
+        ]
+    )
 
-    rs = RandomizedSearchCV(
-        estimator=estimator,
+    hist_gb_pipe = Pipeline(
+        [
+            ("pre", pre),
+            (
+                "clf",
+                HistGradientBoostingClassifier(
+                    random_state=random_state,
+                    max_iter=300,
+                ),
+            ),
+        ]
+    )
+
+    tscv = TimeSeriesSplit(n_splits=N_SPLITS)
+
+    # 2. Hyperparameter search: LogisticRegression
+    log.info("Running RandomizedSearchCV for LogisticRegression...")
+    log_reg_rs = RandomizedSearchCV(
+        estimator=log_reg_pipe,
         param_distributions=CLF_PARAM_DISTS,
-        cv=TimeSeriesSplit(n_splits=N_SPLITS),
+        cv=tscv,
         scoring="neg_log_loss",
         n_jobs=n_jobs,
         random_state=random_state,
@@ -456,38 +525,111 @@ def _fit_classifier(
         error_score="raise",
     )
 
-    rs.fit(X, y)
+    # 3. Hyperparameter search: HistGradientBoostingClassifier
+    log.info("Running RandomizedSearchCV for HistGradientBoostingClassifier...")
+    hist_gb_rs = RandomizedSearchCV(
+        estimator=hist_gb_pipe,
+        param_distributions=HIST_PARAM_DISTS,
+        cv=tscv,
+        scoring="neg_log_loss",
+        n_jobs=n_jobs,
+        random_state=random_state,
+        verbose=1,
+        n_iter=n_iter,
+        refit=True,
+        error_score="raise",
+    )
 
-    best_params = {k.replace("clf__", ""): v for k, v in rs.best_params_.items()}
-    base_model = cast(Pipeline, rs.best_estimator_)
+    # Fit both searches
+    log_reg_rs.fit(X, y)
+    hist_gb_rs.fit(X, y)
 
-    log.info("Classifier CV complete in %s | Best LogLoss: %.4f | Params: %s",
-             _timer(start), -rs.best_score_, best_params)
+    log_reg_logloss = -log_reg_rs.best_score_
+    hist_gb_logloss = -hist_gb_rs.best_score_
 
-    # Apply probability calibration using isotonic regression
+    log.info(
+        "LogReg best LogLoss: %.4f | params: %s",
+        log_reg_logloss,
+        log_reg_rs.best_params_,
+    )
+    log.info(
+        "HistGB best LogLoss: %.4f | params: %s",
+        hist_gb_logloss,
+        hist_gb_rs.best_params_,
+    )
+
+    # 4. Build params dicts (strip 'clf__' for readability)
+    log_reg_params: Dict[str, Any] = {
+        k.split("__", 1)[1] if "__" in k else k: v
+        for k, v in log_reg_rs.best_params_.items()
+    }
+    log_reg_params["algorithm"] = "log_reg"
+    log_reg_params["cv_log_loss"] = float(log_reg_logloss)
+
+    hist_params: Dict[str, Any] = {
+        k.split("__", 1)[1] if "__" in k else k: v
+        for k, v in hist_gb_rs.best_params_.items()
+    }
+    hist_params["algorithm"] = "hist_gb"
+    hist_params["cv_log_loss"] = float(hist_gb_logloss)
+
+    # 5. Best estimators (pipelines including preprocessing)
+    log_reg_best = log_reg_rs.best_estimator_
+    hist_best = hist_gb_rs.best_estimator_
+
+    # 6. Optional probability calibration
     if calibrate:
-        log.info("Applying probability calibration (isotonic regression, 5-fold)...")
-        cal_start = time.time()
+        log.info("Applying probability calibration for LogReg and HistGB...")
 
-        # Wrap the entire pipeline with CalibratedClassifierCV
-        # Uses 5-fold CV to fit calibration without data leakage
-        calibrated_model = CalibratedClassifierCV(
-            estimator=base_model,
-            method="isotonic",  # Non-parametric, works well with limited data
+        # LogisticRegression: isotonic calibration
+        log_reg_model: BaseEstimator = CalibratedClassifierCV(
+            estimator=log_reg_best,
+            method="isotonic",
             cv=5,
             n_jobs=n_jobs,
         )
-        calibrated_model.fit(X, y)
+        log_reg_model.fit(X, y)
+        log_reg_params["calibrated"] = True
+        log_reg_params["calibration_method"] = "isotonic"
+        log_reg_params["calibration_cv"] = 5
 
-        log.info("Calibration complete in %s", _timer(cal_start))
-        best_params["calibrated"] = True
-        best_params["calibration_method"] = "isotonic"
-        best_params["calibration_cv"] = 5
+        # HistGradientBoostingClassifier: sigmoid calibration
+        hist_model: BaseEstimator = CalibratedClassifierCV(
+            estimator=hist_best,
+            method="sigmoid",
+            cv=5,
+            n_jobs=n_jobs,
+        )
+        hist_model.fit(X, y)
+        hist_params["calibrated"] = True
+        hist_params["calibration_method"] = "sigmoid"
+        hist_params["calibration_cv"] = 5
+    else:
+        log_reg_model = log_reg_best
+        hist_model = hist_best
+        log_reg_params["calibrated"] = False
+        hist_params["calibrated"] = False
 
-        return calibrated_model, best_params
+    # 7. Winner selection by CV log loss (lower is better)
+    if hist_gb_logloss < log_reg_logloss:
+        winner_model = hist_model
+        winner_params = dict(hist_params)
+        winner_name = "hist_gb"
+    else:
+        winner_model = log_reg_model
+        winner_params = dict(log_reg_params)
+        winner_name = "log_reg"
 
-    best_params["calibrated"] = False
-    return base_model, best_params
+    log.info(
+        "Classifier training complete in %s | Winner: %s | Best LogLoss: %.4f",
+        _timer(start),
+        winner_name,
+        winner_params["cv_log_loss"],
+    )
+
+    # Return both the winner and the HistGB model
+    return winner_model, winner_params, hist_model, hist_params
+
 
 
 # -----------------------
@@ -598,6 +740,17 @@ def _extract_feature_importance(
     importance_dict = {}
 
     try:
+        # CalibratedClassifierCV wraps the fitted pipeline; unwrap for access to named_steps.
+        if isinstance(model, CalibratedClassifierCV):
+            try:
+                calibrated = model.calibrated_classifiers_[0]
+                base_estimator = getattr(calibrated, "base_estimator", None)
+            except Exception:
+                base_estimator = getattr(model, "base_estimator", None)
+
+            if base_estimator is not None:
+                model = base_estimator
+
         # Get the actual estimator from pipeline
         if model_type == "regressor":
             estimator = model.named_steps.get("reg")
@@ -644,18 +797,25 @@ def _extract_feature_importance(
 # Main Training Function
 # -----------------------
 def main(data_path: str, out_dir: str) -> None:
-    """Execute full training pipeline.
+    """Execute full training pipeline for NFL ML models.
 
-    1. Load and validate dataset
-    2. Preprocess and split data (train/holdout)
-    3. Train home/away regressors and win classifier
-    4. Evaluate on holdout set
-    5. Extract feature importances
-    6. Save all artifacts and reports
+    High-level steps:
+      1. Load and validate dataset.
+      2. Preprocess and split data (chronological train / holdout).
+      3. Train:
+         - home score regressor
+         - away score regressor
+         - win probability classifiers (LogReg + HistGB, with calibration).
+      4. Evaluate on holdout set.
+      5. Extract feature importances.
+      6. Save all artifacts and structured reports.
     """
     training_start = time.time()
     np.random.seed(RANDOM_SEED)
 
+    # -------------------------------------------------------------------------
+    # 0. Configuration logging
+    # -------------------------------------------------------------------------
     log.info("=" * 60)
     log.info("NFL ML Training Pipeline")
     log.info("=" * 60)
@@ -668,29 +828,31 @@ def main(data_path: str, out_dir: str) -> None:
     log.info("  Parallel jobs: %d", N_JOBS)
     log.info("-" * 60)
 
-    # Load data
+    # -------------------------------------------------------------------------
+    # 1. Load data
+    # -------------------------------------------------------------------------
     log.info("Loading dataset...")
     df = pd.read_csv(data_path)
-    log.info("Loaded %d rows x %d columns", len(df), len(df.columns))
-
-    # Validate required columns
-    _ensure_columns(df, TIME_KEYS + [TARGET_HOME, TARGET_AWAY, CLASS_LABEL])
-
     if df.empty:
         raise RuntimeError(f"Dataset is empty: {data_path}")
+
+    log.info("Loaded %d rows x %d columns", len(df), len(df.columns))
+
+    # Ensure required columns are present (targets + time keys)
+    _ensure_columns(df, TIME_KEYS + [TARGET_HOME, TARGET_AWAY, CLASS_LABEL])
 
     # Chronological sort (critical for time-series CV)
     df = _dataset_sort(df)
 
-    # Extract targets BEFORE dropping leaky columns
+    # -------------------------------------------------------------------------
+    # 2. Extract targets and drop leaky columns
+    # -------------------------------------------------------------------------
     y_home = df[TARGET_HOME].copy()
     y_away = df[TARGET_AWAY].copy()
     y_win = df[CLASS_LABEL].copy()
 
-    # Remove leaky columns from features
     df = _drop_leaky_columns(df)
 
-    # Remove rows with missing targets
     keep_mask = (~y_home.isna()) & (~y_away.isna()) & (~y_win.isna())
     n_dropped = (~keep_mask).sum()
     if n_dropped > 0:
@@ -703,33 +865,43 @@ def main(data_path: str, out_dir: str) -> None:
 
     log.info("Dataset after cleaning: %d rows", len(df))
 
-    # Infer features
+    # -------------------------------------------------------------------------
+    # 3. Infer features and optimize numeric dtypes
+    # -------------------------------------------------------------------------
     num_cols, cat_cols = _infer_features(df)
     feature_cols = num_cols + cat_cols
 
     if not feature_cols:
-        raise RuntimeError("No features found after leakage sanitization. Check your dataset.")
+        raise RuntimeError(
+            "No features found after leakage sanitization. "
+            "Check your dataset or _drop_leaky_columns."
+        )
 
     X = df[feature_cols].copy()
-
-    # Optimize memory for numeric columns
     for col in num_cols:
         if col in X.columns:
             X[col] = X[col].astype("float32")
 
-    # Create train/holdout split (chronological)
-    train_idx, holdout_idx = _get_holdout_split(X, y_home, holdout_ratio=0.15)
+    # -------------------------------------------------------------------------
+    # 4. Chronological train / holdout split
+    # -------------------------------------------------------------------------
+    train_idx, holdout_idx = _get_holdout_split(X, y_home, holdout_ratio=0.20)
     X_train, X_holdout = X.iloc[train_idx], X.iloc[holdout_idx]
     y_home_train, y_home_holdout = y_home.iloc[train_idx], y_home.iloc[holdout_idx]
     y_away_train, y_away_holdout = y_away.iloc[train_idx], y_away.iloc[holdout_idx]
     y_win_train, y_win_holdout = y_win.iloc[train_idx], y_win.iloc[holdout_idx]
 
-    log.info("Train set: %d rows | Holdout set: %d rows", len(train_idx), len(holdout_idx))
+    log.info(
+        "Train set: %d rows | Holdout set: %d rows",
+        len(train_idx),
+        len(holdout_idx),
+    )
 
-    # Build preprocessor
+    # -------------------------------------------------------------------------
+    # 5. Preprocessor (fit on TRAIN only)
+    # -------------------------------------------------------------------------
     pre = _make_preprocessor(num_cols, cat_cols)
 
-    # Fit preprocessor to get transformed feature count
     pre.fit(X_train)
     try:
         n_transformed = len(pre.get_feature_names_out())
@@ -739,7 +911,9 @@ def main(data_path: str, out_dir: str) -> None:
     log.info("Transformed feature count: %d", n_transformed)
     log.info("-" * 60)
 
-    # Train models
+    # -------------------------------------------------------------------------
+    # 6. Train models
+    # -------------------------------------------------------------------------
     log.info("Training home score regressor...")
     home_model, home_params = _fit_regression(
         X_train, y_home_train, pre, RANDOM_SEED, N_JOBS, label="home_score"
@@ -750,36 +924,79 @@ def main(data_path: str, out_dir: str) -> None:
         X_train, y_away_train, pre, RANDOM_SEED, N_JOBS, label="away_score"
     )
 
-    log.info("Training win probability classifier...")
-    win_model, win_params = _fit_classifier(
-        X_train, y_win_train, pre, RANDOM_SEED, N_JOBS
+    log.info("Training win probability classifiers (LogReg + HistGB)...")
+    # winner_model: best (LogReg or HistGB), hist_model: always HistGB
+    win_model, win_params, hist_model, hist_params = _fit_classifier(
+        X_train,
+        y_win_train,
+        pre,
+        RANDOM_SEED,
+        N_JOBS,
+        calibrate=True,
     )
 
     log.info("-" * 60)
     log.info("Evaluating on holdout set...")
 
-    # Evaluate on holdout
+    # -------------------------------------------------------------------------
+    # 7. Evaluate on holdout
+    # -------------------------------------------------------------------------
     home_metrics = _evaluate_regression(home_model, X_holdout, y_home_holdout)
     away_metrics = _evaluate_regression(away_model, X_holdout, y_away_holdout)
 
-    # Pass calibration flag to classifier evaluation
-    is_calibrated = win_params.get("calibrated", False)
-    win_metrics = _evaluate_classifier(win_model, X_holdout, y_win_holdout, is_calibrated)
+    win_is_calibrated = win_params.get("calibrated", False)
+    hist_is_calibrated = hist_params.get("calibrated", False)
 
-    log.info("Home Score Regressor - MAE: %.2f, RMSE: %.2f, R²: %.3f",
-             home_metrics.mae, home_metrics.rmse, home_metrics.r2)
-    log.info("Away Score Regressor - MAE: %.2f, RMSE: %.2f, R²: %.3f",
-             away_metrics.mae, away_metrics.rmse, away_metrics.r2)
-    log.info("Win Classifier - Accuracy: %.3f, ROC-AUC: %.3f, Brier: %.4f, ECE: %.4f",
-             win_metrics.accuracy, win_metrics.roc_auc, win_metrics.brier_score, win_metrics.ece)
+    win_metrics = _evaluate_classifier(
+        win_model, X_holdout, y_win_holdout, win_is_calibrated
+    )
+    hist_win_metrics = _evaluate_classifier(
+        hist_model, X_holdout, y_win_holdout, hist_is_calibrated
+    )
 
-    # Extract feature importances
+    log.info(
+        "Home Score Regressor - MAE: %.2f, RMSE: %.2f, R²: %.3f",
+        home_metrics.mae,
+        home_metrics.rmse,
+        home_metrics.r2,
+    )
+    log.info(
+        "Away Score Regressor - MAE: %.2f, RMSE: %.2f, R²: %.3f",
+        away_metrics.mae,
+        away_metrics.rmse,
+        away_metrics.r2,
+    )
+    log.info(
+        "Win Classifier (winner) - Accuracy: %.3f, ROC-AUC: %.3f, "
+        "Brier: %.4f, ECE: %.4f",
+        win_metrics.accuracy,
+        win_metrics.roc_auc,
+        win_metrics.brier_score,
+        win_metrics.ece,
+    )
+    log.info(
+        "HistGB Classifier - Accuracy: %.3f, ROC-AUC: %.3f, "
+        "Brier: %.4f, ECE: %.4f",
+        hist_win_metrics.accuracy,
+        hist_win_metrics.roc_auc,
+        hist_win_metrics.brier_score,
+        hist_win_metrics.ece,
+    )
+
+    # -------------------------------------------------------------------------
+    # 8. Feature importances
+    # -------------------------------------------------------------------------
     log.info("Extracting feature importances...")
     home_importance = _extract_feature_importance(home_model, feature_cols, "regressor")
     away_importance = _extract_feature_importance(away_model, feature_cols, "regressor")
     win_importance = _extract_feature_importance(win_model, feature_cols, "classifier")
+    hist_win_importance = _extract_feature_importance(
+        hist_model, feature_cols, "classifier"
+    )
 
-    # Save artifacts
+    # -------------------------------------------------------------------------
+    # 9. Save artifacts
+    # -------------------------------------------------------------------------
     log.info("-" * 60)
     log.info("Saving artifacts to %s", out_dir)
     os.makedirs(out_dir, exist_ok=True)
@@ -788,12 +1005,14 @@ def main(data_path: str, out_dir: str) -> None:
     dump(home_model, os.path.join(out_dir, "home_model.joblib"))
     dump(away_model, os.path.join(out_dir, "away_model.joblib"))
     dump(win_model, os.path.join(out_dir, "win_clf_calibrated.joblib"))
+    dump(hist_model, os.path.join(out_dir, "hist_win_clf_calibrated.joblib"))
 
-    # Training duration
     training_duration = time.time() - training_start
     training_timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
 
-    # Build summary
+    # -------------------------------------------------------------------------
+    # 10. Build summary
+    # -------------------------------------------------------------------------
     summary = TrainingSummary(
         training_timestamp_utc=training_timestamp,
         training_duration_seconds=round(training_duration, 2),
@@ -811,14 +1030,18 @@ def main(data_path: str, out_dir: str) -> None:
         home_model_metrics=home_metrics.to_dict(),
         away_model_metrics=away_metrics.to_dict(),
         win_model_metrics=win_metrics.to_dict(),
+        hist_model_metrics=hist_win_metrics.to_dict(),
         cv_best_params={
             "home_model": home_params,
             "away_model": away_params,
             "win_model": win_params,
+            "hist_model": hist_params,
         },
     )
 
-    # Metadata for API consumption
+    # -------------------------------------------------------------------------
+    # 11. Metadata for API/frontend
+    # -------------------------------------------------------------------------
     metadata = {
         "training_timestamp_utc": summary.training_timestamp_utc,
         "dataset_hash": summary.dataset_hash,
@@ -826,6 +1049,7 @@ def main(data_path: str, out_dir: str) -> None:
         "home_model": "home_model.joblib",
         "away_model": "away_model.joblib",
         "win_model": "win_clf_calibrated.joblib",
+        "hist_win_model": "hist_win_clf_calibrated.joblib",
         "raw_feature_columns": {"numeric": num_cols, "categorical": cat_cols},
         "production_ready": True,
         "cv": {"type": "TimeSeriesSplit", "n_splits": N_SPLITS},
@@ -833,6 +1057,7 @@ def main(data_path: str, out_dir: str) -> None:
             "home": home_metrics.to_dict(),
             "away": away_metrics.to_dict(),
             "win": win_metrics.to_dict(),
+            "hist_win": hist_win_metrics.to_dict(),
         },
         "rows": summary.rows_total,
         "features": len(feature_cols),
@@ -840,19 +1065,26 @@ def main(data_path: str, out_dir: str) -> None:
 
     # Feature importance report
     feature_importance = {
-        "home_model": dict(list(home_importance.items())[:50]),  # Top 50
+        "home_model": dict(list(home_importance.items())[:50]),
         "away_model": dict(list(away_importance.items())[:50]),
         "win_model": dict(list(win_importance.items())[:50]),
+        "hist_model": dict(list(hist_win_importance.items())[:50]),
     }
 
-    # Write reports
-    with open(os.path.join(out_dir, "training_report.json"), "w", encoding="utf-8") as f:
+    # -------------------------------------------------------------------------
+    # 12. Write reports
+    # -------------------------------------------------------------------------
+    with open(
+        os.path.join(out_dir, "training_report.json"), "w", encoding="utf-8"
+    ) as f:
         json.dump(asdict(summary), f, indent=2)
 
     with open(os.path.join(out_dir, "metadata.json"), "w", encoding="utf-8") as f:
         json.dump(metadata, f, indent=2)
 
-    with open(os.path.join(out_dir, "feature_importance.json"), "w", encoding="utf-8") as f:
+    with open(
+        os.path.join(out_dir, "feature_importance.json"), "w", encoding="utf-8"
+    ) as f:
         json.dump(feature_importance, f, indent=2)
 
     log.info("=" * 60)
@@ -862,53 +1094,16 @@ def main(data_path: str, out_dir: str) -> None:
     log.info("  - home_model.joblib")
     log.info("  - away_model.joblib")
     log.info("  - win_clf_calibrated.joblib")
+    log.info("  - hist_win_clf_calibrated.joblib")
     log.info("  - metadata.json")
     log.info("  - training_report.json")
     log.info("  - feature_importance.json")
     log.info("=" * 60)
 
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Train leak-free NFL ML models with time-aware CV.",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  python train_models.py --data backend/data/game_features_2014_2025.csv --out backend/models
-  python train_models.py --data data/game_features.csv --out models --hp-niter 20 --n-jobs 4
-        """,
-    )
-    parser.add_argument(
-        "--data", type=str,
-        default="./backend/data/game_features_2014_2025.csv",
-        help="Path to features CSV",
-    )
-    parser.add_argument(
-        "--out", type=str,
-        default="backend/models",
-        help="Output directory for artifacts",
-    )
-    parser.add_argument(
-        "--n-jobs", type=int,
-        default=N_JOBS,
-        help=f"Parallel jobs for CV (default: {N_JOBS})",
-    )
-    parser.add_argument(
-        "--hp-niter", type=int,
-        default=HP_N_ITER,
-        help=f"RandomizedSearchCV iterations (default: {HP_N_ITER})",
-    )
-    parser.add_argument(
-        "--cv-splits", type=int,
-        default=N_SPLITS,
-        help=f"TimeSeriesSplit folds (default: {N_SPLITS})",
-    )
-
+if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser(description="Train NFL ML models")
+    parser.add_argument("--data", type=str, default="data/game_features_2014_2025.csv", help="Path to game features CSV")
+    parser.add_argument("--out", type=str, default="models", help="Output directory for model artifacts")
     args = parser.parse_args()
-
-    # Override globals with CLI args
-    HP_N_ITER = args.hp_niter
-    N_SPLITS = args.cv_splits
-    N_JOBS = args.n_jobs
-
-    main(args.data, args.out)
+    main(data_path=args.data, out_dir=args.out)

@@ -1,5 +1,11 @@
 # Alfred Activity Log
 
+## 2025-12-08T06:35:00Z
+
+- Fixed training pipeline crash in `backend/train_models.py` caused by `TrainingSummary` missing `hist_model_metrics` when saving reports.
+- Hardened feature-importance extraction to unwrap `CalibratedClassifierCV` so calibrated pipelines expose their underlying estimators for importance mapping.
+- Pending: rerun `python backend/train_models.py --data backend/data/game_features_2014_2025.csv --out backend/models/prod_models` and redeploy artifacts to Heroku/Vercel.
+
 ## 2025-12-07T09:40:00Z
 
 - **Reverted all uncommitted changes** to clean working state at commit `793634d52`
@@ -12,7 +18,7 @@
 - **Restored missing frontend API helpers** for build stability
   - Added `getHealthStatus`, `getPredictionHistory`, `startTraining`, and `getStatusOverview` exports in `frontend/src/api/client.js`
   - StatsPage and PredictionContext build now succeeds (`npm run build` passes)
- - Build check: `npm run build` (frontend) now succeeds
+- Build check: `npm run build` (frontend) now succeeds
 
 ## 2025-11-23T06:50:53Z
 
@@ -79,7 +85,7 @@ Risks / Follow-ups:
 
 Heroku logs revealed:
 
-```
+```plaintext
 ModuleNotFoundError: No module named 'pydantic._internal'
 ```
 

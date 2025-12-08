@@ -38,8 +38,8 @@
  *   • “Defensive rendering”: optional chaining (?.) + nullish checks keep UI robust against partial data.
  *   • “Single responsibility” helpers: keeps the map() clean and self-documenting.
  */
-
-import React, { useMemo } from "react";
+import React from 'react'
+import { useMemo } from "react";
 
 /* ---------- tiny utilities ---------- */
 
@@ -48,10 +48,10 @@ const firstNonNullish = (...values) => values.find((v) => v != null);
 
 /** Convert a probability in [0..1] to an integer percentage, or null if invalid. */
 const toWholePercent = (prob) => (
-    typeof prob === "number" ? 
+    typeof prob === "number" ?
     Math.round(prob * 100) : null);
 
-    
+
 /** Safely coerce many timestamp shapes to a Date, or null if not present. */
 const toDateOrNull = (value) => {
   if (value == null) return null;
@@ -75,7 +75,7 @@ const extractHomeWinProbability = (event) =>
   );
 
 
- 
+
 
 /** Build a readable game label, or a generic entry label if no game info exists. */
 const buildGameLabel = (event, index) => {

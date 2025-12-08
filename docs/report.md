@@ -6,6 +6,15 @@ This report documents incremental changes to the NFL_ML_Predictions repository, 
 
 ## Recent Changes
 
+- Date/Time: 2025-12-08 / 06:35 UTC.
+  - Files Modified: `backend/train_models.py`, `alfred.log.md`.
+  - Change Description:
+    - Added `hist_model_metrics` to `TrainingSummary` to resolve the TypeError raised during training report serialization.
+    - Updated feature-importance extraction to unwrap `CalibratedClassifierCV` so calibrated pipelines expose their underlying estimators for importance mapping.
+  - Why Made: Training run aborted while saving reports because `TrainingSummary` did not accept `hist_model_metrics`; calibrated classifiers also could not expose importances, emitting warnings.
+  - Impact: Training can complete report generation without crashing; calibrated classifiers now yield feature importance data. A retrain is still required to regenerate artifacts and metadata before deployment.
+  - Quality Gates: Build/Tests: Not Run (code-only fix). Retrain/Deploy: Pending.
+
 - Date/Time: 2025-12-06 / 00:00 UTC.
   - Files Modified: `backend/main.py`, `frontend/src/api/client.js`, `alfred.log.md`.
   - Change Description:

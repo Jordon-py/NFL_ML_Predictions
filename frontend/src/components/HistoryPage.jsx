@@ -14,6 +14,8 @@
  *   - Render cost is dominated by the chart, typically O(n) over history length.
  *   - Re-renders when context `state.history` changes.
  */
+import React from 'react'
+import { useState, useEffect } from 'react';
 import { usePredictions } from '../PredictionContext.jsx';
 import HistoryChart from './HistoryChart.jsx';
 import NavBar from './NavBar/NavBar.jsx';
