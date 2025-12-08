@@ -16,12 +16,12 @@ Key Endpoints:
     - /predict/next-week: Batch predictions for next scheduled week.
 
 Dependencies:
-    - DATASET_PATH, SCHEDULE_PATH,ALLOWED_ORIGINS, ALLOWED_ORIGINS, SERVE_FRONTEND (from .env)
+    - DATASET_PATH, SCHEDULE_PATH,ALLOWED_ORIGINS, SERVE_FRONTEND (from .env)
     - Models and metadata in backend/models/
     - Engineered features in backend/data/game_features.csv
 
     Run:
-        uvicorn backend.main:app --reload --port 5000
+        python uvicorn backend.main:app --reload --port 5000
 
     Maintainer Notes:
         - All endpoints return JSON; errors use HTTPException.
@@ -57,50 +57,28 @@ try:
 except Exception:
     check_is_fitted = None
     SKLEARN_CHECK_AVAILABLE = False
-from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-# Load .env
-# Load .env from backend directory or repository root for consistent environment variable loading
-backend_dir = Path(__file__).parent
-repo_root = backend_dir.parent
-dotenv_loaded = load_dotenv(backend_dir / ".env")
-if not dotenv_loaded:
-    load_dotenv(repo_root / ".env")
+from .config import (
+    ALLOW_FALLBACK_PREDICTIONS,
+    BACKEND_DIR,
+    BASE_DIR,
+    DATA_DIR,
+    DEFAULT_DATASET,
+    DEFAULT_SCHEDULE,
+    FRONTEND_BUILD,
+    FRONTEND_DIST,
+    LOG_DIR,
+    MODELS_DIR,
+    SERVE_FRONTEND,
+    TRUTHY,
+    resolve_cors,
+)
 
-# -----------------------
-# Paths and constants
-# -----------------------
-THIS_FILE = Path(__file__).resolve()
-BACKEND_DIR = THIS_FILE.parent
-BASE_DIR = BACKEND_DIR.parent
-DATA_DIR = BACKEND_DIR / "data"
-MODELS_DIR = BACKEND_DIR / "models"
-LOG_DIR = BACKEND_DIR / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
-
-# ---------------------------------------------------------------------
-# Use game_features.csv which has the engineered features (prior stats, differentials, betting data)
-# merged_game_features.csv only has raw stats and won't work with trained models
-# ---------------------------------------------------------------
-# Default dataset/schedule paths (relative to backend/data). Avoid leading slashes to prevent absolute-root resolution.
-DEFAULT_DATASET = DATA_DIR / "game_features.csv"
-DEFAULT_SCHEDULE = DATA_DIR / "Nfl_schedule_2025_2026.csv"
-
-FRONTEND_DIR = BASE_DIR / "frontend"
-FRONTEND_BUILD = FRONTEND_DIR / "build"
-FRONTEND_DIST = FRONTEND_DIR / "dist"
-
-TRUTHY = {"true", "t", "1", "yes", "y"}
-SERVE_FRONTEND = os.getenv("SERVE_FRONTEND", "false").strip().lower() in TRUTHY
-
-# Configuration: whether to allow fallback/dummy predictions when features or
-# win-models are missing. Set to 'false' to reject predictions that rely on
-# fallbacks and force clients to only accept predictions produced by trained models.
-ALLOW_FALLBACK_PREDICTIONS = os.getenv("ALLOW_FALLBACK_PREDICTIONS", "false").strip().lower() in TRUTHY
 
 # Logging
 logging.config.dictConfig(
@@ -133,35 +111,10 @@ log = logging.getLogger("api")
 model_objects: Optional[Dict[str, Any]] = None
 dataset_df: Optional[pd.DataFrame] = None
 
-# CORS configuration
-DEFAULT_ALLOWED_ORIGINS: List[str] = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "https://nfl-ml-predictions.vercel.app",
-    "https://nfl-ml-predictions-pr5uahmqx-christopher-jordons-projects.vercel.app",
-    "https://nfl-predict-6fghcp7sx-christopher-jordons-projects.vercel.app",
-    "https://new-nfl-predict.vercel.app",
-    "http://www.nfl-predict.vercel.app",
-]
+ALLOWED_ORIGINS, ALLOW_ORIGIN_REGEX = resolve_cors()
+log.info("CORS allow_origins=%s allow_origin_regex=%s", ALLOWED_ORIGINS, ALLOW_ORIGIN_REGEX)
 
-
-def parse_allowed_origins() -> List[str]:
-    """Parse ALLOWED_ORIGINS env var and fall back to curated defaults."""
-    raw = os.getenv("ALLOWED_ORIGINS", "nfl-ml-predictions.vercel.app/").strip()
-    entries = [o.strip() for o in raw.split(",") if o.strip()]
-    return entries or DEFAULT_ALLOWED_ORIGINS
-
-
-if os.getenv("RESTRICT_CORS", "False").strip().lower() in TRUTHY:
-    ALLOWED_ORIGINS = parse_allowed_origins()
-    log.info("CORS restricted to ALLOWED_ORIGINS: %s", ALLOWED_ORIGINS)
-else:
-    ALLOWED_ORIGINS = ["nfl-ml-predictions.vercel.app/"]
-    log.info("CORS configured to allow all origins (ALLOWED_ORIGINS='nfl-ml-predictions.vercel.app/')")
-
-allow_origin_regex_env = os.getenv("ALLOWED_ORIGIN_REGEX", "").strip()
-ALLOW_ORIGIN_REGEX = allow_origin_regex_env or r"https://.*//.vercel//.app$"
-
+# ------------------------------------------------------------------------
 # ⚠️ Add ANY custom middlewares BEFORE this line (auth/logging/sentry/etc)
 # Teams
 TEAM_ABBREVIATIONS = {
@@ -284,7 +237,9 @@ def load_objects() -> Dict[str, Any]:
             - raw_feature_columns: dict of feature columns
             - win_threshold_optimal: float, optimal win threshold
     """
-    meta_path = MODELS_DIR / "metadata.json"
+    # Production models in backend/models/prod_models/
+    PROD_MODELS_DIR = MODELS_DIR / "prod_models"
+    meta_path = PROD_MODELS_DIR / "metadata.json"
     log.debug("Loading model metadata from %s", meta_path)
     if not meta_path.exists():
         raise FileNotFoundError(f"Missing {meta_path}")
@@ -293,7 +248,7 @@ def load_objects() -> Dict[str, Any]:
 
     def resolve_model_path(meta_key: str, fallback: str) -> Path:
         candidate = Path(meta.get(meta_key, fallback))
-        candidate = candidate if candidate.is_absolute() else MODELS_DIR / candidate
+        candidate = candidate if candidate.is_absolute() else PROD_MODELS_DIR / candidate
         return _resolve_case_insensitive(candidate)
 
     preprocessor = joblib.load(resolve_model_path("preprocessor", "preprocessor.joblib"))
@@ -573,7 +528,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     if not ds_path.exists():
         log.warning("✗ Dataset not found at %s", ds_path)
         # Check alternate locations
-        alternates = DATA_DIR / "merge_dominance.csv",
+        alternates = DATA_DIR / "./game_features_2014_2025.csv",
 
 
 
