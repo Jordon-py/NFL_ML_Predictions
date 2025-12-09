@@ -1,266 +1,133 @@
-"""
-NFL Game Prediction API — FastAPI Entrypoint
-
-Architectural Role:
-    - Main backend entrypoint for NFL game predictions and reporting.
-    - Loads ML models, engineered datasets, and serves as the API gateway.
-    - Integrates with FastAPI, pandas, joblib, and environment configuration (.env).
-
-Key Endpoints:
-    - /health: Service and model status.
-    - /debug: Metadata and config diagnostics.
-    - /report/training: Model training report.
-    - /report/calibration: Classifier calibration metrics.
-    - /schedule/next-week: Upcoming NFL games (from schedule CSV).
-    - /predict: Predict scores and win probabilities for a given matchup.
-    - /predict/next-week: Batch predictions for next scheduled week.
-
-Dependencies:
-    - DATASET_PATH, SCHEDULE_PATH,ALLOWED_ORIGINS, SERVE_FRONTEND (from .env)
-    - Models and metadata in backend/models/
-    - Engineered features in backend/data/game_features.csv
-
-    Run:
-        python uvicorn backend.main:app --reload --port 5000
-
-    Maintainer Notes:
-        - All endpoints return JSON; errors use HTTPException.
-        - Models are loaded once at startup for performance.
-        - Frontend static files can be served if configured.
-
----------------------------------------------------------------------
-    # File: backend/main.py
-    # Purpose: FastAPI backend entrypoint for NFL ML Predictions (startup, health, predict, reports)
-    # Functions: lifespan, health, debug_info, report_training, report_calibration, predict_game, _sanity_predict, _validate_features_present, _ensure_home_away, etc.
-    # Variables: MODELS_DIR, ALLOWED_ORIGINS, model_objects, dataset_df
-    # Interacts With: models/ (preprocessor + models + metadata.json + training_report*.json), frontend via REST, train/build scripts
-"""
-
-
-from __future__ import annotations
-
-import json
-import logging
-import logging.config
-import math  # used by probability fallback and any sigmoid-like helpers
 import os
+import json
+import math
+import logging
+from pathlib import Path
+from typing import Dict, Any, List, Optional, AsyncGenerator
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any, AsyncGenerator, Dict, List, Optional
+import nflreadpy as nfl
 import joblib
-import numpy as np
 import pandas as pd
-try:
-    from sklearn.utils.validation import check_is_fitted
-    SKLEARN_CHECK_AVAILABLE = True
-except Exception:
-    check_is_fitted = None
-    SKLEARN_CHECK_AVAILABLE = False
+import numpy as np
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-import nflreadpy as nfl
+from dotenv import load_dotenv
 
-from .config import (
-    ALLOW_FALLBACK_PREDICTIONS,
-    BACKEND_DIR,
-    BASE_DIR,
-    DATA_DIR,
-    DEFAULT_DATASET,
-    DEFAULT_SCHEDULE,
-    FRONTEND_BUILD,
-    FRONTEND_DIST,
-    LOG_DIR,
-    MODELS_DIR,
-    SERVE_FRONTEND,
-    TRUTHY,
-    resolve_cors,
-)
-
-LOG_DIR.mkdir(parents=True, exist_ok=True)
-
-# Logging
-logging.config.dictConfig(
-    {
-        "version": 1,
-        "disable_existing_loggers": False,
-        "formatters": {
-            "d": {"format": "%(asctime)s %(levelname)s %(name)s %(message)s"}
-        },
-        "handlers": {
-            "console": {
-                "class": "logging.StreamHandler",
-                "level": "INFO",
-                "formatter": "d",
-            },
-            "file": {
-                "class": "logging.FileHandler",
-                "level": "DEBUG",
-                "formatter": "d",
-                "filename": str(LOG_DIR / "api.log"),
-                "encoding": "utf-8",
-            },
-        },
-        "root": {"level": "DEBUG", "handlers": ["console", "file"]},
-    }
-)
-log = logging.getLogger("api")
-
-# Globals
-model_objects: Optional[Dict[str, Any]] = None
-dataset_df: Optional[pd.DataFrame] = None
-
-ALLOWED_ORIGINS, ALLOW_ORIGIN_REGEX = resolve_cors()
-log.info("CORS allow_origins=%s allow_origin_regex=%s", ALLOWED_ORIGINS, ALLOW_ORIGIN_REGEX)
-
-# ------------------------------------------------------------------------
-# ⚠️ Add ANY custom middlewares BEFORE this line (auth/logging/sentry/etc)
-# Teams
-TEAM_ABBREVIATIONS = {
-    "Arizona Cardinals": "ARI",
-    "Atlanta Falcons": "ATL",
-    "Baltimore Ravens": "BAL",
-    "Buffalo Bills": "BUF",
-    "Carolina Panthers": "CAR",
-    "Chicago Bears": "CHI",
-    "Cincinnati Bengals": "CIN",
-    "Cleveland Browns": "CLE",
-    "Dallas Cowboys": "DAL",
-    "Denver Broncos": "DEN",
-    "Detroit Lions": "DET",
-    "Green Bay Packers": "GB",
-    "Houston Texans": "HOU",
-    "Indianapolis Colts": "IND",
-    "Jacksonville Jaguars": "JAX",
-    "Kansas City Chiefs": "KC",
-    "Las Vegas Raiders": "LV",
-    "Los Angeles Chargers": "LAC",
-    "Los Angeles Rams": "LAR",
-    "Miami Dolphins": "MIA",
-    "Minnesota Vikings": "MIN",
-    "New England Patriots": "NE",
-    "New Orleans Saints": "NO",
-    "New York Giants": "NYG",
-    "New York Jets": "NYJ",
-    "Philadelphia Eagles": "PHI",
-    "Pittsburgh Steelers": "PIT",
-    "San Francisco 49ers": "SF",
-    "Seattle Seahawks": "SEA",
-    "Tampa Bay Buccaneers": "TB",
-    "Tennessee Titans": "TEN",
-    "Washington Commanders": "WAS",
-}
-TEAM_CODE_FIX = {"LA": "LAR", "STL": "LAR", "SD": "LAC", "OAK": "LV", "WSH": "WAS"}
-VALID_ABBRS = set(TEAM_ABBREVIATIONS.keys()) | set(TEAM_CODE_FIX.keys()) | set(TEAM_ABBREVIATIONS.values())
-def _normalize_feature_cols(cols: Dict[str, List[str]] | List[str]) -> List[str]:
-    """Normalize feature columns to a flat list.
-
-    Accepts either a dict with 'numeric' and 'categorical' lists (preferred)
-    or a legacy flat list of feature names. Returns a single flat list.
-    """
-    if isinstance(cols, dict):
-        return cols.get("numeric", []) + cols.get("categorical", [])
-    if isinstance(cols, list):
-        return cols
-    return []
-
-
-def to_team_abbr(name: str) -> str:
-    """
-    Convert a team name/legacy code/abbreviation to its canonical 2–3 letter code.
-
-    Resolution order:
-      1) Legacy/relocation fixes (TEAM_CODE_FIX: e.g., 'SD'->'LAC', 'STL'->'LAR')
-      2) Official full names (TEAM_ABBREVIATIONS: e.g., 'Seattle Seahawks'->'SEA')
-      3) Already-canonical abbreviations (e.g., 'SEA'->'SEA')
-
-    Raises:
-        ValueError if the team is unknown.
-    """
-    n = str(name).strip()
-    # 1) Legacy/relocation codes
-    if n in TEAM_CODE_FIX:
-        return TEAM_CODE_FIX[n]
-    # 2) Official full names -> abbr
-    if n in TEAM_ABBREVIATIONS:
-        return TEAM_ABBREVIATIONS[n]
-    # 3) Already canonical abbr
-    if n in VALID_ABBRS:
-        return TEAM_CODE_FIX.get(n, n)
-    raise ValueError(f"Unknown team: {name}")
-
-
+load_dotenv(".env")
+load_dotenv(".env")
 # -----------------------
-def _resolve_case_insensitive(path: Path) -> Path:
-    """
-    Resolve a file path in a case-insensitive manner within its parent dir.
+# Configuration
+# -----------------------
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger(__name__)
 
-    If the exact path exists, return it. Otherwise, search the parent directory
-    for a filename that matches case-insensitively and return that path if found.
-    If no match is found, return the original path (which may not exist).
+# Global state containers so /health and helpers never see NameError
+model_objects: Optional[Dict[str, Any]] = None
+dataset_df: Optional[pd.DataFrame] = pd.DataFrame()
+
+BACKEND_DIR = Path(__file__).resolve().parent
+DATA_DIR = BACKEND_DIR / "data"
+
+# Allow overriding model directory via env var.
+# Example (PowerShell):
+#   setx MODELS_DIR "C:\Users\goku\Documents\NFL_ML_Predictions\backend\prod-models\models"
+MODELS_DIR = Path(
+    os.getenv(
+        "MODELS_DIR",
+        str(BACKEND_DIR / "prod-models" / "models"),
+    )
+)
+
+DEFAULT_DATASET = BACKEND_DIR / "game_features_20251208.csv"
+DEFAULT_SCHEDULE = DATA_DIR / "Nfl_schedule_2025.csv"
+
+# Metadata path can also be overridden; by default we look inside MODELS_DIR.
+PROD_MODELS_PATH = Path(
+    os.getenv(
+        "PROD_MODELS_PATH",
+        str(MODELS_DIR / "metadata.json"),
+    )
+)
+
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "").split(",")
+ALLOW_ORIGIN_REGEX = os.getenv("ALLOW_ORIGIN_REGEX")
+SERVE_FRONTEND = os.getenv("SERVE_FRONTEND", "false").lower() == "true"
+FRONTEND_BUILD = BACKEND_DIR.parent / "frontend" / "build"
+FRONTEND_DIST = BACKEND_DIR.parent / "frontend" / "dist"
+ALLOW_FALLBACK_PREDICTIONS = os.getenv("ALLOW_FALLBACK_PREDICTIONS", "true").lower() == "true"
+
+TEAM_CODE_FIX = {
+    "WSH": "WAS",
+    "HST": "HOU",
+    "CLV": "CLE",
+    "BLT": "BAL",
+    "ARZ": "ARI",
+}
+
+def to_team_abbr(t: str) -> str:
+    return TEAM_CODE_FIX.get(t, t)
+
+def resolve_model_path(key: str, filename: str) -> Path:
+    env_val = os.getenv(f"MODEL_PATH_{key.upper()}")
+    if env_val:
+        return Path(env_val)
+    return MODELS_DIR / filename
+
+def _normalize_feature_cols(raw: Any) -> List[str]:
+    """Normalize raw_feature_columns metadata into a flat list of feature names.
+
+    Supports:
+      - dict form: {"numeric": [...], "categorical": [...]}
+      - sequence / pandas Index of column names
+      - single value fallback
+
+    Returns:
+        List[str]: feature names as strings.
     """
-    try:
-        if path.exists():
-            return path
-        parent = path.parent
-        needle = path.name.lower()
-        if parent.exists():
-            for p in parent.iterdir():
-                try:
-                    if p.name.lower() == needle:
-                        return p
-                except Exception:
-                    continue
-    except Exception:
-        pass
-    return path
+    if raw is None:
+        return []
+
+    # Dict form from metadata.json
+    if isinstance(raw, dict):
+        cols: List[str] = []
+        for key in ("numeric", "categorical"):
+            vals = raw.get(key)
+            if isinstance(vals, (list, tuple, set, np.ndarray, pd.Index)):
+                cols.extend([str(c) for c in vals])
+        return cols
+
+    # Sequence / Index form
+    if isinstance(raw, (list, tuple, set, np.ndarray, pd.Index)):
+        return [str(c) for c in raw]
+
+    # Fallback: treat as single column name
+    return [str(raw)]
 
 
 def load_objects() -> Dict[str, Any]:
-    """
-    Load model metadata and instantiate reusable predictors for the API.
+    """Load ML models and metadata from disk."""
+    log.info("Loading models from %s", MODELS_DIR)
 
-    Loads the following models from disk:
-        - preprocessor: Feature engineering pipeline (joblib)
-        - home_model: Home team score regressor (joblib or dict with 'hgbr', 'ridge', 'weight')
-        - away_model: Away team score regressor (joblib or dict with 'hgbr', 'ridge', 'weight')
-        - win_model: Calibrated win probability classifier (joblib, optional)
-
-    Returns:
-        dict with keys:
-            - mode: str, operational mode (e.g., "production")
-            - preprocessor: sklearn pipeline or transformer
-            - home_model: regressor or ensemble dict
-            - away_model: regressor or ensemble dict
-            - win_model: classifier or None
-            - raw_feature_columns: dict of feature columns
-            - win_threshold_optimal: float, optimal win threshold
-    """
-    # Production models in backend/models/prod_models/
-    PROD_MODELS_DIR = BACKEND_DIR / "prod_models" / "models"
-    meta_path = PROD_MODELS_DIR / "metadata.json"
-    log.debug("Loading model metadata from %s", meta_path)
-    if not meta_path.exists():
-        raise FileNotFoundError(f"Missing {meta_path}")
-
-    meta = json.loads(meta_path.read_text(encoding="utf-8"))
-
-    def resolve_model_path(meta_key: str, fallback: str) -> Path:
-        candidate = Path(meta.get(meta_key, fallback))
-        candidate = candidate if candidate.is_absolute() else PROD_MODELS_DIR / candidate
-        return _resolve_case_insensitive(candidate)
+    meta_path = Path(PROD_MODELS_PATH)
+    if meta_path.exists():
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    else:
+        meta = {}
 
     preprocessor = joblib.load(resolve_model_path("preprocessor", "preprocessor.joblib"))
-    feature_names_in: List[str] = []
-    try:
-        if hasattr(preprocessor, "feature_names_in_"):
-            feature_names_in = [str(c) for c in list(preprocessor.feature_names_in_)]
-        elif hasattr(preprocessor, "get_feature_names_out"):
-            feature_names_in = [str(c) for c in list(preprocessor.get_feature_names_out())]
-    except Exception:
-        feature_names_in = []
+
+    feature_names_in = []
+    if hasattr(preprocessor, "get_feature_names_out"):
+        try:
+            feature_names_in = list(preprocessor.get_feature_names_out())
+        except Exception:
+            pass
+    elif hasattr(preprocessor, "feature_names_in_"):
+        feature_names_in = list(preprocessor.feature_names_in_)
+
     home_model = joblib.load(resolve_model_path("home_model", "home_model.joblib"))
     away_model = joblib.load(resolve_model_path("away_model", "away_model.joblib"))
     # Fix: load win_model from path if it exists; previous code attempted to treat a loaded object as a Path.
@@ -405,7 +272,7 @@ def _sanity_predict(model_objects: Dict[str, Any], df: pd.DataFrame) -> None:
         # Avoid absolute-root paths; fall back to DEFAULT_DATASET if available
         fallback_path = Path(os.getenv("DATASET_PATH", str(DEFAULT_DATASET)))
         df = pd.read_csv(fallback_path) if fallback_path.exists() else pd.DataFrame()
-        print(df.head())
+        # log.debug("Sanity-predict fallback dataset head:\n%s", df.head())
         features = {c: 0 for c in model_objects.get("raw_feature_columns", {}).get("numeric", [])}
 
     # Build a single-row DataFrame for sanity transform
