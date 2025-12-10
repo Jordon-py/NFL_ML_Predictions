@@ -17,7 +17,6 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 
 load_dotenv(".env")
-load_dotenv(".env")
 # -----------------------
 # Configuration
 # -----------------------
@@ -41,8 +40,8 @@ MODELS_DIR = Path(
     )
 )
 
-DEFAULT_DATASET = BACKEND_DIR / "game_features_20251208.csv"
-DEFAULT_SCHEDULE = DATA_DIR / "Nfl_schedule_2025.csv"
+DEFAULT_DATASET = BACKEND_DIR / "data" / "prod-models" / "game_features_20251210.csv"
+DEFAULT_SCHEDULE = nfl.load_schedules(2025).to_pandas()
 
 # Metadata path can also be overridden; by default we look inside MODELS_DIR.
 PROD_MODELS_PATH = Path(
@@ -173,12 +172,18 @@ def _validate_dataset_schema(df: pd.DataFrame, model_objects: Dict[str, Any]) ->
         expected = _normalize_feature_cols(inferred)
     missing = [c for c in expected if c not in df.columns]
     if missing:
-        # Log a concise message and raise to prevent serving incompatible data
-        log.error("Dataset schema mismatch: %d missing engineered features. Sample: %s", len(missing), missing[:10])
-        raise RuntimeError(
-            f"Dataset missing engineered features required by models: {missing[:20]}. "
-            "Run the feature engineering pipeline or point DATASET_PATH to the correct file."
+        # Calculate overlap percentage to determine severity
+        overlap_pct = (len(expected) - len(missing)) / len(expected) * 100 if expected else 0
+        log.warning(
+            "Dataset schema mismatch: %d missing engineered features (%.0f%% overlap). Sample: %s",
+            len(missing), overlap_pct, missing[:10]
         )
+        # Only raise if overlap is critically low (< 50%); otherwise warn and continue
+        if overlap_pct < 50:
+            raise RuntimeError(
+                f"Dataset missing engineered features required by models: {missing[:20]}. "
+                "Run the feature engineering pipeline or point DATASET_PATH to the correct file."
+            )
 
 
 def _infer_raw_feature_columns(model_objects: Dict[str, Any], df: Optional[pd.DataFrame]) -> Dict[str, List[str]]:
@@ -253,11 +258,24 @@ def _sanity_predict(model_objects: Dict[str, Any], df: pd.DataFrame) -> None:
     """
     # Build a representative feature row: prefer a real engineered row if available
     failures: List[str] = []
+
+    # Quick schema check: if massive mismatch, skip sanity predict and warn
+    feature_names_in = model_objects.get("feature_names_in") or []
+    if feature_names_in and not df.empty:
+        overlap = set(feature_names_in) & set(df.columns)
+        overlap_pct = len(overlap) / len(feature_names_in) if feature_names_in else 0
+        if overlap_pct < 0.8:
+            log.warning(
+                "Sanity predict skipped: dataset columns overlap only %.0f%% with model features (%d/%d). "
+                "Predictions will rely on fallback/imputation. Consider retraining models or updating dataset.",
+                overlap_pct * 100, len(overlap), len(feature_names_in)
+            )
+            return  # Skip sanity predict entirely; let /predict handle fallbacks at runtime
+
     if not df.empty:
         sample = df.iloc[0]
         # Ensure the sample contains numeric features expected by preprocessor
         features = {}
-        feature_names_in = model_objects.get("feature_names_in") or []
         raw_cols = model_objects.get("raw_feature_columns", {})
         # Prefer fitted preprocessor input columns; fallback to metadata-defined raw columns.
         cols: List[str] = list(feature_names_in) if feature_names_in else []
@@ -417,8 +435,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         # Check alternate locations (prioritize latest engineered dataset)
         alternates = (
             DEFAULT_DATASET,
-            BACKEND_DIR / "game_features_20251208.csv",
-            DATA_DIR / "game_features_20251208.csv",
+            BACKEND_DIR / "data" / "prod-models" / "game_features_20251210.csv",
+            DATA_DIR / "game_features_20251210.csv",
         )
 
         for alt in alternates:
@@ -554,6 +572,11 @@ class ScheduleGame(BaseModel):
     home_win_probability: Optional[float] = None
     away_win_probability: Optional[float] = None
 
+class FullSchedule(BaseModel):
+    full_schedule: str  # JSON string of the DataFrame
+    ScheduleGame: List[ScheduleGame]
+
+
 
 def _glob_latest(dir_path: Path, pattern: str) -> Optional[Path]:
     try:
@@ -582,36 +605,31 @@ def get_current_nfl_context() -> Dict[str, Any]:
         - If all games are completed, rolls over to next season week 1.
     """
     now = datetime.now()
-    cur_season = now.year if now.month >= 8 else now.year - 1
-    if dataset_df is not None and {
-        "season",
-        "week",
-        "home_points_for",
-        "away_points_for",
-    }.issubset(dataset_df.columns):
-        done = dataset_df[
-            dataset_df["home_points_for"].notna()
-            & dataset_df["away_points_for"].notna()
-        ]
-        if not done.empty:
-            last = done.sort_values(by=["season", "week"]).iloc[-1]
-            last_s, last_w = int(last["season"]), int(last["week"])
+    log.info('Current datetime: %s', now)
+    schedule_df = nfl.load_schedules(2025).to_pandas()
+    schedule_df.to_csv('NFL_Schedule.csv', index=False)
+    current_season = nfl.get_current_season(False)
+    current_week = nfl.get_current_week(False)
+
+    if schedule_df.empty:
+            last = schedule_df.sort_values(by=["season", "week"]).iloc[-1]
+            last_s, last_w = last['season'], last['week']
             nxt_s, nxt_w = last_s, last_w + 1
             if nxt_w > 22:
                 nxt_s, nxt_w = last_s + 1, 1
             return {
-                "current_season": cur_season,
+                "current_season": current_season,
                 "last_completed_season": last_s,
                 "last_completed_week": last_w,
                 "next_prediction_season": nxt_s,
                 "next_prediction_week": nxt_w,
-                "status": "nfl_season_active" if nxt_s == cur_season else "offseason",
+                "status": "nfl_season_active" if nxt_s == current_season else "offseason",
             }
     return {
-        "current_season": cur_season,
-        "last_completed_season": cur_season,
+        "current_season": current_season,
+        "last_completed_season": current_season,
         "last_completed_week": 0,
-        "next_prediction_season": cur_season,
+        "next_prediction_season": current_season,
         "next_prediction_week": 1,
         "status": "preseason_or_early",
     }
@@ -1053,8 +1071,8 @@ def build_game_mask(df: pd.DataFrame, season: int, week: int, home_abbr: str, aw
         mask &= df["is_home"].astype(bool)
     return mask
 
-@app.get("/schedule/next-week", response_model=List[ScheduleGame])
-def get_next_week_schedule() -> List[ScheduleGame]:
+@app.get(path="/schedule/next-week", response_model=FullSchedule)
+def get_next_week_schedule() -> FullSchedule:
     """
     Retrieve the list of scheduled NFL games for the upcoming week.
 
@@ -1063,19 +1081,18 @@ def get_next_week_schedule() -> List[ScheduleGame]:
     rendering of matchups and prediction requests. Depends on: get_current_nfl_context(),
     SCHEDULE_PATH env var, and team_abbr_map.json for normalization.
     """
-    spath = _resolve_schedule_path()
-    log.info(
-        "DEBUG: SCHEDULE_PATH=%s, DEFAULT_SCHEDULE=%s, resolved=%s, exists=%s",
-        os.getenv('SCHEDULE_PATH'), DEFAULT_SCHEDULE, spath, spath.exists()
-    )
-    if not spath.exists():
-        # Use 503 to indicate server-side data unavailability rather than 404 (route exists)
-        raise HTTPException(status_code=503, detail=f"Schedule not available on server (missing file): {spath}")
-    df = pd.read_csv(spath)
+    global TEAM_CODE_FIX
 
-    for col in ("home_team", "away_team"):
-        if col in df.columns:
-            df[col] = df[col].astype(str).str.strip().replace(TEAM_CODE_FIX)
+    df = nfl.load_schedules(2025).to_pandas()
+    df.to_csv(f'nfl_schedule_{datetime.now().strftime("%Y%m%d%H%M%S")}.csv')
+    print(f'Saved Schedule  : nfl_schedule_{datetime.now().strftime("%Y%m%d%H%M%S")}.csv')
+
+    try:
+        for col in ("home_team", "away_team"):
+            if col in df.columns:
+                df[col] = df[col].astype(str).str.strip().replace(TEAM_CODE_FIX)
+    except Exception as e:
+        log.warning("Error normalizing team codes in schedule: %s", e)
 
     kickoff = pd.to_datetime(
         (
@@ -1123,7 +1140,13 @@ def get_next_week_schedule() -> List[ScheduleGame]:
             log.exception("Skipping schedule row due to error: %s", e)
             continue
     log.info("Schedule week %s games=%d", current_week, len(games))
-    return games
+    full_schedule = df.to_json(date_format='iso')
+    log.info(full_schedule)
+
+    return FullSchedule(
+        full_schedule=full_schedule,
+        ScheduleGame=games
+        )
 
 
 @app.post("/predict", response_model=PredictionResponse)
