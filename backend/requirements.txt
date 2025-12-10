@@ -1,7 +1,7 @@
 # Production dependencies - optimized for Heroku deployment
 
 # Core web framework
-fastapi==2.0.0
+fastapi==0.124.2
 uvicorn[standard]>=0.23.0,<0.25.0
 gunicorn>=21.2.0,<22.0.0
 
