@@ -4,6 +4,33 @@
 
 This report documents incremental changes to the NFL_ML_Predictions repository, focusing on bug fixes, code clarity, and architectural integrity. Changes are made with a "Repository Guardian" mindset: holistic awareness, logic simplification, and professional documentation. Current app completion estimate: 100% (full ML pipeline functional; models trained on engineered features; predictions ready for integration).
 
+## Active Enhancements Under Development
+
+- **Date/Time:** 2025-12-04 / 17:20 UTC
+  - **Focus:** Reactivated Copilot instructions + Alfred persona; refreshed operational backlog to align with deployment readiness directives.
+  - **Key Actions:**
+    - Reviewed latest report entries to ground the activation in documented history.
+    - Updated `docs/alfred.log.md` Task Memory (items 3–5) to track: (a) git history cleanup + force push, (b) production endpoint revalidation, (c) README model metrics table publication.
+    - Logged the activation session inside `alfred.log.md`, including next steps and health estimate.
+  - **Upcoming Steps:**
+    1. Execute git cleanup/force-push once user provides confirmation token.
+    2. Run `/health`, `/schedule/next-week`, and `/predict` smoke tests post-cleanup and capture evidence.
+    3. Draft the README evaluation table using the latest holdout metrics before surfacing to stakeholders.
+  - **App Completion Estimate:** 87% (unchanged pending verification + documentation work).
+  - **Enhancement Suggestion:** Automate Active Enhancements status generation (e.g., script draws from Alfred log tasks) to keep docs/report.md synchronized with minimal manual edits.
+- **Date/Time:** 2025-12-04 / 17:55 UTC
+  - **Focus:** Production smoke test + model ledger creation.
+  - **Key Actions:**
+    - Hit `/health`, `/schedule/next-week`, and `/predict` on Heroku; all returned "Application Error" (Heroku dyno crash). Evidence captured for follow-up.
+    - Authored `docs/training_runs.md` with historical training metadata (dataset scope, hyperparameters, validation metrics, artifact roots).
+    - Added "Model Performance Snapshot" table to `README.md` referencing the 2025-12-01 promoted run.
+  - **Upcoming Steps:**
+    1. Inspect Heroku logs / dyno status to restore backend availability.
+    2. Once healthy, rerun the smoke suite and update ledger entries if a new training run replaces 20251201.
+    3. Extend the ledger automation to ingest future `cv_fold_metrics.csv` outputs for trend charts.
+  - **App Completion Estimate:** 87% (blocked on backend uptime).
+  - **Enhancement Suggestion:** Add a CI step that exercises `/health` + `/predict` after deployments to catch Heroku crashes faster.
+
 ## Recent Changes
 
 - Date/Time: 2025-12-08 / 23:59 UTC.

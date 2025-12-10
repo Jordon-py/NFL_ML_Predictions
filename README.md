@@ -94,6 +94,12 @@ npm start
 
 The application will be available at `http://localhost:3000`
 
+## Model Performance Snapshot (Latest)
+
+| Run Date (UTC) | Dataset | Features | Home MAE / RMSE | Away MAE / RMSE | Win Brier / LogLoss / Acc | Notes |
+|----------------|---------|----------|------------------|------------------|---------------------------|-------|
+| 2025-12-01 16:33 | 2,611 games × 136 cols | Prior efficiency diffs, player aggregates, betting lines, rest, Elo | 4.45 / 5.85 | 4.36 / 5.57 | 0.123 / 0.388 / 0.825 | GradientBoostingRegressor (scores) + CalibratedClassifierCV (wins), random_state 4211. Full ledger in `docs/training_runs.md`. |
+
 ## Overview
 
 ### Data Acquisition

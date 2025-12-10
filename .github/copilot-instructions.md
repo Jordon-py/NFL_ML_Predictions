@@ -4,12 +4,30 @@
 
 ### Role
 - Quickly orient AI coding agents to the NFL_ML_Predictions repository so they can make safe, small, high-value edits without breaking builds or deployments.
-ALWAYS CHECK AND UPDATE: 'NFL_ML_Predictions\alfred.log.md'
+ALWAYS CHECK AND UPDATE: 'NFL_ML_Predictions\DOCS\alfred.log.md' IMPORTANT(Tasks only) NOT THE LOG ITSELF ONLY UPDATE THE ONGOING TASKS LIST IF NEEDED ALWAYS MAINTAIN THE LOG ACCURATELY WITH DATES AND TIMES OF CHANGES AND A SUMMARY OF WHAT WAS DONE AND KEEP A COPY OF AND POINTER TO ENDPOINTS AND IF THEY WERE CHANGED , BROKEN , OR NEED TO BE UPDATED BASED ON THE STATE OF THE REPO THESE COPIES ARE TO BE KEPT IN THE LOG FOR FUTURE REFERENCE AND TO BE COMPARED PEREIODICALLY TO ENSURE CONSISTENCY IF CHANGES ARE MADE TO THE ENDPOINTS OR ANYTHING ELSE THAT IS RELEVANT TO THE LOG ITSELF NOTIFY THE USER NEXT TIME USER INTERACTS WITH YOU  DO NOTHING ELSE PROVIDE THE WARNING TO THE USER YOU NOTICED A CHANGE IN THE ENPOINTS AND TO PRESS 1 OR 2 TO EITHER REVERT ENDPOINTS TO THE LAST KNOWN GOOD CONFIGURATION OR TO UPDATE THE LOG WITH THE NEW ENDPOINTS AND ANY CHANGES THAT WERE MADE TO THEM
 
 ### Big Picture
 - FastAPI backend exposes prediction APIs and loads ML artifacts. React frontend (Vite) talks to backend via REST `/predict` endpoint. Data flows from CSV datasets → ML models → API responses → UI predictions.
 
 ### Primary Directives
+0. **Comprehensive Contextual Analysis:** Before making any code changes, analyze the entire repository structure, including backend, frontend, configuration files, and documentation. Understand how components interact.
+💾 Integration Directive
+
+Upon each AI or Copilot run:
+
+Read the current Task Table from alfred.log.md.
+
+Preserve Tasks 1 & 2 (persistent core).
+
+Evaluate Tasks 3–7:
+
+Replace only completed or outdated tasks.
+
+Generate replacements aligned with deployment-readiness.
+
+Append change summaries to docs/report.md under “Active Enhancements Under Development.”
+
+
 1. **Holistic Code Awareness:** Always scan full repository context, including backend, frontend, configuration, and documentation files. Infer architectural intent.
 
 2. **Logic Simplification:** Identify and simplify overly complex logic without changing external behavior. Prioritize clarity and maintainability.
@@ -50,6 +68,7 @@ def get_current_nfl_context() -> Dict[str, Any]:
 - Backend: FastAPI on port 8000, CORS from CORS_ORIGINS env var (backend/main.py:L120). No DB/cache/queues.
 - Frontend: Vite dev server proxies to backend, production uses VITE_API_URL.
 - ML: scikit-learn, lightgbm models loaded via joblib (backend/models/).
+- Dataset: Loaded from backend/data/ or DATA_URL fallback if missing (backend/main.py).
 - Deployment: Heroku (Procfile, app.json), Vercel (vercel.json).
 
 ### Cross-Component Communication
@@ -83,6 +102,8 @@ def get_current_nfl_context() -> Dict[str, Any]:
 - Implemented responsive flexbox layout for TeamGrid cards and structured card content with proper spacing and no overlapping stats.
 - Fixed kickoff time display to use user's local timezone instead of Pacific Time.
 - Resolved merge conflict in `backend/models/metadata.json`; backend `/health` now returns healthy with models loaded.
+- Added DATA_URL downloader in backend/main.py for dataset fallback when local file missing.
+- Created backup branch for git history rewrite to remove large tracked virtualenv files.
 
 
 
@@ -109,6 +130,7 @@ Keep this file concise: update only with repository-discoverable facts. After ed
 
 * **Always Active:** Apply these directives in all completions across the repo.
 * **Context Priority:** Treat `.env`, `requirements.txt`, `package.json`, and config files as primary context sources for reasoning.
+* **Git Management:** Exclude virtualenvs (.venv, venv) and node_modules in .gitignore; if large files are committed, use git filter-branch to remove from history before pushing.
 * **Documentation Format:**
 
   * Use Markdown for READMEs and top-level documentation.

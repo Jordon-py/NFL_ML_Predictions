@@ -16,3 +16,4 @@ backend/data/
 *.ts
 
 node_modules/
+*.bundle
