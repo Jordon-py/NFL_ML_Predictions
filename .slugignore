@@ -31,4 +31,20 @@ backend/metrics/data/game_features_new.csv
 *.pyc
 .venv/
 venv/
-.pytest_cache/
+.pytest_cache
+.vercel/
+frontend/*
+!.vercel/output/
+!.json
+*/*.toml
+*.lock
+.pytest_cache/*
+node_modules/*
+frontend/node_modules/*
+.DS_Store
+.env
+.env.*
+
+### Frontend is deployed separately (e.g., Vercel), not needed on Heroku
+
+frontend/
