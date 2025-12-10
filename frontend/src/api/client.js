@@ -17,10 +17,8 @@ const HEROKU_FALLBACK = "https://nfl-predict-ecf5a5bd34fe.herokuapp.com";
 function normalizeBase(base) {
   if (!base) return "";
   let b = String(base).trim();
-  // allow comma-joined mistakes; keep first non-empty
-  if (b.includes(",")) b = b.split(",").map(s => s.trim()).find(Boolean) || "";
-  // remove trailing slashes
-  return b.replace(/\/+$/, "");
+  if (b.includes(",")) b = b.split(",").map(s => s.trim()).find(Boolean) || "";     // allow comma-joined mistakes; keep first non-empty
+  return b.replace(/\/+$/, "");       // remove trailing slashes
 }
 
 function joinUrl(base, path) {
@@ -36,12 +34,12 @@ function resolveApiBase() {
   const fromEnv = normalizeBase(import.meta?.env?.VITE_API_BASE || import.meta?.env?.VITE_API_URL);
   const host = (typeof window !== "undefined" && window.location && window.location.hostname) || "";
   const isLocalHost = /^(localhost|127\.0\.0\.1)$/i.test(host);
-  const base = isLocalHost ? "" : (fromEnv || HEROKU_FALLBACK);
+  const base = isLocalHost ? "http://127.0.0.1:8000" : (fromEnv || HEROKU_FALLBACK);
   // One-time diagnostic: if hosted and no explicit VITE_API_BASE provided, warn about fallback
   if (!isLocalHost && !fromEnv && typeof window !== "undefined" && !window.__NFL_API_BASE_WARNED__) {
     try {
       // eslint-disable-next-line no-console
-      console.warn("[NFL-ML] Using Heroku API fallback. Set VITE_API_BASE or VITE_API_URL to your backend URL to remove this warning.");
+      console.warn("[NFL-ML] Using Heroku API. Set VITE_API_BASE or VITE_API_URL to your backend URL to remove this warning.");
       window.__NFL_API_BASE_WARNED__ = true;
     } catch (_) { /* noop */ }
   }
@@ -137,10 +135,11 @@ const postJson = (path, body, opts = {}) => api(path, { ...opts, method: "POST",
  * Normalize UI params → backend PredictionRequest.
  * Accepts either explicit fields or schedule objects with home/away_abbr.
  */
-function toPredictionRequest({ homeTeam, awayTeam, season, week, home_abbr, away_abbr, home_team, away_team }) {
+function toPredictionRequest({ stadium, homeTeam, awayTeam, season, week, home_abbr, away_abbr, home_team, away_team }) {
   return {
-    home_team: (home_abbr || home_team || homeTeam),
-    away_team: (away_abbr || away_team || awayTeam),
+    stadium: String(stadium),
+    home_team: String(home_abbr || home_team || homeTeam),
+    away_team: String(away_abbr || away_team || awayTeam),
     season: Number(season),
     week: Number(week),
   };
@@ -155,12 +154,11 @@ export function createApi(base = API_BASE) {
 
   return {
     // Health & reports
-    getHealth: () => _get("/health"),
+    getHealth: async () => await _get("/health"),
     // Alias used by hooks that poll training/model readiness
-    getHealthStatus: () => _get("/health"),
-    getTrainingReport: () => _get("/report/training"),
-    getCalibrationReport: () => _get("/report/calibration"),
-
+    getHealthStatus: async () => await _get("/health"),
+    getTrainingReport: async () => await _get("/report/training"),
+    getCalibrationReport: async () => await _get("/report/calibration"),
     // Schedule & batch predictions
     getNextWeekSchedule: () => _get("/schedule/next-week"),
     predictNextWeek: () => _get("/predict/next-week"),
@@ -193,6 +191,7 @@ export const apiClient = createApi();
 // Named exports for direct import
 export const getNextWeekSchedule = apiClient.getNextWeekSchedule;
 export const predictGame = apiClient.predictGame;
+
 export const predictNextWeek = apiClient.predictNextWeek;
 export const getHealth = apiClient.getHealth;
 export const getHealthStatus = apiClient.getHealthStatus;

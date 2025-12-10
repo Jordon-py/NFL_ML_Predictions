@@ -28,7 +28,7 @@ Environment variables:
     RANDOM_SEED   - Random state for reproducibility (default: 42)
 
 Usage:
-    python train_models.py --data 'data/prod-models/game_features_20251208.csv' --out 'data/prod-models/models'
+    python train_models.py --data 'data/prod-models/game_features_20251210.csv' --out 'data/prod-models/models'
 """
 
 # File: backend/train_models.py
@@ -406,7 +406,7 @@ def _fit_regression(
         scoring="neg_mean_absolute_error",
         n_jobs=n_jobs,
         random_state=random_state,
-        verbose=1,
+        verbose=2,
         n_iter=n_iter,
         refit=True,
         error_score="raise",
@@ -519,7 +519,7 @@ def _fit_classifier(
         scoring="neg_log_loss",
         n_jobs=n_jobs,
         random_state=random_state,
-        verbose=1,
+        verbose=3,
         n_iter=n_iter,
         refit=True,
         error_score="raise",
@@ -534,7 +534,7 @@ def _fit_classifier(
         scoring="neg_log_loss",
         n_jobs=n_jobs,
         random_state=random_state,
-        verbose=1,
+        verbose=3,
         n_iter=n_iter,
         refit=True,
         error_score="raise",
@@ -596,13 +596,13 @@ def _fit_classifier(
         # HistGradientBoostingClassifier: sigmoid calibration
         hist_model: BaseEstimator = CalibratedClassifierCV(
             estimator=hist_best,
-            method="sigmoid",
+            method="isotonic",
             cv=5,
             n_jobs=n_jobs,
         )
         hist_model.fit(X, y)
         hist_params["calibrated"] = True
-        hist_params["calibration_method"] = "sigmoid"
+        hist_params["calibration_method"] = "isotonic"
         hist_params["calibration_cv"] = 5
     else:
         log_reg_model = log_reg_best
@@ -876,7 +876,7 @@ def main(data_path: str, out_dir: str) -> None:
             "No features found after leakage sanitization. "
             "Check your dataset or _drop_leaky_columns."
         )
-
+    df[feature_cols].to_csv('prod-dataset.csv')
     X = df[feature_cols].copy()
     for col in num_cols:
         if col in X.columns:
@@ -1103,7 +1103,7 @@ def main(data_path: str, out_dir: str) -> None:
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description="Train NFL ML models")
-    parser.add_argument("--data", type=str, default="data/game_features_2014_2025.csv", help="Path to game features CSV")
-    parser.add_argument("--out", type=str, default="models", help="Output directory for model artifacts")
+    parser.add_argument("--data", type=str, default="data/game_features_20251208.csv", help="Path to game features CSV")
+    parser.add_argument("--out", type=str, default="prod-models/models", help="Output directory for model artifacts")
     args = parser.parse_args()
     main(data_path=args.data, out_dir=args.out)

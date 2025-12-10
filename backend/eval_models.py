@@ -14,7 +14,7 @@ Features:
   - Per-season metric tables for the holdout period
 
 Usage:
-  python eval_models.py --csv-path 'game_features_20251208.csv' --train-end-season 2023 --train-end-week 18
+  python eval_models.py --csv-path 'data/prod-models/game_features_20251210.csv' --train-end-season 2023 --train-end-week 18
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 from typing import List, Tuple, Dict
-
+from joblib import load
 import numpy as np
 import pandas as pd
 
@@ -73,6 +73,12 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=18,
         help="Last week in the final train season to include (inclusive).",
+    )
+    p.add_argument(
+        "--models-dir",
+        type=str,
+        default="data/prod-models/models",
+        help="Directory containing trained model .joblib files.",
     )
     return p.parse_args()
 
@@ -448,7 +454,8 @@ def build_threshold_diagnostics(
     y_pred = (prob_model >= threshold).astype(int)
 
     # Confusion matrix counts: [[TN, FP], [FN, TP]]
-    tn, fp, fn, tp = confusion_matrix(y_true, y_pred).ravel()
+    # Use explicit labels to ensure a 2x2 matrix even if one class is missing.
+    tn, fp, fn, tp = confusion_matrix(y_true, y_pred, labels=[0, 1]).ravel()
 
     cm_df = pd.DataFrame(
         {
@@ -757,19 +764,34 @@ def main() -> None:
         f"(train_end={args.train_end_season} wk {args.train_end_week})"
     )
 
-    numeric_features, categorical_features = build_feature_sets(df)
-    print(f"Numeric features: {len(numeric_features)}")
-    print(f"Categorical features: {categorical_features}")
+    # ----------------------------
+    # Load and use pre-trained score regressors
+    # ----------------------------
+    models_dir = Path(args.models_dir)
+    reg_home_pretrained = load(models_dir / "home_model.joblib")
+    reg_away_pretrained = load(models_dir / "away_model.joblib")
+    hist_win_pretrained = load(models_dir / "hist_win_clf_calibrated.joblib")
+    win_clf_pretrained = load(models_dir / "win_clf_calibrated.joblib")
 
-    # For this evaluation harness we only use numeric features.
+    # Load preprocessor to get expected feature names
+    preprocessor = load(models_dir / "preprocessor.joblib")
+    if hasattr(preprocessor, "feature_names_in_"):
+        numeric_features = list(preprocessor.feature_names_in_)
+        print(f"Using {len(numeric_features)} features from preprocessor")
+    else:
+        numeric_features, _ = build_feature_sets(df)
+        print(f"Fallback: Using {len(numeric_features)} numeric features from dataset")
+
+    # For this evaluation harness we use features expected by the preprocessor.
     X = df[numeric_features].copy()
     y_home_score = df["home_points_for"].to_numpy()
     y_away_score = df["away_points_for"].to_numpy()
     y_home_win = df["home_win"].astype(int).to_numpy()
     seasons = df["season"].astype(int).to_numpy()
 
-    X_train = X.loc[is_train].to_numpy()
-    X_holdout = X.loc[is_holdout].to_numpy()
+    # Keep as DataFrame for sklearn ColumnTransformer compatibility
+    X_train = X.loc[is_train]
+    X_holdout = X.loc[is_holdout]
     y_home_train = y_home_score[is_train]
     y_home_holdout = y_home_score[is_holdout]
     y_away_train = y_away_score[is_train]
@@ -778,17 +800,9 @@ def main() -> None:
     y_win_holdout = y_home_win[is_holdout]
     seasons_holdout = seasons[is_holdout]
 
-    # ----------------------------
-    # Train simple score regressors
-    # ----------------------------
-    reg_home = make_regression_pipeline()
-    reg_away = make_regression_pipeline()
-
-    reg_home.fit(X_train, y_home_train)
-    reg_away.fit(X_train, y_away_train)
-
-    pred_home = reg_home.predict(X_holdout)
-    pred_away = reg_away.predict(X_holdout)
+    # Use the pre-trained models directly on the holdout features.
+    pred_home = reg_home_pretrained.predict(X_holdout)
+    pred_away = reg_away_pretrained.predict(X_holdout)
 
     df_reg_home = evaluate_regressor(
         "home_score_reg", y_home_holdout, pred_home, seasons_holdout
@@ -804,11 +818,10 @@ def main() -> None:
     print(df_reg_away.to_string(index=False))
 
     # ----------------------------
-    # Train win classifier
+    # Use pre-trained calibrated win classifier
     # ----------------------------
-    clf = make_classifier_pipeline()
-    clf.fit(X_train, y_win_train)
-    prob_win_holdout = clf.predict_proba(X_holdout)[:, 1]
+    # hist_win_pretrained is treated as the main production classifier.
+    prob_win_holdout = hist_win_pretrained.predict_proba(X_holdout)[:, 1]
 
     prob_moneyline = None
     if "home_moneyline_prob" in df.columns:
@@ -841,6 +854,161 @@ def main() -> None:
     print(thresh_metrics.to_frame().T.to_string(index=False))
 
     # -----------------------------------------------------------------
+    # Enhancement 1: per-game holdout predictions for front-end use
+    # -----------------------------------------------------------------
+    holdout_meta_cols: list[str] = []
+    for col in ["season", "week", "game_id", "game_date", "home_team", "away_team"]:
+        if col in df.columns:
+            holdout_meta_cols.append(col)
+
+    df_holdout = df.loc[is_holdout, holdout_meta_cols].copy()
+    # Attach actual outcomes
+    df_holdout["home_points_for_actual"] = y_home_holdout
+    df_holdout["away_points_for_actual"] = y_away_holdout
+    df_holdout["home_win_actual"] = y_win_holdout
+    # Attach model predictions
+    df_holdout["home_score_pred"] = pred_home
+    df_holdout["away_score_pred"] = pred_away
+    df_holdout["home_win_prob_model"] = prob_win_holdout
+    if prob_moneyline is not None:
+        df_holdout["home_win_prob_moneyline"] = prob_moneyline
+
+    preds_path = csv_path.with_name(csv_path.stem + "_holdout_predictions.csv")
+    df_holdout.to_csv(preds_path, index=False)
+    print(f"\n=== Saved per-game holdout predictions to {preds_path} ===")
+
+    # -----------------------------------------------------------------
+    # Enhancement 2: compact JSON summary for dashboards / tooling
+    # -----------------------------------------------------------------
+    import json
+
+    summary_payload = {
+        "dataset": csv_path.name,
+        "train_end": {
+            "season": args.train_end_season,
+            "week": args.train_end_week,
+        },
+        "regression": {
+            "home": df_reg_home.to_dict(orient="records"),
+            "away": df_reg_away.to_dict(orient="records"),
+        },
+        "classification_overall": df_clf_overall.to_dict(orient="records"),
+        "classification_by_season": df_clf_season.to_dict(orient="records"),
+        "threshold_metrics": thresh_metrics.to_dict(),
+    }
+
+    # Provide short, plain-English metric descriptions for UI display
+    metric_descriptions = {
+        "MAE": "Mean Absolute Error — average points the model's score prediction is off by.",
+        "RMSE": "Root Mean Squared Error — like MAE but penalizes big misses more strongly.",
+        "R2": "R² — how much of the score variability the model explains; higher is better.",
+        "Brier": "Brier score — average squared error of predicted probabilities (lower is better).",
+        "LogLoss": "Log loss — punishes confident wrong probabilities heavily (lower is better).",
+        "AUC": "AUC — how well the model ranks winners vs losers; 1.0 is perfect, 0.5 is random.",
+        "Accuracy": "Accuracy — fraction of matches where the predicted label matches the actual result.",
+        "Precision": "Precision — of games predicted as home wins, how many were actually home wins.",
+        "Recall": "Recall — of actual home wins, how many did we correctly predict?",
+        "F1": "F1 score — harmonic mean of precision and recall; balances precision and recall.",
+    }
+
+    # Build a structured schema for each metric to help front-end renderers
+    # 'format' suggests how to display the number; 'example_value' is a numeric example
+    # 'example_text' gives a short, friendly example string for UI tooltips.
+    # Compute sample values from the holdout metrics we just calculated.
+    # Regression examples (use home regressor averages)
+    mae_home_avg = _weighted_mean(df_reg_home["MAE"], df_reg_home["n_games"]) if not df_reg_home.empty else float("nan")
+    rmse_home_avg = _weighted_mean(df_reg_home["RMSE"], df_reg_home["n_games"]) if not df_reg_home.empty else float("nan")
+    r2_home_avg = _weighted_mean(df_reg_home["R2"], df_reg_home["n_games"]) if not df_reg_home.empty else float("nan")
+
+    # Classification examples (overall metrics)
+    clf_row = None
+    if not df_clf_overall.empty:
+        clf_mask = (df_clf_overall["model"] == "win_classifier") & (df_clf_overall["scope"] == "overall")
+        if clf_mask.any():
+            clf_row = df_clf_overall[clf_mask].iloc[0]
+
+    brier_val = float(clf_row["Brier"]) if clf_row is not None and not pd.isna(clf_row["Brier"]) else float("nan")
+    logloss_val = float(clf_row["LogLoss"]) if clf_row is not None and not pd.isna(clf_row["LogLoss"]) else float("nan")
+    auc_val = float(clf_row["AUC"]) if clf_row is not None and not pd.isna(clf_row["AUC"]) else float("nan")
+    acc_val = float(clf_row["Accuracy"]) if clf_row is not None and not pd.isna(clf_row["Accuracy"]) else float("nan")
+
+    # Threshold-based metrics
+    precision_val = float(thresh_metrics.get("precision", float("nan"))) if thresh_metrics is not None else float("nan")
+    recall_val = float(thresh_metrics.get("recall", float("nan"))) if thresh_metrics is not None else float("nan")
+    f1_val = float(thresh_metrics.get("f1", float("nan"))) if thresh_metrics is not None else float("nan")
+
+    metric_schema = {
+        "MAE": {
+            "description": metric_descriptions["MAE"],
+            "format": "points",
+            "example_value": round(mae_home_avg, 2) if not pd.isna(mae_home_avg) else None,
+            "example_text": f"MAE: {mae_home_avg:.1f} → on average off by ~{round(mae_home_avg)} points" if not pd.isna(mae_home_avg) else None,
+        },
+        "RMSE": {
+            "description": metric_descriptions["RMSE"],
+            "format": "points",
+            "example_value": round(rmse_home_avg, 2) if not pd.isna(rmse_home_avg) else None,
+            "example_text": f"RMSE: {rmse_home_avg:.1f} → similar to MAE but punishes big misses" if not pd.isna(rmse_home_avg) else None,
+        },
+        "R2": {
+            "description": metric_descriptions["R2"],
+            "format": "decimal",
+            "example_value": round(r2_home_avg, 3) if not pd.isna(r2_home_avg) else None,
+            "example_text": f"R²: {r2_home_avg:.3f} → explains about {r2_home_avg * 100:.0f}% of score variance" if not pd.isna(r2_home_avg) else None,
+        },
+        "Brier": {
+            "description": metric_descriptions["Brier"],
+            "format": "decimal",
+            "example_value": round(brier_val, 3) if not pd.isna(brier_val) else None,
+            "example_text": f"Brier: {brier_val:.3f} → lower is better for probability calibration" if not pd.isna(brier_val) else None,
+        },
+        "LogLoss": {
+            "description": metric_descriptions["LogLoss"],
+            "format": "decimal",
+            "example_value": round(logloss_val, 3) if not pd.isna(logloss_val) else None,
+            "example_text": f"LogLoss: {logloss_val:.3f} → lower is better; punishes wrong confident predictions" if not pd.isna(logloss_val) else None,
+        },
+        "AUC": {
+            "description": metric_descriptions["AUC"],
+            "format": "decimal",
+            "example_value": round(auc_val, 3) if not pd.isna(auc_val) else None,
+            "example_text": f"AUC: {auc_val:.3f} → 0.92 indicates strong discriminative power" if not pd.isna(auc_val) else None,
+        },
+        "Accuracy": {
+            "description": metric_descriptions["Accuracy"],
+            "format": "percent",
+            "example_value": round(acc_val * 100, 1) if not pd.isna(acc_val) else None,
+            "example_text": f"Accuracy: {acc_val * 100:.1f}% → proportion of correctly predicted games" if not pd.isna(acc_val) else None,
+        },
+        "Precision": {
+            "description": metric_descriptions["Precision"],
+            "format": "percent",
+            "example_value": round(precision_val * 100, 1) if not pd.isna(precision_val) else None,
+            "example_text": f"Precision: {precision_val * 100:.1f}% → of games predicted as home wins, percent actually won" if not pd.isna(precision_val) else None,
+        },
+        "Recall": {
+            "description": metric_descriptions["Recall"],
+            "format": "percent",
+            "example_value": round(recall_val * 100, 1) if not pd.isna(recall_val) else None,
+            "example_text": f"Recall: {recall_val * 100:.1f}% → percent of true home wins we correctly captured" if not pd.isna(recall_val) else None,
+        },
+        "F1": {
+            "description": metric_descriptions["F1"],
+            "format": "percent",
+            "example_value": round(f1_val * 100, 1) if not pd.isna(f1_val) else None,
+            "example_text": f"F1: {f1_val * 100:.1f}% → balance of precision and recall" if not pd.isna(f1_val) else None,
+        },
+    }
+
+    # Keep short descriptions for backward compatibility and attach the schema too
+    summary_payload["metric_descriptions"] = metric_descriptions
+    summary_payload["metric_schema"] = metric_schema
+
+    summary_path = csv_path.with_name(csv_path.stem + "_eval_summary.json")
+    summary_path.write_text(json.dumps(summary_payload, indent=2), encoding="utf-8")
+    print(f"=== Saved JSON summary to {summary_path} ===")
+
+    # -----------------------------------------------------------------
     # Structured textual report saved to disk
     # -----------------------------------------------------------------
     report_text = build_textual_report(
@@ -858,7 +1026,6 @@ def main() -> None:
     report_path = csv_path.with_name(csv_path.stem + "_eval_report.md")
     report_path.write_text(report_text, encoding="utf-8")
     print(f"\n=== Saved textual evaluation report to {report_path} ===")
-
 
 
 if __name__ == "__main__":

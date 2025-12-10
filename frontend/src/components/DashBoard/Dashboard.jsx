@@ -49,25 +49,16 @@ import ErrorDisplay from "../ErrorDisplay";
  *
  * @returns {{ isLoading: boolean, error: Error | null, data: DashboardData | null }}
  */
+
 function useDashboardData() {
-  const context = /** @type {any} */ (usePredictions());
+  const context = usePredictions();
 
   return useMemo(() => {
-    if (!context) {
-      return {
-        isLoading: true,
-        error: new Error(
-          "Prediction context not available. Please refresh the page and try again."
-        ),
-        data: null,
-      };
-    }
-
     const {
-      current,
-      history = [],
-      schedule = [],
+      schedule,
       week,
+      history,
+      current,
       teams = {},
       predictions = {},
       loading = {},
@@ -501,7 +492,7 @@ export default function Dashboard() {
           homeScore = baseHomeScore;
         }
 
-       
+
 
         const pointDiff =
           rawPrediction?.point_diff ??
