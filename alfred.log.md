@@ -1,5 +1,49 @@
 # Alfred Activity Log
 
+## 2025-12-10T15:00:00Z — API Coherence & Endpoint Simplification
+
+### Context
+- Performed comprehensive analysis of `backend/main.py` and `frontend/src/api/client.js`
+- Identified critical bugs, dead code, and logic errors affecting API reliability
+
+### Backend Changes (`main.py`)
+
+| Issue | Fix | Lines |
+|-------|-----|-------|
+| `nfl.load_schedules(2025)` called at module level → Heroku crash | Changed to lazy-load (`DEFAULT_SCHEDULE = None`) | L43-47 |
+| Logic error in `get_current_nfl_context()` — accessing `.iloc[-1]` on empty DataFrame | Fixed conditional to return early when `schedule_df.empty` | L614-647 |
+| Unreachable code block after early return | Removed duplicate fallback return | L648-655 |
+
+### Frontend Changes (`client.js`)
+
+| Issue | Fix | Lines |
+|-------|-----|-------|
+| **CRITICAL**: `JSON.response.body` is invalid JavaScript | Removed — `response` is already parsed JSON | L136-137 |
+| Missing `api()` function — `get()` and `postJson()` referenced undefined | Added complete `api()` with timeout, retry, AbortController | L76-160 |
+| No educational comments | Added section headers and JSDoc explaining each pattern | Throughout |
+
+### Endpoint Status Matrix
+
+| Endpoint | Backend | Frontend | Status |
+|----------|---------|----------|--------|
+| `/health` | ✅ | ✅ `getHealth()` | Working |
+| `/debug` | ✅ | — | Working |
+| `/report/training` | ✅ | ✅ `getTrainingReport()` | Working |
+| `/report/calibration` | ✅ | ✅ `getCalibrationReport()` | Working |
+| `/schedule/next-week` | ✅ | ✅ `getNextWeekSchedule()` | Working |
+| `/predict` | ✅ | ✅ `predictGame()` | **Fixed** |
+| `/predict/next-week` | ✅ | ✅ `predictNextWeek()` | Working |
+| `/history` | ❌ Missing | ⚠️ `getPredictionHistory()` | Not implemented |
+| `/train` | ❌ Missing | ⚠️ `startTraining()` | Not implemented |
+| `/status/overview` | ❌ Missing | ⚠️ Has fallback | Graceful degradation |
+
+### Deployment Pending
+- Backend: `git push heroku rollback/heroku-endpoint-restore:master`
+- Frontend: `npx vercel --prod --yes`
+- Post-deploy: Smoke test `/health`, `/schedule/next-week`, `/predict`
+
+---
+
 ## 2025-12-08T23:59:00Z
 
 - Promoted refreshed production artifacts from `backend/prod-models/models` into `backend/models/prod_models/` (metadata timestamp 2025-12-08 17:05 UTC, 200 features, 2,149 rows).

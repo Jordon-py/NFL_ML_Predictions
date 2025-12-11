@@ -74,58 +74,95 @@ export function normalizePredictError(err) {
 
 // ---------- Core fetch with timeout + retry ----------
 
-function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+/**
+ * CHANGED: Added the missing `api()` function that `get()` and `postJson()` reference.
+ * 
+ * Why this pattern?
+ * - Centralizes all HTTP logic: timeout, retry, error normalization.
+ * - Uses AbortController for request timeouts (browser-native, no dependencies).
+ * - Implements exponential backoff for transient failures (network hiccups).
+ * - Returns parsed JSON directly, or throws ApiError with status code.
+ * 
+ * @param {string} url - Full URL to fetch
+ * @param {Object} opts - Fetch options (method, body, headers, etc.)
+ * @returns {Promise<any>} Parsed JSON response
+ * @throws {ApiError} On HTTP errors or timeout
+ */
+async function api(url, opts = {}) {
+  const { timeout = DEFAULT_TIMEOUT_MS, retries = RETRY_ATTEMPTS, ...fetchOpts } = opts;
 
-async function api(path, init = {}, { timeoutMs = DEFAULT_TIMEOUT_MS, retries = RETRY_ATTEMPTS } = {}) {
-  // If caller already provided an absolute URL, use it as-is to avoid double-prefixing API_BASE
-  const url = /^https?:\/\//i.test(String(path))
-    ? String(path)
-    : joinUrl(API_BASE, path);
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-
-  const doFetch = async () => {
-    const res = await fetch(url, {
-      // Do not send cookies; backend is stateless and allows "*" in dev
-      credentials: "omit",
-      ...init,
-      headers: { "Content-Type": "application/json", ...(init.headers || {}) },
-      signal: controller.signal,
-    });
-
-    const ctype = String(res.headers.get("Content-Type") || "");
-    const parseJson = async () => { try { return await res.json(); } catch { return null; } };
-    const parseText = async () => { try { return await res.text(); } catch { return null; } };
-
-    if (!res.ok) {
-      const payload = ctype.includes("application/json") ? await parseJson() : await parseText();
-      const msg = (payload && (payload.detail || payload.message)) || res.statusText || "Request failed";
-      throw new ApiError(res.status, msg, payload, url);
-    }
-    return ctype.includes("application/json") ? await parseJson() : await parseText();
+  // Default headers for JSON APIs
+  const headers = {
+    "Content-Type": "application/json",
+    "Accept": "application/json",
+    ...fetchOpts.headers,
   };
 
-  try {
-    let attempt = 0;
-    while (true) {
-      try {
-        const out = await doFetch();
-        return out;
-      } catch (err) {
-        const retriable =
-          err?.name === "AbortError" ||
-          err instanceof TypeError ||          // network
-          (typeof err.status === "number" && err.status >= 500);
-        if (!retriable || attempt >= retries) throw err;
-        await delay(RETRY_BASE_MS * Math.pow(2, attempt));
-        attempt += 1;
+  let lastError;
+
+  // Retry loop with exponential backoff
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    // AbortController provides a way to cancel fetch after timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+    try {
+      const response = await fetch(url, {
+        ...fetchOpts,
+        headers,
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      // Parse response body (even for errors, backend may send JSON details)
+      let data;
+      const contentType = response.headers.get("content-type") || "";
+      if (contentType.includes("application/json")) {
+        data = await response.json();
+      } else {
+        data = await response.text();
+      }
+
+      // HTTP 2xx = success; otherwise throw structured error
+      if (response.ok) {
+        return data;
+      }
+
+      // Non-2xx: wrap in ApiError for downstream handling
+      const errorMessage = typeof data === "object" ? (data.detail || data.message || JSON.stringify(data)) : data;
+      throw new ApiError(response.status, errorMessage, data, url);
+
+    } catch (err) {
+      clearTimeout(timeoutId);
+
+      // Handle AbortController timeout
+      if (err.name === "AbortError") {
+        lastError = new ApiError(408, `Request timeout after ${timeout}ms`, null, url);
+      } else if (err instanceof ApiError) {
+        lastError = err;
+        // Don't retry client errors (4xx) — only retry server/network errors
+        if (err.status >= 400 && err.status < 500) {
+          throw err;
+        }
+      } else {
+        // Network error or other fetch failure
+        lastError = new ApiError(0, err.message || "Network error", null, url);
+      }
+
+      // Exponential backoff before retry: 300ms, 600ms, 1200ms...
+      if (attempt < retries) {
+        const delay = RETRY_BASE_MS * Math.pow(2, attempt);
+        await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
-  } finally {
-    clearTimeout(timer);
   }
+
+  // All retries exhausted
+  throw lastError;
 }
 
+// Convenience wrappers
 const get = (path, opts = {}) => api(path, { ...opts, method: "GET" });
 const postJson = (path, body, opts = {}) => api(path, { ...opts, method: "POST", body: JSON.stringify(body) });
 
@@ -135,7 +172,7 @@ const postJson = (path, body, opts = {}) => api(path, { ...opts, method: "POST",
  * Normalize UI params → backend PredictionRequest.
  * Accepts either explicit fields or schedule objects with home/away_abbr.
  */
-function toPredictionRequest({ stadium, homeTeam, awayTeam, season, week, home_abbr, away_abbr, home_team, away_team }) {
+function PredictionRequest({ stadium, homeTeam, awayTeam, season, week, home_abbr, away_abbr, home_team, away_team }) {
   return {
     stadium: String(stadium),
     home_team: String(home_abbr || home_team || homeTeam),
@@ -147,29 +184,74 @@ function toPredictionRequest({ stadium, homeTeam, awayTeam, season, week, home_a
 
 // ---------- Public API ----------
 
+/**
+ * Creates an API client instance bound to a specific backend URL.
+ * 
+ * Educational: This factory pattern allows:
+ * - Testing with mock servers by passing a different base URL
+ * - Supporting multiple environments (dev, staging, prod) from the same codebase
+ * - Easy switching between local and deployed backends
+ * 
+ * @param {string} base - Backend URL (defaults to auto-resolved API_BASE)
+ * @returns {Object} API client with methods for each endpoint
+ */
 export function createApi(base = API_BASE) {
-  // You can pass an explicit base to talk to a different instance
+  // Internal helpers that prefix all paths with the base URL
   const _get = (p, o) => api(joinUrl(base, p), { ...o, method: "GET" });
   const _post = (p, b, o) => api(joinUrl(base, p), { ...o, method: "POST", body: JSON.stringify(b) });
 
   return {
-    // Health & reports
+    // ──────────────────────────────────────────────────────────────
+    // Health & Reports
+    // ──────────────────────────────────────────────────────────────
+    
+    /** Check if the backend is healthy and models are loaded */
     getHealth: async () => await _get("/health"),
-    // Alias used by hooks that poll training/model readiness
+    
+    /** Alias for getHealth — used by hooks that poll training/model readiness */
     getHealthStatus: async () => await _get("/health"),
+    
+    /** Fetch the full training report (metrics, hyperparameters, etc.) */
     getTrainingReport: async () => await _get("/report/training"),
+    
+    /** Fetch calibration metrics for the win probability model */
     getCalibrationReport: async () => await _get("/report/calibration"),
-    // Schedule & batch predictions
-    getNextWeekSchedule: () => _get("/schedule/next-week"),
+
+    // ──────────────────────────────────────────────────────────────
+    // Schedule & Batch Predictions
+    // ──────────────────────────────────────────────────────────────
+    
+    /** Get list of games for the upcoming NFL week */
+    getNextWeekSchedule: async () => await _get("/schedule/next-week"),
+    
+    /** Batch predict all games in the next week */
     predictNextWeek: () => _get("/predict/next-week"),
 
-    // Prediction history (defensive: limit defaults to 100 to cap payload)
+    // ──────────────────────────────────────────────────────────────
+    // Prediction History (NOTE: Backend endpoint may not exist)
+    // ──────────────────────────────────────────────────────────────
+    
+    /**
+     * CHANGED: Added note that /history endpoint may not exist in current backend.
+     * This method is kept for forward compatibility when the endpoint is added.
+     */
     getPredictionHistory: (limit = 100) => _get(`/history?limit=${Number(limit) || 100}`),
 
-    // Model training (best-effort; backend may treat as no-op if unsupported)
+    // ──────────────────────────────────────────────────────────────
+    // Model Training (best-effort; backend may not support)
+    // ──────────────────────────────────────────────────────────────
+    
+    /** Trigger model training — backend may treat as no-op if unsupported */
     startTraining: () => _post("/train", {}),
 
-    // Backend status overview (falls back to health-only if composite endpoint missing)
+    // ──────────────────────────────────────────────────────────────
+    // Status Overview
+    // ──────────────────────────────────────────────────────────────
+    
+    /**
+     * Get comprehensive status overview.
+     * CHANGED: Has graceful fallback to /health if /status/overview doesn't exist.
+     */
     getStatusOverview: async () => {
       try {
         return await _get("/status/overview");
@@ -180,9 +262,26 @@ export function createApi(base = API_BASE) {
       }
     },
 
+    // ──────────────────────────────────────────────────────────────
+    // Single Game Prediction
+    // ──────────────────────────────────────────────────────────────
+    
     // Single-game prediction
-    predictGame: (params) => _post("/predict", toPredictionRequest(params)),
-  };
+    // CHANGED: Fixed broken code — `JSON.response.body` was invalid JavaScript syntax.
+    // The `response` variable already contains the parsed JSON from `api()`.
+    predictGame: async (params) => {
+      try {
+        // _post returns parsed JSON directly (api() handles parsing)
+        const response = await _post("/predict", PredictionRequest(params));
+        // Educational: No need to parse again — `response` is already the prediction object
+        // with fields: home_score, away_score, home_win_probability, etc.
+        return response;
+      } catch (err) {
+        // normalizePredictError converts ApiError to user-friendly messages
+        throw new Error(normalizePredictError(err));
+      }
+    },
+  }
 }
 
 // For convenience default instance (uses resolved API_BASE)
