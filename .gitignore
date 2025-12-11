@@ -82,13 +82,19 @@ data/
 *.csv
 *.json
 *.txt
-*.joblib
+
 *.pkl
 *.model
 !requirements.txt
 !README.md
-!backend/data/
+!backend/data/prod-models/models/*.joblib
+!backend/data/prod-models/*.csv
 !backend/models/
+# CHANGED: Allow production model artifacts for Heroku deployment
+!backend/prod-models/
+!backend/prod-models/models/
+!backend/pr
+!backend/prod-models/*.csv
 
 ## AI tooling
 .serena/
@@ -96,3 +102,4 @@ data/
 ## Deployment configs
 !vercel.json
 node_modules
+

@@ -1,3 +1,39 @@
+"""
+NFL ML Predictions API — Backend Server
+========================================
+
+FastAPI backend serving ML predictions for NFL game outcomes.
+
+QUICK START (Local Development):
+    cd backend
+    .\.venv\Scripts\Activate.ps1
+    python -m uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000
+
+ENDPOINTS:
+    GET  /health            → API health status and model readiness
+    GET  /debug             → Debug info, metadata, timestamps
+    GET  /schedule/next-week → Upcoming NFL games for prediction
+    POST /predict           → Single game prediction (home_team, away_team, season, week)
+    GET  /predict/next-week → Batch predictions for upcoming week
+    GET  /report/training   → Model training metrics
+    GET  /report/calibration → Win probability calibration data
+
+ENVIRONMENT VARIABLES:
+    MODELS_DIR          → Path to model .joblib files (default: backend/prod-models/models)
+    DATASET_PATH        → Path to engineered features CSV
+    ALLOWED_ORIGINS     → Comma-separated CORS origins
+    ALLOW_ORIGIN_REGEX  → Regex for dynamic CORS (e.g., https://.*\.vercel\.app)
+
+ARCHITECTURE:
+    Request → FastAPI Router → Feature Assembly → Preprocessor → ML Models → Response
+
+    Models:
+      - home_model.joblib: Predicts home team score
+      - away_model.joblib: Predicts away team score
+      - win_clf_calibrated.joblib: Calibrated win probability classifier
+      - preprocessor.joblib: Feature transformation pipeline
+"""
+
 import os
 import json
 import math
@@ -17,22 +53,25 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 
 load_dotenv(".env")
-# -----------------------
-# Configuration
-# -----------------------
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# CONFIGURATION
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tip: Override paths via environment variables for different deployment targets
+
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
-# Global state containers so /health and helpers never see NameError
+# Global state containers — initialized in lifespan() at startup
 model_objects: Optional[Dict[str, Any]] = None
 dataset_df: Optional[pd.DataFrame] = pd.DataFrame()
 
+# Path resolution
 BACKEND_DIR = Path(__file__).resolve().parent
 DATA_DIR = BACKEND_DIR / "data"
 
-# Allow overriding model directory via env var.
-# Example (PowerShell):
-#   setx MODELS_DIR "C:\Users\goku\Documents\NFL_ML_Predictions\backend\prod-models\models"
+# Model directory: where .joblib files live
+# Educational: Using env var allows same code to work locally and on Heroku
 MODELS_DIR = Path(
     os.getenv(
         "MODELS_DIR",
@@ -40,6 +79,7 @@ MODELS_DIR = Path(
     )
 )
 
+# Dataset path: engineered features CSV for predictions
 DEFAULT_DATASET = BACKEND_DIR / "data" / "prod-models" / "game_features_20251210.csv"
 
 # CHANGED: Lazy-load schedule to avoid nflreadpy pydantic crash on Heroku startup.
@@ -47,7 +87,7 @@ DEFAULT_DATASET = BACKEND_DIR / "data" / "prod-models" / "game_features_20251210
 # pydantic version incompatibility. Now we load on-demand in endpoints.
 DEFAULT_SCHEDULE: Optional[pd.DataFrame] = None  # Loaded lazily in _get_schedule_df()
 
-# Metadata path can also be overridden; by default we look inside MODELS_DIR.
+# Metadata path: model metadata JSON
 PROD_MODELS_PATH = Path(
     os.getenv(
         "PROD_MODELS_PATH",

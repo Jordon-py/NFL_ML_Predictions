@@ -3,6 +3,7 @@
 ## 2025-12-10T15:00:00Z — API Coherence & Endpoint Simplification
 
 ### Context
+
 - Performed comprehensive analysis of `backend/main.py` and `frontend/src/api/client.js`
 - Identified critical bugs, dead code, and logic errors affecting API reliability
 
@@ -38,6 +39,7 @@
 | `/status/overview` | ❌ Missing | ⚠️ Has fallback | Graceful degradation |
 
 ### Deployment Pending
+
 - Backend: `git push heroku rollback/heroku-endpoint-restore:master`
 - Frontend: `npx vercel --prod --yes`
 - Post-deploy: Smoke test `/health`, `/schedule/next-week`, `/predict`
