@@ -41,7 +41,11 @@ MODELS_DIR = Path(
 )
 
 DEFAULT_DATASET = BACKEND_DIR / "data" / "prod-models" / "game_features_20251210.csv"
-DEFAULT_SCHEDULE = nfl.load_schedules(2025).to_pandas()
+
+# CHANGED: Lazy-load schedule to avoid nflreadpy pydantic crash on Heroku startup.
+# nfl.load_schedules() was called at import time, which crashed Heroku due to
+# pydantic version incompatibility. Now we load on-demand in endpoints.
+DEFAULT_SCHEDULE: Optional[pd.DataFrame] = None  # Loaded lazily in _get_schedule_df()
 
 # Metadata path can also be overridden; by default we look inside MODELS_DIR.
 PROD_MODELS_PATH = Path(
@@ -611,28 +615,35 @@ def get_current_nfl_context() -> Dict[str, Any]:
     current_season = nfl.get_current_season(False)
     current_week = nfl.get_current_week(False)
 
+    # CHANGED: Fixed logic error — original code tried to access .iloc[-1] on empty DataFrame.
+    # The 'if schedule_df.empty' block should return early with defaults, not process data.
     if schedule_df.empty:
-            last = schedule_df.sort_values(by=["season", "week"]).iloc[-1]
-            last_s, last_w = last['season'], last['week']
-            nxt_s, nxt_w = last_s, last_w + 1
-            if nxt_w > 22:
-                nxt_s, nxt_w = last_s + 1, 1
-            return {
-                "current_season": current_season,
-                "last_completed_season": last_s,
-                "last_completed_week": last_w,
-                "next_prediction_season": nxt_s,
-                "next_prediction_week": nxt_w,
-                "status": "nfl_season_active" if nxt_s == current_season else "offseason",
-            }
+        # No schedule data available; return safe defaults for preseason/early season
+        return {
+            "current_season": current_season,
+            "last_completed_season": current_season,
+            "last_completed_week": 0,
+            "next_prediction_season": current_season,
+            "next_prediction_week": 1,
+            "status": "preseason_or_early",
+        }
+
+    # Schedule has data — find the last completed game and compute next prediction week
+    last = schedule_df.sort_values(by=["season", "week"]).iloc[-1]
+    last_s, last_w = int(last['season']), int(last['week'])
+    nxt_s, nxt_w = last_s, last_w + 1
+    # NFL regular season has 18 weeks; handle rollover to next season
+    if nxt_w > 22:
+        nxt_s, nxt_w = last_s + 1, 1
     return {
         "current_season": current_season,
-        "last_completed_season": current_season,
-        "last_completed_week": 0,
-        "next_prediction_season": current_season,
-        "next_prediction_week": 1,
-        "status": "preseason_or_early",
+        "last_completed_season": last_s,
+        "last_completed_week": last_w,
+        "next_prediction_season": nxt_s,
+        "next_prediction_week": nxt_w,
+        "status": "nfl_season_active" if nxt_s == current_season else "offseason",
     }
+
 
 def _validate_features_present(feature_names: List[str], row: pd.Series) -> List[str]:
         """
