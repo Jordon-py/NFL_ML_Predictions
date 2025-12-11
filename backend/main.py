@@ -1385,18 +1385,19 @@ def predict_game(payload: PredictionRequest) -> PredictionResponse:
             return None
 
         def _predict_with_fill(bundle: Any, Xdf: pd.DataFrame) -> np.ndarray:
-            """Attempt prediction; if a ColumnTransformer complains about missing
-            columns, add them as NaN and retry once.
+            """Attempt prediction with the model pipeline.
 
-            This makes the server resilient to legacy artifacts whose preprocessor
-            expects a superset of columns not listed in metadata yet. Imputers in
-            the pipeline can handle NaNs for these columns.
+            IMPORTANT: The model is a Pipeline with a ColumnTransformer that expects
+            RAW column names (e.g., 'home_prior_pf_avg_3'), NOT transformed names
+            (e.g., 'num__home_prior_pf_avg_3'). The ColumnTransformer applies
+            transformations internally.
+            
+            The _get_expected_features() returns transformed output names from
+            feature_names_in_, which is WRONG for input alignment. We should
+            pass the raw columns directly and let the pipeline handle it.
             """
-            # First, align strictly to model's expected features when available
-            exp = _get_expected_features(bundle) if not isinstance(bundle, dict) else _get_expected_features(bundle.get("model") or bundle.get("estimator") or bundle.get("hgbr") or bundle.get("ridge") or bundle)
-            if exp:
-                X_aligned = Xdf.reindex(columns=exp, fill_value=np.nan)
-                return _reg_predict(bundle, X_aligned)
+            # Pass Xdf directly to the model — don't align to transformed column names!
+            # The model's ColumnTransformer expects raw input column names.
             try:
                 return _reg_predict(bundle, Xdf)
             except ValueError as ve:
@@ -1420,12 +1421,6 @@ def predict_game(payload: PredictionRequest) -> PredictionResponse:
                         add_df = pd.DataFrame({c: [np.nan] for c in missing_cols}, index=Xdf.index)
                         Xdf = pd.concat([Xdf, add_df], axis=1)
                     return _reg_predict(bundle, Xdf)
-                # If the estimator rejects unseen columns, try reducing to intersection
-                if "Feature names unseen at fit time" in msg:
-                    exp2 = _get_expected_features(bundle)
-                    if exp2:
-                        X_aligned2 = Xdf.reindex(columns=exp2, fill_value=np.nan)
-                        return _reg_predict(bundle, X_aligned2)
                 raise
 
         home_score = float(np.clip(_predict_with_fill(model_objects["home_model"], X)[0], 0.0, 70.0))
@@ -1448,23 +1443,18 @@ def predict_game(payload: PredictionRequest) -> PredictionResponse:
                 win_m = win_entry
 
             def _predict_proba_with_fill(clf: Any, Xdf: pd.DataFrame) -> float:
-                """Predict win probability with defensive alignment and NaN/inf handling.
+                """Predict win probability.
 
-                Steps:
-                  1) Align columns to estimator.feature_names_in_ when available.
-                  2) Attempt predict_proba.
-                  3) On missing-columns error, add NaN columns and retry once (handled below).
-                  4) On NaN/inf errors, coerce to numeric, replace +/-inf→NaN, fillna(0.0), and retry once.
-                  5) If estimator lacks predict_proba but has predict, map margin to prob via sigmoid.
+                IMPORTANT: Like _predict_with_fill, we pass RAW column names to the
+                classifier pipeline. The ColumnTransformer handles transformation.
+                Do NOT align to transformed feature_names_in_ as that breaks input.
                 """
                 try:
-                    exp = _get_expected_features(clf)
-                    Xuse = Xdf.reindex(columns=exp, fill_value=np.nan) if exp else Xdf
-
+                    # Pass raw columns directly to the classifier pipeline
                     if hasattr(clf, "predict_proba"):
-                        return float(clf.predict_proba(Xuse)[0, 1])
+                        return float(clf.predict_proba(Xdf)[0, 1])
                     if hasattr(clf, "predict"):
-                        margin = float(clf.predict(Xuse)[0])
+                        margin = float(clf.predict(Xdf)[0])
                         return float(1.0 / (1.0 + math.exp(-0.25 * margin)))
                     raise AttributeError("win_model lacks predict/predict_proba")
                 except ValueError as ve:
@@ -1472,8 +1462,7 @@ def predict_game(payload: PredictionRequest) -> PredictionResponse:
                     # Special-case: NaN/inf present — sanitize and retry once
                     if ("Input X contains NaN" in msg) or ("infinity" in msg) or ("too large" in msg):
                         try:
-                            expN = _get_expected_features(clf)
-                            Xsan = Xdf.reindex(columns=expN, fill_value=np.nan) if expN else Xdf.copy()
+                            Xsan = Xdf.copy()
                             # Coerce to numeric, drop non-numeric to NaN, then replace inf and fill
                             Xsan = Xsan.apply(pd.to_numeric, errors="coerce")
                             Xsan = Xsan.replace([np.inf, -np.inf], np.nan).fillna(0.0)
@@ -1483,7 +1472,6 @@ def predict_game(payload: PredictionRequest) -> PredictionResponse:
                                 margin = float(clf.predict(Xsan)[0])
                                 return float(1.0 / (1.0 + math.exp(-0.25 * margin)))
                         except Exception:
-                            # fall through to other recovery paths below
                             pass
                     if "columns are missing:" in msg:
                         missing_cols: List[str] = []
@@ -1501,26 +1489,13 @@ def predict_game(payload: PredictionRequest) -> PredictionResponse:
                         if missing_cols:
                             add_df = pd.DataFrame({c: [np.nan] for c in missing_cols}, index=Xdf.index)
                             Xdf = pd.concat([Xdf, add_df], axis=1)
-                        # retry once
-                        exp3 = _get_expected_features(clf)
-                        Xuse2 = Xdf.reindex(columns=exp3, fill_value=np.nan) if exp3 else Xdf
-                        # sanitize on retry as well, in case imputers were not part of clf
-                        Xuse2 = Xuse2.apply(pd.to_numeric, errors="coerce").replace([np.inf, -np.inf], np.nan).fillna(0.0)
+                        # retry once with sanitization
+                        Xuse2 = Xdf.apply(pd.to_numeric, errors="coerce").replace([np.inf, -np.inf], np.nan).fillna(0.0)
                         if hasattr(clf, "predict_proba"):
                             return float(clf.predict_proba(Xuse2)[0, 1])
                         if hasattr(clf, "predict"):
                             margin = float(clf.predict(Xuse2)[0])
                             return float(1.0 / (1.0 + math.exp(-0.25 * margin)))
-                    if "Feature names unseen at fit time" in msg:
-                        exp4 = _get_expected_features(clf)
-                        if exp4:
-                            Xuse3 = Xdf.reindex(columns=exp4, fill_value=np.nan)
-                            Xuse3 = Xuse3.apply(pd.to_numeric, errors="coerce").replace([np.inf, -np.inf], np.nan).fillna(0.0)
-                            if hasattr(clf, "predict_proba"):
-                                return float(clf.predict_proba(Xuse3)[0, 1])
-                            if hasattr(clf, "predict"):
-                                margin = float(clf.predict(Xuse3)[0])
-                                return float(1.0 / (1.0 + math.exp(-0.25 * margin)))
                     raise
 
             if win_m is not None:
