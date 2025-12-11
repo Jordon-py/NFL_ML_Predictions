@@ -28,17 +28,21 @@ Core Logic Overview:
  *   - Extend `history` trimming/deduping here instead of inside components.
  */
 import React, {
-  createContext, useContext, useMemo,
-  useReducer, useCallback, useEffect
+    createContext,
+    useCallback,
+    useContext,
+    useEffect,
+    useMemo,
+    useReducer
 } from 'react';
-import { getNextWeekSchedule, getHealthStatus, getPredictionHistory } from './api/client';
+import { getHealthStatus, getNextWeekSchedule, getPredictionHistory } from './api/client';
 import {
-  MAX_HISTORY_ENTRIES,
-  PREDICTION_HISTORY_KEY,
-  buildGameKey,
-  getMetaEnv,
-  loadPredictionHistoryFromStorage,
-  parseTeamsCsv,
+    MAX_HISTORY_ENTRIES,
+    PREDICTION_HISTORY_KEY,
+    buildGameKey,
+    getMetaEnv,
+    loadPredictionHistoryFromStorage,
+    parseTeamsCsv,
 } from './utils/predictionContextUtils';
 
 /**
@@ -295,15 +299,27 @@ export function PredictionProvider( { children } )
   const setTeams = useCallback( ( teams ) => dispatch( { type: SET_TEAMS, payload: teams } ), [] );
 
   // Fetch schedule on mount
+  // Backend returns { full_schedule: string, ScheduleGame: Game[] }
+  // We extract the ScheduleGame array for rendering.
   useEffect( () =>
   {
     let mounted = true;
     const fetchSchedule = async () =>
     {
       try {
-        const scheduleData = await getNextWeekSchedule();
+        const response = await getNextWeekSchedule();
+        if ( !mounted ) return;
 
-        if ( !mounted || !Array.isArray( scheduleData ) ) return;
+        // Backend returns FullSchedule object with ScheduleGame array.
+        // Support both old (direct array) and new (object wrapper) formats.
+        const scheduleData = Array.isArray( response )
+          ? response
+          : ( response?.ScheduleGame ?? response?.games ?? [] );
+
+        if ( !Array.isArray( scheduleData ) || scheduleData.length === 0 ) {
+          console.warn( '[PredictionContext] Schedule response is empty or invalid:', response );
+          return;
+        }
 
         console.info( `[scheduleData] Fetched ${scheduleData.length} games from backend schedule API.` );
         // Extract week from first game and coerce to number. Accept several
