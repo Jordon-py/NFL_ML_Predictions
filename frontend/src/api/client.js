@@ -76,13 +76,13 @@ export function normalizePredictError(err) {
 
 /**
  * CHANGED: Added the missing `api()` function that `get()` and `postJson()` reference.
- * 
+ *
  * Why this pattern?
  * - Centralizes all HTTP logic: timeout, retry, error normalization.
  * - Uses AbortController for request timeouts (browser-native, no dependencies).
  * - Implements exponential backoff for transient failures (network hiccups).
  * - Returns parsed JSON directly, or throws ApiError with status code.
- * 
+ *
  * @param {string} url - Full URL to fetch
  * @param {Object} opts - Fetch options (method, body, headers, etc.)
  * @returns {Promise<any>} Parsed JSON response
@@ -186,12 +186,12 @@ function PredictionRequest({ stadium, homeTeam, awayTeam, season, week, home_abb
 
 /**
  * Creates an API client instance bound to a specific backend URL.
- * 
+ *
  * Educational: This factory pattern allows:
  * - Testing with mock servers by passing a different base URL
  * - Supporting multiple environments (dev, staging, prod) from the same codebase
  * - Easy switching between local and deployed backends
- * 
+ *
  * @param {string} base - Backend URL (defaults to auto-resolved API_BASE)
  * @returns {Object} API client with methods for each endpoint
  */
@@ -204,33 +204,33 @@ export function createApi(base = API_BASE) {
     // ──────────────────────────────────────────────────────────────
     // Health & Reports
     // ──────────────────────────────────────────────────────────────
-    
+
     /** Check if the backend is healthy and models are loaded */
     getHealth: async () => await _get("/health"),
-    
+
     /** Alias for getHealth — used by hooks that poll training/model readiness */
     getHealthStatus: async () => await _get("/health"),
-    
+
     /** Fetch the full training report (metrics, hyperparameters, etc.) */
     getTrainingReport: async () => await _get("/report/training"),
-    
+
     /** Fetch calibration metrics for the win probability model */
     getCalibrationReport: async () => await _get("/report/calibration"),
 
     // ──────────────────────────────────────────────────────────────
     // Schedule & Batch Predictions
     // ──────────────────────────────────────────────────────────────
-    
+
     /** Get list of games for the upcoming NFL week */
     getNextWeekSchedule: async () => await _get("/schedule/next-week"),
-    
+
     /** Batch predict all games in the next week */
     predictNextWeek: () => _get("/predict/next-week"),
 
     // ──────────────────────────────────────────────────────────────
     // Prediction History (NOTE: Backend endpoint may not exist)
     // ──────────────────────────────────────────────────────────────
-    
+
     /**
      * CHANGED: Added note that /history endpoint may not exist in current backend.
      * This method is kept for forward compatibility when the endpoint is added.
@@ -240,14 +240,14 @@ export function createApi(base = API_BASE) {
     // ──────────────────────────────────────────────────────────────
     // Model Training (best-effort; backend may not support)
     // ──────────────────────────────────────────────────────────────
-    
+
     /** Trigger model training — backend may treat as no-op if unsupported */
     startTraining: () => _post("/train", {}),
 
     // ──────────────────────────────────────────────────────────────
     // Status Overview
     // ──────────────────────────────────────────────────────────────
-    
+
     /**
      * Get comprehensive status overview.
      * CHANGED: Has graceful fallback to /health if /status/overview doesn't exist.
@@ -265,7 +265,7 @@ export function createApi(base = API_BASE) {
     // ──────────────────────────────────────────────────────────────
     // Single Game Prediction
     // ──────────────────────────────────────────────────────────────
-    
+
     // Single-game prediction
     // CHANGED: Fixed broken code — `JSON.response.body` was invalid JavaScript syntax.
     // The `response` variable already contains the parsed JSON from `api()`.
