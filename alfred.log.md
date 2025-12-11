@@ -1,5 +1,72 @@
 # Alfred Activity Log
 
+## 2025-12-11T03:45:00Z — Frontend Schedule Response Fix
+
+### Summary
+
+Fixed prediction cards not showing on dashboard. Root cause: backend returns `{ ScheduleGame: Game[] }` object, but frontend expected a direct array.
+
+### Changes Applied
+
+| Change | Impact | Files |
+|--------|--------|-------|
+| Extract `ScheduleGame` array from backend response | Bug fix | `PredictionContext.jsx:L298-333` |
+| Support both old (array) and new (object) response formats | Resilience | `PredictionContext.jsx` |
+
+### Deployment
+
+- **Frontend**: Vercel production deployed — <https://nfl-ml-predictions.vercel.app>
+
+---
+
+## 2025-12-11T03:15:00Z — Production Model Path Correction & Redeployment
+
+### Summary
+
+Corrected the production model path from `backend/prod-models/models` to `backend/data/prod-models/models` (user-specified location). All endpoints verified working in production (Heroku v459).
+
+### Changes Applied
+
+| Change | Impact | Files |
+|--------|--------|-------|
+| Updated MODELS_DIR path to `backend/data/prod-models/models` | Config fix | `main.py:L75-80` |
+| Tracked production model files in git | Deployment | `backend/data/prod-models/models/*.joblib` |
+
+### Production Model Artifacts (Now Tracked)
+
+| File | Path | Size |
+|------|------|------|
+| `preprocessor.joblib` | `backend/data/prod-models/models/` | - |
+| `home_model.joblib` | `backend/data/prod-models/models/` | - |
+| `away_model.joblib` | `backend/data/prod-models/models/` | - |
+| `win_clf_calibrated.joblib` | `backend/data/prod-models/models/` | - |
+| `hist_win_clf_calibrated.joblib` | `backend/data/prod-models/models/` | - |
+| `metadata.json` | `backend/data/prod-models/models/` | Training timestamp: 2025-12-10T16:23:04 UTC |
+| `training_report.json` | `backend/data/prod-models/models/` | - |
+| `feature_importance.json` | `backend/data/prod-models/models/` | - |
+
+### Verified Endpoints (Production - Heroku v459)
+
+| Endpoint | Method | Status | Response |
+|----------|--------|--------|----------|
+| `/health` | GET | ✅ | `{"status":"healthy","mode":"production","reason":"models loaded"}` |
+| `/schedule/next-week` | GET | ✅ | Returns 2025 season schedule (Week 15 games) |
+| `/predict` | POST | ✅ | KC vs BUF → `home_score: 23.1, away_score: 20.7, home_win_prob: 68%` |
+
+### Frontend Components Verified
+
+| Component | Status | Lines |
+|-----------|--------|-------|
+| `Dashboard.jsx` | ✅ No errors | 606 lines |
+| `TeamGrid.jsx` | ✅ No errors | 337 lines |
+
+### Deployment
+
+- **Backend**: Heroku `nfl-predict` v459 — `git push heroku rollback/heroku-endpoint-restore:master --force`
+- **Commit**: `feat: use backend/data/prod-models for production models (trained 2025-12-10)`
+
+---
+
 ## 2025-12-11T02:00:00Z — Full Deployment Success: Backend + Frontend
 
 ### Summary
@@ -24,7 +91,7 @@ Completed comprehensive API coherence analysis and deployment. All critical endp
 | Fixed broken `JSON.response.body` syntax in `predictGame()` | Bug fix | `client.js:L136-137` |
 | Added JSDoc documentation and section headers | Educational | `client.js` |
 
-### Model Artifacts Now Tracked
+### Model Artifacts Now Tracked (Legacy Location - Deprecated)
 
 | File | Path |
 |------|------|

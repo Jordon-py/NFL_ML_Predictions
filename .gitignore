@@ -91,10 +91,9 @@ data/
 !backend/data/prod-models/*.csv
 !backend/models/
 # CHANGED: Allow production model artifacts for Heroku deployment
-!backend/prod-models/
-!backend/prod-models/models/
-!backend/pr
-!backend/prod-models/*.csv
+
+
+
 
 ## AI tooling
 .serena/
