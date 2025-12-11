@@ -1,5 +1,55 @@
 # Alfred Activity Log
 
+## 2025-12-11T02:00:00Z — Full Deployment Success: Backend + Frontend
+
+### Summary
+
+Completed comprehensive API coherence analysis and deployment. All critical endpoints are now working in production.
+
+### Backend Fixes Applied
+
+| Change | Impact | Files |
+|--------|--------|-------|
+| Added top-level docstring with Quick Start, Endpoints, Env Vars | Educational | `main.py:L1-38` |
+| Lazy-load `nflreadpy` schedule to avoid Heroku pydantic crash | Stability | `main.py:L85-87` |
+| Fixed `get_current_nfl_context()` accessing `.iloc[-1]` on empty DataFrame | Bug fix | `main.py:L614-647` |
+| Added `pyarrow>=14.0.0` to requirements for polars→pandas conversion | Dependency | `requirements.txt` |
+| Tracked model .joblib files in git (updated .gitignore exceptions) | Deployment | `.gitignore` |
+
+### Frontend Fixes Applied
+
+| Change | Impact | Files |
+|--------|--------|-------|
+| Added complete `api()` function with timeout/retry/AbortController | Feature | `client.js:L76-160` |
+| Fixed broken `JSON.response.body` syntax in `predictGame()` | Bug fix | `client.js:L136-137` |
+| Added JSDoc documentation and section headers | Educational | `client.js` |
+
+### Model Artifacts Now Tracked
+
+| File | Path |
+|------|------|
+| `preprocessor.joblib` | `backend/prod-models/models/` |
+| `home_model.joblib` | `backend/prod-models/models/` |
+| `away_model.joblib` | `backend/prod-models/models/` |
+| `win_clf_calibrated.joblib` | `backend/prod-models/models/` |
+| `hist_win_clf_calibrated.joblib` | `backend/prod-models/models/` |
+| `game_features_20251210.csv` | `backend/data/prod-models/` |
+
+### Verified Endpoints (Production)
+
+| Endpoint | Method | Status | Response |
+|----------|--------|--------|----------|
+| `/health` | GET | ✅ | `{"status":"healthy","mode":"production","reason":"models loaded"}` |
+| `/schedule/next-week` | GET | ✅ | Returns Week 15 games (16 matchups) |
+| `/predict` | POST | ✅ | KC vs BUF → `home_score: 23.1, away_score: 20.7, home_win_prob: 68%` |
+
+### Deployments
+
+- **Backend**: Heroku `nfl-predict` — `git push heroku rollback/heroku-endpoint-restore:master`
+- **Frontend**: Vercel — Pending `npx vercel --prod`
+
+---
+
 ## 2025-12-10T15:00:00Z — API Coherence & Endpoint Simplification
 
 ### Context

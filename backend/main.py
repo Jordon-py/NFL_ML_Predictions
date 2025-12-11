@@ -72,10 +72,11 @@ DATA_DIR = BACKEND_DIR / "data"
 
 # Model directory: where .joblib files live
 # Educational: Using env var allows same code to work locally and on Heroku
+# Production models are in backend/data/prod-models/models (trained 2025-12-10)
 MODELS_DIR = Path(
     os.getenv(
         "MODELS_DIR",
-        str(BACKEND_DIR / "prod-models" / "models"),
+        str(BACKEND_DIR / "data" / "prod-models" / "models"),
     )
 )
 
