@@ -1069,6 +1069,28 @@ def debug_info() -> Dict[str, Any]:
         out["training_report_present"] = tr is not None
         if tr is not None:
             out["training_report_path"] = tr.name
+        
+        # Dataset diagnostics
+        out["dataset_info"] = {
+            "path": str(DEFAULT_DATASET),
+            "exists": DEFAULT_DATASET.exists(),
+            "rows": len(dataset_df) if dataset_df is not None else 0,
+            "columns": list(dataset_df.columns)[:10] if dataset_df is not None and not dataset_df.empty else [],
+        }
+        
+        # Test a specific game lookup
+        if dataset_df is not None and not dataset_df.empty:
+            test_mask = (
+                (dataset_df["season"] == 2025) & 
+                (dataset_df["week"] == 15) & 
+                (dataset_df["home_team"] == "TB") & 
+                (dataset_df["away_team"] == "ATL")
+            )
+            out["test_lookup"] = {
+                "query": "TB vs ATL 2025 W15",
+                "matches": int(test_mask.sum()),
+                "home_prior_pf_avg_3": float(dataset_df.loc[test_mask, "home_prior_pf_avg_3"].iloc[0]) if test_mask.sum() > 0 else None,
+            }
     except Exception as e:
         out["error"] = f"{type(e).__name__}: {e}"
     return out
