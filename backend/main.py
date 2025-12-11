@@ -1343,6 +1343,13 @@ def predict_game(payload: PredictionRequest) -> PredictionResponse:
             return np.nan
 
         X = pd.DataFrame({col: [_get_or_default(col)] for col in exp_all}, columns=exp_all)
+        
+        # Debug: Log sample feature values to verify extraction
+        sample_cols = ["home_prior_pf_avg_3", "away_prior_pf_avg_3", "home_elo_pre", "home_team", "away_team"]
+        for c in sample_cols:
+            if c in X.columns:
+                log.info("Feature %s: row=%s -> X=%s", c, row.get(c) if c in row.index else "N/A", X[c].iloc[0])
+        
         missing_after = [c for c in exp_all if c not in X.columns]
         if missing_after:
             log.warning("Missing expected feature cols after assembly: %s", missing_after)
