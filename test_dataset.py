@@ -31,7 +31,7 @@ print(f"Match TB vs ATL Week 15 2025: {matches} matches")
 
 if matches > 0:
     row = df[mask].iloc[0]
-    
+
     # Extract features
     X = {}
     for col in all_cols:
@@ -44,22 +44,22 @@ if matches > 0:
             X[col] = a
         else:
             X[col] = np.nan
-    
+
     X_df = pd.DataFrame([X])
     print(f"\nExtracted {len(X)} features")
     print(f"Sample values:")
     print(f"  home_prior_pf_avg_3: {X.get('home_prior_pf_avg_3')}")
     print(f"  away_prior_pf_avg_3: {X.get('away_prior_pf_avg_3')}")
     print(f"  home_elo_pre: {X.get('home_elo_pre')}")
-    
+
     # Count NaN values
     nan_count = sum(1 for v in X.values() if pd.isna(v))
     print(f"  NaN values: {nan_count}/{len(X)}")
-    
+
     # Load and run model
     print("\nLoading home model...")
     home_model = joblib.load(MODELS_DIR / "home_model.joblib")
-    
+
     # Align columns to what model expects
     try:
         if hasattr(home_model, "feature_names_in_"):
