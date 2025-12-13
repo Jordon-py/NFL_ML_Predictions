@@ -35,7 +35,7 @@ import React, {
     useMemo,
     useReducer
 } from 'react';
-import { getHealthStatus, getNextWeekSchedule, getPredictionHistory } from './api/client';
+import { getNextWeekSchedule, health, predictGame } from './api/nfl.js';
 import {
     MAX_HISTORY_ENTRIES,
     PREDICTION_HISTORY_KEY,
@@ -344,7 +344,7 @@ export function PredictionProvider( { children } )
     const poll = async () =>
     {
       try {
-        const h = await getHealthStatus();
+        const h = await health();
         if ( active && h && h.status ) setHealth( h );
       } catch ( e ) {
         if ( active ) setHealth( { status: 'unhealthy', mode: 'none', reason: 'health fetch failed' } );
@@ -355,32 +355,23 @@ export function PredictionProvider( { children } )
     return () => { active = false; clearInterval( id ); };
   }, [ setHealth ] );
 
-  // Hydrate history from backend (falls back to localStorage seed when API unavailable)
-  useEffect( () =>
-  {
-    let active = true;
-    const loadHistoryFromBackend = async () =>
-    {
-      try {
-        const payload = await getPredictionHistory( MAX_HISTORY_ENTRIES );
-        if ( !active || !payload ) return;
-        const entries = Array.isArray( payload.entries ) ? payload.entries : [];
-        setHistoryState( entries );
-
-        // Seed predictions map so schedule grid can show prior outcomes.
-        entries.forEach( ( entry ) => {
-          const key = buildGameKey( entry );
-          if ( key ) {
-            setPrediction( key, entry );
-          }
-        } );
-      } catch ( err ) {
-        console.warn( '[PredictionContext] History fetch failed, using local cache.', err );
-      }
-    };
-    loadHistoryFromBackend();
-    const id = setInterval( loadHistoryFromBackend, 60000 );
-    return () => { active = false; clearInterval( id ); };
+  // Hydrate history from localStorage (backend history endpoint not yet available)
+  useEffect( () => {
+    try {
+        const entries = loadPredictionHistoryFromStorage();
+        if ( entries && entries.length ) {
+            setHistoryState( entries );
+            // Seed predictions map so schedule grid can show prior outcomes.
+            entries.forEach( ( entry ) => {
+                const key = buildGameKey( entry );
+                if ( key ) {
+                    setPrediction( key, entry );
+                }
+            } );
+        }
+    } catch (err) {
+        console.warn("[PredictionContext] Local history load failed", err);
+    }
   }, [ setHistoryState, setPrediction ] );
 
   // Load team metadata (names + logo URLs) from public CSV once on mount.
