@@ -37,7 +37,7 @@
 import React from 'react';
 import Card from './Card.jsx';        // Presentational card for a single matchup
 import './TeamGrid.css';
-import { predictGame } from '../../api/client.js';
+import { predictGame } from '../../api/nfl.js';
 
 /**
  * Helper: build a stable key for a game.
@@ -169,7 +169,7 @@ export default function TeamGrid({
         <header className="team-grid__header">
           <div className="team-grid__heading">
             <span className="team-grid__badge">Week {safeWeek}</span>
-            <h2 className="team-grid__title">Week {safeWeek}</h2>
+            <h2 className="team-grid__title">Matchups</h2>
           </div>
           <p className="team-grid__subtitle">
             Showing <strong>{games.length}</strong> games scheduled.
@@ -305,7 +305,7 @@ export default function TeamGrid({
                 // regardless of success or failure.
                 setLocalLoadingMap((prev) => {
                   const copy = { ...prev };
-                  console.log('copy', copy, 'rawkey', rawKey)
+
                   delete copy[rawKey];
                   return copy;
                 });
