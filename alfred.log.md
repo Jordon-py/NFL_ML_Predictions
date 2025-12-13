@@ -579,3 +579,21 @@ Resolved the "Fake Predictions" (fallback) issue where the backend was failing t
   - `POST /predict (KC vs LAC)`: Returns ~79% win prob (was 65% fallback).
   - `POST /predict (CIN vs BAL)`: Returns ~79% win prob (was 65% fallback).
   - **Note**: The specific probabilities are currently identical for different games (79.8%), likely due to the "heuristic" nature of the current `inference` dataset or model state (using broad Rolling averages). However, they are **no longer** the hardcoded 65% fallback, proving the dataset is now loaded and being read.
+
+## 2025-12-13T15:11:26Z — Repo cleanup to remove backup bundle
+
+### Summary
+- Ran `git filter-repo` to excise `backup-pre-clean-2025-12-02.bundle` from all history.
+- Removed filter-repo metadata and verified the bundle object no longer exists.
+- Added `*.bundle` ignore rule to prevent future commits of backup bundles.
+
+### Files Analyzed
+- .git history for `backup-pre-clean-2025-12-02.bundle`
+- .gitignore
+
+### Fixes Implemented
+- Git history rewritten without the backup bundle.
+- Ignore rule added for `.bundle` archives.
+
+### Warnings / Follow-ups
+- Coordinate force-push to remote and instruct collaborators to reclone/reset to the rewritten history to avoid reintroducing the bundle.
