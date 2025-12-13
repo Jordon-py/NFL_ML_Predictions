@@ -6,6 +6,13 @@ This report documents incremental changes to the NFL_ML_Predictions repository, 
 
 ## Active Enhancements Under Development
 
+- **Date/Time:** 2025-12-11 / 04:30 UTC
+  - **Focus:** Stop OPTIONS 400s and restore prediction variance.
+  - **Key Actions:** Parsed ALLOWED_ORIGINS into a real list with localhost/Vercel defaults; added catch-all OPTIONS responder; removed transformed-column alignment in predict paths so pipelines consume raw feature names.
+  - **Upcoming Steps:** Deploy to Heroku and smoke test `/health` + OPTIONS `/health` + `/predict`; decide whether to stub `/history` for UI callers.
+  - **App Completion Estimate:** 98% (pending logo check + /history decision).
+  - **Enhancement Suggestion:** Add automated preflight smoke for `/health` and `/history` to catch regressions early.
+
 - **Date/Time:** 2025-12-04 / 17:20 UTC
   - **Focus:** Reactivated Copilot instructions + Alfred persona; refreshed operational backlog to align with deployment readiness directives.
   - **Key Actions:**

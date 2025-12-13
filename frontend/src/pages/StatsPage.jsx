@@ -1,16 +1,30 @@
 // File: frontend/src/pages/StatsPage.jsx
-// Purpose: Status and history dashboard showing backend health, dataset stats, schedule, and recent predictions.
-// Functions: toGameKey(28), LoadingSpinner(33), SummaryCard(53), StatsPage(63)
-// Variables: historyMap(139), overviewData(165)
-// Interacts With: api/client for health/status/history/schedule, PredictionContext for fallback state.
-// StatsPage.jsx - Status + History dashboard
-// -----------------------------------------
-// Pulls real-time health, dataset, and prediction history metrics from the backend
-// while still falling back to local context data when offline. Serves as the
-// "status page" requested by stakeholders.
+//
+// Purpose:
+//   A simple "Status + History" dashboard that reads everything from the backend.
+//   Primary endpoints (client.js prefers these):
+//   - /status/overview        (health + dataset + history metrics)
+//   - /api/games/next-week    (upcoming games)
+//   - /api/history?limit=N    (recent prediction entries; stable envelope)
+//
+//   Back-compat fallbacks (client.js will use these if needed):
+//   - /schedule/next-week
+//   - /history?limit=N
+//
+// Design goals:
+//   - NO context hook or offline fallback.
+//   - Keep it easy to reason about (one component, minimal derived state).
+//   - Avoid runtime errors from CSS-module style variables by using string classNames.
+//
+// Depends on:
+//   - ../api/client: getNextWeekSchedule, getPredictionHistory, getStatusOverview
+//   - NavBar, HistoryChart
+//
+// Notes:
+//   - client.js normalizes getPredictionHistory() into { entries, total, limit }
+//     and getStatusOverview() into a safe shape.
 
-import React, { useState, useEffect, useMemo } from "react";
-import { usePredictions } from "../PredictionContext";
+import React, { useEffect, useMemo, useState } from "react";
 import NavBar from "../components/NavBar/NavBar.jsx";
 import HistoryChart from "../components/HistoryChart.jsx";
 import {
@@ -18,292 +32,282 @@ import {
   getPredictionHistory,
   getStatusOverview,
 } from "../api/client";
-// @ts-ignore - CSS module import for JS/JSX file
 import "./StatsPage.css";
 
-/**
- * Builds a stable "game key" from either a schedule row or a prediction entry.
- * We intentionally support both schedule objects and prediction objects here.
- */
-const toGameKey = (game) =>
-  [game?.season, game?.week, game?.home_abbr || game?.home_team, game?.away_abbr || game?.away_team]
-    .filter(Boolean)
-    .join("-");
+// Keep this small so the page stays fast, but large enough for trend charts.
+const HISTORY_LIMIT = 50;
+
+/** Build a stable composite key that works for BOTH schedule rows and history entries. */
+function toGameKey(game) {
+  const season = game?.season ?? "";
+  const week = game?.week ?? "";
+  const home = (game?.home_abbr || game?.home_team || "").toString().trim().toUpperCase();
+  const away = (game?.away_abbr || game?.away_team || "").toString().trim().toUpperCase();
+
+  // Example: "2025-15-KC-BUF"
+  return [season, week, home, away].filter(Boolean).join("-");
+}
+
+/** Safe percent label for probabilities in [0, 1]. */
+function toPercentLabel(prob) {
+  const n = Number(prob);
+  if (!Number.isFinite(n)) return "n/a";
+  return `${Math.round(n * 100)}%`;
+}
 
 function LoadingSpinner({ label = "Loading" }) {
   return (
-    <div className={loadingContainer} role="status" aria-live="polite">
-      <span className={loadingSpinner} aria-hidden="true" />
-      <p>{label}...</p>
+    <div className="stats-loading" role="status" aria-live="polite">
+      <span className="stats-loading__spinner" aria-hidden="true" />
+      <p className="stats-loading__label">{label}...</p>
     </div>
   );
 }
 
 /**
- * SummaryCard - small KPI card used for health / dataset / history metrics.
- * `intent` is a semantic style hook ("ok" | "error" | "default").
+ * SummaryCard - small KPI card for quick metrics.
  *
- * @param {{
- *   title: string;
- *   value: string | number | null | undefined;
- *   subtext?: string;
- *   intent?: "ok" | "error" | "default";
- * }} props
+ * intent: "ok" | "error" | "default"
  */
 function SummaryCard({ title, value, subtext, intent = "default" }) {
   return (
-    <article className={`${summaryCard} ${styles[intent] ?? ""}`}>
-      <p className={summaryLabel}>{title}</p>
-      <strong className={summaryValue}>{value ?? "-"}</strong>
-      {subtext && <small className={summarySubtext}>{subtext}</small>}
+    <article className={`summary-card summary-card--${intent}`}>
+      <p className="summary-card__label">{title}</p>
+      <strong className="summary-card__value">{value ?? "-"}</strong>
+      {subtext ? <small className="summary-card__subtext">{subtext}</small> : null}
     </article>
   );
 }
 
-
 export default function StatsPage() {
-  /** @type {any} */
-  const predictionState = usePredictions();
-
-  // Remote payloads from the backend
-  const [schedule, setSchedule] = useState(
-    /** @type {any[]} */([])
-  );
-  const [historyPayload, setHistoryPayload] = useState({ entries: [], total: 0 });
+  // Remote payloads (backend-only)
+  const [schedule, setSchedule] = useState([]);
+  const [historyPayload, setHistoryPayload] = useState({ entries: [], total: 0, limit: 0 });
   const [overview, setOverview] = useState(null);
 
   // Local UI state
-  const [isPageLoading, setIsPageLoading] = useState(true);
-  const [pageError, setPageError] = useState(/** @type {string | null} */(null));
+  const [isLoading, setIsLoading] = useState(true);
+  const [pageError, setPageError] = useState(null);
 
   /**
-   * Initial hydration:
-   * - schedule: upcoming games (for "Next Week Schedule")
-   * - history: last N prediction entries
-   * - overview: health + dataset + history summary metrics
+   * Load everything in parallel.
+   * We use Promise.allSettled so ONE failing endpoint does not blank the whole page.
    */
   useEffect(() => {
     let active = true;
 
-    const hydrate = async () => {
-      try {
-        setIsPageLoading(true);
-        const [scheduleData, historyResponse, overviewData] = await Promise.all([
-          getNextWeekSchedule(),
-          getPredictionHistory(50),
-          getStatusOverview(),
-        ]);
+    async function hydrate() {
+      setIsLoading(true);
+      setPageError(null);
 
-        if (!active) return;
+      const [scheduleRes, historyRes, overviewRes] = await Promise.allSettled([
+        getNextWeekSchedule(),
+        getPredictionHistory(HISTORY_LIMIT),
+        getStatusOverview(),
+      ]);
 
-        setSchedule(Array.isArray(scheduleData) ? scheduleData : []);
-        setHistoryPayload(historyResponse || { entries: [], total: 0 });
-        setOverview(overviewData || null);
-        setPageError(null);
-      } catch (err) {
-        if (!active) return;
-        console.error("[StatsPage] loadPageData failed", err);
-        setPageError("Failed to load status data. Backend may be offline.");
-      } finally {
-        if (active) setIsPageLoading(false);
+      if (!active) return;
+
+      // Schedule
+      if (scheduleRes.status === "fulfilled") {
+        setSchedule(Array.isArray(scheduleRes.value) ? scheduleRes.value : []);
+      } else {
+        // Keep schedule empty, but don’t hard-fail the whole page.
+        console.warn("[StatsPage] schedule fetch failed", scheduleRes.reason);
+        setSchedule([]);
       }
-    };
+
+      // History (client.js already returns a safe shape, even on failure)
+      if (historyRes.status === "fulfilled") {
+        setHistoryPayload(historyRes.value || { entries: [], total: 0 });
+      } else {
+        console.warn("[StatsPage] history fetch failed", historyRes.reason);
+        setHistoryPayload({ entries: [], total: 0, limit: 0 });
+      }
+
+      // Overview (client.js returns a safe default object on failure)
+      if (overviewRes.status === "fulfilled") {
+        setOverview(overviewRes.value || null);
+      } else {
+        console.warn("[StatsPage] overview fetch failed", overviewRes.reason);
+        setOverview(null);
+      }
+      // If EVERYTHING failed, show a single friendly error with a tiny hint.
+      const failures = [];
+      if (scheduleRes.status === "rejected") failures.push("schedule");
+      if (historyRes.status === "rejected") failures.push("history");
+      if (overviewRes.status === "rejected") failures.push("overview");
+
+      const allFailed = failures.length === 3;
+
+      if (allFailed) {
+        setPageError(
+          `Failed to load status data (schedule, history, overview). Backend may be offline.`
+        );
+      } else if (failures.length > 0) {
+        // Partial failure: keep the page usable, but make the missing piece obvious.
+        setPageError(`Some data failed to load: ${failures.join(", ")}.`);
+      }
+      setIsLoading(false);
+    }
 
     hydrate();
+
     return () => {
-      // guard so we don't update state on an unmounted component
-      active = false;
+      active = false; // guard against setState on unmounted component
     };
   }, []);
 
-  /**
-   * History source:
-   * - Prefer backend-provided history payload.
-   * - Fall back to context history if backend history is empty/offline.
-   */
-  const history = useMemo(() => {
-    if (Array.isArray(historyPayload?.entries) && historyPayload.entries.length) {
-      return historyPayload.entries;
-    }
-    return Array.isArray(predictionState?.history) ? predictionState.history : [];
-  }, [historyPayload, predictionState?.history]);
+  // Normalize backend shapes into predictable view-model values.
+  const history = Array.isArray(historyPayload?.entries) ? historyPayload.entries : [];
+  const safeOverview = overview && typeof overview === "object" ? overview : {};
 
-  /**
-   * historyMap:
-   * We key predictions by BOTH:
-   *  - canonical game_id (backend ID)
-   *  - composite key (season-week-home-away) via toGameKey(entry)
-   *
-   * That way, schedule rows can be matched regardless of whether they carry
-   * a game_id or just the team/season/week fields.
-   */
+  const health = safeOverview.health || { status: "unknown" };
+  const dataset = safeOverview.dataset || {};
+  const historyMetrics = safeOverview.history?.metrics || {};
+
+  const totalPredictions =
+    Number.isFinite(Number(historyMetrics.total_predictions))
+      ? Number(historyMetrics.total_predictions)
+      : history.length;
+
+  const winRateLabel =
+    typeof historyMetrics.win_rate === "number"
+      ? `${Math.round(historyMetrics.win_rate * 100)}%`
+      : "n/a";
+
+  // Match schedule rows to predictions by either canonical id or composite key.
   const historyMap = useMemo(() => {
     const map = new Map();
 
-    history.forEach(
-      /** @param {any} entry */
-      (entry) => {
-        if (!entry) return;
+    for (const entry of history) {
+      if (!entry) continue;
 
-        // Primary key: stable ID from the backend, if present
-        if (entry.game_id) {
-          map.set(entry.game_id, entry);
-        }
+      // 1) canonical backend id
+      if (entry.game_id) map.set(entry.game_id, entry);
 
-        // Fallback: composite key constructed from season/week/home/away
-        const compositeKey = toGameKey(entry);
-        if (compositeKey) {
-          map.set(compositeKey, entry);
-        }
-      }
-    );
+      // 2) composite key
+      const key = toGameKey(entry);
+      if (key) map.set(key, entry);
+    }
 
     return map;
   }, [history]);
 
-  // Prefer backend overview; fall back to context health if overview is missing.
-  /** @type {any} */
-  const overviewData = overview || {};
-  // @ts-ignore - overviewData is a plain JSON-like object from the backend.
-  const health = overviewData.health || predictionState?.health;
-  const datasetStatistics = overviewData.dataset || {};
-  const historyMetrics = overviewData.history?.metrics || {
-    total_predictions: history.length,
+  const scheduleRows = Array.isArray(schedule) ? schedule : [];
+  const currentWeek =
+    Number.isFinite(Number(scheduleRows?.[0]?.week)) ? Number(scheduleRows[0].week) : null;
+
+  // Give NavBar what it likely expects (same shape as Dashboard’s navState).
+  const navState = {
+    title: "Prediction Status",
+    heroSubtitle: "Live backend health, dataset stats, and recorded predictions.",
+    subtitle: `${totalPredictions} historical predictions stored`,
+    weekLabel: currentWeek ? `Week ${currentWeek}` : "Week ?",
+    healthLabel:
+      health?.status === "healthy" ? "Backend: Healthy" : `Backend: ${health?.status ?? "unknown"}`,
   };
-  /** @type {any[]} */
-  const scheduleList = Array.isArray(schedule) ? schedule : [];
 
-  const predictionHistoryEntries = history;
-  const predictionWinRate =
-    typeof historyMetrics?.win_rate === "number"
-      ? `${Math.round(historyMetrics.win_rate * 100)}%`
-      : "n/a";
+  function renderSchedule() {
+    if (isLoading) return <LoadingSpinner label="Loading status" />;
+    if (pageError) return <div className="stats-error">{pageError}</div>;
 
-  /**
-   * Renders "Next Week Schedule" list:
-   * - Each row shows matchup + kickoff time
-   * - If we have a matching prediction, show win probabilities and margin
-   */
-  const renderScheduleList = () => {
-    if (isPageLoading) return <LoadingSpinner label="Loading status" />;
-    if (pageError) return <div className={error}>{pageError}</div>;
-    if (scheduleList.length === 0) {
-      return (
-        <p className={empty}>
-          No future games detected in the schedule file.
-        </p>
-      );
+    if (scheduleRows.length === 0) {
+      return <p className="stats-empty">No future games detected in the schedule file.</p>;
     }
 
     return (
-      <ul className={scheduleList}>
-        {scheduleList.map((game) => {
-          const idKey = game?.game_id ?? game?.id;
+      <ul className="stats-schedule__list">
+        {scheduleRows.map((game, idx) => {
+          const idKey = game?.game_id ?? game?.id ?? null;
           const compositeKey = toGameKey(game);
 
-          // Try to resolve the prediction by canonical ID first, then by composite key
           const prediction =
-            (idKey && historyMap.get(idKey)) ||
-            (compositeKey && historyMap.get(compositeKey));
+            (idKey && historyMap.get(idKey)) || (compositeKey && historyMap.get(compositeKey));
 
           const kickoffDate = game?.kickoff ? new Date(game.kickoff) : null;
-          const kickoffLabel = kickoffDate
-            ? kickoffDate.toLocaleString()
-            : "TBD";
+          const kickoffLabel = kickoffDate ? kickoffDate.toLocaleString() : "TBD";
+
+          const rowKey = idKey || compositeKey || `${idx}`;
 
           return (
-            <li key={idKey || compositeKey} className={scheduleItem}>
-              <div className={gameInfo}>
-                <span>
-                  {game.away_abbr || game.away_team} @{" "}
-                  {game.home_abbr || game.home_team}
+            <li key={rowKey} className="stats-schedule__item">
+              <div className="stats-schedule__game">
+                <span className="stats-schedule__matchup">
+                  {(game?.away_abbr || game?.away_team) ?? "AWAY"} @{" "}
+                  {(game?.home_abbr || game?.home_team) ?? "HOME"}
                 </span>
-                <span className={kickoffTime}>{kickoffLabel}</span>
+                <span className="stats-schedule__kickoff">{kickoffLabel}</span>
               </div>
 
               {prediction ? (
-                <div className={predictionDetails}>
-                  <p>
-                    Home win:{" "}
-                    {Math.round(
-                      (prediction.home_win_probability ?? 0) * 100
-                    )}
-                    %
-                  </p>
-                  <p>
-                    Away win:{" "}
-                    {Math.round(
-                      (prediction.away_win_probability ?? 0) * 100
-                    )}
-                    %
-                  </p>
-                  <p className={pointDiff}>
+                <div className="stats-schedule__prediction">
+                  <p>Home win: {toPercentLabel(prediction.home_win_probability)}</p>
+                  <p>Away win: {toPercentLabel(prediction.away_win_probability)}</p>
+                  <p className="stats-schedule__diff">
                     Diff:{" "}
-                    {prediction.point_diff?.toFixed?.(1) ??
-                      prediction.point_diff}{" "}
-                    pts
+                    {prediction.point_diff?.toFixed?.(1) ?? prediction.point_diff ?? "n/a"} pts
                   </p>
                 </div>
               ) : (
-                <p className={pendingNote}>
-                  No prediction recorded yet.
-                </p>
+                <p className="stats-schedule__pending">No prediction recorded yet.</p>
               )}
             </li>
           );
         })}
       </ul>
     );
-  };
+  }
 
   return (
     <>
-      {/* Propagate latest health into the NavBar so the whole app reflects status */}
-      {/* @ts-ignore - predictionState is a JS object from context; we allow spreading here. */}
-      <NavBar state={{ ...predictionState, health }} />
+      {/* Keep NavBar informed about health without relying on context */}
+      <NavBar state={navState} />
 
-      <div className={statsPage}>
-        <header className={pageHeader}>
-          <h1 className={h1}>Prediction Status Page</h1>
-          <p className={pageLead}>
+      <div className="stats-page">
+        <header className="stats-page__header">
+          <h1 className="stats-page__title">Prediction Status Page</h1>
+          <p className="stats-page__lead">
             Live backend health, dataset stats, and recorded predictions.
           </p>
         </header>
 
-        <section className={summaryGrid}>
-          <SummaryCard
-            title="Backend Health"
-            value={health?.status ?? "unknown"}
-            subtext={health?.reason}
-            intent={
-              health?.status === "healthy"
-                ? "ok"
-                : health?.status === "unhealthy"
-                  ? "error"
-                  : "default"
-            }
-          />
-          <SummaryCard
-            title="Dataset rows"
-            value={datasetStatistics?.rows ?? "-"}
-            subtext={datasetStatistics?.path ?? "path unknown"}
-          />
-          <SummaryCard
-            title="Predictions recorded"
-            value={historyMetrics?.total_predictions ?? predictionHistoryEntries.length}
-            subtext={`Win rate: ${predictionWinRate}`}
-          />
+        <section className="stats-summary">
+          <div className="stats-summary__grid">
+            <SummaryCard
+              title="Backend Health"
+              value={health?.status ?? "unknown"}
+              subtext={health?.reason}
+              intent={
+                health?.status === "healthy"
+                  ? "ok"
+                  : health?.status === "unhealthy"
+                    ? "error"
+                    : "default"
+              }
+            />
+            <SummaryCard
+              title="Dataset rows"
+              value={dataset?.rows ?? "-"}
+              subtext={dataset?.path ?? "path unknown"}
+            />
+            <SummaryCard
+              title="Predictions recorded"
+              value={totalPredictions}
+              subtext={`Win rate: ${winRateLabel}`}
+            />
+          </div>
         </section>
 
-        <section className={scheduleSection}>
-          <h2 className={h2}>Next Week Schedule</h2>
-          {renderScheduleList()}
+        <section className="stats-section">
+          <h2 className="stats-section__title">Next Week Schedule</h2>
+          {renderSchedule()}
         </section>
 
-        <section className={historySection}>
-          <h2 className={h2}>Historical Predictions</h2>
-          {/* HistoryChart still receives the raw history array plus context state */}
-          <HistoryChart history={history} state={predictionState} />
+        <section className="stats-section">
+          <h2 className="stats-section__title">Historical Predictions</h2>
+          {/* We no longer have a context "state"; pass a tiny object if the chart expects a prop. */}
+          <HistoryChart history={history} state={{ health }} />
         </section>
       </div>
     </>

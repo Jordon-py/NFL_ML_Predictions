@@ -1,9 +1,10 @@
+"""
 # File: backend/build_csv_datasetsv3.py
 # Purpose: Canonical NFL dataset builder producing leak-safe game-level features and exports for training/inference.
 # Functions: setup_logger(105), load_team_game_metrics(218), load_player_game_stats(375), load_team_weekly_stats(507), load_schedules(557), add_features(709), build_dominance_features(1188), create_elo_features(1341), create_game_features(1417), create_rolling_features(1447), create_qb_features(1547), create_target_features(1581), build_dataset(1618), parse_args(1779), main(1822)
 # Variables: ABBR_FIX(80), OUTPUT_DATASET_NAME(90), HAS_winner_BOOL(93), TIME_COLS_IN_ORDER(94), NFL_BACKEND(121)
 # Interacts With: backend/utils/feature_helpers.py, nflreadpy/nfl_data_py backends, data/pbp caches, train_models.py (consumes CSV outputs)
-"""
+
 build_csv_datasets.py
 =====================
 
@@ -21,7 +22,8 @@ Features:
 
 Quick start
 -----------
-python build_csv_datasetsv3.py --start 2018 --end 2025 --out-dir './data/prod-models' --save-dominance-matrix
+python build_csv_datasetsv3.py --start 2019 --end 2025 --out-dir './data/heroku-models' --save-dominance-matrix --encode 'onehot' --save-dominance-matrix --dominance-log ./data/dominance_log.txt
+
 
 Additional quick starts (common option combinations):
 

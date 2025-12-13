@@ -21,9 +21,6 @@ ENV/
 
 # Model files
 
-models/*.pkl
-models/*.model
-!models/.gitkeep
 
 # Data files (keep structure but not data)
 

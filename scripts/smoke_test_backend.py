@@ -15,6 +15,7 @@ if __name__ == '__main__':
         'http://127.0.0.1:8000/status/overview',
         'http://127.0.0.1:8000/schedule/next-week',
         'http://127.0.0.1:8000/history'
+        'http://127.0.0.1:8000/predict'
     ]
 
     for u in urls:

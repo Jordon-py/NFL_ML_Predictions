@@ -17,7 +17,7 @@
 import React from 'react';
 import Card from './Card.jsx';
 import './TeamGrid.css';
-import { predictGame } from '../../api/client.js';
+import { predictGame } from '../../api/nfl.js';
 
 /**
  * Build a stable key for a game.
@@ -180,6 +180,22 @@ export default function TeamGrid({
           Showing <strong>{games.length}</strong> games scheduled.
         </p>
       </header>
+    // 3. Normal, "loaded" path: render the header and the card grid.
+    return (
+      <section
+        className="team-grid"
+        aria-label={`NFL Week ${safeWeek}`}
+        data-week={safeWeek}
+      >
+        <header className="team-grid__header">
+          <div className="team-grid__heading">
+            <span className="team-grid__badge">Week {safeWeek}</span>
+            <h2 className="team-grid__title">Matchups</h2>
+          </div>
+          <p className="team-grid__subtitle">
+            Showing <strong>{games.length}</strong> games scheduled.
+          </p>
+        </header>
 
       <div className="team-grid__grid">
         {games.map((game, index) => {
@@ -238,6 +254,36 @@ export default function TeamGrid({
               });
             }
           };
+              // Fallback path: construct the payload that the backend expects
+              // and call the API helper directly.
+              const payload = {
+                home_team: homeAbbr,
+                away_team: awayAbbr,
+                // We support both season/week and season_num/week_num naming.
+                season: game?.season ?? game?.season_num ?? null,
+                week: game?.week ?? game?.week_num ?? null,
+              };
+
+              try {
+                // Functional setState pattern:
+                // - We use the callback form of setLocalLoadingMap(prev => next)
+                //   to avoid bugs when multiple clicks happen in quick succession.
+                setLocalLoadingMap((prev) => ({ ...prev, [rawKey]: true }));
+                await predictGame(payload);
+              } catch (err) {
+                // eslint-disable-next-line no-console
+                console.error('[TeamGrid] predictGame failed', err);
+              } finally {
+                // Clean up the local loading flag when the request completes,
+                // regardless of success or failure.
+                setLocalLoadingMap((prev) => {
+                  const copy = { ...prev };
+
+                  delete copy[rawKey];
+                  return copy;
+                });
+              }
+            };
 
           return (
             <Card

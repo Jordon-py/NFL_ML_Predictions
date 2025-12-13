@@ -11,6 +11,7 @@ ENV/
 env.bak/
 backend/.venv/
 backend/venv/
+nfl_env/
 
 ## Node artifacts
 node_modules/
@@ -27,8 +28,9 @@ frontend/build/
 frontend/dist/
 frontend/dist/node_modules
 frontend/.vite/
+frontend/.vercel/
 .parcel-cache/
-.vercel
+.vercel/
 
 ## Environment configuration
 .env
@@ -84,6 +86,7 @@ data/
 
 .bundle
 
+*.bundle
 *.txt
 
 *.pkl
@@ -106,6 +109,7 @@ data/
 node_modules
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 node_modules
 node_modules
@@ -113,3 +117,8 @@ node_modules
 node_modules/
 frontend/node_modules/
 >>>>>>> 385c33653 (Stop tracking node_modules; ignore for future)
+=======
+## Backup bundles
+*.bundle
+
+>>>>>>> cd97fecac (chore: update .gitignore to include backup bundles and clean up node artifacts)
