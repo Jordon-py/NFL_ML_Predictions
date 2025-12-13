@@ -1,0 +1,95 @@
+{
+    "project_overview": {
+        "name": "NFL_ML_Predictions",
+        "description": "NFL game prediction system with FastAPI backend, React frontend, and ML models",
+        "stack": [
+            "Python",
+            "FastAPI",
+            "React",
+            "scikit-learn",
+            "pandas"
+        ],
+        "last_analyzed": "2025-12-07T06:00:00Z"
+    },
+    "metrics": {
+        "variables": {
+            "train_models.py": {
+                "TARGET_HOME": "home_points_for",
+                "TARGET_AWAY": "away_points_for",
+                "CLASS_LABEL": "home_win",
+                "TIME_KEYS": [
+                    "season",
+                    "week"
+                ],
+                "HP_N_ITER": "int (default 50)",
+                "N_SPLITS": "int (default 5)",
+                "RANDOM_SEED": "int (default 42)",
+                "N_JOBS": "int (default -1)"
+            }
+        },
+        "functions": {
+            "train_models.py": {
+                "_timer": "Format elapsed time since start",
+                "_ensure_columns": "Validate required columns exist in DataFrame",
+                "_dataset_hash": "Generate reproducible hash for dataset versioning",
+                "_drop_leaky_columns": "Remove columns that could leak target information",
+                "_infer_features": "Separate numeric and categorical feature columns",
+                "_make_preprocessor": "Build sklearn preprocessing pipeline",
+                "_dataset_sort": "Sort dataset chronologically by season and week",
+                "_get_holdout_split": "Reserve final chronological portion for holdout",
+                "_fit_regression": "Fit regression model with hyperparameter search",
+                "_fit_classifier": "Fit binary classifier with hyperparameter search",
+                "_evaluate_regression": "Compute regression metrics on holdout set",
+                "_evaluate_classifier": "Compute classifier metrics on holdout set",
+                "_extract_feature_importance": "Extract feature importance from trained model",
+                "main": "Execute full training pipeline"
+            }
+        },
+        "interactions": {
+            "train_models.py -> backend/models/": "Outputs: preprocessor.joblib, home_model.joblib, away_model.joblib, win_clf_calibrated.joblib, metadata.json, training_report.json, feature_importance.json",
+            "train_models.py <- backend/data/": "Input: game_features_2014_2025.csv or other CSV datasets",
+            "main.py <- backend/models/": "Loads trained models for prediction API"
+        },
+        "data_shapes": {
+            "RegressionMetrics": {
+                "mae": "float",
+                "rmse": "float",
+                "r2": "float"
+            },
+            "ClassifierMetrics": {
+                "accuracy": "float",
+                "roc_auc": "float",
+                "brier_score": "float",
+                "log_loss_val": "float",
+                "pr_auc": "float"
+            },
+            "TrainingSummary": "Comprehensive training run summary with metrics and params"
+        }
+    },
+    "history_log": [
+        {
+            "timestamp": "2025-12-07T06:00:00Z",
+            "action": "Enhanced train_models.py",
+            "files_modified": [
+                "backend/train_models.py"
+            ],
+            "changes": [
+                "Fixed broken _fit_classifier function (was missing return statement)",
+                "Removed duplicate TrainSummary dataclass definition",
+                "Added RegressionMetrics and ClassifierMetrics dataclasses",
+                "Added comprehensive holdout evaluation (MAE, RMSE, R², ROC-AUC, Brier, PR-AUC)",
+                "Added feature importance extraction and persistence",
+                "Added timing information throughout training pipeline",
+                "Improved logging with structured output",
+                "Added _get_holdout_split for proper train/holdout separation",
+                "Enhanced CLI with --cv-splits argument",
+                "Output now includes feature_importance.json",
+                "Changed dataset hash to SHA256 (more robust)",
+                "Made preprocessor force dense output for HistGradientBoosting compatibility"
+            ],
+            "result": "Pass",
+            "insight": "Training script now produces full metrics suite and feature importances for model interpretability"
+        }
+    ],
+    "last_run_summary": "Enhanced train_models.py with proper holdout evaluation, feature importance extraction, timing, and fixed broken _fit_classifier. Script now outputs 7 artifacts including feature_importance.json."
+}
