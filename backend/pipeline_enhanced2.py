@@ -65,7 +65,7 @@ from sklearn.metrics import (
 from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.linear_model import LogisticRegression
 from sklearn.calibration import CalibratedClassifierCV
-import matplotlib as plt
+import matplotlib.pyplot as plt
 
 from typing import Dict, List, Tuple, Any
 from pathlib import Path
