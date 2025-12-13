@@ -102,3 +102,6 @@ data/
 !vercel.json
 node_modules
 
+## Backup bundles
+*.bundle
+
