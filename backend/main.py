@@ -203,7 +203,7 @@ class AppState:
         """Load the most recent game_features*.csv into memory."""
         try:
             path: Path
-        
+
             path = 'NFL_ML_Predictions/backend/data/game_features_20251201.csv'
                 # Fallback default filename under data dir
             path = DATA_DIR / "game_features_20251201.csv"
@@ -767,15 +767,7 @@ async def predict(request: PredictRequest) -> Dict[str, Any]:
         fall back to a logistic transform of the score differential.
       - Record result in in-memory history and return it.
     """
-    # Ensure backend is "ready"
-    models_ok = all(m in state.models for m in REQUIRED_MODELS)
-    if state.dataset is None or not models_ok:
-        missing = [m for m in REQUIRED_MODELS if m not in state.models]
-        raise HTTPException(
-            status_code=503,
-            detail=f"Not ready: missing models {missing}",
-        )
-
+  
     # Normalize identifiers for matching against dataset
     home_team = request.home_team.strip().upper()
     away_team = request.away_team.strip().upper()
