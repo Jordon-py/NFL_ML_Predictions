@@ -21,7 +21,7 @@ Features:
 
 Quick start
 -----------
-python build_csv_datasetsv3.py --start 2018 --end 2025 --out-dir ./data --save-dominance-matrix
+python build_csv_datasetsv3.py --start 2018 --end 2025 --out-dir './data/prod-models' --save-dominance-matrix
 
 Additional quick starts (common option combinations):
 
@@ -809,7 +809,7 @@ def add_features(
         c for c in wide.columns if c.startswith(("home_prior_", "away_prior_"))
     ]
     diff_feature_cols = [c for c in wide.columns if c.startswith("home_minus_away_")]
-    
+
     # Leak-safe forward-fill for priors and rolling stats on future rows
     wide = _ffill_prior_features(wide)
     wide = _ffill_rolling_features(wide)
@@ -1510,8 +1510,45 @@ def create_rolling_features(df: pd.DataFrame) -> pd.DataFrame:
         completed, (team_games["points_for"] > team_games["points_against"]).astype(float), np.nan
     )
 
-    def safe_rolling(series: pd.Series, window: int) -> pd.Series:
-        return series.shift(1).rolling(window=window, min_periods=1).mean()
+    grouped = team_games.groupby("team", group_keys=False)
+    for window in [3, 5, 10]:
+        team_games[f"rolling_pf_{window}"] = grouped["points_for"].apply(
+            lambda x: safe_rolling(x, window)
+        )
+        team_games[f"rolling_pa_{window}"] = grouped["points_against"].apply(
+            lambda x: safe_rolling(x, window)
+        )
+        team_games[f"rolling_win_pct_{window}"] = grouped["win"].apply(
+            lambda x: safe_rolling(x, window)
+        )
+
+    roll_cols = [c for c in team_games.columns if c.startswith("rolling_")]
+
+    home_rolling = team_games[team_games["is_home"] == 1][
+        ["game_id", "team"] + roll_cols
+    ].copy()
+    home_rolling.columns = ["game_id", "home_team"] + [f"home_{c}" for c in roll_cols]
+
+    away_rolling = team_games[team_games["is_home"] == 0][
+        ["game_id", "team"] + roll_cols
+    ].copy()
+    away_rolling.columns = ["game_id", "away_team"] + [f"away_{c}" for c in roll_cols]
+
+    out = out.merge(home_rolling, on=["game_id", "home_team"], how="left")
+    out = out.merge(away_rolling, on=["game_id", "away_team"], how="left")
+
+    logging.info("Created rolling window features (windows: 3, 5, 10)")
+    return out
+
+def safe_rolling(series: pd.Series, window: int) -> pd.Series:
+    """
+    Leak-safe rolling mean for pre-game features.
+
+    We always apply shift(1) so that the current game's result is never
+    included in its own rolling window. Only completed *prior* games
+    contribute to each row's rolling stats.
+    """
+    return series.shift(1).rolling(window=window, min_periods=1).mean()
 
     for window in [3, 5, 10]:
         grouped = team_games.groupby("team", group_keys=False)
@@ -1733,7 +1770,16 @@ def build_dataset(
                 except Exception:
                     logging.exception("Failed to write dominance log %s", dominance_log)
         except Exception:
-            logging.exception("Failed to compute/export dominance features")
+            logging.exception(msg="Failed to compute/export dominance features")
+
+    # This protects downstream classifiers from accidentally using a
+    # label-like feature (away_win = 1 - home_win) as an input.
+    if "away_win" in df.columns:
+        logging.warning(
+            msg="Dropping 'away_win' column from dataset before export to avoid label leakage."
+        )
+        df = df.drop(columns=["away_win"])
+
 
     # Write metadata
     try:
@@ -1781,7 +1827,7 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
         description="Build NFL game-level dataset (one row per game)."
     )
-    p.add_argument("--start", type=int, default=2017, help="Start season (inclusive).")
+    p.add_argument("--start", type=int, default=2018, help="Start season (inclusive).")
     p.add_argument("--end", type=int, default=2025, help="End season (inclusive).")
     p.add_argument(
         "--out-dir",

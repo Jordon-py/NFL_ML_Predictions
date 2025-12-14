@@ -1,147 +1,55 @@
-# Safe minimal slugignore - Backend (FastAPI) only for Heroku
+# Heroku slugignore (FastAPI backend)
+# Keep backend code + required model/data artifacts; exclude dev/frontend cruft.
 
-## Exclude entire frontend (deployed separately on Vercel)
-
+# Frontend (deployed separately on Vercel)
 frontend/
 
-## Node modules (largest space saver)
+# Node modules
+node_modules/
+**/node_modules/
 
-*/node_modules/
-
-## Development artifacts
-
-**/*.map
-.cache/
-tmp/
-logs/
-__pycache__/
-.vscode/
-.github/
-*.md
-docs/
-tests/
-.git/
-.github/
-frontend/node_modules/
-frontend/src/
-frontend/public/
-backend/__pycache__/
-backend/logs/
-backend/metrics/data/game_features_new.csv
-*.pyc
+# Local Python environments
 .venv/
 venv/
-.pytest_cache
-.vercel/
-frontend/*
-!.vercel/output/
-!.json
-*/*.toml
-*.lock
-.pytest_cache/*
-node_modules/*
-frontend/node_modules/*
-.DS_Store
-.env
-.env.*
-ollama run dolphin-mistral
-## Language caches
-__pycache__/
-*.py[cod]
-*$py.class
-
-## Virtual environments
-.venv/
-venv/
-env/
-ENV/
-env.bak/
 backend/.venv/
 backend/venv/
-nfl_env/
+env/
+ENV/
 
-## Node artifacts
-node_modules/
-frontend/node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
+# Git/CI/editor metadata
+.git/
+.github/
+.vscode/
+.idea/
 
-## Build outputs
-build/
-dist/
-frontend/build/
-frontend/dist/
-frontend/dist/node_modules
-frontend/.vite/
-frontend/.vercel/
-.parcel-cache/
-.vercel
-
-## Environment configuration
+# Local env files / secrets
 .env
 .env.*
-backend/.env
-frontend/.env*
 
-## IDE & OS noise
-.vscode/*
-!.vscode/settings.json
-!.vscode/tasks.json
-.idea/
-*.swp
-*.swo
-.DS_Store
-Thumbs.db
-
-## Logs & coverage
-*.log
-coverage/
+# Python caches & test junk
+__pycache__/
+**/__pycache__/
+*.pyc
 .pytest_cache/
-*.coverage
-backend/logs/
+.cache/
 
-## Notebook checkpoints
-.ipynb_checkpoints/
+# Notebooks, docs, reports
+docs/
+reports/
+backend/reports/
+backend/metrics/
+backend/tests/
+tests/
+**/*.ipynb
+**/*.map
 
-## Packaging artifacts
-.slugignore
-*.so
-.Python
-develop-eggs/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-pip-wheel-metadata/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-node_modules/
+# Vercel artifacts
+.vercel/
+frontend/.vercel/
 
-## Data & models (allow curated assets)
-
-.bundle
-
-*.txt
-
-!README.md
-
-
-## AI tooling
-
-
-## Deployment configs
-
-node_modules
-node_modules
-node_modules
-node_modules/
-frontend/node_modules/
+# Large duplicate artifacts not needed at runtime (we use backend/data/prod-models by default)
+models/
+backend/OUTDIR/
+backend/20*/
+backend/prod-models/
+backend/models/

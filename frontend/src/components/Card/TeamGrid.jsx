@@ -17,7 +17,7 @@
 import React from 'react';
 import Card from './Card.jsx';
 import './TeamGrid.css';
-import { predictGame } from '../../api/client.js';
+import { predictGame } from '../../api/nfl.js';
 
 /**
  * Build a stable key for a game.

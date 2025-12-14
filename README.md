@@ -10,7 +10,7 @@ graph TD
     D --> A[User Interaction]
     A --> E[Real-time Predictions]
     E --> D
-    
+
 ```
 
 ![Project Screenshot](https://github.com/user-attachments/assets/826bfed3-ad7e-4c32-bfc7-e3b12cde826f)
@@ -41,7 +41,7 @@ This NFL Prediction System offers the following key features:
 1. Clone the repository:
 
 ```bash
-git clone https://github.com/your-username/NFL_ML_Predictions.git
+git clone https://github.com/cjordon/NFL_ML_Predictions.git
 cd NFL_ML_Predictions
 ```
 
@@ -93,6 +93,12 @@ npm start
 ```
 
 The application will be available at `http://localhost:3000`
+
+## Model Performance Snapshot (Latest)
+
+| Run Date (UTC) | Dataset | Features | Home MAE / RMSE | Away MAE / RMSE | Win Brier / LogLoss / Acc | Notes |
+|----------------|---------|----------|------------------|------------------|---------------------------|-------|
+| 2025-12-01 16:33 | 2,611 games × 136 cols | Prior efficiency diffs, player aggregates, betting lines, rest, Elo | 4.45 / 5.85 | 4.36 / 5.57 | 0.123 / 0.388 / 0.825 | GradientBoostingRegressor (scores) + CalibratedClassifierCV (wins), random_state 4211. Full ledger in `docs/training_runs.md`. |
 
 ## Overview
 
@@ -195,16 +201,16 @@ def prepare_game_level_data(df):
             'touchdown': 'sum',
             # Add other relevant features
         }).reset_index()
-        
+
         # Add game outcome (you'll need to define this based on your data)
         # This is a simplified example
         game_features['home_won'] = np.random.choice([0, 1], size=len(game_features))
-        
+
     else:
         # Game-level data
         game_features = df.copy()
         game_features['home_won'] = (game_features['point_diff'] > 0).astype(int)
-    
+
     return game_features
 
 # Prepare datasets
@@ -218,32 +224,32 @@ predictive_features = ['offensive_epa', 'avg_speed', 'explosive_plays_count', 's
 # Train models
 def evaluate_model(X, y, feature_names, model_name):
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-    
+
     # Random Forest
     rf = RandomForestClassifier(n_estimators=100, random_state=42)
     rf.fit(X_train, y_train)
     rf_pred = rf.predict(X_test)
     rf_accuracy = accuracy_score(y_test, rf_pred)
-    
+
     # Logistic Regression
     lr = LogisticRegression(random_state=42)
-    lr.fit(X_train, y_train) 
+    lr.fit(X_train, y_train)
     lr_pred = lr.predict(X_test)
     lr_accuracy = accuracy_score(y_test, lr_pred)
-    
+
     print(f"\n{model_name} Results:")
     print(f"Random Forest Accuracy: {rf_accuracy:.3f}")
     print(f"Logistic Regression Accuracy: {lr_accuracy:.3f}")
-    
+
     # Feature importance (Random Forest)
     importance = pd.DataFrame({
         'feature': feature_names,
         'importance': rf.feature_importances_
     }).sort_values('importance', ascending=False)
-    
+
     print("Top 5 Most Important Features:")
     print(importance.head())
-    
+
     return rf_accuracy, lr_accuracy
 
 # Compare models
@@ -257,7 +263,7 @@ if len(original_games) > 100 and all(col in original_games.columns for col in or
     y_orig = original_games['home_won']
     orig_rf, orig_lr = evaluate_model(X_orig, y_orig, original_features, "Original Dataset")
 
-# Predictive data model  
+# Predictive data model
 if len(predictive_games) > 100 and all(col in predictive_games.columns for col in predictive_features):
     X_pred = predictive_games[predictive_features].fillna(0)
     y_pred = predictive_games['home_won']
@@ -272,10 +278,10 @@ def analyze_correlations(df, target_col='home_won'):
     """Analyze feature correlations with target variable."""
     numeric_cols = df.select_dtypes(include=[np.number]).columns
     correlations = df[numeric_cols].corr()[target_col].abs().sort_values(ascending=False)
-    
+
     print(f"\nTop 10 features correlated with {target_col}:")
     print(correlations.head(10))
-    
+
     return correlations
 
 # Run correlation analysis
@@ -286,7 +292,7 @@ if 'home_won' in predictive_games.columns:
 def compare_feature_distributions(orig_df, pred_df):
     """Compare feature distributions between datasets."""
     common_features = set(orig_df.columns) & set(pred_df.columns)
-    
+
     for feature in list(common_features)[:5]:  # Analyze first 5 common features
         print(f"\n{feature} Statistics:")
         print(f"Original - Mean: {orig_df[feature].mean():.3f}, Std: {orig_df[feature].std():.3f}")

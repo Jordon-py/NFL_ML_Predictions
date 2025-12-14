@@ -41,9 +41,9 @@ graph TD
 
 ### Step-by-Step Breakdown
 
-1.  **User Interaction**: The flow begins in `TeamGrid.jsx` when a user clicks on a matchup card. This triggers the `handlePredict` function.
+1. **User Interaction**: The flow begins in `TeamGrid.jsx` when a user clicks on a matchup card. This triggers the `handlePredict` function.
 
-2.  **API Call**: `handlePredict` calls `predictGame` from `api/client.js`, which sends a `POST` request to the backend's `/predict` endpoint.
+2. **API Call**: `handlePredict` calls `predictGame` from `api/client.js`, which sends a `POST` request to the backend's `/predict` endpoint.
 
 3.  **State Update**:
     *   Upon receiving a successful response, `handlePredict` uses the `toEntry` utility function from `PredictionContext.js` to format the API response into a standardized object.
@@ -113,9 +113,9 @@ export function toEntry({ home_abbr, away_abbr, home_score, away_score, ... }) {
 
 The `TeamGrid.jsx` component is responsible for fetching the weekly schedule and rendering a card for each matchup.
 
-1.  **Data Fetching**: An initial `useEffect` hook calls `getNextWeekSchedule()` from `api/client.js`. The result, an array of game objects, is stored in the `schedule` state variable.
+1. **Data Fetching**: An initial `useEffect` hook calls `getNextWeekSchedule()` from `api/client.js`. The result, an array of game objects, is stored in the `schedule` state variable.
 
-2.  **Rendering**: The component maps over the `schedule` array. For each `game` object in the array, it renders a matchup card.
+2. **Rendering**: The component maps over the `schedule` array. For each `game` object in the array, it renders a matchup card.
 
     *   A unique `key` is assigned to each card for efficient re-renders.
     *   The `game` object (containing team abbreviations, kickoff time, etc.) is passed to the card's `onClick` handler (`handlePredict`).

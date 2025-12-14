@@ -30,7 +30,7 @@ frontend/dist/node_modules
 frontend/.vite/
 frontend/.vercel/
 .parcel-cache/
-.vercel
+.vercel/
 
 ## Environment configuration
 .env
@@ -77,24 +77,29 @@ share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-node_modules/
+MANIFEST
 
 ## Data & models (allow curated assets)
-
-.bundle
-
+data/
+*.csv
+*.json
+*.bundle
 *.txt
 
+*.pkl
+*.model
+!requirements.txt
 !README.md
+!backend/data/prod-models/models/*.joblib
+!backend/data/prod-models/*.csv
+!backend/models/
+# CHANGED: Allow production model artifacts for Heroku deployment
+
+
 
 
 ## AI tooling
-
+.serena/
 
 ## Deployment configs
-
-node_modules
-node_modules
-node_modules
-node_modules/
-frontend/node_modules/
+!vercel.json

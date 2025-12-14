@@ -9,18 +9,19 @@
 
 #ham-button {
   background: transparent;
-  max-height: 48px;
-  max-width: 48px;
-  width: 48px;
-  height: 48px;
+  max-height: 32px;
+  max-width: 32px;
+  width: 32px;
+  height: 32px;
   border: 1px solid #007bff33;
-  border-radius: 8px;
+  border-radius: 6px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: transform 0.2s ease;
   z-index: 1000;
+  padding: 2px;
 }
 
 /* Hamburger Button */
@@ -105,8 +106,15 @@
 .menu-item a:focus {
   outline: 2px solid var(--accent-color, #ffce1f);
   outline-offset: -2px;
+}
 
-.menu-panel {
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .hamburger-menu-container {
+    display: block;
+  }
+
+  .menu-panel {
     min-width: 180px;
     right: -10px;
   }

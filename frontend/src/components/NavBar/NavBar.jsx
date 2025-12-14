@@ -14,8 +14,7 @@ import HamburgerMenu from '../Hamburger/HamburgerMenu';
  *   - We call `handleScroll()` once on mount to sync initial state (in case the page loads scrolled).
  *   - Passive scroll listener + SSR guard for safety.
  */
-function NavBar( { state = {} } )
-{
+function NavBar( { state = {} } ) {
     // Keep string type to avoid changing downstream CSS expectations
     const [ isSticking, setIsSticking ] = useState( '' );
     const { health } = state;
