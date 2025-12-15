@@ -2,16 +2,14 @@
 // Purpose: Status and history dashboard showing backend health, dataset stats, schedule, and recent predictions.
 // Functions: toGameKey(28), LoadingSpinner(33), SummaryCard(53), StatsPage(63)
 // Variables: historyMap(139), overviewData(165)
-// Interacts With: api/client for health/status/history/schedule, PredictionContext for fallback state.
+// Interacts With: api/client for health/status/history/schedule.
 // StatsPage.jsx - Status + History dashboard
 // -----------------------------------------
 // Pulls real-time health, dataset, and prediction history metrics from the backend
 // while still falling back to local context data when offline. Serves as the
 // "status page" requested by stakeholders.
 
-import React, { useState, useEffect, useMemo } from "react";
-import { usePredictions } from "../PredictionContext";
-import NavBar from "../components/NavBar/NavBar.jsx";
+import { useEffect, useState } from "react";
 import HistoryChart from "../components/HistoryChart.jsx";
 import {
   getNextWeekSchedule,
@@ -61,15 +59,10 @@ function SummaryCard({ title, value, subtext, intent = "default" }) {
 }
 
 export default function StatsPage() {
-  /** @type {any} */
-  const predictionState = usePredictions();
-
   // Remote payloads from the backend
-  const [schedule, setSchedule] = useState(
-    /** @type {any[]} */([])
-  );
-  const [historyPayload, setHistoryPayload] = useState({ entries: [], total: 0 });
-  const [overview, setOverview] = useState(null);
+  const [schedule, setSchedule] = useState(/** @type {any[]} */([]));
+  const [history, setHistory] = useState(/** @type {any[]} */([]));
+  const [overview, setOverview] = useState(/** @type {any | null} */(null));
 
   // Local UI state
   const [isPageLoading, setIsPageLoading] = useState(true);
@@ -96,7 +89,7 @@ export default function StatsPage() {
         if (!active) return;
 
         setSchedule(Array.isArray(scheduleData) ? scheduleData : []);
-        setHistoryPayload(historyResponse || { entries: [], total: 0 });
+        setHistory(Array.isArray(historyResponse?.entries) ? historyResponse.entries : []);
         setOverview(overviewData || null);
         setPageError(null);
       } catch (err) {
@@ -115,68 +108,22 @@ export default function StatsPage() {
     };
   }, []);
 
-  /**
-   * History source:
-   * - Prefer backend-provided history payload.
-   * - Fall back to context history if backend history is empty/offline.
-   */
-  const history = useMemo(() => {
-    if (Array.isArray(historyPayload?.entries) && historyPayload.entries.length) {
-      return historyPayload.entries;
-    }
-    return Array.isArray(predictionState?.history) ? predictionState.history : [];
-  }, [historyPayload, predictionState?.history]);
+  const historyMap = new Map();
+  history.forEach((entry) => {
+    if (!entry) return;
+    if (entry.game_id) historyMap.set(entry.game_id, entry);
+    const compositeKey = toGameKey(entry);
+    if (compositeKey) historyMap.set(compositeKey, entry);
+  });
 
-  /**
-   * historyMap:
-   * We key predictions by BOTH:
-   *  - canonical game_id (backend ID)
-   *  - composite key (season-week-home-away) via toGameKey(entry)
-   *
-   * That way, schedule rows can be matched regardless of whether they carry
-   * a game_id or just the team/season/week fields.
-   */
-  const historyMap = useMemo(() => {
-    const map = new Map();
-
-    history.forEach(
-      /** @param {any} entry */
-      (entry) => {
-        if (!entry) return;
-
-        // Primary key: stable ID from the backend, if present
-        if (entry.game_id) {
-          map.set(entry.game_id, entry);
-        }
-
-        // Fallback: composite key constructed from season/week/home/away
-        const compositeKey = toGameKey(entry);
-        if (compositeKey) {
-          map.set(compositeKey, entry);
-        }
-      }
-    );
-
-    return map;
-  }, [history]);
-
-  // Prefer backend overview; fall back to context health if overview is missing.
-  /** @type {any} */
   const overviewData = overview || {};
-  // @ts-ignore - overviewData is a plain JSON-like object from the backend.
-  const health = overviewData.health || predictionState?.health;
+  const health = overviewData.health || { status: "unknown" };
   const datasetStatistics = overviewData.dataset || {};
-  const historyMetrics = overviewData.history?.metrics || {
-    total_predictions: history.length,
-  };
+  const historyMetrics = overviewData.history?.metrics || { total_predictions: history.length };
   /** @type {any[]} */
   const scheduleList = Array.isArray(schedule) ? schedule : [];
 
-  const predictionHistoryEntries = history;
-  const predictionWinRate =
-    typeof historyMetrics?.win_rate === "number"
-      ? `${Math.round(historyMetrics.win_rate * 100)}%`
-      : "n/a";
+  const predictionWinRate = typeof historyMetrics?.win_rate === "number" ? `${Math.round(historyMetrics.win_rate * 100)}%` : "n/a";
 
   /**
    * Renders "Next Week Schedule" list:
@@ -257,10 +204,6 @@ export default function StatsPage() {
 
   return (
     <>
-      {/* Propagate latest health into the NavBar so the whole app reflects status */}
-      {/* @ts-ignore - predictionState is a JS object from context; we allow spreading here. */}
-      <NavBar state={{ ...predictionState, health }} />
-
       <div className={styles.statsPage}>
         <header className={styles.pageHeader}>
           <h1 className={styles.h1}>Prediction Status Page</h1>
@@ -289,7 +232,7 @@ export default function StatsPage() {
           />
           <SummaryCard
             title="Predictions recorded"
-            value={historyMetrics?.total_predictions ?? predictionHistoryEntries.length}
+            value={historyMetrics?.total_predictions ?? history.length}
             subtext={`Win rate: ${predictionWinRate}`}
           />
         </section>
@@ -302,7 +245,7 @@ export default function StatsPage() {
         <section className={styles.historySection}>
           <h2 className={styles.h2}>Historical Predictions</h2>
           {/* HistoryChart still receives the raw history array plus context state */}
-          <HistoryChart history={history} state={predictionState} />
+          <HistoryChart history={history} />
         </section>
       </div>
     </>

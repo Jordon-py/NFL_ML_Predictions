@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import './NavBar.css';
 import HamburgerMenu from '../Hamburger/HamburgerMenu';
@@ -14,11 +14,10 @@ import HamburgerMenu from '../Hamburger/HamburgerMenu';
  *   - We call `handleScroll()` once on mount to sync initial state (in case the page loads scrolled).
  *   - Passive scroll listener + SSR guard for safety.
  */
-function NavBar( { state = {} } )
+function NavBar({ health } = {})
 {
     // Keep string type to avoid changing downstream CSS expectations
     const [ isSticking, setIsSticking ] = useState( '' );
-    const { health } = state;
 
     // EFFECT: toggle the "sticking" class after scrolling a small distance.
     const handleScroll = () =>
@@ -57,10 +56,10 @@ function NavBar( { state = {} } )
             <svg width="0" height="0" aria-hidden="true">
                 <defs>
                     <linearGradient id="sb3Gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" stopColor="/9abfffff" />
-                        <stop offset="50%" stopColor="/a16affff" />
-                        <stop offset="85%" stopColor="/8fabdeff" />
-                        <stop offset="100%" stopColor="/2c79ffff" />
+                        <stop offset="0%" stopColor="#9abfffff" />
+                        <stop offset="50%" stopColor="#a16affff" />
+                        <stop offset="85%" stopColor="#8fabdeff" />
+                        <stop offset="100%" stopColor="#2c79ffff" />
                     </linearGradient>
                     <filter id="sb3Sparkle" x="-20%" y="-20%" width="140%" height="140%">
                         <feGaussianBlur in="SourceAlpha" stdDeviation="0.5" result="a" />
@@ -85,7 +84,10 @@ function NavBar( { state = {} } )
 
             <div className="nav-left">
                 <h1>NFL Predict</h1>
-                <div className={ `health-indicator ${healthStatusClass}` } title={ `Backend Status: ${health?.status} - ${health?.reason}` }></div>
+                <div
+                    className={ `health-indicator ${healthStatusClass}` }
+                    title={ `Backend Status: ${health?.status ?? 'unknown'}${health?.reason ? ` - ${health.reason}` : ''}` }
+                ></div>
             </div>
 
             {/* Desktop links (hidden on small screens via CSS) */ }

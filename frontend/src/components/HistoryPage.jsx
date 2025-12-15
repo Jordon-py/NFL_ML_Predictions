@@ -2,12 +2,10 @@
  * HistoryPage.jsx
  * ----------------
  * Purpose:
- *   Standalone route that renders the HistoryChart using data from
- *   the global PredictionContext. This allows the chart to be opened
- *   directly at /history without relying on the dashboard layout.
+ *   Standalone route that renders the HistoryChart using data from `/history`.
+ *   This allows the chart to be opened directly at /history.
  *
  * Contract:
- *   - Reads prediction state via selector hooks.
  *   - Supplies a safe `history` array to <HistoryChart/>.
  *
  * Notes:
@@ -15,8 +13,6 @@
  *   - Page re-renders when `state.history` changes in context.
  */
 import HistoryChart from './HistoryChart.jsx';
-import NavBar from './NavBar/NavBar.jsx';
-
 import { useEffect, useState } from 'react';
 import { getPredictionHistory } from '../api/client.js';
 
@@ -41,7 +37,6 @@ export default function HistoryPage() {
   // NavBar can display static info; HistoryChart reads `history` prop
   return (
     <>
-      <NavBar />
       <HistoryChart history={history} />
     </>
   );

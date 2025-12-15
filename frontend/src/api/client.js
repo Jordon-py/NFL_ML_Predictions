@@ -78,14 +78,6 @@ export async function fetchJson(path, options = {}) {
 // -------------------------
 // Health / Debug
 // -------------------------
-export async function health() {
-  return fetchJson("/health");
-}
-
-export async function getHealthStatus() {
-  return health();
-}
-
 export async function getStatusOverview() {
   try {
     const res = await fetchJson("/status/overview");
@@ -137,18 +129,6 @@ export async function getNextWeekSchedule() {
   return [];
 }
 
-/**
- * Team logos map for UI rendering.
- * Expected shape:
- *   { "TB": { logoUrl: "https://...", name: "Tampa Bay Buccaneers" }, ... }
- */
-export async function getTeamLogos() {
-  const res = await fetchJson("/teams/logos");
-  // If backend returns {teams:{...}} normalize it.
-  if (res && typeof res === "object" && res.teams && typeof res.teams === "object") return res.teams;
-  return res ?? {};
-}
-
 // -------------------------
 // Cognitive endpoints (compute)
 // -------------------------
@@ -168,41 +148,6 @@ export async function predictGame(payload) {
     method: "POST",
     body: JSON.stringify(body),
   });
-}
-
-/**
- * Batch predictions for the entire "next week" schedule.
- * Backend should return:
- *   { games: [{...schedule_fields, prediction: {...}}] }
- */
-export async function getNextWeekPredictions() {
-  const res = await fetchJson("/predict/next-week");
-  if (Array.isArray(res)) return res;
-  if (res && Array.isArray(res.games)) return res.games;
-  return [];
-}
-
-// -------------------------
-// Optional endpoints (training / history)
-// -------------------------
-export async function startTraining() {
-  const tryPost = async (path) => {
-    try {
-      return await fetchJson(path, { method: "POST" });
-    } catch (err) {
-      if (err instanceof HttpError) {
-        if (err.status === 404 || err.status === 405) return null;
-        const detail = err.body?.detail ?? err.body;
-        const msg = typeof detail === "string" ? detail : `Training request failed (${err.status})`;
-        throw new Error(msg);
-      }
-      throw err;
-    }
-  };
-
-  const res = (await tryPost("/retrain")) ?? (await tryPost("/train"));
-  if (res == null) throw new Error("Training endpoint not available");
-  return res;
 }
 
 export async function getPredictionHistory(limit = 100) {

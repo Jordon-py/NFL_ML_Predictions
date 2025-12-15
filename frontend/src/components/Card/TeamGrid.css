@@ -328,6 +328,20 @@
   color: var(--c-ink-soft);
 }
 
+.game-card__reset {
+  align-self: flex-end;
+  background: transparent;
+  border: 1px solid var(--c-border-subtle);
+  color: #e5e7eb;
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.game-card__reset:hover {
+  border-color: var(--c-brand-1);
+}
+
 /* Responsive tweaks */
 
 @media (max-width: 600px) {

@@ -21,7 +21,7 @@ Features:
 
 Quick start
 -----------
-python build_csv_datasetsv3.py --start 2018 --end 2025 --out-dir ./data --save-dominance-matrix
+python build_csv_datasetsv3.py --start 2019 --end 2025 --out-dir ./data --save-dominance-matrix --encode 'onehot' --no-calibration-rows 
 
 Additional quick starts (common option combinations):
 
@@ -809,7 +809,7 @@ def add_features(
         c for c in wide.columns if c.startswith(("home_prior_", "away_prior_"))
     ]
     diff_feature_cols = [c for c in wide.columns if c.startswith("home_minus_away_")]
-    
+
     # Leak-safe forward-fill for priors and rolling stats on future rows
     wide = _ffill_prior_features(wide)
     wide = _ffill_rolling_features(wide)
