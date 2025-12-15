@@ -7,25 +7,42 @@
  *   directly at /history without relying on the dashboard layout.
  *
  * Contract:
- *   - Reads `state` from usePredictions().
- *   - Passes `state` and a safe `history` array to <HistoryChart/>.
+ *   - Reads prediction state via selector hooks.
+ *   - Supplies a safe `history` array to <HistoryChart/>.
  *
- * Complexity notes:
- *   - Render cost is dominated by the chart, typically O(n) over history length.
- *   - Re-renders when context `state.history` changes.
+ * Notes:
+ *   - Chart render cost is roughly O(n) over `history.length`.
+ *   - Page re-renders when `state.history` changes in context.
  */
-import { usePredictions } from '../PredictionContext.jsx';
 import HistoryChart from './HistoryChart.jsx';
 import NavBar from './NavBar/NavBar.jsx';
 
-export default function HistoryPage() {
-  const predictionState = usePredictions();
-  const history = Array.isArray(predictionState?.history) ? predictionState.history : [];
+import { useEffect, useState } from 'react';
+import { getPredictionHistory } from '../api/client.js';
 
+export default function HistoryPage() {
+  // lightweight client-backed history loader — avoids missing selector hooks
+  const [history, setHistory] = useState([]);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const res = await getPredictionHistory(100);
+        if (!mounted) return;
+        setHistory(Array.isArray(res.entries) ? res.entries : res.entries ?? res ?? []);
+      } catch (err) {
+        setHistory([]);
+      }
+    })();
+    return () => (mounted = false);
+  }, []);
+
+  // NavBar can display static info; HistoryChart reads `history` prop
   return (
     <>
-      <NavBar state={predictionState} />
-      <HistoryChart state={predictionState} history={history} />
+      <NavBar />
+      <HistoryChart history={history} />
     </>
   );
 }

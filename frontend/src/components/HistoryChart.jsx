@@ -11,14 +11,19 @@
  *     • A human-readable label for the game (e.g., "2025 W7 MIA@BUF")
  *
  * Data contract (input):
- *   <HistoryChart history={arrayOfEvents} state={controllerState} />
- *   Each event may come from different parts of the app, so we normalize the fields.
+ *   Primary usage:
+ *     <HistoryChart />
+ *     - Reads history from PredictionContext via selector hooks.
+ *
+ *   Optional override:
+ *     <HistoryChart history={arrayOfEvents} />
+ *     - If `history` is provided and is an array, it is used instead of context.
  *
  *   Expected event shape (loose union — missing fields are tolerated):
  *     {
  *       ts?: string | number | Date,               // primary timestamp
  *       time?: string | number | Date,             // optional alt timestamp
- *       probs?: { home?: number, ensemble?: number },
+ *       probs?: { home?: number, ensemble?: number, away?: number },
  *       home_win_probability?: number,             // optional alt prob (0..1)
  *       game?: {
  *         season: number,
@@ -28,74 +33,68 @@
  *       }
  *     }
  *
- * Key ideas (why the code looks this way):
+ * Key ideas:
+ *   • Selector hooks (usePredictionHistory) hide context + defensive checks.
  *   • Normalization helpers (extractTimestamp / extractHomeWinProbability / buildGameLabel) keep render logic clean.
- *   • useMemo caches derived arrays/aggregates so we don’t recompute on every render.
- *   • We fail gracefully: when fields are missing, we render "—" or "n/a" instead of breaking.
- *
- * Teaching notes (React patterns used):
- *   • “Derived state” via useMemo: when a value can be computed from props, prefer memoized derivation over useState.
- *   • “Defensive rendering”: optional chaining (?.) + nullish checks keep UI robust against partial data.
- *   • “Single responsibility” helpers: keeps the map() clean and self-documenting.
+ *   • useMemo caches derived rows and summary stats so we don’t recompute on every render.
+ *   • We fail gracefully: missing fields render "—" or "n/a" instead of throwing.
+ */
+import { useMemo } from "react";
+
+// Lightweight normalization helpers used to make HistoryChart self-contained
+function extractTimestamp(event) {
+  const t = event?.ts ?? event?.time ?? event?.prediction?.ts ?? event?.timestamp ?? null;
+  if (!t) return null;
+  const d = t instanceof Date ? t : new Date(t);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function extractHomeWinProbability(event) {
+  // Prioritise explicit fields; tolerate multiple shapes
+  if (!event) return null;
+  if (typeof event.home_win_probability === "number") return event.home_win_probability;
+  if (event?.prediction?.home_win_probability != null) return event.prediction.home_win_probability;
+  if (event?.probs?.home != null) return event.probs.home;
+  if (event?.probs?.ensemble != null) return event.probs.ensemble;
+  return null;
+}
+
+function toWholePercent(prob) {
+  if (prob == null || !Number.isFinite(Number(prob))) return null;
+  return Math.round(Number(prob) * 100);
+}
+
+function buildGameLabel(event, index) {
+  const g = event?.game ?? event?.request ?? null;
+  if (g) {
+    const season = g.season ?? "";
+    const week = g.week ? `W${g.week}` : "";
+    const away = (g.away_abbr || g.away_team || g.away) ?? "away";
+    const home = (g.home_abbr || g.home_team || g.home) ?? "home";
+    return `${season} ${week} ${away}@${home}`.trim();
+  }
+  return `prediction-${index}`;
+}
+
+
+/**
+ * Prefer `probs.home`, fallback to other sources; return [0..1] or null.
+ * Note: we include probs.ensemble and probs.away so we can still render *some*
+ * probability even if the shape varies between callers.
  */
 
-import React, { useMemo } from "react";
 
-/* ---------- tiny utilities ---------- */
-
-/** Return the first non-nullish value (null/undefined are skipped). */
-const firstNonNullish = (...values) => values.find((v) => v != null);
-
-/** Convert a probability in [0..1] to an integer percentage, or null if invalid. */
-const toWholePercent = (prob) => (
-    typeof prob === "number" ? 
-    Math.round(prob * 100) : null);
-
-    
-/** Safely coerce many timestamp shapes to a Date, or null if not present. */
-const toDateOrNull = (value) => {
-  if (value == null) return null;
-  const d = value instanceof Date ? value : new Date(value);
-  return isNaN(d.getTime()) ? null : d;
-};
-
-/* ---------- normalization helpers (keep render logic clean) ---------- */
-
-/** Prefer `ts`, then `time`; return a Date or null. */
-const extractTimestamp = (event) => toDateOrNull(firstNonNullish(event?.ts, event?.time, event?.game?.ts, null));
-
-/** Prefer `probs.home`, fallback to other sources; return [0..1] or null. */
-const extractHomeWinProbability = (event) =>
-  firstNonNullish(
-    event?.probs?.home,
-    event?.probs?.ensemble,
-    event?.probs?.away,
-    event?.home_win_probability,
-    null,
-  );
-
-
- 
-
-/** Build a readable game label, or a generic entry label if no game info exists. */
-const buildGameLabel = (event, index) => {
-  const g = event?.game;
-  if (g?.season && g?.week && g?.away_abbr && g?.home_abbr) {
-    return `${g.season} W${g.week} ${g.away_abbr}@${g.home_abbr}`;
-  }
-  if (g?.away_abbr || g?.home_abbr) {
-    return `${g?.away_abbr ?? "Away"} @ ${g?.home_abbr ?? "Home"}`;
-  }
-  return `Entry ${index + 1}`;
-};
-
-export default function HistoryChart({ history, state }) {
-  // Normalize the input early so the rest of the code can assume an array.
-  const historyItems = useMemo(() => {
-    if (Array.isArray(history)) return history;
-    if (Array.isArray(state?.history)) return state.history;
-    return [];
-  }, [history, state?.history]);
+/**
+ * HistoryChart component
+ *
+ * Props:
+ *   - history (optional): if provided and is an array, it overrides context history.
+ *     Otherwise we use history from PredictionContext via usePredictionHistory().
+ */
+export default function HistoryChart({ history: historyOverride }) {
+  // 1) Get a normalized history array, preferring explicit `history` if valid.
+  //    The selector hides the context access + "is this an array?" checks.
+  const historyItems = Array.isArray(historyOverride) ? historyOverride : [];
 
   /**
    * chartPoints: normalized, render-ready rows
@@ -108,6 +107,7 @@ export default function HistoryChart({ history, state }) {
     return historyItems.map((event, index) => {
       const timestamp = extractTimestamp(event);
       const prob = extractHomeWinProbability(event);
+
       return {
         index,
         timestamp,
@@ -128,12 +128,15 @@ export default function HistoryChart({ history, state }) {
       .map((p) => p.homeWinPercent)
       .filter((n) => typeof n === "number");
 
-    const averageHomeWinPercent =
-      percentValues.length
-        ? Math.round(percentValues.reduce((a, b) => a + b, 0) / percentValues.length)
-        : null;
+    const averageHomeWinPercent = percentValues.length
+      ? Math.round(
+          percentValues.reduce((a, b) => a + b, 0) / percentValues.length
+        )
+      : null;
 
-    const mostRecentDate = historyItems[0] ? extractTimestamp(historyItems[0]) : null;
+    const mostRecentDate = historyItems[0]
+      ? extractTimestamp(historyItems[0])
+      : null;
 
     return {
       totalCount: historyItems.length,
@@ -162,17 +165,28 @@ export default function HistoryChart({ history, state }) {
         <h2>Prediction History</h2>
         <small>
           {statsSummary.totalCount} item(s)
-          {statsSummary.mostRecentDate && <> • last: {statsSummary.mostRecentDate.toLocaleString()}</>}
-          {statsSummary.averageHomeWinPercent != null && <> • avg home win: {statsSummary.averageHomeWinPercent}%</>}
+          {statsSummary.mostRecentDate && (
+            <>
+              {" "}
+              • last: {statsSummary.mostRecentDate.toLocaleString()}
+            </>
+          )}
+          {statsSummary.averageHomeWinPercent != null && (
+            <> • avg home win: {statsSummary.averageHomeWinPercent}%</>
+          )}
         </small>
       </header>
 
       <ol className="history-points a-text-fade-slide">
         {chartPoints.slice(0, 16).map((row) => (
           <li key={row.index} title={row.label}>
-            <code>{row.timestamp ? row.timestamp.toLocaleString() : "—"}</code>
+            <code>
+              {row.timestamp ? row.timestamp.toLocaleString() : "—"}
+            </code>
             {" — "}
-            <strong>{row.homeWinPercent != null ? `${row.homeWinPercent}%` : "n/a"}</strong>{" "}
+            <strong>
+              {row.homeWinPercent != null ? `${row.homeWinPercent}%` : "n/a"}
+            </strong>{" "}
             <em>({row.label})</em>
           </li>
         ))}
