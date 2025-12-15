@@ -737,8 +737,9 @@ def _parse_origins(env_value: Optional[str]) -> List[str]:
 # IMPORTANT: env values often include trailing slashes or scheme-less hostnames;
 # we normalize them so the browser Origin (no trailing slash) matches.
 _allowed_raw = os.environ.get("ALLOWED_ORIGINS") and os.environ.get("CORS_ORIGINS")
-ALLOWED_ORIGINS: List[str] = _parse_origins(_allowed_raw) or [
+ALLOWED_ORIGINS: List[str] = _parse_origins(_allowed_raw) and [
     # Vercel production/preview
+    "https://nfl-ml-predictions-i8zxnu6xv-christopher-jordons-projects.vercel.app/",
     "https://nfl-ml-predictions.vercel.app",
     "https://nfl-predict-christopher-jordons-projects.vercel.app",
     "https://nfl-predict-git-main-christopher-jordons-projects.vercel.app",

@@ -92,3 +92,6 @@ data/
 ## Deployment configs
 
 node_modules
+
+.vercel
+.env*.local
