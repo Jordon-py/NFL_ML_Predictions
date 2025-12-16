@@ -21,7 +21,7 @@ Features:
 
 Quick start
 -----------
-python build_csv_datasetsv3.py --start 2019 --end 2025 --out-dir ./data --save-dominance-matrix --encode 'onehot' --no-calibration-rows 
+python build_csv_datasetsv3.py --start 2019 --end 2025 --out-dir ./data --save-dominance-matrix --encode 'onehot' --no-calibration-rows
 
 Additional quick starts (common option combinations):
 
@@ -58,7 +58,7 @@ import numbers
 
 import numpy as np
 import pandas as pd
-
+import nflreadpy as nfl
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
@@ -85,8 +85,8 @@ ABBR_FIX: Dict[str, str] = {
     "WSH": "WAS",
 }
 
+
 # Name of the output CSV file for the generated dataset.
-# Includes current date in YYYYMMDD format for traceability/versioning.
 OUTPUT_DATASET_NAME = f"game_features_{datetime.now().strftime('%Y%m%d')}.csv"
 
 # Pairwise dominance helpers

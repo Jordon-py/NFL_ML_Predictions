@@ -1,4 +1,4 @@
-.env*
+
 .DS_Store
 *.log
 coverage/
@@ -14,5 +14,5 @@ backend/data/
 *.pkl
 *.md
 *.ts
-dist/
+
 node_modules/

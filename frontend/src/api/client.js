@@ -1,20 +1,21 @@
 /**
-* File Metrics:
-* - Purpose: One tiny, consistent fetch wrapper for the whole app.
-* - Why: Every endpoint gets the same error handling, JSON parsing, and abort support.
-*
-* Key Concepts:
-* - AbortController cancels in-flight requests when components unmount.
-* - "HttpError" carries status + body for better debugging.
-*
-* Learning Checkpoints:
-* - You should be able to answer: "Where do I change my API base URL?"
-* - You should be able to answer: "Where do errors get normalized?"
-*
-* Tips & Next Steps:
-* - For local dev, set VITE_API_BASE="http://127.0.0.1:8000"
-* - For Vercel, set VITE_API_BASE to your Heroku URL (no trailing slash)
-*/
+ * File: frontend/src/api/client.js
+ *
+ * Purpose:
+ *   One tiny, consistent fetch wrapper for the whole app (schedule + predict + history).
+ *
+ * The production gotcha (Vercel):
+ *   Vite does NOT ship your local `.env` file to Vercel. You must set env vars
+ *   in Vercel Project Settings → Environment Variables.
+ *
+ * Required env:
+ *   - Local dev:    VITE_API_BASE_URL=http://127.0.0.1:8000
+ *   - Vercel prod:  VITE_API_BASE_URL=https://<your-heroku-app>.herokuapp.com
+ *
+ * Notes:
+ *   - Trailing slashes are stripped so URL joins are predictable.
+ *   - Errors are thrown as HttpError(status, url, body) so UI can display useful info.
+ */
 
 export class HttpError extends Error {
   constructor(message, { status, url, body } = {}) {
@@ -26,42 +27,65 @@ export class HttpError extends Error {
   }
 }
 
-// If you use a Vite proxy, set BASE_URL = "" (empty string) and call "/api/..."
+/**
+ * Resolve the API base URL.
+ *
+ * Why this matters:
+ *   - Locally you can hit FastAPI directly.
+ *   - On Vercel you must call your Heroku domain (or you'll accidentally call localhost / a relative path).
+ *
+ * Optional:
+ *   - If you intentionally use a Vite proxy in DEV, you can set VITE_API_BASE_URL=""
+ *     (empty string) and call "/api/..." paths.
+ */
 const RAW_BASE_URL =
-  import.meta.env.VITE_API_BASE ??
   import.meta.env.VITE_API_BASE_URL ??
-  import.meta.env.VITE_API_URL ??
-  "";
-const BASE_URL = RAW_BASE_URL.replace(/\/+$/, ""); // "" works great with Vite proxy
+  import.meta.env.VITE_API_BASE ??
+  import.meta.env.VITE_API_URL;
+
+// If not set, default to localhost in DEV, but require it in PROD.
+const BASE_URL = (
+  RAW_BASE_URL ?? (import.meta.env.DEV ? "http://127.0.0.1:8000" : "")
+).replace(/\/+$/, "");
+
 export const API_BASE = BASE_URL;
 
 async function safeReadJson(res) {
   try {
     return await res.json();
   } catch {
-    return null; // sometimes backends return empty bodies
+    return null; // some endpoints (or errors) can return empty bodies
   }
 }
 
 /**
  * fetchJson(path, options)
- * - path: "/health" | "/predict" etc
+ * - path: "/health" | "/predict" | "/schedule/next-week" ...
  * - options: { method, headers, body, signal }
  */
 export async function fetchJson(path, options = {}) {
+  // Fail fast in production if the base URL wasn't configured on Vercel.
+  if (import.meta.env.PROD && !BASE_URL) {
+    throw new Error(
+      "Missing VITE_API_BASE_URL. Set it in Vercel → Project Settings → Environment Variables " +
+        "(example: https://<your-heroku-app>.herokuapp.com)."
+    );
+  }
+
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
   const url = `${BASE_URL}${normalizedPath}`;
 
   const res = await fetch(url, {
     method: "GET",
     ...options,
+    credentials: "omit",
     headers: {
       "Content-Type": "application/json",
       ...(options.headers || {}),
     },
   });
 
-  // Try to parse body (even for errors) so your UI can show useful messages
+  // Parse body even for errors (helps UI show backend detail)
   const body = await safeReadJson(res);
 
   if (!res.ok) {
@@ -78,7 +102,9 @@ export async function fetchJson(path, options = {}) {
 // -------------------------
 // Health / Debug
 // -------------------------
+
 export async function getStatusOverview() {
+  // This endpoint is optional. If it fails, return a safe fallback object.
   try {
     const res = await fetchJson("/status/overview");
 
@@ -101,8 +127,8 @@ export async function getStatusOverview() {
       dataset: { rows: 0 },
       history: { metrics: { total_predictions: 0 } },
     };
-  } catch (err) {
-    console.warn("Status overview unavailable");
+  } catch {
+    console.warn("[client] Status overview unavailable; using fallback");
     return {
       health: { status: "unknown" },
       dataset: { rows: 0 },
@@ -114,6 +140,7 @@ export async function getStatusOverview() {
 // -------------------------
 // Context endpoints (cheap, cacheable)
 // -------------------------
+
 export async function getNextWeekSchedule() {
   // Backend may return:
   // - { games: [...] } (recommended)
@@ -123,7 +150,7 @@ export async function getNextWeekSchedule() {
   if (Array.isArray(res)) return res;
   if (res && Array.isArray(res.games)) return res.games;
 
-  // very old compatibility shapes (keep until you can delete them)
+  // very old compatibility shape (keep until you can delete it)
   if (res && Array.isArray(res.ScheduleGame)) return res.ScheduleGame;
 
   return [];
@@ -132,15 +159,27 @@ export async function getNextWeekSchedule() {
 // -------------------------
 // Cognitive endpoints (compute)
 // -------------------------
+
 export async function predictGame(payload) {
+  // Normalize the payload so backend matching is stable (uppercased abbreviations).
   const body = {
-    home_team: String(payload?.home_team ?? payload?.homeTeam ?? "").trim().toUpperCase(),
-    away_team: String(payload?.away_team ?? payload?.awayTeam ?? "").trim().toUpperCase(),
+    home_team: String(payload?.home_team ?? payload?.homeTeam ?? "")
+      .trim()
+      .toUpperCase(),
+    away_team: String(payload?.away_team ?? payload?.awayTeam ?? "")
+      .trim()
+      .toUpperCase(),
     season: Number(payload?.season ?? payload?.season_num ?? payload?.seasonNum),
     week: Number(payload?.week ?? payload?.week_num ?? payload?.weekNum),
   };
 
-  if (!body.home_team || !body.away_team || !Number.isFinite(body.season) || !Number.isFinite(body.week)) {
+  // Simple contract check: better to fail here than send junk to the API.
+  if (
+    !body.home_team ||
+    !body.away_team ||
+    !Number.isFinite(body.season) ||
+    !Number.isFinite(body.week)
+  ) {
     throw new Error("predictGame requires {home_team, away_team, season, week}");
   }
 
@@ -163,13 +202,15 @@ export async function getPredictionHistory(limit = 100) {
     if (res && Array.isArray(res.entries)) {
       return {
         entries: res.entries,
-        total: Number.isFinite(Number(res.total)) ? Number(res.total) : res.entries.length,
+        total: Number.isFinite(Number(res.total))
+          ? Number(res.total)
+          : res.entries.length,
       };
     }
 
     return { entries: [], total: 0 };
-  } catch (err) {
-    console.warn("History endpoint unavailable, falling back to empty");
+  } catch {
+    console.warn("[client] History endpoint unavailable; using empty list");
     return { entries: [], total: 0 };
   }
 }

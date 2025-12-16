@@ -89,8 +89,8 @@ SCHEDULE_PATH = Path(schedule_env) if schedule_env else (DATA_DIR / "Nfl_schedul
 
 # Required model keys for /predict to be "ready"
 REQUIRED_MODELS: Tuple[str, ...] = ("home", "away", "win")
-models_dir = os.environ.get("MODELS_DIR")
-MODELS_DIR = Path(models_dir) if models_dir else ('backend/20251215/models')
+# Models directory is resolved at runtime by _find_models_dir().
+# Override in production with: MODELS_DIR=/absolute/or/repo-relative/path
 
 
 # Ensure expected folders exist (safe on repeated calls)
@@ -192,41 +192,54 @@ def _models_dir_has_required_artifacts(models_dir: Path) -> bool:
 def _find_models_dir() -> Path:
     """Locate the best models directory.
 
-    Supports:
-      - Explicit env override: MODELS_DIR / MODEL_DIR / MODELS_PATH
-      - Default: backend/models
-      - Date-stamped training runs: backend/20251215/models (most recent wins)
-      - prod layout: backend/**/prod-models/models
+    Priority order:
+      1) Env override (recommended for Heroku): MODELS_DIR / MODELS_PATH / MODEL_DIR
+      2) A complete bundle in common repo locations (prod-models/models, dated runs, etc.)
+      3) Fallback: backend/models (even if incomplete, so errors are visible in logs)
+
+    Tip:
+      - On Heroku, always set MODELS_DIR to a path that exists *in the slug*.
     """
     env = (
         os.environ.get("MODELS_DIR")
+        or os.environ.get("MODELS_PATH")
+        or os.environ.get("MODEL_DIR")
     )
     if env:
         p = Path(env).expanduser()
-        if p.exists():
+        if _models_dir_has_required_artifacts(p):
             return p
-
-    default_dir = BASE_DIR / datetime.now().strftime("%Y%m%d") / "models"
-    if _models_dir_has_required_artifacts(default_dir):
-        return default_dir
+        if p.exists():
+            # Exists but doesn't look complete; still return so logs show what is missing.
+            return p
 
     candidates: List[Path] = []
 
-    # Common local pattern: backend/20251215/models
+    # Common packaged pattern: backend/data/prod-models/models
+    direct = BASE_DIR / "data" / "prod-models" / "models"
+    if _models_dir_has_required_artifacts(direct):
+        candidates.append(direct)
+
+    # Common local pattern: backend/models
+    local_default = BASE_DIR / "models"
+    if _models_dir_has_required_artifacts(local_default):
+        candidates.append(local_default)
+
+    # Date-stamped training runs: backend/20251215/models (most recent wins)
     for p in BASE_DIR.glob("20*/models"):
         if _models_dir_has_required_artifacts(p):
             candidates.append(p)
 
-    # Common packaged pattern: backend/data/prod-models/models
+    # Any nested prod-models/models in the repo
     for p in BASE_DIR.glob("**/prod-models/models"):
         if _models_dir_has_required_artifacts(p):
             candidates.append(p)
 
     if candidates:
-        # Prefer most recently modified bundle
+        # Prefer the most recently modified bundle
         return sorted(candidates, key=lambda p: p.stat().st_mtime, reverse=True)[0]
 
-    return default_dir
+    return local_default
 
 
 def _load_team_logo_map() -> Dict[str, str]:
@@ -733,19 +746,30 @@ def _parse_origins(env_value: Optional[str]) -> List[str]:
     return out
 
 
-# CORS configuration: prefer env list; otherwise default to known origins.
-# IMPORTANT: env values often include trailing slashes or scheme-less hostnames;
-# we normalize them so the browser Origin (no trailing slash) matches.
-_allowed_raw = os.environ.get("ALLOWED_ORIGINS") and os.environ.get("CORS_ORIGINS")
-ALLOWED_ORIGINS: List[str] = _parse_origins(_allowed_raw) and [
-    # Vercel production/preview
-    "https://nfl-ml-predictions-i8zxnu6xv-christopher-jordons-projects.vercel.app/",
+# CORS configuration
+# ------------------
+# Your frontend (Vercel) calls your backend (Heroku) cross-origin, so CORS must allow:
+#   - Your production custom domains
+#   - Your Vercel *.vercel.app deployments (optional, but useful for preview URLs)
+#   - Local dev ports (5173, 4173, etc.)
+#
+# Best practice:
+#   - In Heroku config vars, set ALLOWED_ORIGINS as a comma-separated list:
+#       https://do-better-predict.com,https://www.do-better-predict.com,https://nfl-ml-predictions.vercel.app
+#
+# Optional:
+#   - If you want all Vercel preview deploys to work without updating ALLOWED_ORIGINS,
+#     keep ALLOW_VERCEL_PREVIEWS=1 (default below) which enables allow_origin_regex.
+
+_allowed_raw = os.environ.get("ALLOWED_ORIGINS") or os.environ.get("CORS_ORIGINS")
+ALLOWED_ORIGINS: List[str] = _parse_origins(_allowed_raw) or [
+    # Custom domains
+    "https://do-better-predict.com",
+    "https://www.do-better-predict.com",
+    # Vercel production domains (stable)
     "https://nfl-ml-predictions.vercel.app",
     "https://nfl-predict-christopher-jordons-projects.vercel.app",
-    "https://nfl-predict-git-main-christopher-jordons-projects.vercel.app",
-    # Local dev (common React/Vite ports)
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
+    # Local dev (Vite)
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "http://localhost:4173",
@@ -753,6 +777,9 @@ ALLOWED_ORIGINS: List[str] = _parse_origins(_allowed_raw) and [
 ]
 
 ALLOW_ORIGIN_REGEX = os.environ.get("CORS_ORIGINS_REGEX") or os.environ.get("ALLOW_ORIGIN_REGEX")
+if not ALLOW_ORIGIN_REGEX and os.environ.get("ALLOW_VERCEL_PREVIEWS", "1") == "1":
+    # Allows https://<anything>.vercel.app (preview URLs change per deployment)
+    ALLOW_ORIGIN_REGEX = r"^https://.*\.vercel\.app$"
 
 logging.info("[App] CORS allowed origins: %s", ALLOWED_ORIGINS)
 if ALLOW_ORIGIN_REGEX:
@@ -762,7 +789,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_origin_regex=ALLOW_ORIGIN_REGEX,
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -944,8 +971,15 @@ def get_schedule() -> List[Dict[str, Any]]:
     # artifacts must not take down the schedule endpoint.
     logo_map = _load_team_logo_map()
 
-  # Build a real kickoff timestamp (gameday + gametime).
-    # Your CSV has gametime (typically ET). If you only parse gameday, Monday becomes 00:00 UTC and gets filtered out.
+    # Kickoff timestamp (UTC)
+    # -----------------------
+    # Your schedule CSV often has:
+    #   - gameday (date) and
+    #   - gametime (clock time, typically Eastern)
+    #
+    # We combine them into a single timezone-aware UTC timestamp so "next week"
+    # selection works correctly on Heroku (which compares against UTC 'now').
+    df["dt"] = pd.NaT
     if "gameday" in df.columns:
         if "gametime" in df.columns:
             kickoff_str = (
@@ -955,25 +989,43 @@ def get_schedule() -> List[Dict[str, Any]]:
             )
             kickoff_naive = pd.to_datetime(kickoff_str, errors="coerce")
 
-            # Interpret schedule times as America/New_York (NFL schedule convention),
-            # then convert to UTC so it compares correctly against `now = datetime.now(timezone.utc)`.
-            df["dt"] = (
-                kickoff_naive.dt.tz_localize(
-                    "America/New_York",
+            try:
+                df["dt"] = (
+                    kickoff_naive.dt.tz_localize(
+                        "America/New_York",
+                        ambiguous="NaT",
+                        nonexistent="shift_forward",
+                    ).dt.tz_convert("UTC")
+                )
+            except Exception:
+                # Fallback if tzdata is unavailable in the runtime.
+                df["dt"] = kickoff_naive.dt.tz_localize(
+                    "UTC",
                     ambiguous="NaT",
                     nonexistent="shift_forward",
                 )
-                .dt.tz_convert("UTC")
-            )
         else:
-            # If there is no gametime, treat the whole day as "still upcoming" until end-of-day ET.
-            d = pd.to_datetime(df["gameday"], errors="coerce")
-            df["dt"] = (
-                (d + pd.Timedelta(hours=23, minutes=59))
-                .dt.tz_localize("America/New_York", ambiguous="NaT", nonexistent="shift_forward")
-                .dt.tz_convert("UTC")
-            )
-    future = df[df.get("dt", pd.Series([None]*len(df))) > datetime.now(timezone.utc)].sort_values(by=["dt", "season", "week"])
+            # No gametime column: treat gameday as "upcoming" until end-of-day Eastern.
+            d = pd.to_datetime(df["gameday"], errors="coerce") + pd.Timedelta(hours=23, minutes=59)
+            try:
+                df["dt"] = (
+                    d.dt.tz_localize(
+                        "America/New_York",
+                        ambiguous="NaT",
+                        nonexistent="shift_forward",
+                    ).dt.tz_convert("UTC")
+                )
+            except Exception:
+                df["dt"] = d.dt.tz_localize(
+                    "UTC",
+                    ambiguous="NaT",
+                    nonexistent="shift_forward",
+                )
+
+    # Decide which (season, week) is "next"
+    now_utc = pd.Timestamp.now(tz="UTC")
+    future = df[df["dt"].notna() & (df["dt"] > now_utc)].sort_values(by=["dt", "season", "week"])
+
     if not future.empty:
         next_row = future.iloc[0]
         target_s = int(next_row.get("season_num", next_row.get("season", 2024)))
