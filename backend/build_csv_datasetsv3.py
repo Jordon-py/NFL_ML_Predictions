@@ -87,7 +87,7 @@ ABBR_FIX: Dict[str, str] = {
 
 
 # Name of the output CSV file for the generated dataset.
-OUTPUT_DATASET_NAME = f"game_features_{datetime.now().strftime('%Y%m%d')}.csv"
+OUTPUT_DATASET_NAME = f"data/game_features_{datetime.now().strftime('%Y%m%d')}.csv"
 
 # Pairwise dominance helpers
 HAS_winner_BOOL = True  # if you only have scores, set False
@@ -105,7 +105,7 @@ TIME_COLS_IN_ORDER: Optional[Sequence[str]] = None  # auto-detect if None
 def setup_logger(out_dir: Path) -> None:
     """Initialize both file and console logging so CLI users get progress feedback."""
     out_dir.mkdir(parents=True, exist_ok=True)
-    log_file = out_dir / "build_csv_datasets.log"
+    log_file = out_dir / "build_csv_datasetsv3.log"
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(message)s",
@@ -117,69 +117,20 @@ def setup_logger(out_dir: Path) -> None:
 # ---------------------------------------------------------------------
 # Backend selection (nflreadpy preferred, fallback to nfl_data_py)
 # ---------------------------------------------------------------------
-
-NFL_BACKEND = "nfl_data_py"
-nfl = None
-_fallback_reason = None
-
+NFL_BACKEND = "nflreadpy"
 
 def _note_backend(msg: str, level: int = logging.INFO) -> None:
     logging.log(level, msg)
 
 
-try:
-    import nflreadpy as _nfl
-
-    try:
-        _probe = _nfl.load_schedules(seasons=None)
-        if hasattr(_probe, "to_pandas"):
-           print(f'_probe worked using nflreadpy: { _probe.head(3).to_pandas() }')
-        NFL_BACKEND = "nflreadpy"
-        nfl = _nfl
-        _note_backend("Using backend 'nflreadpy'")
-    except Exception as e:
-        _fallback_reason = f"nflreadpy probe failed: {e}"
-        import nfl_data_py as _nfl  # type: ignore[no-redef]
-
-        nfl = _nfl
-        NFL_BACKEND = "nfl_data_py"
-        _note_backend(
-            f"Using fallback backend '{NFL_BACKEND}' - {_fallback_reason}",
-            logging.WARNING,
-        )
-except Exception as e:
-    _fallback_reason = f"nflreadpy import failed: {e}"
-    try:
-        import nfl_data_py as _nfl  # type: ignore[no-redef]
-    except Exception as e2:
-        nfl = None
-        _note_backend(f"No NFL backend available: {e2}", logging.ERROR)
-    else:
-        nfl = _nfl
-        NFL_BACKEND = "nfl_data_py"
-        _note_backend(
-            f"Using fallback backend '{NFL_BACKEND}' - {_fallback_reason}",
-            logging.WARNING,
-        )
-
-
 # ---------------------------------------------------------------------
-# Utilities
+# Utilities Get Current Week & Season
 # ---------------------------------------------------------------------
-
-
-def to_pandas_safe(obj) -> pd.DataFrame:
-    """Accept pandas or Polars DataFrame/LazyFrame; return pandas.DataFrame."""
-    if obj.__class__.__module__.startswith("pandas"):
-        return obj
-    if hasattr(obj, "collect"):
-        obj = obj.collect()
-    if hasattr(obj, "to_pandas"):
-        try:
-            return obj.to_pandas(use_pyarrow_extension_array=False)
-        except TypeError:
-            return obj.to_pandas()
-    raise TypeError(f"Unsupported table type for to_pandas_safe: {type(obj)}")
+def current_season_week():
+    """Determine current NFL season and week"""
+    season = nfl.get_current_season()
+    week = nfl.get_current_week()
+    return season, week
 
 
 def _normalize_codes(df: pd.DataFrame, cols: List[str]) -> pd.DataFrame:

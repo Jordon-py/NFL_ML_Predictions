@@ -29,6 +29,7 @@ Notes:
 import json
 import logging
 import os
+import re
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from contextlib import asynccontextmanager
@@ -242,6 +243,10 @@ def _find_models_dir() -> Path:
     return local_default
 
 
+# Resolve models directory once at import time so serving code can rely on MODELS_DIR.
+MODELS_DIR: Path = _find_models_dir()
+
+
 def _load_team_logo_map() -> Dict[str, str]:
     """Load a {TEAM_ABBR: logo_url} mapping if available.
 
@@ -276,7 +281,6 @@ def _load_team_logo_map() -> Dict[str, str]:
             DATA_DIR / "team_logos.csv",
             DATA_DIR / "team_logo.csv",
             DATA_DIR / "team_logo_abbr.json",
-            DATA_DIR / "team_logo_squared_by_abbr.json",
         ]
     )
 
@@ -405,6 +409,8 @@ def _roll_forward_missing_player_stats(
       - Only touches columns that look like player stat features:
           home_player_team_* / away_player_team_* and home/away_qb_completion_pct.
     """
+    row_df = nfl.load_schedules(seasons=2025)
+    row_df = row_df.to_pandas()
     if row_df is None or row_df.empty:
         return row_df
 
@@ -748,38 +754,89 @@ def _parse_origins(env_value: Optional[str]) -> List[str]:
 
 # CORS configuration
 # ------------------
-# Your frontend (Vercel) calls your backend (Heroku) cross-origin, so CORS must allow:
-#   - Your production custom domains
-#   - Your Vercel *.vercel.app deployments (optional, but useful for preview URLs)
-#   - Local dev ports (5173, 4173, etc.)
+# The browser will send an `Origin` header that looks like:
+#   https://nfl-ml-predictions.vercel.app
 #
-# Best practice:
-#   - In Heroku config vars, set ALLOWED_ORIGINS as a comma-separated list:
-#       https://do-better-predict.com,https://www.do-better-predict.com,https://nfl-ml-predictions.vercel.app
+# On Heroku we control CORS via config vars (recommended):
+#   - RESTRICT_CORS     : "true" | "false" (default: true)
+#   - ALLOWED_ORIGINS   : comma-separated list of exact origins (scheme + host)
+#                         Example:
+#                           https://nfl-ml-predictions.vercel.app,http://localhost:5173
+#                         (We also accept bare hostnames and normalize them to https://...)
+#   - ALLOW_ORIGIN_REGEX: regex for dynamic preview origins (e.g., Vercel preview URLs)
+#                         Example (recommended):
+#                           ^https://.*\.vercel\.app$
 #
-# Optional:
-#   - If you want all Vercel preview deploys to work without updating ALLOWED_ORIGINS,
-#     keep ALLOW_VERCEL_PREVIEWS=1 (default below) which enables allow_origin_regex.
+# Important:
+#   - FastAPI's allow_origin_regex expects a REAL regex (not a glob).
+#     If you accidentally set "*.vercel.app", we convert it to a safe regex.
 
-_allowed_raw = os.environ.get("ALLOWED_ORIGINS") or os.environ.get("CORS_ORIGINS")
+def _env_flag(name: str, default: str = "true") -> bool:
+    """Parse boolean-ish env vars safely."""
+    return str(os.getenv(name, default)).strip().lower() in ("1", "true", "yes", "y", "on")
+
+
+def _maybe_glob_to_regex(raw: Optional[str]) -> Optional[str]:
+    """Convert common glob patterns (like *.vercel.app) to a regex FastAPI understands.
+
+    FastAPI / Starlette want a regex that matches the *full origin string*, including scheme.
+    """
+    if not raw:
+        return None
+
+    p = str(raw).strip().strip('"').strip("'").rstrip("/")
+    if not p:
+        return None
+
+    # If it already looks like a regex, assume the user knows what they're doing.
+    if p.startswith("^") or p.endswith("$"):
+        return p
+
+    # Common Heroku mistake: ALLOW_ORIGIN_REGEX="*.vercel.app"
+    if "vercel.app" in p and "*" in p:
+        return r"^https://.*\.vercel\.app$"
+
+    # If it contains a wildcard but isn't a regex, treat it as a glob and convert.
+    if "*" in p:
+        escaped = re.escape(p).replace(r"\*", ".*")
+        if "://" in p:
+            return rf"^{escaped}$"
+        return rf"^https?://{escaped}$"
+
+    # Hostname only (no scheme): match http/https for that exact host.
+    if "://" not in p and "." in p:
+        return rf"^https?://{re.escape(p)}$"
+
+    return p
+
+
+# Read origins from env (Heroku), then fall back to a small safe default list.
+_allowed_raw = (
+    os.environ.get("ALLOWED_ORIGINS")
+    or os.environ.get("CORS_ORIGINS")
+    or os.environ.get("CORS_DEPLOYED")  # legacy/diagnostic var some deploy scripts used
+)
+
 ALLOWED_ORIGINS: List[str] = _parse_origins(_allowed_raw) or [
-    # Custom domains
-    "https://do-better-predict.com",
-    "https://www.do-better-predict.com",
-    # Vercel production domains (stable)
+    # Production (your chosen canonical frontend)
     "https://nfl-ml-predictions.vercel.app",
-    "https://nfl-predict-christopher-jordons-projects.vercel.app",
     # Local dev (Vite)
     "http://localhost:5173",
     "http://127.0.0.1:5173",
-    "http://localhost:4173",
-    "http://127.0.0.1:4173",
 ]
 
-ALLOW_ORIGIN_REGEX = os.environ.get("CORS_ORIGINS_REGEX") or os.environ.get("ALLOW_ORIGIN_REGEX")
-if not ALLOW_ORIGIN_REGEX and os.environ.get("ALLOW_VERCEL_PREVIEWS", "1") == "1":
-    # Allows https://<anything>.vercel.app (preview URLs change per deployment)
+# Regex origins: Vercel previews change per deploy, so a regex is the cleanest solution.
+_allow_regex_raw = os.environ.get("ALLOW_ORIGIN_REGEX") or os.environ.get("CORS_ORIGINS_REGEX")
+ALLOW_ORIGIN_REGEX = _maybe_glob_to_regex(_allow_regex_raw)
+
+# Optional convenience switch: allow previews even if regex isn't explicitly configured.
+if not ALLOW_ORIGIN_REGEX and _env_flag("ALLOW_VERCEL_PREVIEWS", "true"):
     ALLOW_ORIGIN_REGEX = r"^https://.*\.vercel\.app$"
+
+# If RESTRICT_CORS is false, we intentionally open it up (useful for quick debugging).
+if not _env_flag("RESTRICT_CORS", "true"):
+    ALLOWED_ORIGINS = ["*"]
+    ALLOW_ORIGIN_REGEX = None
 
 logging.info("[App] CORS allowed origins: %s", ALLOWED_ORIGINS)
 if ALLOW_ORIGIN_REGEX:
@@ -787,8 +844,8 @@ if ALLOW_ORIGIN_REGEX:
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
-    allow_origin_regex=ALLOW_ORIGIN_REGEX,
+    allow_origins=ALLOWED_ORIGINS,          # ✅ list (string here breaks CORS matching)
+    allow_origin_regex=ALLOW_ORIGIN_REGEX,  # ✅ supports Vercel preview deployments
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -953,15 +1010,11 @@ def get_schedule() -> List[Dict[str, Any]]:
       - Determine the next slate using the earliest future game; fall back
         to the latest season/week in the file if all games are in the past.
     """
-    schedule_path = _find_schedule_path()
-    if not schedule_path:
-        raise HTTPException(
-            status_code=404,
-            detail="Schedule file not found in backend/data or frontend/public",
-        )
-
-    logging.info("[Schedule] Loading schedule from: %s", schedule_path)
-    df = pd.read_csv(schedule_path)
+    df = nfl.load_schedules(seasons=2025)
+    df = df.to_pandas()
+    if df is None or df.empty:
+        logging.warning("[Schedule] No schedule data available; returning empty list.")
+        return []
 
     df = _coerce_season_week(df)
     df = _normalize_team_columns(
@@ -1044,8 +1097,8 @@ def get_schedule() -> List[Dict[str, Any]]:
 
     results: List[Dict[str, Any]] = []
     for _, row in week_df.iterrows():
-        home_team = row.get("home_team")
-        away_team = row.get("away_team")
+        home_team = logo_map.get("team_name") if "team_name" == row.get("home_team") else row.get("home_team")
+        away_team = logo_map.get("team_name") if "team_name" == row.get("away_team") else row.get("away_team")
         home_abbr = row.get("home_abbr", home_team)
         away_abbr = row.get("away_abbr", away_team)
 
