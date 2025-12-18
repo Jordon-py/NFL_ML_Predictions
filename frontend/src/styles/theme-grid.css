@@ -1,5 +1,5 @@
-/* ==========================================================================
-   theme-grid.css — Components & Sections
+/* ========================================================================== 
+   theme-grid.css - Components & Sections
    Purpose: team grid, cards, logos, timings, and section-specific styles.
    Load order: 2 of 2 (after base.css)
    ========================================================================== */
@@ -11,24 +11,22 @@
   align-items: center;
   text-align: center;
 }
+
 h1 {
   font-family: 'Playfair', 'Lucida Sans Unicode', 'Lucida Grande', 'Lucida Sans', Arial, sans-serif;
+  text-align: center;
 }
 
 h2.nfl-matchups {
   backdrop-filter: blur(2px);
   text-shadow: 0 4px 14px oklch(0% 0 0 / 0.5);
   font-size: clamp(3rem, 8vw + 1rem, 6rem);
-  /* Responsive font size */
   font-family: "Cinzel", serif;
   font-weight: 800;
   color: oklch(95% 0.05 240);
-  /* Slightly off-white for depth */
   margin: 0;
   animation: textFadeSlide 1s var(--a-ease) both;
-  /* Apply text intro */
 }
-
 
 p.nfl-matchups {
   font-size: clamp(1rem, 2vw + 0.5rem, 1.25rem);
@@ -36,7 +34,6 @@ p.nfl-matchups {
   margin-top: 0.5rem;
   max-width: 60ch;
   animation: textFadeSlide 3s var(--a-ease) 200ms both;
-  /* Staggered intro */
 }
 
 /* --- Lists used by History/Insights ------------------------------------- */
@@ -46,16 +43,13 @@ section.history-chart {
   background-color: oklch(0% 0 0 / 0.7);
   gap: 20px;
   font-size: 1rem;
-  /* Adjusted for consistency */
   border-left: 2px solid oklch(70% 0.15 265 / 0.7);
   border-top: 1px solid oklch(70% 0.17 269 / 0.5);
   border-radius: var(--r-sm);
   padding: 1rem;
   margin: 1rem;
   max-width: 400px;
-  /* Constrain width */
   animation: cardPop 1.8s var(--a-ease) both;
-  /* Pop-in animation */
 }
 
 /* --- Team grid layout ---------------------------------------------------- */
@@ -64,15 +58,12 @@ section.team-main {
   flex-wrap: wrap;
   flex-direction: row;
   justify-content: space-between;
-  /* Center grid items */
-  
-  /* Consistent gap */
+  gap: 1rem;
   padding: 1rem;
 }
 
 .team-grid-cards {
   display: contents;
-  /* Use parent grid for layout */
 }
 
 /* --- Micro info rows ----------------------------------------------------- */
@@ -80,7 +71,6 @@ section.team-main {
   display: flex;
   flex-direction: row;
   gap: 1rem;
-  /* Reduced gap */
 }
 
 /* Probabilities (top summary strip) */
@@ -88,7 +78,6 @@ div.probability.home-win-prob.inner-card {
   font-size: 1rem;
   color: oklch(94.104% 0.04575 215.5);
   animation: a-shine 3s linear infinite;
-  /* Apply shine animation */
 }
 
 /* Predicted score (fixed summary, top-right) */
@@ -97,23 +86,19 @@ div.probability.home-win-prob.inner-card {
   flex-direction: row;
   gap: .5rem;
   font-weight: 600;
-  /* Bolder */
   font-size: 1.5rem;
   color: oklch(98% 0.02 240);
   background-color: oklch(15% 0.05 240 / 0.8);
   font-family: var(--font-tech);
-  /* Use tech font */
   position: fixed;
   border-radius: var(--r-sm);
   top: 1rem;
   right: 1rem;
   padding: 0.5rem 1rem;
   animation: a-shine 2.5s linear infinite;
-  /* Slower shine */
 }
 
 /* --- Cards --------------------------------------------------------------- */
-/* Base card shell for matchups */
 .matchup-card {
   display: flex;
   flex-direction: column;
@@ -127,16 +112,12 @@ div.probability.home-win-prob.inner-card {
   flex: 1 1 320px;
   color: oklch(95% 0.02 240);
   border: 1px solid oklch(80% 0.05 240 / 0.2);
-
-  /* Entrance Animation */
   --i: 0;
-  /* Stagger index */
   animation: cardPop 0.6s var(--a-ease) calc(var(--i) * 80ms) both;
 }
 
 .inner-card {
   border-radius: var(--r-sm);
-  /* Consistent radius */
 }
 
 .matchup-card:hover {
@@ -205,26 +186,21 @@ div.probability.home-win-prob.inner-card {
 
 .at-symbol {
   font-weight: 600;
-  /* Bolder */
   color: var(--c-accent);
   font-size: 1.2rem;
   font-family: var(--font-tech);
-  /* Use tech font */
 }
 
 img.team-logo {
   width: clamp(5rem, 15vw, 7rem);
-  /* Responsive logo size */
   height: auto;
   aspect-ratio: 1 / 1;
   object-fit: contain;
   border-radius: 50%;
-  /* Circular logos */
   background: oklch(0% 0 0 / 0.2);
   padding: 8px;
   transition: transform 0.4s var(--a-ease), filter 0.4s var(--a-ease);
   animation: a-fade-in 0.8s var(--a-ease) both;
-  /* Apply fade-in */
 }
 
 img.team-logo:hover {
@@ -237,9 +213,7 @@ img.team-logo:hover {
   color: var(--c-text-muted-on-dark);
   white-space: nowrap;
   font-family: var(--font-tech);
-  /* Use tech font */
   animation: a-text-fade-slide 1s var(--a-ease) 300ms both;
-  /* Apply text intro */
 }
 
 .prediction {
@@ -257,9 +231,7 @@ img.team-logo:hover {
   text-align: center;
   font-weight: 600;
   font-family: var(--font-tech);
-  /* Use tech font */
   animation: a-pulse 2s ease-in-out infinite 1s;
-  /* Subtle pulse for attention */
 }
 
 /* --- Side readouts / badges --------------------------------------------- */
@@ -276,7 +248,6 @@ img.team-logo:hover {
   font-family: var(--font-tech);
   transition: transform 0.3s ease;
   animation: a-fade-in 1s var(--a-ease) 500ms both;
-  /* Fade in */
 }
 
 .point-prob {
@@ -285,14 +256,12 @@ img.team-logo:hover {
   top: 8%;
   left: 50%;
   transform: translateX(-50%);
-  /* Center properly */
   display: flex;
   flex-direction: row;
   background: var(--grad-primary);
   padding: 0.5rem 1rem;
   border-radius: var(--r-sm);
   animation: a-fade-in 1s var(--a-ease) 400ms both;
-  /* Fade in */
 }
 
 /* Prediction result block */
@@ -307,7 +276,6 @@ img.team-logo:hover {
   font-family: var(--font-tech);
   transition: transform 0.3s ease-in-out;
   animation: a-glow 2.5s ease-in-out infinite;
-  /* Apply glow */
 }
 
 /* --- States & motion safety --------------------------------------------- */
@@ -316,14 +284,11 @@ img.team-logo:hover {
   align-items: center;
   gap: 8px;
   font-family: var(--font-tech);
-  /* Use tech font */
-  /* pulsing while loading */
   animation: pulseOpacity 1.5s ease-in-out infinite;
   filter: brightness(1.05);
 }
 
 @media (prefers-reduced-motion: reduce) {
-
   .matchup-card,
   .team-logo,
   .kickoff,
@@ -335,53 +300,5 @@ img.team-logo:hover {
   p.nfl-matchups {
     transition: none;
     animation: none;
-  }
-}
-
-/* --- Unified logo & card visual upgrades ---------------------------------
-   These rules enhance logos and card surfaces globally so both module
-   and non-module selectors receive the same visual treatment. They are
-   intentionally additive and responsive. */
-
-.team-logo,
-img.team-logo {
-  width: clamp(4.5rem, 12vw, 8rem);
-  height: auto;
-  aspect-ratio: 1 / 1;
-  object-fit: contain;
-  border-radius: 50%;
-  padding: 6px;
-  background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(0,0,0,0.06));
-  box-shadow: 0 8px 22px rgba(2,6,23,0.45), inset 0 1px 0 rgba(255,255,255,0.02);
-  transition: transform .45s var(--a-ease), filter .45s var(--a-ease), box-shadow .45s var(--a-ease);
-  will-change: transform, filter;
-}
-
-/* prediction-sizing is handled in component CSS modules (.gameCardLogo.hasPrediction) */
-
-.team-logo:hover {
-  transform: translateY(-6px) scale(1.08) rotate(3deg);
-  filter: brightness(1.12) saturate(1.06) drop-shadow(0 6px 20px var(--c-brand-1));
-}
-
-/* Glassy card accent for the team grid area — subtle gradient + border */
-section.team-main {
-  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.06));
-  border-radius: var(--r-lg, 12px);
-  padding: 1.25rem;
-  gap: 1rem;
-}
-
-/* Focus styles for keyboard users */
-.team-logo:focus,
-.team-logo:focus-visible,
-.team-logo:focus-visible {
-  outline: 3px solid color-mix(in oklab, var(--c-brand-1) 35%, white 10%);
-  outline-offset: 6px;
-}
-
-@media (max-width: 600px) {
-  .team-logo {
-    width: clamp(3rem, 18vw, 5.5rem);
   }
 }

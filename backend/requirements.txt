@@ -1,7 +1,7 @@
 # Production dependencies - optimized for Heroku deployment
 
 # Core web framework
-fastapi==0.124.2
+fastapi>=0.104.0,<0.110.0
 uvicorn[standard]>=0.23.0,<0.25.0
 gunicorn>=21.2.0,<22.0.0
 
@@ -20,15 +20,13 @@ lightgbm>=4.0.0,<4.2.0
 # current fastapi pin. If you want to adopt Pydantic v2, upgrade FastAPI and
 # verify the app and tests. For now, pining to v1 avoids dependency resolution
 # conflicts.
-pydantic
+pydantic>=1.8.0,<2.0.0
 
 # Environment variables
-python-dotenv
+python-dotenv>=1.0.0,<1.1.0
 
 # NFL data (may need specific version for compatibility)
 nflreadpy
-# pyarrow is required for polars->pandas conversion (nflreadpy uses polars internally)
-pyarrow>=14.0.0,<19.0.0
 
 # Explicit CORS middleware (Starlette provides CORSMiddleware used by FastAPI)
 # FastAPI already depends on Starlette, but pinning here makes CORS explicit

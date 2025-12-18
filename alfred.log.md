@@ -1,5 +1,7 @@
 # Alfred Activity Log
 
+<<<<<<< HEAD
+=======
 ## 2025-12-13T13:36:00Z — Prediction Display Fix + Smart Stats Roll-Forward
 
 ### Summary
@@ -339,6 +341,7 @@ Completed comprehensive API coherence analysis and deployment. All critical endp
   - StatsPage and PredictionContext build now succeeds (`npm run build` passes)
 - Build check: `npm run build` (frontend) now succeeds
 
+>>>>>>> cd97fecacdc0a2f3d4ee6cd29effaa9619489d75
 ## 2025-11-23T06:50:53Z
 
 - Added doc headers and ASCII clean-up across backend/main.py, backend/train_models.py, and frontend dashboards/clients.
@@ -390,6 +393,8 @@ Risks / Follow-ups:
 - Confirm that models are stored as full pipelines or that the prediction code applies the same preprocessing used during training.
 - If schedule times are naive local datetimes, decide whether to apply a timezone offset; optionally add `SCHEDULE_TIMEZONE_OFFSET_HOURS` env var.
 - If you want server-side enrichment of logos (home_logo/away_logo), update `backend/team_logo.csv` or the schedule CSV and re-deploy.
+<<<<<<< HEAD
+=======
 
 ---
 
@@ -597,3 +602,4 @@ Resolved the "Fake Predictions" (fallback) issue where the backend was failing t
 
 ### Warnings / Follow-ups
 - Coordinate force-push to remote and instruct collaborators to reclone/reset to the rewritten history to avoid reintroducing the bundle.
+>>>>>>> cd97fecacdc0a2f3d4ee6cd29effaa9619489d75

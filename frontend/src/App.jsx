@@ -1,28 +1,7 @@
-/**
- * App.jsx
- * 
- * Root React application component for the NFL prediction UI.
- * 
- * - Provides prediction context to all children via PredictionProvider.
- * - Wraps the UI in a shared ErrorBoundary for global error handling.
- * - Defines top-level routes using React Router (Dashboard, History, Stats, Settings, 404).
- * - All prediction logic and state live in child components (e.g., TeamGrid, HistoryPage).
- * 
- * Architecture notes:
- *   - React Router handles page-level navigation.
- *   - Global layout/styling is managed via TeamGrid.css as the main stylesheet entrypoint.
- * 
- * Change Log:
- *   2025-11-11:
- *     - Replaced placeholder content with a working App component.
- *     - Fixed Dashboard import path and component name mismatch.
- *     - Removed unused imports (Link, useState, HistoryChart) to reduce noise.
- */
-
-import React, { Suspense, lazy } from 'react';
+import { Suspense, lazy, useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { PredictionProvider } from './PredictionContext';
-import ErrorBoundary from './components/ErrorBoundary';
+import NavBar from './components/NavBar/NavBar.jsx';
+import { getStatusOverview } from './api/client.js';
 
 // Lazy load components for better performance
 const Dashboard = lazy(() => import('./components/DashBoard/Dashboard'));
@@ -51,24 +30,40 @@ function NotFoundPage() {
 
 // Main App Component with centralized context and error handling
 function App() {
+  const [health, setHealth] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const overview = await getStatusOverview();
+        if (!active) return;
+        setHealth(overview?.health ?? null);
+      } catch {
+        if (!active) return;
+        setHealth(null);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+
   return (
-    <ErrorBoundary>
-      <PredictionProvider>
-        <Router>
-          <div className="app-container">
-            <Suspense fallback={<div role="status" aria-live="polite">Loading...</div>}>
-              <Routes>
-                <Route path="/" element={<Dashboard />} />
-                <Route path="/history" element={<HistoryPage />} />
-                <Route path="/stats" element={<StatsPage />} />
-                <Route path="/settings" element={<SettingsPage />} />
-                <Route path="*" element={<NotFoundPage />} />
-              </Routes>
-            </Suspense>
-          </div>
-        </Router>
-      </PredictionProvider>
-    </ErrorBoundary>
+    <Router>
+      <NavBar health={health} />
+      <div className="app-container">
+        <Suspense fallback={<div role="status" aria-live="polite">Loading…</div>}>
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/history" element={<HistoryPage />} />
+            <Route path="/stats" element={<StatsPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="*" element={<NotFoundPage />} />
+          </Routes>
+        </Suspense>
+      </div>
+    </Router>
   );
 }
 

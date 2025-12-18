@@ -11,7 +11,6 @@ ENV/
 env.bak/
 backend/.venv/
 backend/venv/
-nfl_env/
 
 ## Node artifacts
 node_modules/
@@ -22,15 +21,11 @@ yarn-error.log*
 pnpm-debug.log*
 
 ## Build outputs
-build/
-dist/
-frontend/build/
-frontend/dist/
+
 frontend/dist/node_modules
 frontend/.vite/
-frontend/.vercel/
 .parcel-cache/
-.vercel/
+.vercel
 
 ## Environment configuration
 .env
@@ -59,7 +54,7 @@ backend/logs/
 .ipynb_checkpoints/
 
 ## Packaging artifacts
-.slugignore
+
 *.so
 .Python
 develop-eggs/
@@ -81,30 +76,21 @@ MANIFEST
 
 ## Data & models (allow curated assets)
 data/
-*.csv
+
 *.json
-*.bundle
 *.txt
 
-*.pkl
-*.model
-!requirements.txt
 !README.md
-!backend/data/prod-models/models/*.joblib
-!backend/data/prod-models/*.csv
-!backend/models/
-# CHANGED: Allow production model artifacts for Heroku deployment
-
-
 
 
 ## AI tooling
 .serena/
 
 ## Deployment configs
-!vercel.json
+
 node_modules
 
-## Backup bundles
-*.bundle
+.vercel
+.env*.local
+
 

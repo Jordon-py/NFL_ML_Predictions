@@ -23,7 +23,11 @@ CLI
 ---
 python pipeline_enhanced_v3.py --data ./data/game_features_20251123.csv --splits 5 --embargo 1
 
+<<<<<<< HEAD
+python pipeline_enhanced_v3.py --data ./data/game_features_20251215.csv --holdout-season 2025 --holdout-week 10 --holdout-week-end 15 --splits 5 --embargo 1 /
+=======
 python pipeline_enhanced_v3.py --data ./data/game_features_20251123.csv --holdout-season 2025 --holdout-week 9 --holdout-week-end 12 --splits 5 --embargo 1 /
+>>>>>>> cd97fecacdc0a2f3d4ee6cd29effaa9619489d75
     [--production] /
     [--holdout-season 2025 --holdout-week 6 --holdout-week-end 9] /
     [--splits 5 --embargo 1]

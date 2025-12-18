@@ -24,7 +24,7 @@ class DataConfig:
 
     BASE_PATH = Path(__file__).parent.parent
     PLAYER_STATS_PATH = BASE_PATH / "backend" / "pbp_cache.csv"
-    TEAM_STATS_PATH = BASE_PATH / "backend" / "game_features_20251201.csv"
+    TEAM_STATS_PATH = BASE_PATH / "backend" / "game_features_20251123.csv"
     OUTPUT_PATH = BASE_PATH / "backend" / "data"
 
     # Key merge columns
@@ -237,9 +237,8 @@ def aggregate_player_stats(player_df):
         "SS": "defense",
         "S": "defense",
     }
-    print(player_df.columns)
     # Map positions to groups, assign "other" for unmapped positions to avoid NaN groupby issues
-    player_df["position_group_agg"] = player_df.map(position_mapping).fillna("other")
+    player_df["position_group_agg"] = player_df["position"].map(position_mapping).fillna("other")
 
     # Define aggregation rules
     agg_rules = {

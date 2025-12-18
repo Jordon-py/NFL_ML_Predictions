@@ -1,3 +1,8 @@
+<<<<<<< HEAD
+# Archived: Enhancement Workflow
+
+This process note has been archived. Current operational steps reside in `docs/RUNBOOK.md` and engineering cadence is reflected in `docs/report.md`.
+=======
 # NFL Prediction System — Enhancement Workflow (Q4 2025)
 
 _This playbook assumes a focused ~5 hour build session. Timestamps are relative (T+hh:mm) so you can pause/resume while keeping the intended sequence._
@@ -167,3 +172,4 @@ _Exit criteria_: Everyone agrees on “better than 0.65 ROC, 0.63 accuracy” be
 - [ ] Weekly automation keeps models fresh with alerts on degradation.
 
 Complete each step sequentially; if you pause more than a day, re-run Step 1 to refresh baselines before resuming.
+>>>>>>> cd97fecacdc0a2f3d4ee6cd29effaa9619489d75

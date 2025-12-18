@@ -16,40 +16,25 @@ backend/venv/
 env/
 ENV/
 
-# Git/CI/editor metadata
+**/*.map
+.cache/
+tmp/
+logs/
+__pycache__/
+.vscode/
+.github/
+*.md
+docs/
+tests/
 .git/
 .github/
-.vscode/
-.idea/
-
-# Local env files / secrets
-.env
-.env.*
-
-# Python caches & test junk
-__pycache__/
-**/__pycache__/
+frontend/node_modules/
+frontend/src/
+frontend/public/
+backend/__pycache__/
+backend/logs/
+backend/metrics/data/game_features_new.csv
 *.pyc
+.venv/
+venv/
 .pytest_cache/
-.cache/
-
-# Notebooks, docs, reports
-docs/
-reports/
-backend/reports/
-backend/metrics/
-backend/tests/
-tests/
-**/*.ipynb
-**/*.map
-
-# Vercel artifacts
-.vercel/
-frontend/.vercel/
-
-# Large duplicate artifacts not needed at runtime (we use backend/data/prod-models by default)
-models/
-backend/OUTDIR/
-backend/20*/
-backend/prod-models/
-backend/models/
