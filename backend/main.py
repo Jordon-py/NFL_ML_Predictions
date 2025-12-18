@@ -37,6 +37,7 @@ from typing import List, Dict, Any, Optional, Tuple, Literal
 from urllib.parse import urlparse
 import nflreadpy as nfl
 from dotenv import load_dotenv
+import numpy as np
 import uvicorn
 import joblib
 import pandas as pd
