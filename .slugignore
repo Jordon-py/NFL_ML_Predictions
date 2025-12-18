@@ -16,7 +16,6 @@ backend/venv/
 env/
 ENV/
 
-<<<<<<< HEAD
 **/*.map
 .cache/
 tmp/
@@ -39,42 +38,3 @@ backend/metrics/data/game_features_new.csv
 .venv/
 venv/
 .pytest_cache/
-=======
-# Git/CI/editor metadata
-.git/
-.github/
-.vscode/
-.idea/
-
-# Local env files / secrets
-.env
-.env.*
-
-# Python caches & test junk
-__pycache__/
-**/__pycache__/
-*.pyc
-.pytest_cache/
-.cache/
-
-# Notebooks, docs, reports
-docs/
-reports/
-backend/reports/
-backend/metrics/
-backend/tests/
-tests/
-**/*.ipynb
-**/*.map
-
-# Vercel artifacts
-.vercel/
-frontend/.vercel/
-
-# Large duplicate artifacts not needed at runtime (we use backend/data/prod-models by default)
-models/
-backend/OUTDIR/
-backend/20*/
-backend/prod-models/
-backend/models/
->>>>>>> cd97fecacdc0a2f3d4ee6cd29effaa9619489d75
