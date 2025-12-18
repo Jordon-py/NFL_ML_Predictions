@@ -1,0 +1,425 @@
+/* Card.module.css — v2 Futuristic + Motion */
+/* Uses globals from base.css: fonts, --a-ease, cardPop/outlineGlow keyframes. */
+
+.card {
+  overflow: hidden;
+  display: flex;
+  flex-direction: row;
+  backdrop-filter: blur(6px);
+  border-radius: var(--r-md);
+  background: radial-gradient(circle at top, #0048ff28, #000622 70%);
+  color: var(--lch-text);
+  border: 1px solid lch(100% 0.01 296.81 / 0.695);
+  padding: 1.5rem;
+  margin: 1rem;
+  position: relative;
+
+  max-width: 700px;
+  width: 700px;
+  max-height: 350px;
+  height: 100%;
+  box-shadow: 1px 4px 8px 2px rgba(255, 253, 253, 0.883) inset,       /* hard drop (stylized) */
+              1px 2px 4px  2px rgba(0, 0, 0, 0.272);  /* soft ambient */
+
+  animation: _cardPop_yvg8j_1 0.6s var(--a-ease) calc(var(--i, 0) * 80ms) both;
+  transform-style: preserve-3d;
+  transition: transform .75s var(--a-ease), box-shadow .75s var(--a-ease), border-color .95s var(--a-ease);
+  outline: inherit;
+  --card-tilt: 130deg;
+  --glow-time: 350ms;
+  --glow-accent: lch(13.16% 45.21 326.7 / 0.594);
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: stretch;
+}
+.matchUpRow {
+  display: flex;
+  flex-direction: row;
+  margin-top: auto;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--c-border-subtle);
+}
+
+.card:hover,
+.card:focus-within {
+  transform: translateY(-8px) scale(1.02) rotateX(0.9deg) rotateY(0.9deg);
+  box-shadow: 1px 4px 16px 4px oklch(14.489% 0.05946 29.223 / 0.568), 0 0 22px var(--glow-accent);
+  cursor: pointer;
+}
+.game-card__footer {
+  font-size: 0.75rem;
+  color: var(--c-ink-softer);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: relative;
+}
+
+.game-card__footer.hasPrediction {
+  display: flex;
+  flex-direction: column;
+  margin-top: auto;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--c-border-subtle);
+}
+
+div.game-card_team {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content:space-around;
+  gap: 1rem;
+}
+
+#reset-button.reset-button {
+  display:flex;
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: transparent;
+  color: var(--lch-text);
+  border: 1px solid var(--lch-border);
+  padding: 0.35rem 0.6rem;
+  border-radius: 6px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  cursor: pointer;
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+  will-change: transform;
+}
+
+#reset-button:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.12), 0 0 8px var(--lch-accent);
+  border-color: var(--lch-primary);
+  cursor: pointer;
+}
+
+.hasPrediction {
+  display:flex;
+  flex-wrap: wrap ;
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: center;
+
+  animation: outlineGlow cubic-bezier(0.075, 0.82, 0.165, 1) ease-in-out infinite;
+  border-color: var(--lch-primary);
+  box-shadow: 3px 3px 12px 3px inset oklch(0% 0 0), 0 0 25px var(--lch-primary);
+  transform: scale(1.03);
+}
+
+/* Animated accent outline for cards with predictions */
+.hasPrediction::after {
+  border-radius: inherit;
+  width:100%;
+  pointer-events: none;
+  z-index: 0;
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--lch-primary) 20%, transparent), 0 0 28px color-mix(in oklab, var(--lch-primary) 35%, transparent);
+  opacity: 0.9;
+  animation: predictionAccent 2.25s ease-in-out infinite;
+}
+
+@keyframes predictionAccent {
+  0% { transform: scale(0.995); box-shadow: 0 0 0 2px color-mix(in oklab, var(--lch-primary) 12%, transparent), 0 0 8px color-mix(in oklab, var(--lch-primary) 18%, transparent); }
+  50% { transform: scale(1.01); box-shadow: 0 0 0 6px color-mix(in oklab, var(--lch-primary) 28%, transparent), 0 0 28px color-mix(in oklab, var(--lch-primary) 40%, transparent); }
+  100% { transform: scale(0.995); box-shadow: 0 0 0 2px color-mix(in oklab, var(--lch-primary) 12%, transparent), 0 0 8px color-mix(in oklab, var(--lch-primary) 18%, transparent); }
+}
+
+.isLoading {
+  cursor: progress;
+}
+
+.isError {
+  border-color: lch(58% 78 30);
+  box-shadow: 0 0 0 1px lch(58% 78 30 / .4) inset;
+}
+
+.isError .gameCardLogo {
+  width: 220px;
+  height: 220px;
+  filter: drop-shadow(0 0 12px var(--lch-primary));
+}
+
+/* Logos inside .left or global hasPrediction variant */
+.gameCardLogo.hasPrediction,
+.gameCardLogo.hasPrediction {
+  display: flex;
+  flex-direction: row;
+  width: 175px;
+  height: 175px;
+  gap: .5rem;
+}
+
+/* Base logo container */
+.gameCardLogo {
+  display: flex;
+  flex-direction: row;
+  align-items:flex-start;
+  justify-content: center;
+  width: 90%;
+  overflow: visible;
+  height: 90%;
+  max-width: 125px;
+  object-fit: cover;
+  border-radius: 50%;
+  background-color: lch(56.19% 72.96 290.23 / 0.191);
+  padding: 5px;
+  transition: transform cubic-bezier(0.075, 0.82, 0.165, 1) var(--a-ease), filter .4s var(--a-ease);
+}
+
+/* Status */
+.status {
+  font-size: .8rem;
+  color: var(--lch-muted);
+}
+
+/* Hover for logo elements (covers module and global variants) */
+.gameCardLogo:hover {
+  transform: scale(1.12) rotate(5deg);
+  filter: brightness(1.2) drop-shadow(0 2px 12px var(--lch-primary));
+}
+
+.head {
+  display: flex;
+  flex-direction: column;
+
+  margin-bottom: 1rem;
+}
+
+.game-card_team  {
+  display: flex;
+  align-items: center;
+  justify-content:space-around;
+  gap: 1rem;
+}
+
+div.predictionBody {
+  display:flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.75rem;
+  flex: 1;
+}
+
+.away {
+  align-items: flex-start;
+}
+
+.home {
+  align-items: flex-end;
+}
+
+.atSymbol {
+  color: lch(58.72% 76.21 25.61);
+  position: relative;
+  font-weight: 800;
+  color: var(--lch-accent);
+  font-size: 3.4rem;
+  font-family: var(--font-tech);
+}
+
+img#home-logo.gameCardLogo {
+  max-width: 220px;
+  width:100%;
+  max-height: 220px;
+  height: 100%;
+
+  object-fit: cover;
+  border-radius: 50%;
+  background-color: lch(0% 0 0 / 0.504);
+  background: oklch(0% 0 0 / 0.295);
+  padding: 6px;
+  transition: transform .4s var(--a-ease), filter .4s var(--a-ease);
+  animation: fadeInVar .8s var(--a-ease) both;
+}
+
+img#away-logo.gameCardLogo {
+  max-width: 220px;
+  width:100%;
+  max-height: 220px;
+  height: 100%;
+
+  object-fit: cover;
+  border-radius: 50%;
+  background-color: lch(0% 0 0 / 0.504);
+  background: oklch(0% 0 0 / 0.295);
+  padding: 6px;
+  transition: transform .4s var(--a-ease), filter .4s var(--a-ease);
+  animation: fadeInVar .8s var(--a-ease) both;
+}
+/* ensure module-only variant (single canonical logo class) */
+.gameCardLogo.hasPrediction {
+  width: 250px;
+  height: 250px;
+}
+
+@media (max-width: 600px) {
+  .gameCardLogo {
+    width: 80px;
+    height: 80px;
+  }
+  .gameCardLogo.hasPrediction {
+    width: 100px;
+    height: 100px;
+  }
+}
+
+.gameCardLogo:hover {
+  transform: scale(1.12) rotate(5deg);
+  filter: brightness(1.2) drop-shadow(0 0 12px var(--lch-primary));
+}
+
+.kickoffTime {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  color: var(--lch-muted);
+  white-space: nowrap;
+  font-family: var(--font-tech);
+  animation: textFadeSlide 2s var(--a-ease) 300ms both;
+}
+
+.hasPrediction {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 1.75rem;
+  margin-top: auto;
+  padding-top: .75rem;
+  border-top: 1px solid var(--lch-border);
+}
+
+.predictionBody {
+  display: flex;
+  gap: .5rem;
+}
+
+.probRow,
+.predScores {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+}
+
+.badgeRow {
+  display: flex;
+  gap: .35rem;
+  flex-wrap: wrap;
+}
+
+.badge {
+  font-size: .75rem;
+  padding: .15rem .5rem;
+  border-radius: var(--r-sm, 4px);
+  border: 1px solid var(--lch-border);
+  background: oklch(10% 0 0 / .4);
+}
+
+.diff {
+  opacity: .85;
+  font-style: normal;
+  margin-left: .35rem;
+}
+
+.cta {
+  text-align: center;
+  font-weight: 600;
+  font-family: var(--font-tech);
+  animation: pulseSoft 2s ease-in-out infinite;
+}
+
+.errorMsg {
+  color: lch(52.33% 87.27 31.71);
+}
+
+/* Reset button — minimal, accessible, subtle float + outline animation */
+.reset {
+  float: right; /* visually anchor to the right side */
+  background: transparent;
+  color: var(--lch-text);
+  border: 1px solid var(--lch-border);
+  padding: 0.35rem 0.6rem;
+  border-radius: 6px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  cursor: pointer;
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+  will-change: transform;
+}
+
+.reset:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.12), 0 0 8px var(--lch-accent);
+  border-color: var(--lch-primary);
+}
+
+.reset:focus {
+  outline: none;
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--lch-accent) 12%, transparent);
+  animation: _resetFloat 3s ease-in-out infinite;
+}
+
+@keyframes _resetFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+.progressTrack {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: lch(20% 5 250 / .35);
+  overflow: hidden;
+  border-bottom-left-radius: var(--r-md);
+  border-bottom-right-radius: var(--r-md);
+}
+
+.progressBar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--lch-accent), var(--lch-primary));
+}
+
+/* Small loading indicator for when a card is fetching predictions */
+.loadingIndicator {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: oklch(0% 0 0 / 0.18);
+  border-radius: 50%;
+  border: 1px solid oklch(80% 0 0 / 0.12);
+  box-shadow: 0 0 8px var(--lch-accent);
+  z-index: 10;
+}
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.12);
+  border-top-color: var(--lch-accent);
+  animation: cardSpin 800ms linear infinite;
+}
+
+@keyframes cardSpin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Dev-only visual hint when a card receives a click (short-lived) */
+.debugClicked {
+  box-shadow: 0 0 0 4px rgba(0, 200, 255, 0.18), 0 8px 28px rgba(0, 0, 0, 0.35) !important;
+  transform: translateY(-6px) scale(1.01) !important;
+}

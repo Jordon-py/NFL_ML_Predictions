@@ -1,7 +1,5 @@
-import { useEffect, useState } from 'react';
-import { NavLink } from 'react-router-dom';
-import './NavBar.css';
-import HamburgerMenu from '../Hamburger/HamburgerMenu';
+import {useEffect, useState} from 'react';
+import './NavBarr.css';
 
 /**
  * NavBar.jsx
@@ -14,10 +12,9 @@ import HamburgerMenu from '../Hamburger/HamburgerMenu';
  *   - We call `handleScroll()` once on mount to sync initial state (in case the page loads scrolled).
  *   - Passive scroll listener + SSR guard for safety.
  */
-function NavBar({ health } = {})
-{
+function NavBar() {
     // Keep string type to avoid changing downstream CSS expectations
-    const [ isSticking, setIsSticking ] = useState( '' );
+    const [isSticking, setIsSticking] = useState('');
 
     // EFFECT: toggle the "sticking" class after scrolling a small distance.
     const handleScroll = () =>
@@ -55,11 +52,11 @@ function NavBar({ health } = {})
             {/* SVG defs for the border animation – render once and reuse via ids. */ }
             <svg width="0" height="0" aria-hidden="true">
                 <defs>
-                    <linearGradient id="sb3Gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" stopColor="#9abfffff" />
-                        <stop offset="50%" stopColor="#a16affff" />
-                        <stop offset="85%" stopColor="#8fabdeff" />
-                        <stop offset="100%" stopColor="#2c79ffff" />
+                    <linearGradient id="sb3Gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" stopColor="#7aaaff" />
+                        <stop offset="50%" stopColor="#b388ff" />
+                        <stop offset="85%" stopColor="#c6ccd7" />
+                        <stop offset="100%" stopColor="#7aaaff" />
                     </linearGradient>
                     <filter id="sb3Sparkle" x="-20%" y="-20%" width="140%" height="140%">
                         <feGaussianBlur in="SourceAlpha" stdDeviation="0.5" result="a" />
@@ -82,25 +79,17 @@ function NavBar({ health } = {})
                 </defs>
             </svg>
 
-            <div className="nav-left">
-                <h1>NFL Predict</h1>
-                <div
-                    className={ `health-indicator ${healthStatusClass}` }
-                    title={ `Backend Status: ${health?.status ?? 'unknown'}${health?.reason ? ` - ${health.reason}` : ''}` }
-                ></div>
-            </div>
-
-            {/* Desktop links (hidden on small screens via CSS) */ }
-            <div className="navBar__links">
-                <NavLink to="/" end>Dashboard</NavLink>
-                <NavLink to="/history">History</NavLink>
-                <NavLink to="/stats">Stats</NavLink>
-            </div>
-            {/* Mobile hamburger (shown on small screens via CSS) */ }
-            <div className="navBar__hamburger" aria-label="Navigation menu">
-                <HamburgerMenu />
-            </div>
-        </nav>
+            <nav className={`navBar ${isSticking}`} style={{position: 'sticky'}}>
+                <h1>NFL Prediction App</h1>
+                <div className="navBar__links">
+                    <ul>
+                        <li><a href="#home">Home</a></li>
+                        <li><a href="#about">About</a></li>
+                        <li><a href="#contact">Contact</a></li>
+                    </ul>
+                </div>
+            </nav>
+        </>
     );
 }
 

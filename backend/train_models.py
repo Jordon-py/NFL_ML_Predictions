@@ -22,35 +22,47 @@ Train leak-free NFL models with time-aware CV.
 """
 
 import argparse
+import hashlib
 import json
 import logging
 import os
 from pathlib import Path
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
-from typing import List, Tuple, Dict, cast, Any
-from dotenv import load_dotenv
+from pathlib import Path
+from typing import List, Tuple, Dict, cast, Any, Optional
 
 import numpy as np
 import pandas as pd
+from dotenv import load_dotenv
+from joblib import dump, load
+import time
+
+from sklearn.base import BaseEstimator
+from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
-from sklearn.impute import SimpleImputer
+from sklearn.calibration import CalibratedClassifierCV, calibration_curve
 from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import HistGradientBoostingClassifier
+from sklearn.ensemble import HistGradientBoostingRegressor
+from sklearn.model_selection import RandomizedSearchCV, TimeSeriesSplit
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.impute import SimpleImputer
 from sklearn.metrics import (
     mean_absolute_error,
+    mean_squared_error,
+    r2_score,
     roc_auc_score,
     brier_score_loss,
     log_loss,
+    precision_recall_curve,
+    auc,
+    accuracy_score,
 )
-from sklearn.model_selection import TimeSeriesSplit, RandomizedSearchCV
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OneHotEncoder, StandardScaler
-from sklearn.ensemble import HistGradientBoostingRegressor
-from sklearn.calibration import CalibratedClassifierCV
-from joblib import dump
+
 
 # -----------------------
-# Configuration
+# Configuration & Environment
 # -----------------------
 load_dotenv(dotenv_path="./.env", verbose=True)
 
@@ -73,16 +85,19 @@ FAST_DEV_TRAIN = os.getenv("FAST_DEV_TRAIN", "0") == "1"
 
 TARGET_HOME = "home_points_for"
 TARGET_AWAY = "away_points_for"
-CLASS_LABEL = "home_win"  # must be 0/1
+CLASS_LABEL = "home_win"
 TIME_KEYS = ["season", "week"]
 
+# Identifier columns (excluded from features)
 ID_COLS = {
     "game_id",
-    # "home_team",
-    # "away_team",
+    "gid",
     "home_team_id",
     "away_team_id",
     "stadium",
+    "time_key",
+    "home_game_date",
+    "away_game_date",
 }
 
 # Columns that must never enter features (labels or post-game/market values)
@@ -112,23 +127,35 @@ LEAK_BLOCKLIST = {
     "season_home_win_rate",
 }
 
+# Hyperparameter search spaces
 REG_PARAM_DISTS = {
-    "reg__max_depth": [None, 6, 10, 14],
-    "reg__learning_rate": np.linspace(0.02, 0.2, 6),
+    "reg__max_depth": [3, 6, 10, 14],
+    "reg__learning_rate": [0.02, 0.05, 0.1, 0.15, 0.2, 0.01],
     "reg__max_leaf_nodes": [15, 31, 63, 127],
-    "reg__l2_regularization": np.linspace(0.0, 0.2, 5),
+    "reg__l2_regularization": [0.02, 0.05, 0.1, 0.15, 0.2],
+    "reg__min_samples_leaf": [10, 20, 30],
 }
 
 CLF_PARAM_DISTS = {
-    "clf__C": np.logspace(-3, 1, 8),
+    "clf__C": [0.02, 0.01, 0.1, 1.0, 0.05],
     "clf__penalty": ["l2"],
     "clf__solver": ["liblinear", "lbfgs"],
     "clf__class_weight": [None, "balanced"],
 }
 
+HIST_PARAM_DISTS = {
+    "clf__max_depth": [3, 6, 10, 14],
+    "clf__learning_rate": [0.02, 0.05, 0.1, 0.15, 0.2],
+    "clf__max_leaf_nodes": [15, 31, 63, 127],
+    "clf__l2_regularization": [0.0, 0.01, 0.05, 0.1],
+    "clf__min_samples_leaf": [10, 20, 30],
+}
+
+# Logging configuration
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
 )
 log = logging.getLogger("train_models")
 
@@ -183,18 +210,41 @@ def _resolve_default_dataset_path() -> str:
 
 
 @dataclass
-class TrainSummary:
+class TrainingSummary:
+    """Comprehensive training run summary."""
     training_timestamp_utc: str
+    training_duration_seconds: float
     rows_total: int
+    rows_train: int
+    rows_holdout: int
     n_features_numeric: int
     n_features_categorical: int
+    n_features_total_transformed: int
     cv_n_splits: int
+    hp_n_iter: int
     random_seed: int
+    dataset_hash: str
     production_ready: bool
-    dataset_hash: int
+    home_model_metrics: Dict[str, float] = field(default_factory=dict)
+    away_model_metrics: Dict[str, float] = field(default_factory=dict)
+    win_model_metrics: Dict[str, float] = field(default_factory=dict)
+    hist_model_metrics: Dict[str, float] = field(default_factory=dict)
+    cv_best_params: Dict[str, Any] = field(default_factory=dict)
+
+
+# -----------------------
+# Utility Functions
+# -----------------------
+def _timer(start: float) -> str:
+    """Format elapsed time since start."""
+    elapsed = time.time() - start
+    if elapsed < 60:
+        return f"{elapsed:.1f}s"
+    return f"{elapsed / 60:.1f}m"
 
 
 def _ensure_columns(df: pd.DataFrame, required: List[str]) -> None:
+    """Validate required columns exist in DataFrame."""
     missing = [c for c in required if c not in df.columns]
     if missing:
         raise ValueError(f"Missing required columns: {missing}")
@@ -223,21 +273,28 @@ def _drop_leaky_columns(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _infer_features(df: pd.DataFrame) -> Tuple[List[str], List[str]]:
-    """Return numeric and categorical feature names after removing IDs and blocklisted fields."""
-    ignore = set(ID_COLS) | set(TIME_KEYS) | set(LEAK_BLOCKLIST)
+    """Separate numeric and categorical feature columns.
+
+    Excludes:
+    - ID columns
+    - Time keys (used for sorting, not prediction)
+    - Target columns
+    - Leak blocklist columns
+    """
+    ignore = set(ID_COLS) | set(TIME_KEYS) | LEAK_BLOCKLIST | {TARGET_HOME, TARGET_AWAY, CLASS_LABEL}
+
     numeric: List[str] = []
     categorical: List[str] = []
-    cat_check = df['home_team'].unique()
-    for c in df.columns:
-        if c in ignore:
+
+    for col in df.columns:
+        if col in ignore:
             continue
-        if c in (TARGET_HOME, TARGET_AWAY, CLASS_LABEL):
-            continue
-        if pd.api.types.is_numeric_dtype(df[c]):
-            numeric.append(c)
-        else:
-            categorical.append(c)
-        
+        if pd.api.types.is_numeric_dtype(df[col]):
+            numeric.append(col)
+        elif pd.api.types.is_object_dtype(df[col]) or pd.api.types.is_categorical_dtype(df[col]):
+            categorical.append(col)
+
+    log.info("Inferred %d numeric and %d categorical features", len(numeric), len(categorical))
     return numeric, categorical
 
 
@@ -259,7 +316,7 @@ def _make_preprocessor(num_cols: List[str], cat_cols: List[str]) -> ColumnTransf
     )
     return ColumnTransformer(
         transformers=[
-            ("num", num_pipe, num_cols),  
+            ("num", num_pipe, num_cols),
             ("cat", cat_pipe, cat_cols),
         ],
         # Force a dense combined feature matrix; some sklearn estimators in this pipeline
@@ -268,17 +325,26 @@ def _make_preprocessor(num_cols: List[str], cat_cols: List[str]) -> ColumnTransf
     )
 
 
-def _split_for_calibration(tscv: TimeSeriesSplit, X: pd.DataFrame, y: pd.Series):
-    """Use the last TimeSeriesSplit fold as validation/holdout. Others become the training pool."""
-    splits = list(tscv.split(X, y))
-    train_idx_all: List[int] = []
-    for tr, va in splits[:-1]:
-        train_idx_all.extend(tr.tolist())
-        train_idx_all.extend(va.tolist())
-    calib_tr, calib_va = splits[-1]
-    return np.array(train_idx_all), calib_tr, calib_va
+def _dataset_sort(df: pd.DataFrame) -> pd.DataFrame:
+    """Sort dataset chronologically by season and week."""
+    return df.sort_values(by=TIME_KEYS).reset_index(drop=True)
 
 
+def _get_holdout_split(X: pd.DataFrame, y: pd.Series, holdout_ratio: float = 0.15) -> Tuple[np.ndarray, np.ndarray]:
+    """Reserve the final chronological portion for holdout evaluation.
+
+    Returns indices for train and holdout sets.
+    """
+    n = len(X)
+    holdout_size = int(n * holdout_ratio)
+    train_idx = np.arange(n - holdout_size)
+    holdout_idx = np.arange(n - holdout_size, n)
+    return train_idx, holdout_idx
+
+
+# -----------------------
+# Model Training Functions
+# -----------------------
 def _fit_regression(
     X: pd.DataFrame,
     y: pd.Series,
@@ -312,9 +378,11 @@ def _fit_regression(
         n_jobs=n_jobs,
         random_state=random_state,
         verbose=2,
-        n_iter=min(HP_N_ITER, len(list(REG_PARAM_DISTS.values())[0]) * 10),
+        n_iter=n_iter,
         refit=True,
+        error_score="raise",
     )
+
     rs.fit(X, y)
     logging.info("%s rs", rs)
     return cast(Pipeline, rs.best_estimator_)
@@ -360,12 +428,27 @@ def _fit_classifier(
     rs = RandomizedSearchCV(
         estimator=base_pipeline,
         param_distributions=CLF_PARAM_DISTS,
-        cv=TimeSeriesSplit(n_splits=N_SPLITS),
+        cv=tscv,
         scoring="neg_log_loss",
         n_jobs=n_jobs,
         random_state=random_state,
-        verbose=2,
-        n_iter=min(HP_N_ITER, len(list(CLF_PARAM_DISTS.values())[0]) * 5),
+        verbose=3,
+        n_iter=n_iter,
+        refit=True,
+        error_score="raise",
+    )
+
+    # 3. Hyperparameter search: HistGradientBoostingClassifier
+    log.info("Running RandomizedSearchCV for HistGradientBoostingClassifier...")
+    hist_gb_rs = RandomizedSearchCV(
+        estimator=hist_gb_pipe,
+        param_distributions=HIST_PARAM_DISTS,
+        cv=tscv,
+        scoring="neg_log_loss",
+        n_jobs=n_jobs,
+        random_state=random_state,
+        verbose=3,
+        n_iter=n_iter,
         refit=True,
     )
     rs.fit(X, y)
@@ -392,7 +475,8 @@ def _fit_classifier(
     return best_pipeline, holdout_metrics
 
 
-def _evaluate_regression(model: Pipeline, X: pd.DataFrame, y: pd.Series) -> float:
+def _evaluate_regression(model: Pipeline, X: pd.DataFrame, y: pd.Series) -> RegressionMetrics:
+    """Compute regression metrics on holdout set."""
     pred = model.predict(X)
     return float(mean_absolute_error(y, pred))
 
@@ -416,35 +500,71 @@ def main(data_path: str, out_dir: str, n_jobs: int = N_JOBS, fast_dev: bool = Fa
     if df.empty:
         raise RuntimeError(f"Dataset is empty: {data_path}")
 
-    # Chronological order
+    log.info("Loaded %d rows x %d columns", len(df), len(df.columns))
+
+    # Ensure required columns are present (targets + time keys)
+    _ensure_columns(df, TIME_KEYS + [TARGET_HOME, TARGET_AWAY, CLASS_LABEL])
+
+    # Chronological sort (critical for time-series CV)
     df = _dataset_sort(df)
 
-    # Extract targets BEFORE dropping leaky columns
+    # -------------------------------------------------------------------------
+    # 2. Extract targets and drop leaky columns
+    # -------------------------------------------------------------------------
     y_home = df[TARGET_HOME].copy()
     y_away = df[TARGET_AWAY].copy()
-    # Drop NaN values before converting to int
     y_win = df[CLASS_LABEL].copy()
-    
+
     # Now drop leaky columns from features (but keep targets separately)
     df = _drop_leaky_columns(df)
 
-    # Remove rows with missing targets (apply same mask to features and targets)
     keep_mask = (~y_home.isna()) & (~y_away.isna()) & (~y_win.isna())
+    n_dropped = (~keep_mask).sum()
+    if n_dropped > 0:
+        log.info("Dropped %d rows with missing targets", n_dropped)
+
     df = df.loc[keep_mask].reset_index(drop=True)
     y_home = y_home.loc[keep_mask].reset_index(drop=True)
     y_away = y_away.loc[keep_mask].reset_index(drop=True)
     y_win = y_win.loc[keep_mask].astype(int).reset_index(drop=True)
 
-    # Features after sanitization
+    log.info("Dataset after cleaning: %d rows", len(df))
+
+    # -------------------------------------------------------------------------
+    # 3. Infer features and optimize numeric dtypes
+    # -------------------------------------------------------------------------
     num_cols, cat_cols = _infer_features(df)
     feature_cols = num_cols + cat_cols
+
     if not feature_cols:
-        raise RuntimeError("No features found after leakage sanitization. Check your dataset.")
+        raise RuntimeError(
+            "No features found after leakage sanitization. "
+            "Check your dataset or _drop_leaky_columns."
+        )
+    df[feature_cols].to_csv('prod-dataset.csv')
     X = df[feature_cols].copy()
-    # Cast numeric columns to float32 to reduce memory footprint during CV
-    for nc in num_cols:
-        if nc in X.columns:
-            X[nc] = X[nc].astype('float32')
+    for col in num_cols:
+        if col in X.columns:
+            X[col] = X[col].astype("float32")
+
+    # -------------------------------------------------------------------------
+    # 4. Chronological train / holdout split
+    # -------------------------------------------------------------------------
+    train_idx, holdout_idx = _get_holdout_split(X, y_home, holdout_ratio=0.20)
+    X_train, X_holdout = X.iloc[train_idx], X.iloc[holdout_idx]
+    y_home_train, y_home_holdout = y_home.iloc[train_idx], y_home.iloc[holdout_idx]
+    y_away_train, y_away_holdout = y_away.iloc[train_idx], y_away.iloc[holdout_idx]
+    y_win_train, y_win_holdout = y_win.iloc[train_idx], y_win.iloc[holdout_idx]
+
+    log.info(
+        "Train set: %d rows | Holdout set: %d rows",
+        len(train_idx),
+        len(holdout_idx),
+    )
+
+    # -------------------------------------------------------------------------
+    # 5. Preprocessor (fit on TRAIN only)
+    # -------------------------------------------------------------------------
     pre = _make_preprocessor(num_cols, cat_cols)
 
     # Fit models (time-aware CV inside)
@@ -478,30 +598,110 @@ def main(data_path: str, out_dir: str, n_jobs: int = N_JOBS, fast_dev: bool = Fa
         use_search=not fast_dev,
     )
 
-    # Quick in-sample sanity MAE (for monitoring only)
-    mae_home = _evaluate_regression(home_model, X, y_home)
-    mae_away = _evaluate_regression(away_model, X, y_away)
+    # -------------------------------------------------------------------------
+    # 7. Evaluate on holdout
+    # -------------------------------------------------------------------------
+    home_metrics = _evaluate_regression(home_model, X_holdout, y_home_holdout)
+    away_metrics = _evaluate_regression(away_model, X_holdout, y_away_holdout)
 
-    # Persist artifacts
+    win_is_calibrated = win_params.get("calibrated", False)
+    hist_is_calibrated = hist_params.get("calibrated", False)
+
+    win_metrics = _evaluate_classifier(
+        win_model, X_holdout, y_win_holdout, win_is_calibrated
+    )
+    hist_win_metrics = _evaluate_classifier(
+        hist_model, X_holdout, y_win_holdout, hist_is_calibrated
+    )
+
+    log.info(
+        "Home Score Regressor - MAE: %.2f, RMSE: %.2f, R²: %.3f",
+        home_metrics.mae,
+        home_metrics.rmse,
+        home_metrics.r2,
+    )
+    log.info(
+        "Away Score Regressor - MAE: %.2f, RMSE: %.2f, R²: %.3f",
+        away_metrics.mae,
+        away_metrics.rmse,
+        away_metrics.r2,
+    )
+    log.info(
+        "Win Classifier (winner) - Accuracy: %.3f, ROC-AUC: %.3f, "
+        "Brier: %.4f, ECE: %.4f",
+        win_metrics.accuracy,
+        win_metrics.roc_auc,
+        win_metrics.brier_score,
+        win_metrics.ece,
+    )
+    log.info(
+        "HistGB Classifier - Accuracy: %.3f, ROC-AUC: %.3f, "
+        "Brier: %.4f, ECE: %.4f",
+        hist_win_metrics.accuracy,
+        hist_win_metrics.roc_auc,
+        hist_win_metrics.brier_score,
+        hist_win_metrics.ece,
+    )
+
+    # -------------------------------------------------------------------------
+    # 8. Feature importances
+    # -------------------------------------------------------------------------
+    log.info("Extracting feature importances...")
+    home_importance = _extract_feature_importance(home_model, feature_cols, "regressor")
+    away_importance = _extract_feature_importance(away_model, feature_cols, "regressor")
+    win_importance = _extract_feature_importance(win_model, feature_cols, "classifier")
+    hist_win_importance = _extract_feature_importance(
+        hist_model, feature_cols, "classifier"
+    )
+
+    # -------------------------------------------------------------------------
+    # 9. Save artifacts
+    # -------------------------------------------------------------------------
+    log.info("-" * 60)
+    log.info("Saving artifacts to %s", out_dir)
     os.makedirs(out_dir, exist_ok=True)
+
     dump(pre, os.path.join(out_dir, "preprocessor.joblib"))
     dump(home_model, os.path.join(out_dir, "home_model.joblib"))
     dump(away_model, os.path.join(out_dir, "away_model.joblib"))
     dump(win_model, os.path.join(out_dir, "win_clf_calibrated.joblib"))
 
-    # Reports
-    training_timestamp_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S %Z")
-    summary = TrainSummary(
-        training_timestamp_utc=training_timestamp_utc,
-        rows_total=int(len(df)),
+    training_duration = time.time() - training_start
+    training_timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+
+    # -------------------------------------------------------------------------
+    # 10. Build summary
+    # -------------------------------------------------------------------------
+    summary = TrainingSummary(
+        training_timestamp_utc=training_timestamp,
+        training_duration_seconds=round(training_duration, 2),
+        rows_total=len(df),
+        rows_train=len(train_idx),
+        rows_holdout=len(holdout_idx),
         n_features_numeric=len(num_cols),
         n_features_categorical=len(cat_cols),
+        n_features_total_transformed=n_transformed,
         cv_n_splits=N_SPLITS,
+        hp_n_iter=HP_N_ITER,
         random_seed=RANDOM_SEED,
         production_ready=True,
         dataset_hash=_dataset_hash(df),
+        production_ready=True,
+        home_model_metrics=home_metrics.to_dict(),
+        away_model_metrics=away_metrics.to_dict(),
+        win_model_metrics=win_metrics.to_dict(),
+        hist_model_metrics=hist_win_metrics.to_dict(),
+        cv_best_params={
+            "home_model": home_params,
+            "away_model": away_params,
+            "win_model": win_params,
+            "hist_model": hist_params,
+        },
     )
 
+    # -------------------------------------------------------------------------
+    # 11. Metadata for API/frontend
+    # -------------------------------------------------------------------------
     metadata = {
         "training_timestamp_utc": summary.training_timestamp_utc,
         "dataset_hash": summary.dataset_hash,
@@ -509,15 +709,31 @@ def main(data_path: str, out_dir: str, n_jobs: int = N_JOBS, fast_dev: bool = Fa
         "home_model": "home_model.joblib",
         "away_model": "away_model.joblib",
         "win_model": "win_clf_calibrated.joblib",
+        "hist_win_model": "hist_win_clf_calibrated.joblib",
         "raw_feature_columns": {"numeric": num_cols, "categorical": cat_cols},
-        "production_ready": True ,
+        "production_ready": True,
         "cv": {"type": "TimeSeriesSplit", "n_splits": N_SPLITS},
-        "holdout_metrics_win": win_holdout_metrics,
-        "quick_mae": {"home": mae_home, "away": mae_away},
+        "holdout_metrics": {
+            "home": home_metrics.to_dict(),
+            "away": away_metrics.to_dict(),
+            "win": win_metrics.to_dict(),
+            "hist_win": hist_win_metrics.to_dict(),
+        },
+        "rows": summary.rows_total,
+        "features": len(feature_cols),
+    }
+
+    # Feature importance report
+    feature_importance = {
+        "home_model": dict(list(home_importance.items())[:50]),
+        "away_model": dict(list(away_importance.items())[:50]),
+        "win_model": dict(list(win_importance.items())[:50]),
+        "hist_model": dict(list(hist_win_importance.items())[:50]),
     }
 
     with open(os.path.join(out_dir, "training_report.json"), "w", encoding="utf-8") as f:
         json.dump(asdict(summary), f, indent=2)
+
     with open(os.path.join(out_dir, "metadata.json"), "w", encoding="utf-8") as f:
         json.dump(metadata, f, indent=2)
 

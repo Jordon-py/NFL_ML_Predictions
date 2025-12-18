@@ -2,6 +2,7 @@
 
 ## Executive Summary
 
+<<<<<<< HEAD
 This report documents incremental changes to the NFL_ML_Predictions repository, focusing on bug fixes, code clarity, and architectural integrity. Changes are made with a "Repository Guardian" mindset: holistic awareness, logic simplification, and professional documentation. **Current app completion estimate: 87%** (feature-complete core; pending UI polish, comprehensive testing, and final deployment verification).
 
 ## Recent Changes
@@ -237,6 +238,110 @@ This report documents incremental changes to the NFL_ML_Predictions repository, 
     - GET /health → {"status":"healthy","mode":"production","reason":"models loaded"}
     - GET /debug → metadata present; CORS origins restricted as configured. Dataset currently reported as missing; predictions will synthesize features when needed.
   - Quality Gates: Build: PASS. Lint/Typecheck: PASS. Smoke: PASS (Heroku healthy; endpoints respond).
+=======
+This report documents incremental changes to the NFL_ML_Predictions repository, focusing on bug fixes, code clarity, and architectural integrity. Changes are made with a "Repository Guardian" mindset: holistic awareness, logic simplification, and professional documentation. Current app completion estimate: 100% (full ML pipeline functional; models trained on engineered features; predictions ready for integration).
+
+## Active Enhancements Under Development
+
+- **Date/Time:** 2025-12-11 / 04:30 UTC
+  - **Focus:** Stop OPTIONS 400s and restore prediction variance.
+  - **Key Actions:** Parsed ALLOWED_ORIGINS into a real list with localhost/Vercel defaults; added catch-all OPTIONS responder; removed transformed-column alignment in predict paths so pipelines consume raw feature names.
+  - **Upcoming Steps:** Deploy to Heroku and smoke test `/health` + OPTIONS `/health` + `/predict`; decide whether to stub `/history` for UI callers.
+  - **App Completion Estimate:** 98% (pending logo check + /history decision).
+  - **Enhancement Suggestion:** Add automated preflight smoke for `/health` and `/history` to catch regressions early.
+
+- **Date/Time:** 2025-12-04 / 17:20 UTC
+  - **Focus:** Reactivated Copilot instructions + Alfred persona; refreshed operational backlog to align with deployment readiness directives.
+  - **Key Actions:**
+    - Reviewed latest report entries to ground the activation in documented history.
+    - Updated `docs/alfred.log.md` Task Memory (items 3–5) to track: (a) git history cleanup + force push, (b) production endpoint revalidation, (c) README model metrics table publication.
+    - Logged the activation session inside `alfred.log.md`, including next steps and health estimate.
+  - **Upcoming Steps:**
+    1. Execute git cleanup/force-push once user provides confirmation token.
+    2. Run `/health`, `/schedule/next-week`, and `/predict` smoke tests post-cleanup and capture evidence.
+    3. Draft the README evaluation table using the latest holdout metrics before surfacing to stakeholders.
+  - **App Completion Estimate:** 87% (unchanged pending verification + documentation work).
+  - **Enhancement Suggestion:** Automate Active Enhancements status generation (e.g., script draws from Alfred log tasks) to keep docs/report.md synchronized with minimal manual edits.
+- **Date/Time:** 2025-12-04 / 17:55 UTC
+  - **Focus:** Production smoke test + model ledger creation.
+  - **Key Actions:**
+    - Hit `/health`, `/schedule/next-week`, and `/predict` on Heroku; all returned "Application Error" (Heroku dyno crash). Evidence captured for follow-up.
+    - Authored `docs/training_runs.md` with historical training metadata (dataset scope, hyperparameters, validation metrics, artifact roots).
+    - Added "Model Performance Snapshot" table to `README.md` referencing the 2025-12-01 promoted run.
+  - **Upcoming Steps:**
+    1. Inspect Heroku logs / dyno status to restore backend availability.
+    2. Once healthy, rerun the smoke suite and update ledger entries if a new training run replaces 20251201.
+    3. Extend the ledger automation to ingest future `cv_fold_metrics.csv` outputs for trend charts.
+  - **App Completion Estimate:** 87% (blocked on backend uptime).
+  - **Enhancement Suggestion:** Add a CI step that exercises `/health` + `/predict` after deployments to catch Heroku crashes faster.
+
+## Recent Changes
+
+- Date/Time: 2025-12-08 / 23:59 UTC.
+  - Files Modified: `backend/models/prod_models/*`, `backend/prod-models/models/*`, `alfred.log.md`, `docs/report.md`.
+  - Change Description:
+    - Promoted the newest production artifacts (timestamp 2025-12-08 17:05 UTC, 200 features, 2,149 rows) from `backend/prod-models/models` into the canonical `backend/models/prod_models/` directory.
+    - Ensures the API/Heroku deployment loads the latest metadata, preprocessor, score models, and calibrated classifiers instead of the older 14:52 UTC bundle.
+  - Why Made: Align the served models with the most recent training run and feature schema; prevent stale predictions caused by outdated prod bundles.
+  - Impact: After restart/redeploy, `/debug` should report the 2025-12-08 17:05 UTC metadata timestamp and 200-feature schema; predictions should reflect the refreshed artifacts.
+  - Quality Gates: No automated tests; requires backend/Heroku restart to ingest new joblibs.
+
+- Date/Time: 2025-12-09 / 00:05 UTC.
+  - Files Modified: `backend/main.py`, `alfred.log.md`, `docs/report.md`.
+  - Change Description:
+    - Exposed `win_classifier_used` in `PredictionResponse` and set it based on whether the calibrated classifier executed, allowing the frontend badge to distinguish classifier vs logistic fallback.
+  - Why Made: UI was labeling predictions as “Logistic fallback” despite the classifier running because the backend never surfaced classifier usage status.
+  - Impact: After redeploy, frontend cards should show “Classifier” when the win model is used; `prediction_source` remains available for provenance.
+  - Quality Gates: Not run; redeploy backend to apply.
+
+- Date/Time: 2025-12-08 / 23:30 UTC.
+  - Files Modified: `backend/.env`, `backend/config.py`, `backend/main.py`, `alfred.log.md`.
+  - Change Description:
+    - Pinned `DATASET_PATH` to `C:\\Users\\goku\\Documents\\NFL_ML_Predictions\\backend\\game_features_20251208.csv` so production loads the newest engineered dataset.
+    - Set `DEFAULT_DATASET` to the same path and expanded dataset fallbacks in `main.py` to prioritize the 20251208 CSV (backend root/data) before older archives.
+  - Why Made: Production was loading an older dataset; forcing the latest file removes stale predictions and startup warnings about missing engineered features.
+  - Impact: API startup now prefers the latest dataset automatically; reduces reliance on legacy CSVs and should improve prediction fidelity once the service restarts with the updated env.
+  - Quality Gates: Pending runtime restart to pick up `.env`; no automated tests executed for this path change.
+
+- Date/Time: 2025-12-08 / 23:55 UTC.
+  - Files Modified: `backend/main.py`, `alfred.log.md`.
+  - Change Description:
+    - Aligned feature schema handling to prefer the fitted preprocessor’s `feature_names_in_` when metadata column counts diverge, preventing startup sanity checks from failing with column-count mismatches.
+    - Dataset validation and sanity prediction now use the preprocessor’s expected columns first, reducing false-positive missing-feature warnings when newer CSVs add or remove fields.
+  - Why Made: Startup logs showed 277 vs 153 column mismatch due to stale metadata and updated CSVs; aligning to the fitted transformer restores sanity checks and keeps predictions model-aligned.
+  - Impact: Startup should pass without column-count errors when the dataset has extra columns; predictions remain bound to the model’s trained schema.
+  - Quality Gates: No automated tests run; requires backend restart (and redeploy to Heroku) to take effect.
+
+- Date/Time: 2025-12-08 / 19:05 UTC.
+  - Files Modified: `backend/config.py`, `backend/.env`, `backend/models/prod_models/*`, `backend/eval_models.py`, `backend/game_features_20251208_eval_report.md`, `alfred.log.md`.
+  - Change Description:
+    - Lazy-loaded `nflreadpy` schedule access in `config.py` to prevent Heroku startup crashes; aligned env vars with `ALLOW_ORIGIN_REGEX` and corrected dataset/schedule paths plus latest Vercel origin in `.env`.
+    - Tracked production model artifacts under `backend/models/prod_models/` so deployments load metadata/joblibs; Heroku release v435 now boots healthy and reports models loaded.
+    - Expanded `eval_models.py` with confusion-matrix diagnostics and textual report generation; produced `game_features_20251208_eval_report.md` with holdout metrics.
+  - Why Made: Heroku crashed on missing `nflreadpy` during startup and lacked bundled model artifacts; evaluation needed clearer diagnostics for production metrics.
+  - Impact: Backend production healthy at `https://nfl-predict-ecf5a5bd34fe.herokuapp.com` with `/predict` returning model-driven scores; frontend live at `https://nfl-ml-predictions.vercel.app`; evaluation report available for the 20251208 dataset.
+  - Quality Gates: Heroku deploy v435 (pass); `/predict` smoke SF vs CHI returns probabilities; `npm run build` (frontend) passes; Vercel production deploy completed.
+
+- Date/Time: 2025-12-08 / 06:35 UTC.
+  - Files Modified: `backend/train_models.py`, `alfred.log.md`.
+  - Change Description:
+    - Added `hist_model_metrics` to `TrainingSummary` to resolve the TypeError raised during training report serialization.
+    - Updated feature-importance extraction to unwrap `CalibratedClassifierCV` so calibrated pipelines expose their underlying estimators for importance mapping.
+  - Why Made: Training run aborted while saving reports because `TrainingSummary` did not accept `hist_model_metrics`; calibrated classifiers also could not expose importances, emitting warnings.
+  - Impact: Training can complete report generation without crashing; calibrated classifiers now yield feature importance data. A retrain is still required to regenerate artifacts and metadata before deployment.
+  - Quality Gates: Build/Tests: Not Run (code-only fix). Retrain/Deploy: Pending.
+
+- Date/Time: 2025-12-06 / 00:00 UTC.
+  - Files Modified: `backend/main.py`, `frontend/src/api/client.js`, `alfred.log.md`.
+  - Change Description:
+    - Removed the unused `nflreadpy` dependency (prevented Heroku startup crashes) and cleaned duplicate helpers and sample routes in `main.py`.
+    - Added `_infer_raw_feature_columns` so `/predict` can assemble features even when `metadata.json` lacks them; now returns a clear 503 with retrain guidance if inference still fails.
+    - Default dataset now points to `backend/data/game_features.csv` instead of an empty path, improving startup reliability.
+    - API client now honors `VITE_API_BASE` or `VITE_API_URL`, centralizes the Heroku fallback, and exposes `normalizePredictError` for friendlier UI messaging on 503/422 cases.
+  - Why Made: Production /predict was failing when metadata omitted `raw_feature_columns`, and Heroku previously crashed on `nflreadpy` imports. Frontend needed clearer base resolution and user-friendly error messaging.
+  - Impact: `/health` and `/schedule/next-week` remain healthy; `/predict` degrades gracefully (503 with guidance) instead of failing ambiguously. Frontend will target the correct API in hosted environments and display clearer errors.
+  - Quality Gates: Build: Pending (no codegen). Lint/Typecheck: Pending. Smoke: Pending `/predict` after retrain.
+>>>>>>> cd97fecacdc0a2f3d4ee6cd29effaa9619489d75
 
 - Date/Time: 2025-11-02 / 00:05 UTC.
   - Files Modified: `frontend/src/components/HamburgerMenu.jsx`, `.debug_memory.json`, `docs/report.md` (this file).
@@ -611,6 +716,18 @@ References: Heroku CLI install/use, container stack via `heroku.yml`, Vite on Ve
   - API Response Time: Schedule endpoint returns data instantly.
   - Code Complexity: Minimal conditional logic guarding API base selection.
   - Deployment Readiness: Heroku v183 verified; Vercel configured.
+<<<<<<< HEAD
+=======
+
+- **Date/Time**: 2024-11-06 / 15:30 UTC
+- **Files Modified**: `frontend/src/components/HamburgerMenu.jsx`
+- **Change Description**: Switched to a named `useState` import and clarified dependency notes to resolve the missing React module warning observed during builds.
+- **Why Made**: Ensures the JSX runtime can resolve React hooks consistently while giving maintainers explicit guidance on required packages.
+- **Impact**: Resolved build warnings related to React module resolution. App completion estimate: 68%.
+- **Metrics Post-Change**:
+  - Files touched this session: 1
+  - Outstanding frontend compile blockers: 0 observed after change
+>>>>>>> cd97fecacdc0a2f3d4ee6cd29effaa9619489d75
 
 - **Date/Time**: 2024-11-06 / 15:30 UTC
 - **Files Modified**: `frontend/src/components/HamburgerMenu.jsx`
@@ -658,6 +775,7 @@ References: Heroku CLI install/use, container stack via `heroku.yml`, Vite on Ve
   - `predict_game()`: Runs ML predictions; loads models, preprocesses features. Interacts with `model_objects`, preprocessor, and CSV data.
   - `predict_next_week()`: Batch predicts all upcoming games; aggregates results/errors. Depends on `get_next_week_schedule()` and `predict_game()`.
   - `_load_features_from_metadata(meta_path)`: Parses feature columns from metadata.json; handles "raw_feature_columns" dict. Called during startup to initialize model_bundle.features.
+<<<<<<< HEAD
 - **Metrics Post-Change**:
 
   - `predict_game()`: Runs ML predictions; loads models, preprocesses features. Interacts with `model_objects`, preprocessor, and CSV data.
@@ -671,6 +789,67 @@ References: Heroku CLI install/use, container stack via `heroku.yml`, Vite on Ve
   - `MODEL_CONFIGS`: Ordered list of `(name, estimator, calibrate)` tuples powering experiments.
 - **Interactions**: Consumes engineered datasets, persists models to `backend/models/`, feeds metadata to FastAPI during startup.
 - **Metrics for Productivity**:
+=======
+- **Variables**:
+  - `model_objects`: Global dict of loaded ML models (e.g., home/away regressors); initialized on startup; used by predict functions.
+  - `DEFAULT_SCHEDULE`: Path to schedule CSV; env-configurable; critical for schedule endpoints.
+  - `ALLOWED_ORIGINS`: List of allowed origins; parsed from env; used by middleware.
+- **Interactions**: API endpoints (e.g., `/predict`) call prediction logic, which loads data/models. Errors logged via HTTPException. No DB/cache; relies on files/env vars.
+
+### frontend/src/api/client.js (API Client)
+
+- **Functions**:
+  - `getNextWeekSchedule()`: Calls `/schedule/next-week` via api(); returns schedule data.
+  - `predictGame(payload)`: Calls `/predict` POST with payload; returns prediction.
+- **Variables**:
+  - `API_BASE`: Empty in dev (proxy), Heroku URL in prod.
+- **Interactions**: Imports in TeamGrid.jsx; handles fetch with timeout/abort.
+
+### frontend/src/components/TeamGrid.jsx (UI Component)
+
+- **Functions**:
+  - `TeamGrid()`: Loads teams/schedule; handles predictions; renders matchups.
+- **Variables**:
+  - `schedule`: Array of games from API.
+- **Interactions**: Calls getNextWeekSchedule() on mount; updates UI with data.
+
+### backend/build_csv_datasets.py (Dataset Engineering Pipeline)
+
+- **Functions**:
+  - `load_schedules(start_year, end_year)`: Loads completed and future NFL schedules from CSV; handles dtype alignment for concatenation. Interacts with pandas DataFrames; feeds feature engineering.
+  - `add_features(df)`: Orchestrates feature creation; calls each `create_*_features` helper. Transforms raw game data into ML-ready features.
+  - `create_elo_features(df)`: Implements an ELO rating system (K=32, starting 1500); calculates pre/post game ratings and differentials.
+  - `create_game_features(df)`: Parses dates, derives contextual metadata (weekend/playoff indicators, rest differential).
+  - `create_rolling_features(df)`: Computes 3/5/10 game rolling statistics with `shift(1)` to avoid leakage.
+  - `create_qb_features(df)`: Aggregates QB metrics (completion %, YPA, TD/INT ratio) from player stats, handling gaps gracefully.
+  - `create_target_features(df)`: Builds prediction targets (point_diff, home_win, winner_team) for supervised learning.
+  - `build_dataset(start_year, end_year, out_dir)`: Pipeline entry; loads raw data, applies features, writes CSV via CLI.
+  - `save_dataset(df, out_path)`: Persists engineered dataset with stable formatting.
+- **Variables**:
+  - `PBP_AGG_COLS`: Mapping of play-by-play aggregations filtered for available data.
+  - `ROLLING_WINDOWS`: Rolling window sizes (3, 5, 10) used for trend detection.
+  - `ELO_K_FACTOR`: Rating update constant controlling ELO sensitivity (32).
+- **Interactions**: Reads from `data/legacy_data/`, supplements with `nfl_data_py`, outputs to `backend/data/` for downstream training.
+- **Metrics for Productivity**:
+  - Dataset generation time: ~30–60s depending on seasons selected.
+  - Output artifacts: `game_features.csv` sized for Heroku slug limits.
+  - Error handling: Guards around NaN targets and missing schedule rows.
+
+### backend/enhanced_pipeline.py (Model Training Pipeline)
+
+- **Functions**:
+  - `build_dataset(data_path)`: Loads CSV, filters `home_win`, prepares feature matrix/targets/groups for training.
+  - `run_experiment(data_path)`: Coordinates cross-validation, calibration, and blend experiments across model configs.
+  - `evaluate_model(name, estimator, X, y, groups, cv)`: Computes CV metrics and Brier skill scores.
+  - `evaluate_on_test(estimator, X_train, y_train, X_test, y_test)`: Trains on full data and scores holdout sets.
+  - `convex_blend(prob_a, prob_b, y_true)`: Optimizes ensemble weights to improve calibration.
+  - `generate_markdown_report(results, output_path, holdout_season)`: Produces training report consumed in `backend/reports/`.
+- **Variables**:
+  - `PROBABILITY_EPS`: Numerical stability constant (1e-6) for log operations.
+  - `MODEL_CONFIGS`: Ordered list of `(name, estimator, calibrate)` tuples powering experiments.
+- **Interactions**: Consumes engineered datasets, persists models to `backend/models/`, feeds metadata to FastAPI during startup.
+- **Metrics for Productivity**:
+>>>>>>> cd97fecacdc0a2f3d4ee6cd29effaa9619489d75
   - Training duration: ~5–10 minutes on full history (LightGBM + calibration).
   - Prediction latency: ~0.5s per game when served by FastAPI.
   - Logging: Structured metrics emitted to console and markdown reports.
@@ -692,7 +871,10 @@ References: Heroku CLI install/use, container stack via `heroku.yml`, Vite on Ve
 
 - **Short-Term**: Integrate trained models into `main.py` sanity checks, add unit tests for CORS parsing and `/predict` payload validation, and verify dev/prod configuration parity.
 - **Short-Term (added)**: Retrain win classifier with leakage guard active to remove underscore- and empirically-derived target features from `raw_feature_columns`; commit updated `metadata.json`, `feature_metadata.json`, and `win_clf_calibrated.joblib`.
+<<<<<<< HEAD
 - **New**: Add an automated retention/compaction routine (CLI or scheduled task) for `prediction_history.json` so legacy entries are archived or rolled off before they regress API schema expectations.
+=======
+>>>>>>> cd97fecacdc0a2f3d4ee6cd29effaa9619489d75
 - **Medium-Term**: Introduce prediction caching (Redis or in-memory layer), extend monitoring dashboards, and harden frontend error boundaries for API failures.
 - **Long-Term**: Expand metrics dashboards (Grafana/DataDog) tracking model accuracy across seasons and explore real-time NFL data plus player prop extensions.
 

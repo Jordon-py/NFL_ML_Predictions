@@ -148,9 +148,21 @@ export default function HistoryChart({ history: historyOverride }) {
 
   return (
     <section className="history-chart" aria-live="polite">
+    <section className="history-chart" aria-live="polite">
       <header>
         <h2>Prediction History</h2>
+        <h2>Prediction History</h2>
         <small>
+          {statsSummary.totalCount} item(s)
+          {statsSummary.mostRecentDate && (
+            <>
+              {" "}
+              • last: {statsSummary.mostRecentDate.toLocaleString()}
+            </>
+          )}
+          {statsSummary.averageHomeWinPercent != null && (
+            <> • avg home win: {statsSummary.averageHomeWinPercent}%</>
+          )}
           {statsSummary.totalCount} item(s)
           {statsSummary.mostRecentDate && (
             <>
@@ -164,6 +176,20 @@ export default function HistoryChart({ history: historyOverride }) {
         </small>
       </header>
 
+      <ol className="history-points a-text-fade-slide">
+        {chartPoints.slice(0, 16).map((row) => (
+          <li key={row.index} title={row.label}>
+            <code>
+              {row.timestamp ? row.timestamp.toLocaleString() : "—"}
+            </code>
+            {" — "}
+            <strong>
+              {row.homeWinPercent != null ? `${row.homeWinPercent}%` : "n/a"}
+            </strong>{" "}
+            <em>({row.label})</em>
+          </li>
+        ))}
+      </ol>
       <ol className="history-points a-text-fade-slide">
         {chartPoints.slice(0, 16).map((row) => (
           <li key={row.index} title={row.label}>

@@ -1,0 +1,35 @@
+{
+  "timestamp": "2025-11-30T09:53:53.721670",
+  "player_stats": {
+    "passing": {
+      "passing_yards": {
+        "completeness": 25.06,
+        "variance": 93.29,
+        "mean": 10.6,
+        "std": 9.66
+      }
+    },
+    "rushing": {
+      "rushing_yards": {
+        "completeness": 30.38,
+        "variance": 38.79,
+        "mean": 4.3,
+        "std": 6.23
+      }
+    },
+    "receiving": {
+      "receiving_yards": {
+        "completeness": 25.06,
+        "variance": 93.21,
+        "mean": 10.59,
+        "std": 9.65
+      }
+    }
+  },
+  "team_stats": {},
+  "recommendations": [
+    "Use EPA metrics (expected points added) - high predictive value",
+    "Aggregate player stats by position group before merging",
+    "Create rolling averages for temporal patterns"
+  ]
+}

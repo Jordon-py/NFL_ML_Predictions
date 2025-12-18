@@ -21,22 +21,49 @@
 import App from './App';
 import ReactDOM from 'react-dom/client';
 import ErrorBoundary from './components/ErrorBoundary';
+<<<<<<< HEAD
 import { StrictMode } from 'react';
 
 import './styles/base.css';        // ← load first
 import './styles/theme-grid.css';  // ← load second
+=======
+import { PredictionProvider } from './PredictionContext';
+
+import './styles/base.css';        // ← load first
+import './styles/theme-grid.css';  // ← load second
+// index.jsx
+import '@material/web/button/filled-button.js';
+import '@material/web/button/outlined-button.js';
+import '@material/web/checkbox/checkbox.js';
+
+
+
+>>>>>>> cd97fecacdc0a2f3d4ee6cd29effaa9619489d75
 // Grab the static DOM node that Vite injects for us.
 const rootElement = document.getElementById('root');
 if (!rootElement) {
   throw new Error('Root element "#root" not found');
+<<<<<<< HEAD
 }
 
+=======
+}
+
+>>>>>>> cd97fecacdc0a2f3d4ee6cd29effaa9619489d75
 // React 18's concurrent root API replaces the legacy render function.
 const root = ReactDOM.createRoot(rootElement);
 root.render(
   <StrictMode>
     <ErrorBoundary>
+<<<<<<< HEAD
       <App />
+=======
+      <PredictionProvider>
+       
+          <App />
+      
+      </PredictionProvider>
+>>>>>>> cd97fecacdc0a2f3d4ee6cd29effaa9619489d75
     </ErrorBoundary>
   </StrictMode>
 );

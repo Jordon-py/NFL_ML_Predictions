@@ -1,14 +1,24 @@
-# Repository Guardian — Copilot instructions (tailored)
+# Repository Guardian — Copilot instructions (W1)
 
-## 🧠 SYSTEM PROMPT: "Repository Guardian Protocol — Copilot W1 Mode"
+Big Picture
+- FastAPI serves ML predictions; models/datasets live under backend/data/prod-models; Vite/React frontend consumes REST.
 
+<<<<<<< HEAD
 ### Role
 - Quickly orient AI coding agents to the NFL_ML_Predictions repository so they can make safe, small, high-value edits without breaking builds or deployments.
 ALWAYS CHECK AND UPDATE: 'NFL_ML_Predictions\alfred.log.md'
+=======
+Dev Quickstart
+- Backend: cd backend; .\.venv\Scripts\Activate.ps1; python -m pip install -r requirements.txt; uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000
+- Frontend: cd frontend; npm install; npm run dev
+- Deploy: git push heroku rollback/heroku-endpoint-restore:main
+>>>>>>> cd97fecacdc0a2f3d4ee6cd29effaa9619489d75
 
-### Big Picture
-- FastAPI backend exposes prediction APIs and loads ML artifacts. React frontend (Vite) talks to backend via REST `/predict` endpoint. Data flows from CSV datasets → ML models → API responses → UI predictions.
+Conventions
+- React via hooks/Context only; custom CSS (no frameworks). Logging via warnings/errors; raise HTTPException on API errors. Tests: pytest (backend/tests), vitest (frontend).
+- Maintain alfred.log.md tasks; update docs/report.md “Active Enhancements Under Development.”
 
+<<<<<<< HEAD
 ### Primary Directives
 1. **Holistic Code Awareness:** Always scan full repository context, including backend, frontend, configuration, and documentation files. Infer architectural intent.
 
@@ -44,29 +54,31 @@ def get_current_nfl_context() -> Dict[str, Any]:
     now = datetime.now()
     cur_season = now.year if now.month >= 8 else now.year - 1
     # ...implementation
+=======
+Snippet (CORS defaults) [backend/main.py](backend/main.py#L75-L111)
+```
+def _parse_allowed_origins(raw: str) -> List[str]:
+    ...
+>>>>>>> cd97fecacdc0a2f3d4ee6cd29effaa9619489d75
 ```
 
-### Services & Integrations
-- Backend: FastAPI on port 8000, CORS from CORS_ORIGINS env var (backend/main.py:L120). No DB/cache/queues.
-- Frontend: Vite dev server proxies to backend, production uses VITE_API_URL.
-- ML: scikit-learn, lightgbm models loaded via joblib (backend/models/).
-- Deployment: Heroku (Procfile, app.json), Vercel (vercel.json).
+Services & Integrations
+- Models and metadata in backend/data/prod-models/models; dataset default backend/data/prod-models/game_features_20251210.csv; env overrides MODELS_DIR/DATASET_PATH.
+- CORS allow list ALLOWED_ORIGINS + regex r"https://.*\.vercel\.app"; catch-all OPTIONS avoids 400 preflights [backend/main.py](backend/main.py#L563-L571). No DB/cache.
+- FastAPI on 8000; Vite dev proxy; Heroku deploy via Procfile.
 
-### Cross-Component Communication
-- Frontend calls backend /predict endpoint with POST {home_team, away_team, season, week} → returns PredictionResponse with scores/probabilities.
+Cross-Component Communication
+- POST /predict {home_team, away_team, season, week} → PredictionResponse (scores, win probabilities, prediction_source, win_classifier_used) [backend/main.py](backend/main.py#L1310-L1525).
 
-### Where to Look
-- `backend/main.py` — API entrypoints and model loading
-- `backend/requirements.txt` — Python packages
-- `frontend/package.json` — build/dev scripts
-- `Procfile`, `heroku.yml`, `app.json`, `vercel.json` — deployment
-- `scripts/` — training/dataset utilities
+Where to Look
+- backend/main.py, backend/requirements.txt, frontend/package.json, vite.config.js, Procfile/heroku.yml/vercel.json, docs/report.md, alfred.log.md.
 
-### Ambiguities to Confirm
-- Model loading: Avoid double-calling joblib.load on loaded objects.
-- Data schema: Prediction routines expect game_features.csv columns.
-- Frontend API: Uses VITE_API_URL in production, proxy in dev.
+Ambiguities to Confirm
+- Which origins beyond localhost/Vercel should be whitelisted?
+- Should /history be implemented or stubbed for UI callers?
+- When win_model is absent, should sigmoid fallback remain allowed?
 
+<<<<<<< HEAD
 ### Changed since last run
 - Fixed double-wrapping of PredictionProvider and ErrorBoundary in index.jsx/App.jsx.
 - Created missing ErrorBoundary.css file.
@@ -146,3 +158,9 @@ Iterative Refinement: After initial output, review and refine based on self-asse
 to ensure clarity, correctness, and educational value.
 
 End each phase with a small yet helpful and detailed logging of changes and their intended benefits. in the code comments. in the docs folder there should be a md file called report.md that documents the changes made and why they were made which file and line of any changes made there should be a professional report like structure with updates graphs and images A list of all the very names being used A list of all functions they should be all grouped into what files that they are with or coming and who they interact with Just a folder full of metrics that I want you to take as you analyze the folder that should help me be more productive Just helpful in general and educational in this full file is something that every time you know you make some changes for me you will document and also document the time and the day, estimate of app completiong percentage and a section where you always update with a enhancement i could impiment
+=======
+Changed since last run
+- Fixed constant predictions by sending raw columns into model pipelines [backend/main.py](backend/main.py#L1375-L1495).
+- Parsed ALLOWED_ORIGINS properly and added catch-all OPTIONS handler to stop 400 preflights [backend/main.py](backend/main.py#L75-L111, backend/main.py#L563-L571).
+- Pending verification: frontend logos render correctly; /history still missing.
+>>>>>>> cd97fecacdc0a2f3d4ee6cd29effaa9619489d75

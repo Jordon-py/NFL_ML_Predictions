@@ -1,0 +1,82 @@
+{
+  "training_timestamp_utc": "2025-12-10 16:23:04 UTC",
+  "training_duration_seconds": 716.9,
+  "rows_total": 2150,
+  "rows_train": 1720,
+  "rows_holdout": 430,
+  "n_features_numeric": 133,
+  "n_features_categorical": 67,
+  "n_features_total_transformed": 326,
+  "cv_n_splits": 5,
+  "hp_n_iter": 40,
+  "random_seed": 403,
+  "dataset_hash": "5171ae4853f14d1a",
+  "production_ready": true,
+  "home_model_metrics": {
+    "mae": 4.204536297679082,
+    "rmse": 5.421150026531131,
+    "r2": 0.7047903685676316
+  },
+  "away_model_metrics": {
+    "mae": 4.052108248379463,
+    "rmse": 5.143791152708277,
+    "r2": 0.715058549639159
+  },
+  "win_model_metrics": {
+    "accuracy": 0.813953488372093,
+    "roc_auc": 0.9163447899618112,
+    "brier_score": 0.12043869876820694,
+    "log_loss": 0.38421929398027277,
+    "pr_auc": 0.9302773793648825,
+    "ece": 0.05726684148267212,
+    "is_calibrated": true
+  },
+  "hist_model_metrics": {
+    "accuracy": 0.8116279069767441,
+    "roc_auc": 0.9012547735951991,
+    "brier_score": 0.1269682535470555,
+    "log_loss": 0.39717411712863376,
+    "pr_auc": 0.9105838005918563,
+    "ece": 0.039453217303741836,
+    "is_calibrated": true
+  },
+  "cv_best_params": {
+    "home_model": {
+      "reg__min_samples_leaf": 10,
+      "reg__max_leaf_nodes": 15,
+      "reg__max_depth": 3,
+      "reg__learning_rate": 0.1,
+      "reg__l2_regularization": 0.05
+    },
+    "away_model": {
+      "reg__min_samples_leaf": 10,
+      "reg__max_leaf_nodes": 15,
+      "reg__max_depth": 3,
+      "reg__learning_rate": 0.1,
+      "reg__l2_regularization": 0.05
+    },
+    "win_model": {
+      "solver": "lbfgs",
+      "penalty": "l2",
+      "class_weight": "balanced",
+      "C": 0.05,
+      "algorithm": "log_reg",
+      "cv_log_loss": 0.38064574954738495,
+      "calibrated": true,
+      "calibration_method": "isotonic",
+      "calibration_cv": 5
+    },
+    "hist_model": {
+      "min_samples_leaf": 30,
+      "max_leaf_nodes": 127,
+      "max_depth": 14,
+      "learning_rate": 0.02,
+      "l2_regularization": 0.01,
+      "algorithm": "hist_gb",
+      "cv_log_loss": 0.4427340831988539,
+      "calibrated": true,
+      "calibration_method": "isotonic",
+      "calibration_cv": 5
+    }
+  }
+}

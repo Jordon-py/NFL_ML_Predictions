@@ -9,15 +9,26 @@
     "start": "vite --port 3000",
     "build": "vite build",
     "preview": "vite preview --port 4173",
+<<<<<<< HEAD
     "test": "vitest --environment jsdom --passWithNoTests"
   },
   "engines": {
     "node": "20.x",
     "npm": ">=10.0.0 <11"
+=======
+    "test": "vitest --environment jsdom"
+  },
+  "engines": {
+    "node": "20.x",
+    "npm": ">=10.0.0 <11"
+>>>>>>> cd97fecacdc0a2f3d4ee6cd29effaa9619489d75
   },
   "dependencies": {
+    "@material/web": "^2.4.0",
+    "papaparse": "^5.5.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+<<<<<<< HEAD
     "react-router-dom": "^7.9.5"
   },
   "devDependencies": {
@@ -54,3 +65,44 @@
   "license": "ISC",
   "author": "Christopher Jordon"
 }
+=======
+    "react-router": "^7.10.1",
+    "react-router-dom": "^7.9.5",
+    "update": "^0.7.4",
+    "upgrade": "^1.1.0"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^5.16.5",
+    "@testing-library/react": "^14.0.0",
+    "@testing-library/user-event": "^14.4.3",
+    "@vitejs/plugin-react-swc": "^3.5.0",
+    "esbuild": "^0.25.11",
+    "jsdom": "^27.2.0",
+    "typescript": "^5.6.3",
+    "vite": "^7.1.12",
+    "vitest": "^4.0.13"
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "homepage": "https://nfl-ml-predictions.vercel.app/",
+  "bugs": {
+    "url": "https://github.com/Jordon-py/NFL_ML_Predictions/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Jordon-py/NFL_ML_Predictions.git"
+  },
+  "license": "ISC",
+  "author": "Christopher Jordon"
+}
+>>>>>>> cd97fecacdc0a2f3d4ee6cd29effaa9619489d75
