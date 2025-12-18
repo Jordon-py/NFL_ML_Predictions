@@ -1,7 +1,30 @@
+// ==========================================
+// File: frontend/src/utils/predictionContextUtils.js
+// Role: Frontend utility helpers.
+// Input Data: Function parameters.
+// Output Data: Transformed values.
+// Dependencies: None
+// Notes: Shared across UI modules.
+// ==========================================
+
 // Shared helpers for prediction state and UI normalization.
 
 export const PREDICTION_HISTORY_KEY = "prediction_history";
 export const MAX_HISTORY_ENTRIES = 100;
+
+const normalizeToken = (value) =>
+  value == null ? "" : String(value).trim().toUpperCase();
+
+function normalizeGameId(rawId) {
+  const trimmed = typeof rawId === "string" ? rawId.trim() : "";
+  if (!trimmed) return "";
+  const parts = trimmed.split(/[-_]/).filter(Boolean);
+  if (parts.length >= 4) {
+    const [season, week, home, away] = parts;
+    return `${season}-${week}-${normalizeToken(home)}-${normalizeToken(away)}`;
+  }
+  return trimmed;
+}
 
 /**
  * Build a consistent game key from either schedule rows or prediction entries.
@@ -11,13 +34,13 @@ export const MAX_HISTORY_ENTRIES = 100;
 export function buildGameKey(gameLike) {
   if (!gameLike) return "";
   if (typeof gameLike.game_id === "string" && gameLike.game_id.trim()) {
-    return gameLike.game_id;
+    return normalizeGameId(gameLike.game_id);
   }
   const parts = [
     gameLike.season,
     gameLike.week,
-    gameLike.home_abbr || gameLike.home_team,
-    gameLike.away_abbr || gameLike.away_team,
+    normalizeToken(gameLike.home_abbr || gameLike.home_team),
+    normalizeToken(gameLike.away_abbr || gameLike.away_team),
   ].filter(Boolean);
   return parts.join("-");
 }

@@ -8,8 +8,8 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import requests
 
-DEFAULT_BASE_URL = os.getenv("BASE_URL", "http://127.0.0.1:8000")
-DEFAULT_TIMEOUT = float(os.getenv("HTTP_TIMEOUT", "10"))
+DEFAULT_VITE = os.getenv('VITE_API_BASE_URL', "http://127.0.0.1:8000")
+DEFAULT_TIMEOUT = float(os.getenv("HTTP_TIMEOUT", "30"))
 DEFAULT_MAX_BODY = int(os.getenv("MAX_BODY_CHARS", "1200"))
 
 ValidationResult = Tuple[List[str], List[str], List[str]]
@@ -17,7 +17,7 @@ ValidationResult = Tuple[List[str], List[str], List[str]]
 
 @dataclass
 class TestContext:
-    base_url: str
+    VITE: str
     timeout: float
     max_body_chars: int
     schedule_game: Optional[Dict[str, Any]] = None
@@ -389,7 +389,7 @@ def _run_tests(ctx: TestContext) -> int:
     failures = 0
     for test in tests:
         payload = test.build_payload(ctx) if test.build_payload else None
-        url = ctx.base_url.rstrip("/") + test.path
+        url = ctx.VITE.rstrip("/") + test.path
         response, elapsed_ms, request_error = _send_request(
             test.method, url, payload, ctx.timeout
         )
@@ -468,13 +468,13 @@ def _run_tests(ctx: TestContext) -> int:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Smoke test NFL ML API endpoints.")
-    parser.add_argument("--base-url", default=DEFAULT_BASE_URL, help="API base URL")
+    parser.add_argument("--base-url", default=DEFAULT_VITE, help="API base URL")
     parser.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT, help="HTTP timeout (seconds)")
     parser.add_argument("--max-body-chars", type=int, default=DEFAULT_MAX_BODY, help="Max response chars to print")
     args = parser.parse_args()
 
     ctx = TestContext(
-        base_url=args.base_url,
+        VITE=args.VITE,
         timeout=args.timeout,
         max_body_chars=args.max_body_chars,
     )

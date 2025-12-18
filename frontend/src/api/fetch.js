@@ -1,3 +1,12 @@
+// ==========================================
+// File: frontend/src/api/fetch.js
+// Role: Fetch wrapper for API requests.
+// Input Data: URL path and fetch options.
+// Output Data: Parsed JSON or errors.
+// Dependencies: None
+// Notes: Centralizes timeouts and error handling.
+// ==========================================
+
 // fetch.js
 /**
  * Custom fetch function with timeout and error handling
@@ -10,7 +19,7 @@
 // fetch.js (minimal-but-strong)
 
 const RAW_BASE =
-  window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" ? import.meta.env.VITE_API_DEV : import.meta.env.VITE_API_BASE_URL;
+  window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" ? import.meta.env.VITE_DEV_ENV : import.meta.env.VITE_API_BASE_URL;
 
 // ✅ Fail fast instead of silently becoming "undefined/"
 if (!RAW_BASE) {
@@ -38,7 +47,7 @@ export class HttpError extends Error {
 async function readBody(response) {
   const text = await response.text(); // ✅ single read
   if (!text) return { data: null, rawText: "" };
-
+  
   const contentType = response.headers.get("content-type") || "";
   const isJson = contentType.includes("application/json");
 
@@ -87,12 +96,11 @@ export async function fetchJson(path, options = {}) {
     });
 
     const { data, rawText } = await readBody(response);
-
     // Optional: dev-only debug
     if (import.meta.env.DEV) console.log("[fetchJson]", { url, status: response.status, data });
 
+    // ✅ If backend sent JSON error {detail: ...}, keep it. If HTML, show preview.
     if (!response.ok) {
-      // ✅ If backend sent JSON error {detail: ...}, keep it. If HTML, show preview.
       const detail =
         data && typeof data === "object"
           ? data.detail || data.message

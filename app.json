@@ -34,12 +34,12 @@
     },
     "DATASET_PATH": {
       "description": "Path to NFL dataset CSV file",
-      "value": "backend/data/Nfl_data_sorted.csv",
+      "value": "backend/data/datasets/game_features_20260102.csv",
       "required": false
     },
     "SCHEDULE_PATH": {
       "description": "Path to NFL schedule CSV file", 
-      "value": "backend/data/Nfl_schedule_2025_2026.csv",
+      "value": "backend/data/Nfl_schedule_2025.csv",
       "required": false
     }
   },

@@ -1,3 +1,12 @@
+# ==========================================
+# File: backend/utils/functions_for_main.py
+# Role: Backend helper module.
+# Input Data: Function inputs.
+# Output Data: Module outputs.
+# Dependencies: pandas, logging, nflreadpy, numpy
+# Notes: Shared utilities.
+# ==========================================
+
 import pandas as pd
 import logging
 import nflreadpy as nfl

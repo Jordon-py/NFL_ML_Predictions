@@ -1,3 +1,12 @@
+// ==========================================
+// File: frontend/src/useTrainingStatus.js
+// Role: Frontend module.
+// Input Data: Module inputs.
+// Output Data: Exports for UI usage.
+// Dependencies: react
+// Notes: Shared application code.
+// ==========================================
+
 /**
  * useTrainingStatus.js
  * --------------------

@@ -1,3 +1,12 @@
+# ==========================================
+# File: backend/scripts/dataset_analysis.py
+# Role: Backend utility script.
+# Input Data: CLI args and input files.
+# Output Data: Reports, charts, or artifacts.
+# Dependencies: pandas, numpy, matplotlib, seaborn
+# Notes: Standalone execution.
+# ==========================================
+
 """
 NFL Dataset Deep Analysis Script
 Analyzes game_features_20251208.csv and game_features_20251201.csv

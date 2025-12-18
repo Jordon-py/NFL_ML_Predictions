@@ -1,3 +1,12 @@
+// ==========================================
+// File: frontend/src/components/ErrorDisplay.jsx
+// Role: React component for UI rendering.
+// Input Data: Props (data and callbacks).
+// Output Data: JSX markup.
+// Dependencies: react, ./ErrorDisplay.css
+// Notes: Presentation-focused component.
+// ==========================================
+
 /*
 File: ErrorDisplay.jsx
 Purpose:

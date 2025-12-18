@@ -1,3 +1,12 @@
+# ==========================================
+# File: backend/scripts/api_test.py
+# Role: Backend utility script.
+# Input Data: CLI args and input files.
+# Output Data: Reports, charts, or artifacts.
+# Dependencies: requests, json
+# Notes: Standalone execution.
+# ==========================================
+
 import requests
 import json
 

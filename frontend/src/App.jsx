@@ -1,3 +1,12 @@
+// ==========================================
+// File: frontend/src/App.jsx
+// Role: Frontend module.
+// Input Data: Module inputs.
+// Output Data: Exports for UI usage.
+// Dependencies: react, react-router-dom, ./components/ErrorBoundary, ./hooks/usePredictionState
+// Notes: Shared application code.
+// ==========================================
+
 /**
  * App.jsx
  * 
@@ -56,7 +65,6 @@ function App() {
   const {
     schedule,
     week,
-    teams,
     predictions,
     loading,
     errors,
@@ -83,7 +91,6 @@ function App() {
                   <Dashboard
                     schedule={schedule}
                     week={week}
-                    teams={teams}
                     predictions={predictions}
                     loading={loading}
                     errors={errors}

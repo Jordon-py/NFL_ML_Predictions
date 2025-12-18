@@ -1,3 +1,12 @@
+# ==========================================
+# File: backend/build_csv_datasetsv3.py
+# Role: Dataset analysis or transformation script.
+# Input Data: Raw or feature datasets.
+# Output Data: Derived datasets or reports.
+# Dependencies: __future__, typing, datetime, argparse
+# Notes: Used during data prep.
+# ==========================================
+
 """
 # File: backend/build_csv_datasetsv3.py
 # Purpose: Canonical NFL dataset builder producing leak-safe game-level features and exports for training/inference.
@@ -22,17 +31,17 @@ Features:
 
 Quick start
 -----------
-python build_csv_datasetsv3.py --start 2019 --end 2025 --out-dir './data/datasets' --save-dominance-matrix --encode 'onehot' --save-dominance-matrix --dominance-log ./data/dominance_log.txt
+python build_csv_datasetsv3.py --start 2016 --end 2025 --out-dir './data/datasets' --save-dominance-matrix --encode 'onehot' --save-dominance-matrix --dominance-log ./data/dominance_log.txt
 
 
 Additional quick starts (common option combinations):
 
 - Build without team encodings and skip calibration rows (useful when
     creating numeric-only training sets or debugging):
-    python build_csv_datasetsv3.py --start 2019 --end 2025 --out-dir ./data/datasets --encode 'onehot' --no-calibration-rows --save-dominance-matrix --legacy-root-copy ./data/dominance_log.txt
+    python build_csv_datasetsv3.py --start 2016 --end 2025 --out-dir ./data/datasets --encode 'onehot' --no-calibration-rows --save-dominance-matrix --legacy-root-copy ./data/dominance_log.txt
 
 - Build and persist pairwise dominance artifacts (matrix and human-readable log):
-    python build_csv_datasetsv3.py --start 2019 --end 2025 --out-dir ./data/datasets --save-dominance-matrix --dominance-log ./data/dominance_log.txt
+    python build_csv_datasetsv3.py --start 2016 --end 2025 --out-dir ./data/datasets --save-dominance-matrix --dominance-log ./data/dominance_log.txt
 
 - Create dataset and also write a legacy root-level copy for compatibility
     with older pipelines / CI hooks:
@@ -57,7 +66,7 @@ import logging
 from pathlib import Path
 import re
 import numbers
-
+import nflreadpy as nfl
 import numpy as np
 import pandas as pd
 
@@ -68,7 +77,7 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.linear_model import Ridge
 
 # Shared feature engineering utilities
-from backend.utils.feature_helpers import (
+from utils.feature_helpers import (
     make_time_key,
     _rolling_prior_stats,
     _ffill_prior_features,
@@ -90,13 +99,14 @@ ABBR_FIX: Dict[str, str] = {
 # Name of the output CSV file for the generated dataset.
 # Includes current date in YYYYMMDD format for traceability/versioning.
 OUTPUT_DATASET_NAME = f"game_features_{datetime.now().strftime('%Y%m%d')}.csv"
+DATA_SAVE = f"game_features_{datetime.now().strftime('%Y%m%d')}.csv"
 
 # Pairwise dominance helpers
 HAS_winner_BOOL = True  # if you only have scores, set False
 TIME_COLS_IN_ORDER: Optional[Sequence[str]] = None  # auto-detect if None
 
 
-# make_time_key is now imported from backend.utils.feature_helpers
+# make_time_key is now imported from utils.feature_helpers
 
 
 # ---------------------------------------------------------------------
@@ -120,23 +130,20 @@ def setup_logger(out_dir: Path) -> None:
 # Backend selection (nflreadpy preferred, fallback to nfl_data_py)
 # ---------------------------------------------------------------------
 
-NFL_BACKEND = "nfl_data_py"
-nfl = None
+NFL_BACKEND = "nflreadpy"
 _fallback_reason = None
 
 
 def _note_backend(msg: str, level: int = logging.INFO) -> None:
     logging.log(level, msg)
 
-
-try:
-    import nflreadpy as _nfl
-
     try:
         _probe = _nfl.load_schedules(seasons=None)
         if hasattr(_probe, "to_pandas"):
-           print(f'_probe worked using nflreadpy: { _probe.head(3).to_pandas() }')
-        NFL_BACKEND = "nflreadpy"
+            print(f'_probe worked using nflreadpy: { _probe.head(3).to_pandas(),'\n', _probe.info() }')
+            NFL_BACKEND = "nflreadpy"
+            
+            return NFL_BACKEND
         nfl = _nfl
         _note_backend("Using backend 'nflreadpy'")
     except Exception as e:
@@ -149,20 +156,7 @@ try:
             f"Using fallback backend '{NFL_BACKEND}' - {_fallback_reason}",
             logging.WARNING,
         )
-except Exception as e:
-    _fallback_reason = f"nflreadpy import failed: {e}"
-    try:
-        import nfl_data_py as _nfl  # type: ignore[no-redef]
-    except Exception as e2:
-        nfl = None
-        _note_backend(f"No NFL backend available: {e2}", logging.ERROR)
-    else:
-        nfl = _nfl
-        NFL_BACKEND = "nfl_data_py"
-        _note_backend(
-            f"Using fallback backend '{NFL_BACKEND}' - {_fallback_reason}",
-            logging.WARNING,
-        )
+
 
 
 # ---------------------------------------------------------------------
@@ -270,9 +264,9 @@ def load_team_game_metrics(pbp_path: Path) -> pd.DataFrame:
     pbp["season"] = pbp["season"].astype(int)
     pbp["week"] = pbp["week"].astype(int)
 
-    from backend.utils.feature_engine import calculate_team_metrics
+    from utils.feature_engine import calculate_team_metrics
     metrics = calculate_team_metrics(pbp)
-    
+
     return metrics.reset_index(drop=True)
 
 
@@ -477,7 +471,7 @@ def load_schedules(seasons: List[int], include_future: bool = False) -> pd.DataF
             sch = None
 
     if sch is None or sch.empty:
-        raise RuntimeError("Could not load schedules from any backend.")
+        raise RuntimeError("Could not load schedules from any ")
 
     need = [
         "season",
@@ -584,7 +578,7 @@ def _team_game_long(sch: pd.DataFrame) -> pd.DataFrame:
 
 
 # _rolling_prior_stats, _ffill_prior_features, _impute_remaining_prior_nans
-# are now imported from backend.utils.feature_helpers
+# are now imported from utils.feature_helpers
 
 
 def _ffill_rolling_features(wide: pd.DataFrame) -> pd.DataFrame:
@@ -607,7 +601,7 @@ def _ffill_rolling_features(wide: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-# _impute_remaining_prior_nans is now imported from backend.utils.feature_helpers
+# _impute_remaining_prior_nans is now imported from utils.feature_helpers
 
 
 def add_features(
@@ -635,9 +629,9 @@ def add_features(
             right=advanced_metrics, on=["season", "week", "game_id", "team"], how="left"
         )
 
-    
+
     # Use shared engine for rolling features
-    from backend.utils.feature_engine import calculate_rolling_features
+    from utils.feature_engine import calculate_rolling_features
     long = calculate_rolling_features(long, windows)
 
     if advanced_cols:

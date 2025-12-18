@@ -1,3 +1,12 @@
+# ==========================================
+# File: backend/scripts/chart3_relationships.py
+# Role: Backend utility script.
+# Input Data: CLI args and input files.
+# Output Data: Reports, charts, or artifacts.
+# Dependencies: pandas, matplotlib, seaborn, numpy
+# Notes: Standalone execution.
+# ==========================================
+
 """
 Chart 3: Target Relationships Analysis
 ======================================

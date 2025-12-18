@@ -1,3 +1,12 @@
+# ==========================================
+# File: backend/ts_split.py
+# Role: Backend helper module.
+# Input Data: Function inputs.
+# Output Data: Module outputs.
+# Dependencies: typing, pandas
+# Notes: Shared utilities.
+# ==========================================
+
 # ts_split.py
 from typing import Tuple, List
 import pandas as pd

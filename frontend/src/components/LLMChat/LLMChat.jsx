@@ -1,3 +1,21 @@
+// ==========================================
+// File: frontend/src/components/LLMChat/LLMChat.jsx
+// Role: React component for UI rendering.
+// Input Data: Props (data and callbacks).
+// Output Data: JSX markup.
+// Dependencies: react, ../../api/client.js, ./LLMChat.css
+// Notes: Presentation-focused component.
+// ==========================================
+
+/**
+ * FILE: frontend/src/components/LLMChat/LLMChat.jsx
+ * PURPOSE: Chat UI that sends the active prediction context to the backend LLM.
+ * INPUT PROPS:
+ *   - prediction: UnifiedPredictionResponse (flat fields for a single game).
+ * OUTPUT / SIDE EFFECTS: Sends chat payloads to /llm/chat and renders responses.
+ * DEPENDENCIES: React, client.js, LLMChat.css
+ */
+
 import React, { useEffect, useRef, useState } from "react";
 import { chatLLM } from "../../api/client.js";
 import "./LLMChat.css";
@@ -14,19 +32,10 @@ function compactObject(value) {
 
 function buildPredictionContext(prediction) {
   if (!prediction) return null;
-  const game = prediction.game || {};
-  const home =
-    prediction.home_team ||
-    game.home_team ||
-    prediction.home_abbr ||
-    game.home_abbr;
-  const away =
-    prediction.away_team ||
-    game.away_team ||
-    prediction.away_abbr ||
-    game.away_abbr;
-  const season = prediction.season ?? game.season;
-  const week = prediction.week ?? game.week;
+  const home = prediction.home_team;
+  const away = prediction.away_team;
+  const season = prediction.season;
+  const week = prediction.week;
 
   return compactObject({
     game_id: prediction.game_id,
@@ -34,10 +43,10 @@ function buildPredictionContext(prediction) {
     away_team: away ? String(away).trim().toUpperCase() : undefined,
     season: Number.isFinite(Number(season)) ? Number(season) : undefined,
     week: Number.isFinite(Number(week)) ? Number(week) : undefined,
-    home_score: prediction.home_score ?? prediction.home_score_pred,
-    away_score: prediction.away_score ?? prediction.away_score_pred,
-    home_win_probability:
-      prediction.home_win_probability ?? prediction.probs?.home,
+    home_score: prediction.home_score,
+    away_score: prediction.away_score,
+    home_win_probability: prediction.home_win_probability,
+    away_win_probability: prediction.away_win_probability,
     prediction_source: prediction.prediction_source,
   });
 }
@@ -48,8 +57,8 @@ function buildContextLabel(predictionContext) {
   const away = predictionContext.away_team || "AWAY";
   const week = predictionContext.week ? `Week ${predictionContext.week}` : null;
   const season = predictionContext.season ? String(predictionContext.season) : null;
-  const suffix = [week, season].filter(Boolean).join(" • ");
-  return suffix ? `${home} vs ${away} • ${suffix}` : `${home} vs ${away}`;
+  const suffix = [week, season].filter(Boolean).join(" - ");
+  return suffix ? `${home} vs ${away} - ${suffix}` : `${home} vs ${away}`;
 }
 
 export default function LLMChat({ prediction }) {

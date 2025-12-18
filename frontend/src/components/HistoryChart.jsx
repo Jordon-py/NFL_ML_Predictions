@@ -1,14 +1,23 @@
+// ==========================================
+// File: frontend/src/components/HistoryChart.jsx
+// Role: React component for UI rendering.
+// Input Data: Props (data and callbacks).
+// Output Data: JSX markup.
+// Dependencies: react
+// Notes: Presentation-focused component.
+// ==========================================
+
 // /frontend/src/components/HistoryChart.jsx
 // @ts-nocheck
 
 /**
- * HistoryChart — Educational Overview
+ * HistoryChart - Educational Overview
  *
  * Purpose:
- *   Display a simple, accessible “history feed” of prediction events. Each row shows:
- *     • When the prediction was made (timestamp)
- *     • Home team win probability (as a whole percent)
- *     • A human-readable label for the game (e.g., "2025 W7 MIA@BUF")
+ *   Display a simple, accessible "history feed" of prediction events. Each row shows:
+ *     - When the prediction was made (timestamp)
+ *     - Home team win probability (as a whole percent)
+ *     - A human-readable label for the game (e.g., "2025 W7 MIA@BUF")
  *
  * Data contract (input):
  *   Primary usage:
@@ -19,32 +28,26 @@
  *     <HistoryChart history={arrayOfEvents} />
  *     - If `history` is provided and is an array, it is used directly.
  *
- *   Expected event shape (loose union — missing fields are tolerated):
+ *   Expected event shape (unified):
  *     {
  *       ts?: string | number | Date,               // primary timestamp
  *       time?: string | number | Date,             // optional alt timestamp
- *       probs?: { home?: number, ensemble?: number, away?: number },
- *       home_win_probability?: number,             // optional alt prob (0..1)
- *       game?: {
- *         season: number,
- *         week: number,
- *         away_abbr: string,                       // e.g., "MIA"
- *         home_abbr: string                        // e.g., "BUF"
- *       }
+ *       home_win_probability?: number,             // probability in [0..1]
+ *       season?: number,
+ *       week?: number,
+ *       away_team?: string,                        // e.g., "MIA"
+ *       home_team?: string                         // e.g., "BUF"
  *     }
  *
  * Key ideas:
- *   • Simple props keep render logic easy to follow.
- *   • Normalization helpers (extractTimestamp / extractHomeWinProbability / buildGameLabel) keep render logic clean.
- *   • Derived rows and summary stats are computed inline for simplicity.
- *   • We fail gracefully: missing fields render "—" or "n/a" instead of throwing.
+ *   - Simple props keep render logic easy to follow.
+ *   - Normalization helpers (extractTimestamp / extractHomeWinProbability / buildGameLabel) keep render logic clean.
+ *   - Derived rows and summary stats are computed inline for simplicity.
+ *   - We fail gracefully: missing fields render "-" or "n/a" instead of throwing.
  */
 import React from "react";
 
 /* ---------- tiny utilities ---------- */
-
-/** Return the first non-nullish value (null/undefined are skipped). */
-const firstNonNullish = (...values) => values.find((v) => v != null);
 
 /** Convert a probability in [0..1] to an integer percentage, or null if invalid. */
 const toWholePercent = (prob) =>
@@ -57,39 +60,27 @@ const toDateOrNull = (value) => {
 }
 
 function extractHomeWinProbability(event) {
-  // Prioritise explicit fields; tolerate multiple shapes
   if (!event) return null;
-  if (typeof event.home_win_probability === "number") return event.home_win_probability;
-  if (event?.prediction?.home_win_probability != null) return event.prediction.home_win_probability;
-  if (event?.probs?.home != null) return event.probs.home;
-  if (event?.probs?.ensemble != null) return event.probs.ensemble;
-  return null;
-}
-
-function toWholePercent(prob) {
-  if (prob == null || !Number.isFinite(Number(prob))) return null;
-  return Math.round(Number(prob) * 100);
+  return typeof event.home_win_probability === "number" ? event.home_win_probability : null;
 }
 
 function buildGameLabel(event, index) {
-  const g = event?.game ?? event?.request ?? null;
-  if (g) {
-    const season = g.season ?? "";
-    const week = g.week ? `W${g.week}` : "";
-    const away = (g.away_abbr || g.away_team || g.away) ?? "away";
-    const home = (g.home_abbr || g.home_team || g.home) ?? "home";
-    return `${season} ${week} ${away}@${home}`.trim();
-  }
-  return `prediction-${index}`;
+  if (!event) return `prediction-${index}`;
+  const season = event.season ?? "";
+  const weekRaw = event.week ?? "";
+  const week = weekRaw ? `W${weekRaw}` : "";
+  const away = event.away_team || "away";
+  const home = event.home_team || "home";
+  return `${season} ${week} ${away}@${home}`.trim();
 }
 
 
-/**
- * Prefer `probs.home`, fallback to other sources; return [0..1] or null.
- * Note: we include probs.ensemble and probs.away so we can still render *some*
- * probability even if the shape varies between callers.
- */
-
+/** Safely extract a Date object from various event shapes. */
+function extractTimestamp(event) {
+  if (!event) return null;
+  const val = event.ts || event.timestamp || event.time || null;
+  return toDateOrNull(val);
+}
 
 /**
  * HistoryChart component
@@ -102,10 +93,6 @@ export default function HistoryChart({ history: historyOverride = [] }) {
 
   /**
    * chartPoints: normalized, render-ready rows
-   *   - index: stable key/index
-   *   - timestamp: Date|null
-   *   - homeWinPercent: integer percent or null
-   *   - label: string
    */
   const chartPoints = historyItems.map((event, index) => {
     const timestamp = extractTimestamp(event);
@@ -121,9 +108,6 @@ export default function HistoryChart({ history: historyOverride = [] }) {
 
   /**
    * statsSummary: small header stats we can show users
-   *   - totalCount: number of events
-   *   - mostRecentDate: Date|null (based on first item in the array)
-   *   - averageHomeWinPercent: integer percent or null
    */
   const percentValues = chartPoints
     .map((p) => p.homeWinPercent)
@@ -160,31 +144,16 @@ export default function HistoryChart({ history: historyOverride = [] }) {
   }
 
   return (
-
     <section className="history-chart" aria-live="polite">
       <header>
         <h2>Prediction History</h2>
-       
         <small>
           {statsSummary.totalCount} item(s)
           {statsSummary.mostRecentDate && (
-            <>
-              {" "}
-              • last: {statsSummary.mostRecentDate.toLocaleString()}
-            </>
+            <> - last: {statsSummary.mostRecentDate.toLocaleString()}</>
           )}
           {statsSummary.averageHomeWinPercent != null && (
-            <> • avg home win: {statsSummary.averageHomeWinPercent}%</>
-          )}
-          {statsSummary.totalCount} item(s)
-          {statsSummary.mostRecentDate && (
-            <>
-              {" "}
-              • last: {statsSummary.mostRecentDate.toLocaleString()}
-            </>
-          )}
-          {statsSummary.averageHomeWinPercent != null && (
-            <> • avg home win: {statsSummary.averageHomeWinPercent}%</>
+            <> - avg home win: {statsSummary.averageHomeWinPercent}%</>
           )}
         </small>
       </header>
@@ -193,23 +162,9 @@ export default function HistoryChart({ history: historyOverride = [] }) {
         {chartPoints.slice(0, 16).map((row) => (
           <li key={row.index} title={row.label}>
             <code>
-              {row.timestamp ? row.timestamp.toLocaleString() : "—"}
+              {row.timestamp ? row.timestamp.toLocaleString() : "-"}
             </code>
-            {" — "}
-            <strong>
-              {row.homeWinPercent != null ? `${row.homeWinPercent}%` : "n/a"}
-            </strong>{" "}
-            <em>({row.label})</em>
-          </li>
-        ))}
-      </ol>
-      <ol className="history-points a-text-fade-slide">
-        {chartPoints.slice(0, 16).map((row) => (
-          <li key={row.index} title={row.label}>
-            <code>
-              {row.timestamp ? row.timestamp.toLocaleString() : "—"}
-            </code>
-            {" — "}
+            {" - "}
             <strong>
               {row.homeWinPercent != null ? `${row.homeWinPercent}%` : "n/a"}
             </strong>{" "}

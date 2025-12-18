@@ -1,3 +1,12 @@
+// ==========================================
+// File: frontend/src/components/D_BUTTON.jsx
+// Role: React component for UI rendering.
+// Input Data: Props (data and callbacks).
+// Output Data: JSX markup.
+// Dependencies: react
+// Notes: Presentation-focused component.
+// ==========================================
+
 /**
  * D_BUTTON.jsx — Clear History Button
  * -----------------------------------

@@ -1,6 +1,6 @@
-<<<<<<< HEAD
 # Python
 __pycache__/
+.exe
 
 *$py.class
 *.so
@@ -39,47 +39,3 @@ Add backend/.venv/
 .pytest_cache/
 .coverage
 htmlcov/
-=======
-# Python
-__pycache__/
-
-*$py.class
-*.so
-.Python
-*.bundle
-# Virtual environments
-venv/
-env/
-ENV/
-.venv/
-
-# IDE
-.vscode/
-.idea/
-*.swp
-
-# Logs
-*.log
-
-# Model files
-models/*.pkl
-models/*.model
-!models/.gitkeep
-
-# Data files (keep structure but not data)
-
-
-!data/.gitkeep
-Add backend/.venv/
-
-# Environment
-.env
-.env.local
-.env.production
-
-
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
->>>>>>> e908bfb18 (Prod/nfl ml vercel (#67))

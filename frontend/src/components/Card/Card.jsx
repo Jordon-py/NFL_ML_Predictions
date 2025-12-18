@@ -1,3 +1,12 @@
+// ==========================================
+// File: frontend/src/components/Card/Card.jsx
+// Role: React component for UI rendering.
+// Input Data: Props (data and callbacks).
+// Output Data: JSX markup.
+// Dependencies: react, ./Card.module.css
+// Notes: Presentation-focused component.
+// ==========================================
+
 // File: frontend/src/components/Card/Card.jsx
 // Purpose: Presentational card for a single NFL matchup with probabilities
 //          and optional score / model details. Used inside TeamGrid as the
@@ -12,13 +21,12 @@ import React from 'react';
 import styles from './Card.module.css'; // CSS module styles
 
 /**
- * Local lookup of NFL team abbreviations → full team names.
+ * Local lookup of NFL team abbreviations - full team names.
  * This is intentionally defined at the module level so it is:
  * - shared by all Card instances
  * - not recreated on every render
  *
- * Callers MAY still pass an `nfl_teams` prop to override/extend this map
- * (e.g., for historical teams), but if they do not, we fall back here.
+ * When the backend does not provide team names, we fall back to this map.
  */
 const NFL_TEAMS_MAP = {
   ARI: 'Arizona Cardinals',
@@ -56,7 +64,7 @@ const NFL_TEAMS_MAP = {
 };
 
 /**
- * Normalize a 0–1 probability into a rounded 0–100 integer.
+ * Normalize a 0-1 probability into a rounded 0-100 integer.
  * Returns `null` when the input is missing or invalid.
  */
 const formatProbabilityAsPercentage = (probabilityValue) =>
@@ -64,17 +72,15 @@ const formatProbabilityAsPercentage = (probabilityValue) =>
     ? Math.round(probabilityValue * 100)
     : null;
 
-/** Decide which team-name map to use (prop override vs local default). */
-const getTeamNameMap = (nfl_teams) =>
-  nfl_teams && Object.keys(nfl_teams).length > 0 ? nfl_teams : NFL_TEAMS_MAP;
-
 /** Build the main card CSS class string. */
-const buildCardClassNames = ({ hasPrediction, loading, error }) =>
+const buildCardClassNames = ({ hasPrediction, loading, error, debugClicked }) =>
   [
     styles.card,
+    'game-card',
     hasPrediction ? styles.hasPrediction : '',
     loading ? styles.isLoading : '',
     error ? styles.isError : '',
+    debugClicked ? styles.debugClicked : '',
   ]
     .filter(Boolean)
     .join(' ');
@@ -101,29 +107,38 @@ const getKickoffDisplayTime = (kickoff) => {
  * Keeps the render section clean and self-documenting.
  */
 const derivePredictionMeta = (prediction) => {
+  const homeScore = prediction?.home_score;
+  const awayScore = prediction?.away_score;
+  const pointDiff =
+    prediction?.point_diff ??
+    (homeScore != null && awayScore != null ? homeScore - awayScore : null);
+
   const hasScoreDetails =
-    prediction?.home_score != null ||
-    prediction?.away_score != null ||
-    prediction?.point_diff != null;
+    homeScore != null ||
+    awayScore != null ||
+    pointDiff != null;
 
   const sim = prediction?.simulation_metrics;
   const isExpert = !!sim;
   const classifierUsed = !isExpert && prediction?.win_classifier_used === true;
 
-  const maxConfidence = formatProbabilityAsPercentage(
-    Math.max(
-      prediction?.home_win_probability ?? 0,
-      prediction?.away_win_probability ?? 0
-    )
-  );
+  const homeProb = prediction?.home_win_probability;
+  const awayProb = prediction?.away_win_probability;
 
-  return { hasScoreDetails, classifierUsed, isExpert, maxConfidence, sim };
+  const maxConfidence =
+    typeof homeProb === 'number' || typeof awayProb === 'number'
+      ? formatProbabilityAsPercentage(Math.max(homeProb ?? 0, awayProb ?? 0))
+      : null;
+
+  return { hasScoreDetails, classifierUsed, isExpert, maxConfidence, sim, homeScore, awayScore };
 };
 
 /**
  * @typedef {Object} Matchup
  * @property {string} away_team   - Abbreviation for away team, e.g. "KC".
  * @property {string} home_team   - Abbreviation for home team, e.g. "DAL".
+ * @property {string} [away_name] - Display name for the away team.
+ * @property {string} [home_name] - Display name for the home team.
  * @property {string | number | Date} [kickoff] - Kickoff timestamp (any Date-compatible type).
  * @property {string} [away_logo] - URL for away team logo.
  * @property {string} [home_logo] - URL for home team logo.
@@ -131,8 +146,8 @@ const derivePredictionMeta = (prediction) => {
 
 /**
  * @typedef {Object} Prediction
- * @property {number} [home_win_probability] - 0–1 probability home team wins.
- * @property {number} [away_win_probability] - 0–1 probability away team wins.
+ * @property {number} [home_win_probability] - 0-1 probability home team wins.
+ * @property {number} [away_win_probability] - 0-1 probability away team wins.
  * @property {number} [home_score]           - Predicted or actual home score.
  * @property {number} [away_score]           - Predicted or actual away score.
  * @property {number} [point_diff]           - Predicted margin (home - away, usually).
@@ -152,7 +167,6 @@ const derivePredictionMeta = (prediction) => {
  * @property {number} [index]
  * @property {() => void} [onClick]
  * @property {(matchup: Matchup) => void} [onReset] - Optional callback when the reset button is clicked.
- * @property {Record<string, string>} [nfl_teams]   - Optional override for team name map.
  */
 
 /**
@@ -177,13 +191,16 @@ const derivePredictionMeta = (prediction) => {
  *  - index?: number     (stagger animation index)
  *  - onClick?: () => void
  *  - onReset?: (matchup: Matchup) => void
- *  - nfl_teams?: Record<abbr, fullName> override map
  *
  * @param {CardProps} props
  */
 export default function Card({
   matchup,
   prediction,
+  title,
+  status,
+  icon,
+  progress,
   loading = false,
   error,
   index = 0,
@@ -194,14 +211,23 @@ export default function Card({
 
   const awayTeam = matchup.away_team ?? '';
   const homeTeam = matchup.home_team ?? '';
-  const awayName = NFL_TEAMS_MAP[awayTeam] ?? awayTeam;
-  const homeName = NFL_TEAMS_MAP[homeTeam] ?? homeTeam;
+  const awayFullName = matchup.away_name ?? NFL_TEAMS_MAP[awayTeam] ?? awayTeam;
+  const homeFullName = matchup.home_name ?? NFL_TEAMS_MAP[homeTeam] ?? homeTeam;
+  const awayLogo = matchup.away_logo;
+  const homeLogo = matchup.home_logo;
 
   const kickoff = matchup.kickoff ? new Date(matchup.kickoff) : null;
-  const kickoffLabel = kickoff && !Number.isNaN(kickoff.getTime()) ? kickoff.toLocaleString() : 'TBD';
+  const kickoffDisplayTime = getKickoffDisplayTime(matchup.kickoff);
+  const kickoffDateTime =
+    kickoff && !Number.isNaN(kickoff.getTime()) ? kickoff.toISOString() : undefined;
 
-  const { hasScoreDetails, classifierUsed, isExpert, maxConfidence, sim } =
+  const { hasScoreDetails, classifierUsed, isExpert, maxConfidence, sim, homeScore, awayScore } =
     derivePredictionMeta(prediction);
+  const hasPrediction =
+    Boolean(prediction) &&
+    (hasScoreDetails ||
+      prediction?.home_win_probability != null ||
+      prediction?.away_win_probability != null);
 
   // Local debug state for a brief visual click cue
   const [debugClicked, setDebugClicked] = React.useState(false);
@@ -291,22 +317,17 @@ export default function Card({
         console.error('[Card] onReset handler threw', err);
       }
     }
-    // Reset is distinct from "open" – no fallback to onClick.
+    // Reset is distinct from "open" - no fallback to onClick.
   };
 
-  
+  const cardClassName = buildCardClassNames({ hasPrediction, loading, error, debugClicked });
+
   return (
     <article
-      className={[
-        'game-card',
-        loading ? 'game-card--loading' : '',
-        error ? 'game-card--error' : '',
-      ]
-        .filter(Boolean)
-        .join(' ')}
+      className={cardClassName}
       // @ts-ignore custom property used by some animations
       style={{ '--i': index }}
-      onClick={onClick}
+      onClick={handleArticleClick}
       onKeyDown={onClick ? handleKeyDown : undefined}
       role={onClick ? 'button' : undefined}
       tabIndex={onClick ? 0 : -1}
@@ -340,7 +361,7 @@ export default function Card({
           <div className={styles.kickoffRow}>
             <time
               className={styles.kickoffTime}
-              dateTime={kickoff ? new Date(kickoff).toISOString() : undefined}
+              dateTime={kickoffDateTime}
             >
               {kickoffDisplayTime}
             </time>
@@ -353,10 +374,10 @@ export default function Card({
             id="away"
             className={`${styles.gameCard} game-card__team game-card__team--away`}
           >
-            {away_logo && (
+            {awayLogo && (
               <img
-                src={away_logo}
-                alt={`${away_team} logo`}
+                src={awayLogo}
+                alt={`${awayTeam} logo`}
                 id="away-logo"
                 className={styles.gameCardLogo}
                 loading="lazy"
@@ -372,10 +393,10 @@ export default function Card({
           <div
             className={`${styles.gameCard} game-card__team game-card__team--home`}
           >
-            {home_logo && (
+            {homeLogo && (
               <img
-                src={home_logo}
-                alt={`${home_team} logo`}
+                src={homeLogo}
+                alt={`${homeTeam} logo`}
                 id="home-logo"
                 className={styles.gameCardLogo}
                 loading="lazy"
@@ -418,6 +439,11 @@ export default function Card({
                       {classifierUsed ? 'Joblib Classifier' : 'Logistic fallback'}
                     </span>
                   )}
+                  {prediction?.prediction_source && (
+                    <span className={styles.badge}>
+                      Source {prediction.prediction_source}
+                    </span>
+                  )}
                   {typeof maxConfidence === 'number' && (
                     <span className={styles.badge}>
                       Confidence {maxConfidence}%
@@ -430,21 +456,21 @@ export default function Card({
                   <div className={styles.scoreRow}>
                     <span>Predicted Score:</span>
                     <b>
-                      {away_team} {Math.round(prediction.away_score ?? 0)} -{' '}
-                      {home_team} {Math.round(prediction.home_score ?? 0)}
+                      {awayTeam} {Math.round(awayScore ?? 0)} -{' '}
+                      {homeTeam} {Math.round(homeScore ?? 0)}
                     </b>
                   </div>
                   {isExpert && (
                     <div className={styles.expertRange}>
                       <span>Range:</span>
                       <em>
-                        {Math.round(sim.sim_away_score - 1.28 * sim.sim_std_away)}–
-                        {Math.round(sim.sim_away_score + 1.28 * sim.sim_std_away)}
+                        {Math.round(sim.sim_away_score - 1.28 * sim.sim_away_sd)}-
+                        {Math.round(sim.sim_away_score + 1.28 * sim.sim_away_sd)}
                       </em>
                       <span> vs </span>
                       <em>
-                        {Math.round(sim.sim_home_score - 1.28 * sim.sim_std_home)}–
-                        {Math.round(sim.sim_home_score + 1.28 * sim.sim_std_home)}
+                        {Math.round(sim.sim_home_score - 1.28 * sim.sim_home_sd)}-
+                        {Math.round(sim.sim_home_score + 1.28 * sim.sim_home_sd)}
                       </em>
                     </div>
                   )}

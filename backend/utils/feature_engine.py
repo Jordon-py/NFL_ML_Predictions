@@ -1,3 +1,12 @@
+# ==========================================
+# File: backend/utils/feature_engine.py
+# Role: Backend helper module.
+# Input Data: Function inputs.
+# Output Data: Module outputs.
+# Dependencies: typing, pandas, numpy, logging
+# Notes: Shared utilities.
+# ==========================================
+
 """
 feature_engine.py
 =================
@@ -15,7 +24,7 @@ import pandas as pd
 import numpy as np
 import logging
 
-from backend.utils.feature_helpers import (
+from utils.feature_helpers import (
     make_time_key,
     _rolling_prior_stats,
 )

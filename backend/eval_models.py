@@ -1,3 +1,12 @@
+# ==========================================
+# File: backend/eval_models.py
+# Role: Model training or evaluation pipeline.
+# Input Data: Feature datasets and config.
+# Output Data: Model artifacts and metrics.
+# Dependencies: __future__, argparse, pathlib, typing
+# Notes: Offline workflow.
+# ==========================================
+
 """
 evaluation_seasonal.py
 ======================

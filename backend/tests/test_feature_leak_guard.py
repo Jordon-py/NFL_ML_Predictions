@@ -1,3 +1,12 @@
+# ==========================================
+# File: backend/tests/test_feature_leak_guard.py
+# Role: Backend test module.
+# Input Data: Test fixtures and sample payloads.
+# Output Data: Pytest assertions and results.
+# Dependencies: pandas, pathlib, backend
+# Notes: Run via pytest.
+# ==========================================
+
 import pandas as pd
 from pathlib import Path
 

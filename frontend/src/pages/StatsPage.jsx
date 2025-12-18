@@ -1,3 +1,12 @@
+// ==========================================
+// File: frontend/src/pages/StatsPage.jsx
+// Role: React component for UI rendering.
+// Input Data: Props (data and callbacks).
+// Output Data: JSX markup.
+// Dependencies: react, ../components/NavBar/NavBar.jsx, ../components/HistoryChart.jsx, ./StatsPage.css
+// Notes: Presentation-focused component.
+// ==========================================
+
 // File: frontend/src/pages/StatsPage.jsx
 //
 // Purpose:

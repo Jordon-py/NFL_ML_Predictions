@@ -1,3 +1,12 @@
+# ==========================================
+# File: backend/routes.py
+# Role: HTTP route handlers for backend endpoints.
+# Input Data: HTTP requests.
+# Output Data: JSON responses.
+# Dependencies: __future__, os, datetime, pathlib
+# Notes: Thin controller layer with schedule CSV header normalization.
+# ==========================================
+
 from __future__ import annotations
 
 """
@@ -132,13 +141,20 @@ def _is_pipeline(obj: Any) -> bool:
 def _safe_logistic_from_diff(diff: float) -> float:
     return float(1.0 / (1.0 + np.exp(-0.3 * diff)))
 
+def _clean_schedule_df(df: pd.DataFrame) -> pd.DataFrame:
+    if df is None or df.empty:
+        return df
+    cleaned = df.copy()
+    cleaned.columns = [str(c).strip() for c in cleaned.columns]
+    return cleaned
+
 def _load_schedule_df(season: int) -> pd.DataFrame:
     # 1) nflreadpy (if available)
     if nfl is not None and os.getenv("OFFLINE_MODE", "false").lower() != "true":
         try:
             df = nfl.load_schedules(season).to_pandas()
             if df is not None and not df.empty:
-                return df
+                return _clean_schedule_df(df)
         except Exception:
             pass
 
@@ -147,7 +163,7 @@ def _load_schedule_df(season: int) -> pd.DataFrame:
     if csv_path:
         p = Path(csv_path)
         if p.exists():
-            return pd.read_csv(p)
+            return _clean_schedule_df(pd.read_csv(p))
 
     # 3) common repo locations
     backend_dir = Path(__file__).resolve().parent
@@ -158,7 +174,7 @@ def _load_schedule_df(season: int) -> pd.DataFrame:
     ]
     for c in candidates:
         if c.exists():
-            return pd.read_csv(c)
+            return _clean_schedule_df(pd.read_csv(c))
 
     return pd.DataFrame()
 

@@ -1,10 +1,10 @@
 /**
- * NFL Prediction App — Core API Client (Expert v1.2)
+ * NFL Prediction App - Core API Client (Expert v1.2)
  * ================================================
  *
  * A robust, high-performance fetch wrapper engineered for the NFL ML Predictions ecosystem.
  * Features:
- *  - Unified error handling with custom HttpError class.
+ *  - Unified error handling in fetchJson.
  *  - Request timeout and cancellation via AbortController.
  *  - Environment-aware URL resolution with trailing-slash normalization.
  *  - Defensive JSON parsing resilient to empty or malformed responses.
@@ -15,12 +15,18 @@
  */
 // client.js (minimal edits)
 
-import { fetchJson, HttpError, API_BASE } from "./fetch"; // API_BASE can stay exported, but we won't concatenate it.
+import { fetchJson } from "./fetch";
 
 export async function getHealthStatus() {
-  const res = await fetchJson("/health"); // ✅ path only
+  const res = await fetchJson("/health");
   console.log('getHealthStatus', res);
 
+  return res;
+}
+
+export async function getDebugInfo() {
+  const res = await fetchJson("/debug");
+  console.log("getDebugInfo", res);
   return res;
 }
 
@@ -32,12 +38,7 @@ export async function getNextWeekSchedule() {
     },
   });
 
-  // ✅ Correct normalization logic
-  if (Array.isArray(data)) {
-    return data;
-  }
-
-  return data?.games ?? data?.ScheduleGame ?? [];
+  return Array.isArray(data?.games) ? data.games : [];
 }
 
 export async function predictGame(payload) {

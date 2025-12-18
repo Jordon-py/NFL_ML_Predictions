@@ -1,3 +1,12 @@
+// ==========================================
+// File: frontend/src/components/HistoryPage.jsx
+// Role: React component for UI rendering.
+// Input Data: Props (data and callbacks).
+// Output Data: JSX markup.
+// Dependencies: react, ./NavBar/NavBar.jsx, ./HistoryChart.jsx, ./D_BUTTON.jsx
+// Notes: Presentation-focused component.
+// ==========================================
+
 /**
  * HistoryPage.jsx
  * ----------------

@@ -1,4 +1,13 @@
 #!/usr/bin/env python
+# ==========================================
+# File: backend/transform_dataset.py
+# Role: Dataset analysis or transformation script.
+# Input Data: Raw or feature datasets.
+# Output Data: Derived datasets or reports.
+# Dependencies: __future__, logging, sys, pathlib
+# Notes: Used during data prep.
+# ==========================================
+
 """
 Transform Dataset from Per-Team to Per-Game Format
 

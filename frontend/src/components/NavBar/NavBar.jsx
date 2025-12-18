@@ -1,3 +1,12 @@
+// ==========================================
+// File: frontend/src/components/NavBar/NavBar.jsx
+// Role: React component for UI rendering.
+// Input Data: Props (data and callbacks).
+// Output Data: JSX markup.
+// Dependencies: react, react-router-dom, ./NavBar.css, ../Hamburger/HamburgerMenu
+// Notes: Presentation-focused component.
+// ==========================================
+
 import React, { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import './NavBar.css';
@@ -20,10 +29,9 @@ function NavBar( { state = {} } ) {
     const { health } = state;
 
     // EFFECT: toggle the "sticking" class after scrolling a small distance.
-    const handleScroll = () =>
-    {
-        if ( typeof window === 'undefined' ) return; // SSR/defensive guard
-        setIsSticking( window.scrollY > 10 ? 'sticking' : '' );
+    const handleScroll = () => {
+        if (typeof window === 'undefined') return; // SSR/defensive guard
+        setIsSticking(window.scrollY > 10 ? 'sticking' : '');
     };
 
     useEffect( () =>

@@ -1,3 +1,12 @@
+# ==========================================
+# File: backend/plots.py
+# Role: Backend helper module.
+# Input Data: Function inputs.
+# Output Data: Module outputs.
+# Dependencies: streamlit, pandas, plotly, numpy
+# Notes: Shared utilities.
+# ==========================================
+
 """
 Interactive Dataset Visualization Pipeline
 Author: Python Data Visualization Expert

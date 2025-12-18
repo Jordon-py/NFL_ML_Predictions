@@ -1,116 +1,93 @@
-"""
-Configuration helpers for the NFL ML Predictions backend.
+# ==========================================
+# File: backend/config.py
+# Role: Backend configuration and env resolution.
+# Input Data: Environment variables.
+# Output Data: Resolved paths and flags.
+# Dependencies: __future__, os, pathlib, pandas
+# Notes: Used during startup.
+# ==========================================
 
-This module centralizes environment loading, common path constants,
-feature toggles, and CORS parsing so they can be reused across the app
-and supporting scripts.
-"""
-# -------------------------------------
-# IMPORTS -----
-# -------------------------------------
+# backend/config.py
 from __future__ import annotations
+
 import os
 from pathlib import Path
-from typing import List, Tuple, Optional
-from dotenv import load_dotenv
-# -------------------------------------
+import pandas as pd
 
-# Locations
-BACKEND_DIR = Path(__file__).parent
-BASE_DIR = BACKEND_DIR.parent
-DATA_DIR = BACKEND_DIR / "data"
-MODELS_DIR = BACKEND_DIR / "models"
-LOG_DIR = BACKEND_DIR / "logs"
-FRONTEND_DIR = BASE_DIR / "frontend"
-FRONTEND_DIST = FRONTEND_DIR / "dist"
-FRONTEND_BUILD = FRONTEND_DIST  # Alias for compatibility
+TRUTHY = {"1", "true", "yes", "y", "on"}
 
-# Truthy parsing helper
-TRUTHY = {"true", "t", "1", "yes", "y"}
+BASE_DIR = Path(__file__).resolve().parent
+REPO_ROOT = BASE_DIR.parent
 
+def _resolve_data_dir() -> Path:
+    env_data_dir = os.getenv("DATA_DIR")
+    if env_data_dir:
+        p = Path(env_data_dir)
+        return (BASE_DIR / p).resolve() if not p.is_absolute() else p.resolve()
+    default_dir = BASE_DIR / "data" / "datasets"
+    if default_dir.exists():
+        return default_dir.resolve()
+    return (BASE_DIR / "data").resolve()
 
-def _load_env( dotenv_path: Path) -> None:
-    """Load .env from backend or repo root. Prefers backend/.env."""
-    dotenv_loaded = load_dotenv(dotenv_path)
-    if not dotenv_loaded:
-        return load_dotenv(BASE_DIR / ".env")
-    return dotenv_loaded
+# Keep your existing behavior: .env is owned by you; we just read env vars.
+DATA_DIR = _resolve_data_dir()
 
+def _resolve_models_dir() -> Path:
+    env_models_dir = os.getenv("MODELS_DIR")
+    if env_models_dir:
+        return Path(env_models_dir).resolve()
 
+    candidates = [
+        BASE_DIR / "20260102" / "models",
+        BASE_DIR / "models",
+        BASE_DIR / "models" / "prod_models",
+        BASE_DIR / "data" / "prod-models" / "models",
+        BASE_DIR / "data" / "legacy_data" / "prod-models" / "models",
+    ]
+    for candidate in candidates:
+        if (candidate / "metadata.json").exists():
+            return candidate.resolve()
 
+    # Fall back to the original default for a clearer error path.
+    return (BASE_DIR / "data" / "prod-models" / "models").resolve()
 
-# Data and schedule defaults (lazily loaded to avoid startup failures)
-# Use the latest engineered dataset in the backend root; aligns with production path.
-DEFAULT_DATASET = BACKEND_DIR / "game_features_20251208.csv"
-DEFAULT_SCHEDULE: Optional[object] = None  # Loaded on demand via load_schedule_data()
+MODELS_DIR = _resolve_models_dir()
 
-
-def load_schedule_data(year: int = 2025):
+def resolve_cors():
     """
-    Lazily load NFL schedule data. Called only when needed.
-    nflreadpy must be installed in the environment calling this.
+    Minimal CORS resolver; keep your existing env-driven CORS behavior if you want.
+    """
+    origins_env = os.getenv("ALLOWED_ORIGINS") or os.getenv("CORS_ORIGINS", "")
+    origins = [o.strip() for o in origins_env.split(",") if o.strip()]
+    if not origins:
+        origins = ["*"]
+    origin_regex = (
+        os.getenv("CORS_ORIGINS_REGEX")
+        or os.getenv("CORS_ORIGIN_REGEX")
+        or ""
+    ).strip() or None
+    return origins, origin_regex
+
+def load_schedule_data_safe(season: int):
+    """
+    Optional dependency. Returns a DataFrame or None.
+    Tries common nflreadpy signatures to reduce breakage.
     """
     try:
         import nflreadpy as nfl
-        return nfl.load_schedules(year).to_pandas()
-    except ImportError:
+    except Exception:
         return None
 
-# Feature toggles
-SERVE_FRONTEND = os.getenv("SERVE_FRONTEND", "false").strip().lower() in TRUTHY
-ALLOW_FALLBACK_PREDICTIONS = os.getenv("ALLOW_FALLBACK_PREDICTIONS", "false").strip().lower() in TRUTHY
+    # Try a few variants (nflreadpy has varied docs/usage)
+    for attempt in (
+        lambda: nfl.load_schedules(season),                 # positional
+        lambda: nfl.load_schedules(seasons=[season]),       # keyword list
+        lambda: nfl.load_schedules(seasons=season),         # keyword int
+    ):
+        try:
+            df = attempt()
+            return df if isinstance(df, pd.DataFrame) else None
+        except Exception:
+            continue
 
-# CORS -----------------------------------------------------------------
-# Default curated origins with scheme to match browser origin headers.
-DEFAULT_ALLOWED_ORIGINS: List[str] = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "https://nfl-ml-predictions.vercel.app",
-    "https://nfl-ml-predictions-pr5uahmqx-christopher-jordons-projects.vercel.app",
-    "https://nfl-predict-6fghcp7sx-christopher-jordons-projects.vercel.app",
-    "https://new-nfl-predict.vercel.app",
-    "https://nfl-predict.vercel.app",
-]
-
-ALLOW_ORIGIN_REGEX = os.getenv("ALLOW_ORIGIN_REGEX","https://nfl-ml-predictions.vercel.app")
-
-
-def _normalize_origin(origin: str) -> str:
-    """
-    Ensure origins include scheme and no trailing slash so they match
-    browser Origin headers.
-    """
-    if not origin:
-        return ALLOW_ORIGIN_REGEX
-    candidate = origin.strip()
-    # Remove trailing slash
-    candidate = candidate[:-1] if candidate.endswith("/") else candidate
-    if candidate.startswith("http://") or candidate.startswith("https://"):
-        return candidate
-    # Default to https scheme for bare hosts
-    return f"https://{candidate}"
-
-
-def parse_allowed_origins(raw: str | None = None) -> List[str]:
-    """
-    Parse ALLOWED_ORIGINS env var or fall back to curated defaults.
-    """
-    source = raw if raw is not None else os.getenv("ALLOWED_ORIGINS", "")
-    entries = [_normalize_origin(o) for o in source.split(",") if o.strip()]
-    entries = [e for e in entries if e]
-    return entries or DEFAULT_ALLOWED_ORIGINS
-
-
-def resolve_cors() -> Tuple[List[str], str | None]:
-    """
-    Build the effective allow_origins list and optional regex for FastAPI.
-    """
-    restrict = os.getenv("RESTRICT_CORS", "false").strip().lower() in TRUTHY
-    if restrict:
-        origins = parse_allowed_origins()
-    else:
-        # Broad default: allow curated list and defer to regex for previews.
-        origins = DEFAULT_ALLOWED_ORIGINS
-    regex = ALLOW_ORIGIN_REGEX or r"https://.*\.vercel\.app"
-    return origins, regex
-
+    return None

@@ -1,3 +1,12 @@
+# ==========================================
+# File: backend/team_assets.py
+# Role: Backend helper module.
+# Input Data: Function inputs.
+# Output Data: Module outputs.
+# Dependencies: __future__, functools, pathlib, typing
+# Notes: Shared utilities.
+# ==========================================
+
 """
 teams_assets.py
 ===============

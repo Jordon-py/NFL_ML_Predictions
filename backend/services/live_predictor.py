@@ -1,3 +1,12 @@
+# ==========================================
+# File: backend/services/live_predictor.py
+# Role: Backend service module.
+# Input Data: Service inputs and config.
+# Output Data: Service outputs.
+# Dependencies: logging, time, typing, datetime
+# Notes: Used by API handlers.
+# ==========================================
+
 """
 live_predictor.py
 =================

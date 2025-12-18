@@ -1,3 +1,12 @@
+# ==========================================
+# File: backend/scripts/chart1_distributions.py
+# Role: Backend utility script.
+# Input Data: CLI args and input files.
+# Output Data: Reports, charts, or artifacts.
+# Dependencies: pandas, matplotlib, seaborn, numpy
+# Notes: Standalone execution.
+# ==========================================
+
 """
 Chart 1: Feature Distributions Analysis
 ========================================

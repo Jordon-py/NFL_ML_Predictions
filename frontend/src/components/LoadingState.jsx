@@ -1,3 +1,12 @@
+// ==========================================
+// File: frontend/src/components/LoadingState.jsx
+// Role: React component for UI rendering.
+// Input Data: Props (data and callbacks).
+// Output Data: JSX markup.
+// Dependencies: react, ./LoadingState.css
+// Notes: Presentation-focused component.
+// ==========================================
+
 /*
 File: LoadingState.jsx
 Purpose:

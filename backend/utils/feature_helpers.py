@@ -1,4 +1,13 @@
 #!/usr/bin/env python
+# ==========================================
+# File: backend/utils/feature_helpers.py
+# Role: Backend helper module.
+# Input Data: Function inputs.
+# Output Data: Module outputs.
+# Dependencies: __future__, logging, os, pathlib
+# Notes: Shared utilities.
+# ==========================================
+
 # -*- coding: utf-8 -*-
 """
 feature_helpers.py (Enhanced v1.1)
@@ -30,7 +39,7 @@ from pathlib import Path
 from typing import Any, List, Optional, Sequence, Union
 import numpy as np
 import pandas as pd
-from backend.config import MODELS_DIR
+from config import MODELS_DIR
 
 log = logging.getLogger(__name__)
 

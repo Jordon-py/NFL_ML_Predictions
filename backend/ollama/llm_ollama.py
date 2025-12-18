@@ -1,3 +1,12 @@
+# ==========================================
+# File: backend/ollama/llm_ollama.py
+# Role: Backend helper module.
+# Input Data: Function inputs.
+# Output Data: Module outputs.
+# Dependencies: __future__, asyncio, json, os
+# Notes: Shared utilities.
+# ==========================================
+
 from __future__ import annotations
 
 import asyncio

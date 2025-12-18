@@ -1,3 +1,12 @@
+# ==========================================
+# File: backend/scripts/sanity_check.py
+# Role: Backend utility script.
+# Input Data: CLI args and input files.
+# Output Data: Reports, charts, or artifacts.
+# Dependencies: backend
+# Notes: Standalone execution.
+# ==========================================
+
 from backend.main import MODELS_DIR, load_models, load_dataset, DATASET_PATH, sanity_predict
 
 print('MODELS_DIR=', MODELS_DIR)

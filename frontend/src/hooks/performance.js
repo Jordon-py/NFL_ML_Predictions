@@ -1,3 +1,12 @@
+// ==========================================
+// File: frontend/src/hooks/performance.js
+// Role: React hook for UI state management.
+// Input Data: Hook params and state.
+// Output Data: State values and actions.
+// Dependencies: react
+// Notes: Consumed by components.
+// ==========================================
+
 import { useState, useEffect, useRef } from 'react';
 
 /**

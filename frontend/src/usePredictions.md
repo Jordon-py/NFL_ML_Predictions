@@ -9,10 +9,10 @@ No React Context is used for predictions.
 
 ## What It Does
 
-- **State Access**: current prediction, history, schedule, teams, and health
+- **State Access**: current prediction, history, schedule, and health
 - **Actions**: update prediction maps, history, and loading/error flags
 - **Persistence**: localStorage sync for prediction history
-- **Effects**: schedule load + health polling + team metadata fetch
+- **Effects**: schedule load + health polling
 
 ## Syntax & Usage
 
@@ -39,7 +39,7 @@ function App() {
   current: PredictionEntry | null,
   history: PredictionEntry[],
   schedule: Array,
-  teams: Record<string, { name: string, logoUrl: string }>,
+  week: number | null,
   health: { status: string, mode: string, reason: string },
   predictions: Record<string, PredictionEntry>,
   loading: Record<string, boolean>,

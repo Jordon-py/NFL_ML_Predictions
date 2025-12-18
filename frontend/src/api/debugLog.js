@@ -1,3 +1,12 @@
+// ==========================================
+// File: frontend/src/api/debugLog.js
+// Role: API client for backend endpoints.
+// Input Data: Request payloads and params.
+// Output Data: Backend response data.
+// Dependencies: None
+// Notes: Uses fetch wrapper.
+// ==========================================
+
 // /frontend/src/api/debugLog.js
 // ----------------------------------------------------------------------------
 // Lightweight client-side debug log for API errors and notable events.

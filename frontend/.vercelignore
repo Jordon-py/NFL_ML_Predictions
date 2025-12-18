@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 .env*
 .DS_Store
 *.log
@@ -18,12 +17,7 @@ backend/data/
 
 node_modules/
 *.bundle
-=======
-<<<<<<< HEAD
 
-=======
-.env*
->>>>>>> cd97fecacdc0a2f3d4ee6cd29effaa9619489d75
 .DS_Store
 *.log
 coverage/
@@ -41,8 +35,3 @@ backend/data/
 *.ts
 
 node_modules/
-<<<<<<< HEAD
-=======
-*.bundle
->>>>>>> cd97fecacdc0a2f3d4ee6cd29effaa9619489d75
->>>>>>> e908bfb18 (Prod/nfl ml vercel (#67))

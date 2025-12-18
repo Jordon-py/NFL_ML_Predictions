@@ -110,6 +110,7 @@
   line-height: 1;
   background: linear-gradient(180deg, #fff 0%, rgba(255, 255, 255, 0.6) 100%);
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
@@ -231,4 +232,155 @@
   font-size: 0.85rem;
   line-height: 1.5;
   color: rgba(255, 255, 255, 0.8);
+}
+
+.explanation-section {
+  margin-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  padding-top: 24px;
+}
+
+.explain-btn {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #fff;
+  padding: 12px;
+  border-radius: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.explain-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: #00c6ff;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(0, 198, 255, 0.2);
+}
+
+.sparkle-icon {
+  font-size: 1.1rem;
+}
+
+.explaining-loader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 20px;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.9rem;
+}
+
+.spinner {
+  width: 24px;
+  height: 24px;
+  border: 3px solid rgba(0, 198, 255, 0.1);
+  border-top: 3px solid #00c6ff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.explanation-box {
+  background: rgba(0, 153, 255, 0.03);
+  border: 1px solid rgba(0, 153, 255, 0.15);
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.explanation-box.animate-in {
+  animation: slideUp 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.explanation-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.explanation-header h4 {
+  margin: 0;
+  font-size: 1rem;
+  color: #00c6ff;
+  font-weight: 700;
+}
+
+.llm-badge {
+  font-size: 0.65rem;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 2px 8px;
+  border-radius: 4px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.explanation-text {
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.85);
+  margin: 0;
+}
+
+.explanation-bullets {
+  margin: 0;
+  padding-left: 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.explanation-bullets li {
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.7);
+  line-height: 1.4;
+}
+
+.explanation-caveats {
+  margin-top: 8px;
+  padding-top: 16px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.1);
+}
+
+.explanation-caveats h5 {
+  margin: 0 0 10px 0;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  color: #ff9f43;
+  letter-spacing: 0.5px;
+}
+
+.explanation-caveats ul {
+  margin: 0;
+  padding-left: 1.2rem;
+  list-style-type: '⚠ ';
+}
+
+.explanation-caveats li {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.5);
+  font-style: italic;
+}
+
+.explanation-error {
+  color: #ff4d4d;
+  font-size: 0.85rem;
+  text-align: center;
+  padding: 10px;
 }

@@ -1,9 +1,9 @@
-# ✅ Last 5 Tasks Completed by LLM Agent
+# ? Last 5 Tasks Completed by LLM Agent
 
-_Last Updated:_ 2025-12-21 01:40:00
+_Last Updated:_ 2026-01-02 08:27:54
 
-1. **Diagnosed backend initialization** - Confirmed backend loads successfully, models/dataset present.
-2. **Identified feature mismatch** - Models expect EPA metrics (off_epa_per_play, def_epa_per_play, etc.) missing from dataset.
-3. **Tested endpoints** - `/health` returns healthy, `/predict` works but uses fallback due to feature mismatch.
-4. Fixed `settings.json` syntax error on line 72.
-5. Created baseline dataflow.md
+1. **Prediction endpoint map doc** - Added a focused /predict mapping doc with diagram, dataflow, and code references.
+2. **Prediction endpoint image** - Added a simple SVG image for the /predict endpoint flow.
+3. **Batch roll-forward updates** - `_fill_team_priors` and `_apply_onehots` now use batched assignments to avoid DataFrame fragmentation warnings.
+4. **Schedule header normalization** - `_load_schedule_df` trims CSV headers so `/schedule/next-week` returns games for TeamGrid.
+5. **Team snapshot cache** - Prediction service caches per-team history for faster roll-forward fills.

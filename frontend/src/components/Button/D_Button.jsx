@@ -1,3 +1,12 @@
+// ==========================================
+// File: frontend/src/components/Button/D_Button.jsx
+// Role: React component for UI rendering.
+// Input Data: Props (data and callbacks).
+// Output Data: JSX markup.
+// Dependencies: react, ./Button.css
+// Notes: Presentation-focused component.
+// ==========================================
+
 import React from "react";
 /**
  * Button (Minimal + Spinner)

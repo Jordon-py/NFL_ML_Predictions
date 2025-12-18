@@ -1,3 +1,12 @@
+// ==========================================
+// File: frontend/src/hooks/useTrainingStatus.js
+// Role: React hook for UI state management.
+// Input Data: Hook params and state.
+// Output Data: State values and actions.
+// Dependencies: react, ../api/client.js
+// Notes: Consumed by components.
+// ==========================================
+
 import {useState} from 'react';
 import {startTraining, getHealthStatus} from '../api/client.js';
 

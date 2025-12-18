@@ -1,4 +1,13 @@
 #!/usr/bin/env python3
+# ==========================================
+# File: backend/train_models.py
+# Role: Model training or evaluation pipeline.
+# Input Data: Feature datasets and config.
+# Output Data: Model artifacts and metrics.
+# Dependencies: argparse, hashlib, json, logging
+# Notes: Offline workflow.
+# ==========================================
+
 """
 Train leak-free NFL models with time-aware CV.
 
@@ -28,7 +37,7 @@ Environment variables:
     RANDOM_SEED   - Random state for reproducibility (default: 42)
 
 Usage:
-    python train_models.py --data 'data/heroku-models/game_features_20251221.csv' --out 'data/heroku-models`'
+    python train_models.py --data 'data/dataset/game_features_20260102.csv' --out 'models`'
 """
 
 # File: backend/train_models.py

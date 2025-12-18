@@ -20,7 +20,6 @@ import { buildGameKey } from '../../utils/predictionContextUtils';
  * @param {Object} props
  * @param {number} props.week - Current NFL week being displayed.
  * @param {Array} props.games - List of matchups for the week.
- * @param {Object} props.teams - Metadata for teams (logos, full names).
  * @param {Object} props.predictions - Map of processed predictions keyed by game ID.
  * @param {Object} props.loading - Map of loading states keyed by game ID.
  * @param {Object} props.errors - Map of error messages keyed by game ID.
@@ -31,7 +30,6 @@ import { buildGameKey } from '../../utils/predictionContextUtils';
 export default function TeamGrid({
   week,
   games = [],
-  teams = {},
   predictions = {},
   loading = {},
   errors = {},
@@ -39,16 +37,11 @@ export default function TeamGrid({
   onReset,
   features = {}
 }) {
-  
   const gameItems = (games || []).map((game, index) => {
     const gkey = buildGameKey(game);
 
-    // Normalize team data using the provided teams metadata map
     const homeTeam = game.home_abbr || game.home_team;
     const awayTeam = game.away_abbr || game.away_team;
-
-    const homeInfo = teams[homeTeam] || {};
-    const awayInfo = teams[awayTeam] || {};
 
     return {
       key: gkey,
@@ -57,9 +50,11 @@ export default function TeamGrid({
         game_id: gkey,
         home_team: homeTeam,
         away_team: awayTeam,
+        home_name: game.home_name,
+        away_name: game.away_name,
         kickoff: game.kickoff,
-        home_logo: homeInfo.logoUrl,
-        away_logo: awayInfo.logoUrl,
+        home_logo: game.home_logo,
+        away_logo: game.away_logo,
         season: game.season,
         week: game.week
       },
@@ -82,7 +77,7 @@ export default function TeamGrid({
   }
 
   return (
-    <section className="team-grid" aria-label={`NFL Week ${week} Matchups`}>
+    <section className="team-grid" aria-label='NFL Week Matchups'>
       <header className="team-grid__header">
         <h2 className="team-grid__title">Week {week} Matchups</h2>
         {features.queueAware && (
@@ -101,9 +96,6 @@ export default function TeamGrid({
             prediction={item.prediction}
             loading={item.isLoading}
             error={item.error}
-            nfl_teams={Object.fromEntries(
-              Object.entries(teams).map(([code, info]) => [code, info.name])
-            )}
             onClick={() => onPredict && onPredict(item.matchup)}
             onReset={() => onReset && onReset(item.matchup)}
             // Enhanced features

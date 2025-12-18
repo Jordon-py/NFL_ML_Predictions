@@ -51,6 +51,9 @@ from datetime import datetime, timezone
 import joblib
 import numpy as np
 import pandas as pd
+import os
+from pathlib import Path
+from dotenv import load_dotenv
 
 from sklearn import clone
 from sklearn.base import BaseEstimator
@@ -70,6 +73,9 @@ import matplotlib as plt
 from typing import Dict, List, Tuple, Any
 from pathlib import Path
 from dataclasses import dataclass
+
+load_dotenv(os.getenv(".env"))
+
 
 # ============================================================
 # — Utility: Time Block Context Manager
@@ -251,7 +257,7 @@ def leak_harden_features(df: pd.DataFrame, feature_cols: list, y_win: pd.Series)
 
 
 
-def load_dataset(path: str):
+def load_dataset(path=os.getenv("DATASET_PATH")):
     df = pd.read_csv(filepath_or_buffer=path)
     df = ensure_season_week(df=df)
 
@@ -295,7 +301,7 @@ def build_preprocessor():
         ("scaler", StandardScaler())
     ])
 
-X, y_away, y_home, df = load_dataset(path=DATASET_PATH)
+X, y_away, y_home, df = load_dataset(path=os.getenv("DATASET_PATH"))
 
 
 
@@ -742,7 +748,7 @@ def main():
     # 1) Load & preprocess
     # --------------------
     with Block("Loading and Preprocessing Data"):
-        bundle = load_dataset(path=DATASET_PATH)
+        bundle = load_dataset(path=os.getenv("DATASET_PATH"))
         df = bundle
         if args.production:
             train_mask = np.ones(len(df), dtype=bool)

@@ -1,3 +1,12 @@
+// ==========================================
+// File: frontend/src/components/ErrorBoundary.jsx
+// Role: React component for UI rendering.
+// Input Data: Props (data and callbacks).
+// Output Data: JSX markup.
+// Dependencies: react, ./ErrorBoundary.css
+// Notes: Presentation-focused component.
+// ==========================================
+
 import React, { Component } from 'react';
 import './ErrorBoundary.css';
 
