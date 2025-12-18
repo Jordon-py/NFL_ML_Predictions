@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 /* ==========================================================================
    theme-grid.css — Components & Sections
    Purpose: team grid, cards, logos, timings, and section-specific styles.
@@ -386,12 +385,43 @@ section.team-main {
     width: clamp(3rem, 18vw, 5.5rem);
   }
 }
-=======
+
 /* ========================================================================== 
    theme-grid.css - Components & Sections
    Purpose: team grid, cards, logos, timings, and section-specific styles.
    Load order: 2 of 2 (after base.css)
    ========================================================================== */
+
+
+.rain-drops {
+  display: contents;
+  position: absolute;
+  top: 10%;
+  height: 120px;
+  width: 6px;
+  border-right: OutLine;
+  background: linear-gradient(70deg, lch(69.13% 48.85 282.55 / 0.765), transparent 70%);
+  transform: rotate(-35deg);
+  border-radius: 50%;
+  translate: -450px 1px ;
+  animation: fallingRain 2s linear forwards;
+}
+@keyframes fallingRain {
+  0% {
+    opacity: .9;
+    transform: translateY(0) rotate(-35deg);
+  }
+  50% {
+    opacity: 0.5;
+    transform: translateY(150px) rotate(-35deg);
+    animation: outlineGlow;
+    transition: filter(brightness(1.03) ease-in-out);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(300px) rotate(-35deg);
+  }
+}
 
 /* --- Headers / Section framing ------------------------------------------ */
 .team-grid-header {
@@ -691,4 +721,3 @@ img.team-logo:hover {
     animation: none;
   }
 }
->>>>>>> e908bfb18 (Prod/nfl ml vercel (#67))

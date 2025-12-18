@@ -1,4 +1,5 @@
 [
+<<<<<<< HEAD
   "backend/scripts/api_test.py::test_predict_endpoint",
   "backend/tests/test_api_endpoints.py::test_debug_endpoint_contains_cors_configuration",
   "backend/tests/test_api_endpoints.py::test_health_endpoint_returns_healthy",
@@ -7,6 +8,8 @@
   "backend/tests/test_feature_leak_guard.py::test_build_dataset_filters_leakage",
   "backend/tests/test_feature_leak_guard.py::test_is_leak_feature_rules",
   "backend/tests/test_simple.py::test_addition",
+=======
+>>>>>>> f3c92a29d (Complete NFL prediction system: dataset engineering with ELO/rolling/QB features, model training pipeline, UI fixes, and production-ready artifacts)
   "backend/tests/test_startup_checks.py::test_sanity_predict_success_with_minimal_engineered_row",
   "backend/tests/test_startup_checks.py::test_validate_dataset_schema_fails_when_missing",
   "scripts/api_test.py::test_api_endpoint"

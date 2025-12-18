@@ -66,10 +66,7 @@ function extractHomeWinProbability(event) {
   return null;
 }
 
-function toWholePercent(prob) {
-  if (prob == null || !Number.isFinite(Number(prob))) return null;
-  return Math.round(Number(prob) * 100);
-}
+
 
 function buildGameLabel(event, index) {
   const g = event?.game ?? event?.request ?? null;

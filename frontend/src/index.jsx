@@ -24,6 +24,11 @@ import ErrorBoundary from './components/ErrorBoundary';
 
 import './styles/base.css';        // ← load first
 import './styles/theme-grid.css';  // ← load second
+import '@material/web/button/filled-button.js';
+import '@material/web/button/outlined-button.js';
+import '@material/web/checkbox/checkbox.js';
+
+
 // Grab the static DOM node that Vite injects for us.
 const rootElement = document.getElementById('root');
 if (!rootElement) {

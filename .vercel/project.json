@@ -1,1 +1,20 @@
+<<<<<<< HEAD
 {"projectId":"prj_qXtQ6psTRUbo92pF4hRBieHyCry8","orgId":"team_lu3mOTznYBnhgbfv7M64NXqP","projectName":"nfl-ml-predictions"}
+=======
+{
+  "projectId": "prj_qXtQ6psTRUbo92pF4hRBieHyCry8",
+  "orgId": "team_lu3mOTznYBnhgbfv7M64NXqP",
+  "projectName": "nfl-ml-predictions",
+  "settings": {
+    "createdAt": 1760583934774,
+    "framework": "vite",
+    "devCommand": null,
+    "installCommand": null,
+    "buildCommand": null,
+    "outputDirectory": null,
+    "rootDirectory": "frontend",
+    "directoryListing": true,
+    "nodeVersion": "20.x"
+  }
+}
+>>>>>>> f3c92a29d (Complete NFL prediction system: dataset engineering with ELO/rolling/QB features, model training pipeline, UI fixes, and production-ready artifacts)

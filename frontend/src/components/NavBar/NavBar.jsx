@@ -20,10 +20,9 @@ function NavBar( { state = {} } ) {
     const { health } = state;
 
     // EFFECT: toggle the "sticking" class after scrolling a small distance.
-    const handleScroll = () =>
-    {
-        if ( typeof window === 'undefined' ) return; // SSR/defensive guard
-        setIsSticking( window.scrollY > 10 ? 'sticking' : '' );
+    const handleScroll = () => {
+        if (typeof window === 'undefined') return; // SSR/defensive guard
+        setIsSticking(window.scrollY > 10 ? 'sticking' : '');
     };
 
     useEffect( () =>

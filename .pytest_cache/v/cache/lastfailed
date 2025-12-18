@@ -1,5 +1,9 @@
 {
+<<<<<<< HEAD
   "backend/test_models_local.py": true,
   "backend/tests/test_feature_leak_guard.py": true,
   "backend/tests/test_leakage.py": true
+=======
+  "backend/test_models_local.py": true
+>>>>>>> f3c92a29d (Complete NFL prediction system: dataset engineering with ELO/rolling/QB features, model training pipeline, UI fixes, and production-ready artifacts)
 }
