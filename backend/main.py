@@ -44,6 +44,21 @@ import pandas as pd
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from backend.utils.functions_for_main import (
+    _add_kickoff_utc_datetime,
+    _coerce_season_week,
+    _normalize_team_columns,
+    _get_game_row,
+    TEAM_ABBR_MAP,
+    _prepare_inputs,
+    _is_pipeline,
+    _align_numeric_df_for_model,
+    _normalize_team_code,
+    _predict_score,
+    _clamp_score,
+    _smooth_win_probability,
+    _roll_forward_missing_player_stats
+)
 
 # -------------------------------------------------------------------
 # Logging
@@ -66,23 +81,7 @@ load_dotenv(BASE_DIR / ".env")
 
 DATA_DIR = BASE_DIR / "data"
 
-# Team abbreviation normalization map (handles legacy/ambiguous codes like LA->LAR).
-TEAM_ABBR_MAP: Dict[str, str] = {}
-try:
-    _abbr_map_path = DATA_DIR / "team_abbr_map.json"
-    if _abbr_map_path.exists():
-        with open(_abbr_map_path, "r", encoding="utf-8") as fh:
-            raw = json.load(fh) or {}
-        if isinstance(raw, dict):
-            TEAM_ABBR_MAP = {
-                str(k).strip().upper(): str(v).strip().upper()
-                for k, v in raw.items()
-                if str(k).strip() and str(v).strip()
-            }
-            if TEAM_ABBR_MAP:
-                logging.info("[Teams] Loaded %d abbreviation aliases from %s", len(TEAM_ABBR_MAP), _abbr_map_path)
-except Exception as e:
-    logging.warning("[Teams] Failed to load team_abbr_map.json: %s", e)
+
 
 # Allow overriding the schedule CSV via env; default to backend/data
 schedule_env = os.environ.get("SCHEDULE_PATH")
@@ -106,38 +105,7 @@ PREDICTION_STORAGE.mkdir(parents=True, exist_ok=True)
 # -------------------------------------------------------------------
 
 
-def _coerce_season_week(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Coerce season/week columns to integers when present.
 
-    Handles both 'season'/'week' and 'season_num'/'week_num' variants.
-    """
-
-    for col in ("season", "season_num"):
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0).astype(int)
-    for col in ("week", "week_num"):
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0).astype(int)
-    return df
-
-
-def _normalize_team_columns(df: pd.DataFrame, cols=None) -> pd.DataFrame:
-    """
-    Uppercase and strip team-related columns for stable matching.
-
-    Default columns include both name and abbreviation variants.
-    """
-    if cols is None:
-        cols = ("home_team", "away_team", "home_abbr", "away_abbr")
-
-    for col in cols:
-        if col in df.columns:
-            df[col] = df[col].astype(str).str.strip().str.upper()
-            # Normalize legacy/alias abbreviations (e.g., LA->LAR) to match dataset/model artifacts.
-            if TEAM_ABBR_MAP:
-                df[col] = df[col].replace(TEAM_ABBR_MAP)
-    return df
 
 
 def _find_schedule_path() -> Optional[Path]:
@@ -362,113 +330,6 @@ def _load_team_logo_map() -> Dict[str, str]:
     return {}
 
 
-def _is_missing_value(v: Any) -> bool:
-    try:
-        # pandas NaN / NaT
-        if pd.isna(v):
-            return True
-    except Exception:
-        pass
-    return isinstance(v, str) and v.strip() == ""
-
-
-def _last_team_game_row(df: pd.DataFrame, team: str, season: int, week: int) -> Optional[pd.Series]:
-    """Return the most recent completed row for `team` before (season, week)."""
-    if df is None or df.empty:
-        return None
-    if not {"season", "week", "home_team", "away_team"}.issubset(df.columns):
-        return None
-
-    team = str(team).strip().upper()
-    m = ((df["home_team"] == team) | (df["away_team"] == team)) & (
-        (df["season"] < season) | ((df["season"] == season) & (df["week"] < week))
-    )
-    hist = df.loc[m].sort_values(by=["season", "week"], ascending=False)
-    if hist.empty:
-        return None
-    return hist.iloc[0]
-
-
-def _roll_forward_missing_player_stats(
-    df: pd.DataFrame,
-    row_df: pd.DataFrame,
-    home_team: str,
-    away_team: str,
-    season: int,
-    week: int,
-) -> pd.DataFrame:
-    """Fill missing player-stat-like features for future games using last known team values.
-
-    Why:
-      - Future schedule rows often have empty player boxscore fields.
-      - When these are NaN, the preprocessor imputes medians, which can make many
-        future predictions look overly similar.
-
-    Policy:
-      - Only fills values that are missing in the matched row.
-      - Only touches columns that look like player stat features:
-          home_player_team_* / away_player_team_* and home/away_qb_completion_pct.
-    """
-    row_df = nfl.load_schedules(seasons=2025)
-    row_df = row_df.to_pandas()
-    if row_df is None or row_df.empty:
-        return row_df
-
-    idx = row_df.index[0]
-    filled = 0
-
-    last_home = _last_team_game_row(df, home_team, season, week)
-    last_away = _last_team_game_row(df, away_team, season, week)
-
-    if last_home is not None:
-        last_home_side = "home" if str(last_home.get("home_team", "")).upper() == str(home_team).upper() else "away"
-    else:
-        last_home_side = None
-
-    if last_away is not None:
-        last_away_side = "home" if str(last_away.get("home_team", "")).upper() == str(away_team).upper() else "away"
-    else:
-        last_away_side = None
-
-    # Home-side roll forward
-    if last_home is not None and last_home_side:
-        for col in row_df.columns:
-            if not (col.startswith("home_player_team_") or col == "home_qb_completion_pct"):
-                continue
-            if not _is_missing_value(row_df.at[idx, col]):
-                continue
-            base = col[len("home_") :]  # e.g., "player_team_qb_pass_yards"
-            src_col = f"{last_home_side}_{base}"
-            if src_col in last_home.index and not _is_missing_value(last_home.get(src_col)):
-                row_df.at[idx, col] = last_home.get(src_col)
-                filled += 1
-
-    # Away-side roll forward
-    if last_away is not None and last_away_side:
-        for col in row_df.columns:
-            if not (col.startswith("away_player_team_") or col == "away_qb_completion_pct"):
-                continue
-            if not _is_missing_value(row_df.at[idx, col]):
-                continue
-            base = col[len("away_") :]
-            src_col = f"{last_away_side}_{base}"
-            if src_col in last_away.index and not _is_missing_value(last_away.get(src_col)):
-                row_df.at[idx, col] = last_away.get(src_col)
-                filled += 1
-
-    if filled:
-        logging.info(
-            "[Predict] Rolled forward %d player-stat features for %s vs %s (season=%s week=%s)",
-            filled,
-            str(home_team).upper(),
-            str(away_team).upper(),
-            season,
-            week,
-        )
-
-    return row_df
-
-
 def _calculate_win_probability(
     win_model: Any,
     full_df: pd.DataFrame,
@@ -543,6 +404,11 @@ class AppState:
         self.preprocessor: Optional[Any] = None
         self.history: List[Dict[str, Any]] = []
 
+        # Cached numeric medians from the loaded dataset (used for stable imputation).
+        # Set during _load_dataset().
+        self.numeric_medians: Optional[pd.Series] = None
+
+
     # -------------------------
     # Startup Loader
     # -------------------------
@@ -571,9 +437,28 @@ class AppState:
 
             # Normalize key columns for consistent lookups
             df = _coerce_season_week(df)
-            df = _normalize_team_columns(df)
+            df = _normalize_team_columns(df, cols=["home_team", "away_team"])
 
             self.dataset = df
+
+
+            # Cache numeric medians once so prediction-time imputations are stable
+
+
+            # even when the matched row contains many missing values (future games).
+
+
+            try:
+
+
+                self.numeric_medians = df.select_dtypes(include=[np.number]).median(numeric_only=True)
+
+
+            except Exception:
+
+
+                self.numeric_medians = None
+
             logging.info("[Dataset] Loaded %d rows", len(df))
         except Exception as e:  # pragma: no cover - defensive
             logging.exception("[Dataset] Error while loading dataset: %s", e)
@@ -1012,68 +897,19 @@ def get_schedule() -> List[Dict[str, Any]]:
     """
     df = nfl.load_schedules(seasons=2025)
     df = df.to_pandas()
+    print(f'List of columns from get schedule in main.py  : {df.columns.tolist()}')
     if df is None or df.empty:
         logging.warning("[Schedule] No schedule data available; returning empty list.")
         return []
 
     df = _coerce_season_week(df)
+    df = df.infer_objects()
     df = _normalize_team_columns(
         df, cols=("home_abbr", "away_abbr", "home_team", "away_team")
     )
     # Attach logos if we have a mapping file. This is optional; missing logo
-    # artifacts must not take down the schedule endpoint.
     logo_map = _load_team_logo_map()
-
-    # Kickoff timestamp (UTC)
-    # -----------------------
-    # Your schedule CSV often has:
-    #   - gameday (date) and
-    #   - gametime (clock time, typically Eastern)
-    #
-    # We combine them into a single timezone-aware UTC timestamp so "next week"
-    # selection works correctly on Heroku (which compares against UTC 'now').
-    df["dt"] = pd.NaT
-    if "gameday" in df.columns:
-        if "gametime" in df.columns:
-            kickoff_str = (
-                df["gameday"].astype(str).str.strip()
-                + " "
-                + df["gametime"].astype(str).str.strip()
-            )
-            kickoff_naive = pd.to_datetime(kickoff_str, errors="coerce")
-
-            try:
-                df["dt"] = (
-                    kickoff_naive.dt.tz_localize(
-                        "America/New_York",
-                        ambiguous="NaT",
-                        nonexistent="shift_forward",
-                    ).dt.tz_convert("UTC")
-                )
-            except Exception:
-                # Fallback if tzdata is unavailable in the runtime.
-                df["dt"] = kickoff_naive.dt.tz_localize(
-                    "UTC",
-                    ambiguous="NaT",
-                    nonexistent="shift_forward",
-                )
-        else:
-            # No gametime column: treat gameday as "upcoming" until end-of-day Eastern.
-            d = pd.to_datetime(df["gameday"], errors="coerce") + pd.Timedelta(hours=23, minutes=59)
-            try:
-                df["dt"] = (
-                    d.dt.tz_localize(
-                        "America/New_York",
-                        ambiguous="NaT",
-                        nonexistent="shift_forward",
-                    ).dt.tz_convert("UTC")
-                )
-            except Exception:
-                df["dt"] = d.dt.tz_localize(
-                    "UTC",
-                    ambiguous="NaT",
-                    nonexistent="shift_forward",
-                )
+    df = _add_kickoff_utc_datetime(df)  # uses 'gameday' column if present
 
     # Decide which (season, week) is "next"
     now_utc = pd.Timestamp.now(tz="UTC")
@@ -1087,7 +923,7 @@ def get_schedule() -> List[Dict[str, Any]]:
         # Fallback: last season/week in file
         season_series = df.get("season", df.get("season_num"))
         week_series = df.get("week", df.get("week_num"))
-        target_s = int(season_series.max()) if season_series is not None else 2024
+        target_s = int(season_series.max()) if season_series is not None else 2025
         target_w = int(week_series.max()) if week_series is not None else 1
 
     s_col = "season_num" if "season_num" in df.columns else "season"
@@ -1167,195 +1003,112 @@ def get_prediction_history(
 
 
 # -------------------------------------------------------------------
-# Prediction Endpoint
+# /predict (final enhanced)
 # -------------------------------------------------------------------
-
-
 @app.post("/predict", response_model=PredictionResponse)
 async def predict(request: PredictRequest) -> Dict[str, Any]:
     """
     Predict home/away score and win probability for a single game.
 
-    Workflow:
-      - Validate that dataset and models are loaded.
-      - Normalize request identifiers (team abbreviations, season/week).
-      - Lookup the corresponding dataset row.
-      - Run the regression models to get scores.
-      - Run the classifier (if present) to get win probability; otherwise
-        fall back to a logistic transform of the score differential.
-      - Record result in in-memory history and return it.
+    Enhancements:
+      - Cleaner structure (helpers instead of nested functions)
+      - Robust row matching (team code OR abbr columns)
+      - Stable imputation using dataset medians (computed once)
+      - Feature alignment for non-pipeline estimators (feature_names_in_)
+      - Output smoothing for probability + sanity clamping for scores
     """
-    # Ensure backend is "ready"
+    # ----- Readiness -----
     models_ok = all(m in state.models for m in REQUIRED_MODELS)
     if state.dataset is None or not models_ok:
         missing = [m for m in REQUIRED_MODELS if m not in state.models]
-        raise HTTPException(
-            status_code=503,
-            detail=f"Not ready: missing models {missing}",
-        )
+        raise HTTPException(status_code=503, detail=f"Not ready: missing models {missing}")
 
-    # Normalize identifiers for matching against dataset
-    home_team = request.home_team.strip().upper()
-    away_team = request.away_team.strip().upper()
-    if TEAM_ABBR_MAP:
-        home_team = TEAM_ABBR_MAP.get(home_team, home_team)
-        away_team = TEAM_ABBR_MAP.get(away_team, away_team)
+    # ----- Validate request -----
     season = int(request.season)
     week = int(request.week)
+
+    if week < 1 or week > 30:
+        raise HTTPException(status_code=400, detail="Invalid week. Expected 1..30.")
+    if season < 1990 or season > 2100:
+        raise HTTPException(status_code=400, detail="Invalid season. Expected a realistic year.")
+    if not request.home_team or not request.away_team:
+        raise HTTPException(status_code=400, detail="home_team and away_team are required.")
+
+    home_team = _normalize_team_code(request.home_team)
+    away_team = _normalize_team_code(request.away_team)
+    if home_team == away_team:
+        raise HTTPException(status_code=400, detail="home_team and away_team must be different.")
 
     df = state.dataset
     assert df is not None  # guarded above
 
-    # Attempt to locate the specific game row
+    # ----- Find feature row -----
+    row = _get_game_row(df, season, week, home_team, away_team)
+
+    # ----- Fill missing player stats (safe) -----
+    row = _roll_forward_missing_player_stats(
+        df=df,
+        row_df=row,
+        home_team=home_team,
+        away_team=away_team,
+        season=season,
+        week=week,
+    )
+
+    # ----- Prepare model inputs -----
+    full_df, numeric_df = _prepare_inputs(row)
+
+    # ----- Predict scores -----
+    home_model = state.models["home"]
+    away_model = state.models["away"]
+    win_model = state.models.get("win")
+
     try:
-        row = df[
-            (df["season"] == season)
-            & (df["week"] == week)
-            & (df["home_team"] == home_team)
-            & (df["away_team"] == away_team)
-        ]
-        logging.debug(
-            "[Predict] Matched rows: %d for season=%s week=%s %s vs %s",
-            len(row),
-            season,
-            week,
-            home_team,
-            away_team,
+        h_score = _predict_score(
+            home_model,
+            full_df,
+            numeric_df,
+            preprocessor=state.preprocessor,
+            numeric_medians=getattr(state, "numeric_medians", None),
+            model_name="home_model",
         )
-    except Exception as e:
-        logging.exception("[Predict] Dataset lookup failed: %s", e)
-        raise HTTPException(
-            status_code=500,
-            detail="Dataset is missing required columns for prediction.",
-        ) from e
-
-    if row.empty:
-        raise HTTPException(
-            status_code=404,
-            detail="Game data not found for given season/week/teams",
+        a_score = _predict_score(
+            away_model,
+            full_df,
+            numeric_df,
+            preprocessor=state.preprocessor,
+            numeric_medians=getattr(state, "numeric_medians", None),
+            model_name="away_model",
         )
-
-    # Run models
-    try:
-        # Future schedule rows often have empty player boxscore fields; roll forward
-        # last known values so the model isn't forced to impute medians everywhere.
-        row = _roll_forward_missing_player_stats(
-            df=df,
-            row_df=row.copy(),
-            home_team=home_team,
-            away_team=away_team,
-            season=season,
-            week=week,
-        )
-
-        # Prepare two views of the input row:
-        #  - full_df: full row with all columns (used by preprocessors)
-        #  - numeric_df: numeric-only DataFrame used for direct regressor.predict
-        full_df = row.drop(columns=["game_id"]) if "game_id" in row.columns else row
-        numeric_df = full_df.select_dtypes(include=[np.number])
-
-        home_model = state.models["home"]
-        away_model = state.models["away"]
-        win_model = state.models.get("win")
-
-        def _safe_predict(model, full_df, numeric_df, model_name="model"):
-            """Predict with graceful fallbacks for NaNs / unfitted preprocessors.
-
-            Strategy:
-              1) Try model.predict on the full DataFrame (preserves feature names).
-              2) If that fails with a NaN / NotFitted error, try a standalone
-                 preprocessor.transform(full_df) (if available) and predict on
-                 the resulting array.
-              3) If no preprocessor is available or it fails, perform a simple
-                 median imputation on numeric columns and retry predict.
-            """
-            try:
-                # Primary path depends on whether the model is a Pipeline
-                # (which may include a preprocessor expecting a DataFrame)
-                if hasattr(model, 'named_steps') or hasattr(model, 'steps'):
-                    # Pipeline: pass full DataFrame so named transformers can run
-                    return float(model.predict(full_df)[0])
-                else:
-                    # Plain estimator (e.g., GradientBoostingRegressor): pass numeric-only array
-                    return float(model.predict(numeric_df)[0])
-            except Exception as err:
-                msg = str(err) or ""
-                logging.warning("[Predict] %s.predict failed on full_df: %s", model_name, msg)
-
-                is_nan_err = "nan" in msg.lower() or "missing value" in msg.lower() or "contains nan" in msg.lower()
-                is_notfitted = "not fitted" in msg.lower() or "notfittederror" in msg.lower()
-
-                # Only attempt fallbacks for NaN / NotFitted situations — otherwise rethrow
-                if not (is_nan_err or is_notfitted):
-                    raise
-
-                # Fallback A: use standalone preprocessor (if available) to transform the full DataFrame
-                if state.preprocessor is not None:
-                    try:
-                        X_proc = state.preprocessor.transform(full_df)
-                        return float(model.predict(X_proc)[0])
-                    except Exception as prep_err:
-                        logging.exception("[Predict] standalone preprocessor transform failed for %s: %s", model_name, prep_err)
-
-                # Fallback B: simple median imputation for numeric columns
-                try:
-                    from sklearn.impute import SimpleImputer
-
-                    # If numeric_df is empty, coerce numeric conversion and try again
-                    if numeric_df.empty:
-                        try:
-                            numeric_df_candidate = full_df.apply(lambda c: pd.to_numeric(c, errors="coerce"))
-                        except Exception:
-                            numeric_df_candidate = full_df.select_dtypes(include=[np.number])
-                    else:
-                        numeric_df_candidate = numeric_df
-
-                    if numeric_df_candidate is not None and not numeric_df_candidate.empty:
-                        imp = SimpleImputer(strategy="median")
-                        X_imp = imp.fit_transform(numeric_df_candidate)
-                        return float(model.predict(X_imp)[0])
-                except Exception as imp_err:
-                    logging.exception("[Predict] numeric imputation fallback failed for %s: %s", model_name, imp_err)
-
-                # No viable fallback — re-raise the original exception
-                raise
-
-        h_score = _safe_predict(home_model, full_df, numeric_df, "home_model")
-        a_score = _safe_predict(away_model, full_df, numeric_df, "away_model")
-
-        # Calculate win probability (the helper will attempt predict_proba and
-        # otherwise fall back to a logistic on point diff)
-        try:
-            win_prob, clf_used = _calculate_win_probability(win_model, full_df, numeric_df, h_score, a_score, preprocessor=state.preprocessor)
-        except Exception as win_err:
-            logging.exception("[Predict] Win-probability calculation failed: %s", win_err)
-            # If classifier fails, still return scores with a null probability
-            win_prob, clf_used = 0.5, False
     except Exception as model_err:
-        logging.exception("[Predict] Model execution failed: %s", model_err)
-        msg = str(model_err)
-        # Provide friendlier error messages for common sklearn issues
-        if isinstance(model_err, ValueError) and "columns are missing" in msg:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Model input mismatch: {msg}",
-            ) from model_err
+        msg = str(model_err) or "unknown error"
+        # Keep messages concise for clients, verbose details stay in logs.
+        raise HTTPException(status_code=500, detail=f"Prediction failed: {msg.splitlines()[0]}") from model_err
 
-        # Handle NaN / missing-value errors with a concise guidance message
-        if "contains nan" in msg.lower() or "input x contains nan" in msg.lower() or "missing value" in msg.lower():
-            friendly = (
-                "Prediction failed due to missing (NaN) values in feature inputs. "
-                "The server attempted automatic fallbacks (preprocessor or median imputation) but they failed. "
-                "Ensure the trained preprocessor artifact (backend/models/preprocessor.joblib) is present in deployment or retrain models with an imputer."
-            )
-            raise HTTPException(status_code=500, detail=friendly) from model_err
+    # Clamp to sane ranges
+    h_score = _clamp_score(h_score)
+    a_score = _clamp_score(a_score)
 
-        # Default: return a concise error without dumping the sklearn stack trace
-        raise HTTPException(
-            status_code=500,
-            detail=f"Prediction failed: {msg.splitlines()[0] if msg else 'unknown error'}",
-        ) from model_err
+    # ----- Predict win probability -----
+    try:
+        win_prob_raw, clf_used = _calculate_win_probability(
+            win_model,
+            full_df,
+            numeric_df,
+            h_score,
+            a_score,
+            preprocessor=state.preprocessor,
+        )
+    except Exception as win_err:
+        logging.warning("[Predict] Win probability calc failed; defaulting to 0.5: %s", str(win_err).splitlines()[0])
+        win_prob_raw, clf_used = 0.5, False
 
+    point_diff = float(h_score - a_score)
+
+    # Smooth probability (no retraining)
+    win_prob = _smooth_win_probability(win_prob_raw, point_diff, clf_used=clf_used)
+
+    # ----- Build response -----
     game_id = f"{season}_{week}_{home_team}_{away_team}"
     generated_at = datetime.now(timezone.utc)
 
@@ -1365,30 +1118,23 @@ async def predict(request: PredictRequest) -> Dict[str, Any]:
         "home_team": home_team,
         "away_team": away_team,
         "game_id": game_id,
-        "home_score": h_score,
-        "away_score": a_score,
-        "home_win_probability": win_prob,
-        "away_win_probability": 1.0 - win_prob,
-        "point_diff": h_score - a_score,
+        "home_score": float(h_score),
+        "away_score": float(a_score),
+        "home_win_probability": float(win_prob),
+        "away_win_probability": float(1.0 - win_prob),
+        "point_diff": float(point_diff),
         "generated_at": generated_at,
         "mode": "production",
-        "win_classifier_used": clf_used,
+        "win_classifier_used": bool(clf_used),
     }
 
-    # Append to in-memory history (cap size to avoid unbounded growth)
+    # ----- History (bounded) -----
     state.history.append(result)
     state.history = state.history[-500:]
 
     logging.info(
         "[Predict] %s vs %s (season=%s week=%s) -> home=%.1f away=%.1f win_p=%.3f (clf_used=%s)",
-        home_team,
-        away_team,
-        season,
-        week,
-        h_score,
-        a_score,
-        win_prob,
-        clf_used,
+        home_team, away_team, season, week, h_score, a_score, win_prob, clf_used
     )
 
     return result
