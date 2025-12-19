@@ -48,17 +48,15 @@ jobs:
           vercel-args: '--prod'
           working-directory: ./frontend
 
-      - name: Deploy to Heroku container (conditional)
+      - name: Deploy to Heroku via buildpack git push (conditional)
         if: ${{ secrets.HEROKU_API_KEY && secrets.HEROKU_APP }}
         env:
           HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
           HEROKU_APP: ${{ secrets.HEROKU_APP }}
         run: |
-          echo "Logging into Heroku container registry..."
-          heroku container:login
-          echo "Pushing container to Heroku app: $HEROKU_APP"
-          heroku container:push web --app "$HEROKU_APP"
-          heroku container:release web --app "$HEROKU_APP"
+          echo "Deploying to Heroku using buildpack-based git push..."
+          heroku git:remote --app "$HEROKU_APP"
+          git push "https://heroku:${HEROKU_API_KEY}@git.heroku.com/${HEROKU_APP}.git" HEAD:main
 
       - name: Fail if required deployment secrets are missing
         if: ${{ !secrets.HEROKU_API_KEY || !secrets.HEROKU_APP || !secrets.VERCEL_TOKEN }}
