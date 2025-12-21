@@ -1242,12 +1242,26 @@ def predict_game(payload: PredictionRequest) -> PredictionResponse:
     probability, and handles errors for missing data, completed games, or prediction
     failures.
     """
+<<<<<<< HEAD
     if model_objects is None or dataset_df is None:
         raise HTTPException(
             500,
             "Models or dataset not loaded. Please ensure the backend is properly initialized.",
         )
 
+=======
+  
+    # Normalize identifiers for matching against dataset
+    home_team = request.home_team.strip().upper()
+    away_team = request.away_team.strip().upper()
+    season = int(request.season)
+    week = int(request.week)
+
+    df = state.dataset
+    assert df is not None  # guarded above
+
+    # Attempt to locate the specific game row
+>>>>>>> 57f097c90 (Implement structural updates and optimizations in the codebase)
     try:
         # ---- Normalize inputs
         h = to_team_abbr(payload.home_team)
