@@ -39,11 +39,8 @@
  *   • useMemo caches derived rows and summary stats so we don’t recompute on every render.
  *   • We fail gracefully: missing fields render "—" or "n/a" instead of throwing.
  */
-
 import React, { useMemo } from "react";
 import { usePredictionHistory } from "../hooks/predictionSelectors.js";
-import React from 'react'
-import { useMemo } from "react";
 
 /* ---------- tiny utilities ---------- */
 
@@ -53,12 +50,6 @@ const firstNonNullish = (...values) => values.find((v) => v != null);
 /** Convert a probability in [0..1] to an integer percentage, or null if invalid. */
 const toWholePercent = (prob) =>
   typeof prob === "number" ? Math.round(prob * 100) : null;
-
-const toWholePercent = (prob) => (
-    typeof prob === "number" ?
-    Math.round(prob * 100) : null);
-
-
 /** Safely coerce many timestamp shapes to a Date, or null if not present. */
 const toDateOrNull = (value) => {
   if (value == null) return null;
@@ -87,9 +78,6 @@ const extractHomeWinProbability = (event) =>
     event?.home_win_probability,
     null
   );
-
-
-
 
 /** Build a readable game label, or a generic entry label if no game info exists. */
 const buildGameLabel = (event, index) => {

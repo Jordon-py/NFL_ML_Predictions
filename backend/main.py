@@ -36,7 +36,46 @@ ARCHITECTURE:
 """
 
 import os
+"""
+NFL ML Predictions API — Backend Server
+========================================
+
+FastAPI backend serving ML predictions for NFL game outcomes.
+
+QUICK START (Local Development):
+    cd backend
+    ./.venv/Scripts/Activate.ps1
+    python -m uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000
+
+ENDPOINTS:
+    GET  /health            → API health status and model readiness
+    GET  /debug             → Debug info, metadata, timestamps
+    GET  /schedule/next-week → Upcoming NFL games for prediction
+    POST /predict           → Single game prediction (home_team, away_team, season, week)
+    GET  /predict/next-week → Batch predictions for upcoming week
+    GET  /report/training   → Model training metrics
+    GET  /report/calibration → Win probability calibration data
+
+ENVIRONMENT VARIABLES:
+    METADATA_URL    → URL to metadata.json for dataset schema
+    MODELS_DIR          → Path to model .joblib files (default: backend/data/prod-models/models)
+    DATASET        → Path to engineered features CSV
+    ALLOWED_ORIGINS     → Comma-separated CORS origins
+    ALLOW_ORIGIN_REGEX  → Regex for dynamic CORS (e.g., https://.*/.vercel/.app)
+
+ARCHITECTURE:
+    Request → FastAPI Router → Feature Assembly → Preprocessor → ML Models → Response
+
+    Models:
+      - home_model.joblib: Predicts home team score
+      - away_model.joblib: Predicts away team score
+      - win_clf_calibrated.joblib: Calibrated win probability classifier
+      - preprocessor.joblib: Feature transformation pipeline
+"""
+
+import os
 import json
+import math
 import math
 import logging
 from pathlib import Path
@@ -44,8 +83,11 @@ from typing import Dict, Any, List, Optional, AsyncGenerator
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 import nflreadpy as nfl
+import nflreadpy as nfl
 import joblib
 import pandas as pd
+import numpy as np
+from fastapi import FastAPI, HTTPException, Response
 import numpy as np
 from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -504,6 +546,133 @@ def normalize_team_output(team: Any) -> Optional[str]:
         return None
     raw = str(team).strip().upper()
     if not raw:
+        )
+
+    row = matches.iloc[0]
+
+    # Build X strictly from metadata schema (prevents leakage + mismatch)
+    raw_cols = bundle.raw_feature_columns
+    X_raw = _as_1row_df(row)[raw_cols]
+
+    # Predict scores
+    home_score = _predict_regressor(bundle.home_model, bundle.preprocessor, X_raw)
+    away_score = _predict_regressor(bundle.away_model, bundle.preprocessor, X_raw)
+
+    # Probabilities (calibrated)
+    point_diff = float(home_score - away_score)
+    home_win_prob, used_fallback = _predict_home_win_prob(bundle, X_raw, point_diff)
+
+    return {
+        "home_team": home,
+        "away_team": away,
+        "season": int(season),
+        "week": int(week),
+        "home_score": float(home_score),
+        "away_score": float(away_score),
+        "home_win_probability": float(home_win_prob),
+        "away_win_probability": float(1.0 - float(home_win_prob)),
+        "prob_used_fallback": bool(used_fallback),
+    }
+
+
+# Default local schedule CSV fallback (used when nflreadpy is unavailable/offline).
+DEFAULT_SCHEDULE_PATH = (BACKEND_DIR / "data" / "Nfl_schedule_2025.csv").resolve()
+
+# Metadata path: model metadata JSON
+PROD_MODELS_PATH = Path(
+    os.getenv(
+        "PROD_MODELS_PATH",
+        str(MODELS_DIR / "metadata.json"),
+    )
+)
+
+def _parse_allowed_origins(raw: str) -> List[str]:
+    """Parse env string into a clean allow list with safe defaults."""
+    items = []
+    for part in raw.split(","):
+        origin = part.strip().rstrip("/")
+        if origin:
+            items.append(origin)
+    if not items:
+        items = [
+            "https://nfl-ml-predictions.vercel.app",
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+        ]
+    return items
+
+
+ALLOWED_ORIGINS = _parse_allowed_origins(os.getenv("ALLOWED_ORIGINS", ""))
+ALLOW_ORIGIN_REGEX = os.getenv("ALLOW_ORIGIN_REGEX", r"^https://.*\.vercel\.app$")
+SERVE_FRONTEND = os.getenv("SERVE_FRONTEND", "false").lower() == "true"
+ALLOW_FALLBACK_PREDICTIONS = os.getenv("ALLOW_FALLBACK_PREDICTIONS", "true").lower() == "true"
+
+TEAM_CODE_FIX = {
+    "WSH": "WAS",
+    "HST": "HOU",
+    "CLV": "CLE",
+    "BLT": "BAL",
+    "ARZ": "ARI",
+}
+
+def to_team_abbr(t: str) -> str:
+    return TEAM_CODE_FIX.get(t, t)
+
+
+
+
+
+
+def normalize_team_input(team: Any, *, field: str = "team") -> str:
+    """Normalize a team identifier from user input into a canonical abbreviation.
+
+    Rules:
+      - Accepts abbreviations or names (best-effort).
+      - Strips whitespace, uppercases, then applies TEAM_CODE_FIX mapping.
+      - Uses backend.utils.feature_helpers.to_team_abbr when available (keeps behavior consistent),
+        otherwise falls back to this module's to_team_abbr.
+
+    Raises:
+        HTTPException: 422 when the input is missing/blank.
+    """
+    if team is None:
+        raise HTTPException(status_code=422, detail=f"Missing '{field}'")
+    raw = str(team).strip().upper()
+    if not raw:
+        raise HTTPException(status_code=422, detail=f"Empty '{field}'")
+
+    fh = _feature_helpers()
+    if fh is not None and hasattr(fh, "to_team_abbr"):
+        try:
+            return fh.to_team_abbr(raw)
+        except Exception:
+            pass
+
+    # Fallback: local mapping only
+    return to_team_abbr(raw)
+
+
+def normalize_team_pair(home_team: Any, away_team: Any) -> Tuple[str, str]:
+    """Normalize (home_team, away_team) as a pair with consistent variable naming."""
+    h = normalize_team_input(home_team, field="home_team")
+    a = normalize_team_input(away_team, field="away_team")
+    if h == a:
+        raise HTTPException(status_code=422, detail="home_team and away_team must be different")
+    return h, a
+
+
+def normalize_team_output(team: Any) -> Optional[str]:
+    """Normalize team codes for *output* contexts (never raises).
+
+    Returns:
+        str | None: canonical abbreviation, or None if input is missing/blank.
+    """
+    if team is None:
+        return None
+    raw = str(team).strip().upper()
+    if not raw:
         return None
 
     fh = _feature_helpers()
@@ -542,7 +711,64 @@ def _ensure_leak_safe_priors(df: pd.DataFrame) -> pd.DataFrame:
     if not required.issubset(df.columns):
         return df
 
+    fh = _feature_helpers()
+    if fh is not None and hasattr(fh, "to_team_abbr"):
+        try:
+            return fh.to_team_abbr(raw)
+        except Exception:
+            return to_team_abbr(raw)
+    return to_team_abbr(raw)
+
+def _ensure_leak_safe_priors(df: pd.DataFrame) -> pd.DataFrame:
+    """Ensure leak-safe rolling prior features exist and are NaN-safe.
+
+    Why this exists:
+      - Your prediction pipeline expects `home_prior_*` / `away_prior_*` columns to be present
+        (or at least not explode if they're missing).
+      - Future games (no scores yet) often contain NaNs; we want stable priors derived only
+        from *earlier completed games*.
+
+    Implementation:
+      - Build a team-game long table (home and away as separate rows).
+      - Use feature_helpers._rolling_prior_stats (shift(1) + rolling(window)) to avoid leakage.
+      - Merge priors back to the wide dataset, then forward-fill and impute remaining NaNs.
+
+    Notes:
+      - If the dataset lacks required columns, this becomes a safe no-op.
+    """
+    fh = _feature_helpers()
+
+    if df is None or df.empty:
+        return df
+
+    required = {"season", "week", "home_team", "away_team"}
+    score_cols = {"home_points_for", "away_points_for"}
+
+    if not required.issubset(df.columns):
+        return df
+
     out = df.copy()
+
+    # Canonical types + stable keys
+    out = fh.coerce_season_week(out)
+
+    if "game_id" not in out.columns:
+        # Deterministic surrogate ID for merging back
+        out["game_id"] = np.arange(len(out), dtype=np.int64)
+
+    # Normalize team codes consistently (aligned with rest of main.py)
+    out["home_team"] = out["home_team"].astype(str).str.upper().map(fh.to_team_abbr)
+    out["away_team"] = out["away_team"].astype(str).str.upper().map(fh.to_team_abbr)
+
+    if "time_key" not in out.columns:
+        out["time_key"] = fh.make_time_key(out)
+
+    # Can't compute rolling priors without score columns
+    if not score_cols.issubset(out.columns):
+        # Still make priors columns NaN-safe if they exist
+        out = fh._ffill_prior_features(out)
+        out = fh._impute_remaining_prior_nans(out)
+        return out
 
     # Canonical types + stable keys
     out = fh.coerce_season_week(out)
@@ -759,6 +985,19 @@ def load_objects() -> Dict[str, Any]:
     return model_objects
 
 def _validate_dataset_schema(df: pd.DataFrame, model_objects: Dict[str, Any]) -> None:
+    """Fail-fast check that dataset contains required engineered features.
+
+    Reads expected feature names from model_objects['raw_feature_columns'] and
+    ensures those columns exist in the dataframe. Raises RuntimeError with
+    actionable message if mismatch detected.
+    """
+    feature_names_in = model_objects.get("feature_names_in") or []
+    fh = _feature_helpers()
+    expected = [str(c) for c in feature_names_in] if feature_names_in else (
+        (fh._normalize_feature_cols(model_objects.get("raw_feature_columns", {}))
+         if (fh is not None and hasattr(fh, "_normalize_feature_cols")) else None)
+        or _normalize_feature_cols(model_objects.get("raw_feature_columns", {}))
+    )
     """Fail-fast check that dataset contains required engineered features.
 
     Reads expected feature names from model_objects['raw_feature_columns'] and
@@ -1156,7 +1395,95 @@ def _sanity_predict(model_objects: Dict[str, Any], df: pd.DataFrame) -> None:
     if not _is_effective_pipeline(home_m) or not _is_effective_pipeline(away_m) or (win_m and not _is_effective_pipeline(win_m)):
         try:
             transformed = pre.transform(X_raw)
+        raise RuntimeError("Sanity-predict aborted: dataset is empty (cannot build a sample row)")
+
+    # 1) Determine expected RAW columns
+    raw_cols = model_objects.get("feature_names_in") or []
+    if not raw_cols:
+        inferred = _infer_raw_feature_columns(model_objects, df)
+        raw_cols = _normalize_feature_cols(inferred)
+
+    if not raw_cols:
+        raise RuntimeError("Sanity-predict aborted: could not infer raw input columns for preprocessor")
+
+    sample = df.iloc[0].to_dict()
+
+    # 2) Build a 1-row raw frame (missing values become NaN; preprocessor should handle this)
+    X_raw = pd.DataFrame([{c: sample.get(c, np.nan) for c in raw_cols}], columns=raw_cols)
+
+    # 3) Transform (unless the model is a full pipeline)
+    def _is_effective_pipeline(m: Any) -> bool:
+        if hasattr(m, "named_steps"): return True
+        est = getattr(m, "estimator", None) or getattr(m, "base_estimator", None)
+        return est is not None and hasattr(est, "named_steps")
+
+    transformed = None
+    if not _is_effective_pipeline(home_m) or not _is_effective_pipeline(away_m) or (win_m and not _is_effective_pipeline(win_m)):
+        try:
+            transformed = pre.transform(X_raw)
         except Exception as e:
+            failures.append(f"preprocessor.transform failed: {type(e).__name__}: {e}")
+            # Try a safer variant
+            try:
+                X_safe = X_raw.fillna(0).replace([np.inf, -np.inf], 0)
+                transformed = pre.transform(X_safe)
+            except Exception as e2:
+                failures.append(f"preprocessor.transform retry failed: {type(e2).__name__}: {e2}")
+
+    # 4) Predict (support both raw and transformed depending on artifact type)
+    def _get_needed(m: Any) -> Optional[List[str]]:
+        needed = getattr(m, "feature_names_in_", None)
+        if needed is None and hasattr(m, "steps"):
+            try: needed = m.steps[0][1].feature_names_in_
+            except: pass
+        if needed is None:
+            est = getattr(m, "estimator", None) or getattr(m, "base_estimator", None)
+            if est: return _get_needed(est)
+        # Avoid treating n_features_in_ (int) as list
+        return list(needed) if (needed is not None and not isinstance(needed, int)) else None
+
+    def _predict(model: Any, X_raw_df: pd.DataFrame, X_tx: Any, label: str) -> Optional[float]:
+        try:
+            X_in = X_raw_df if _is_effective_pipeline(model) else X_tx
+            if X_in is None:
+                raise TypeError("transformed features missing")
+            
+            needed = _get_needed(model)
+            if needed is not None and isinstance(X_in, pd.DataFrame):
+                # Filter to available subset — prevents shape mismatch if more columns exist
+                available = [c for c in needed if c in X_in.columns]
+                if available:
+                    X_in = X_in[available]
+                # If after filtering we still don't match or have missing columns, the model will fail
+                # but it will be a more descriptive error than "X has 277 features".
+
+            return float(model.predict(X_in)[0])
+        except Exception as e:
+            failures.append(f"{label} predict failed: {type(e).__name__}: {e}")
+            return None
+
+    _ = _predict(home_m, X_raw, transformed, "home_model")
+    _ = _predict(away_m, X_raw, transformed, "away_model")
+
+    # Win probability is optional (some builds only ship regressors)
+    if win_m is not None:
+        try:
+            X_in = X_raw if _is_effective_pipeline(win_m) else transformed
+            if X_in is None:
+                raise TypeError("transformed features missing")
+            
+            needed = _get_needed(win_m)
+            if needed is not None and isinstance(X_in, pd.DataFrame):
+                available = [c for c in needed if c in X_in.columns]
+                if available:
+                    X_in = X_in[available]
+
+            if hasattr(win_m, "predict_proba"):
+                _ = float(win_m.predict_proba(X_in)[0, 1])
+            else:
+                _ = float(win_m.predict(X_in)[0])
+        except Exception as e:
+            failures.append(f"win_clf predict failed: {type(e).__name__}: {e}")
             failures.append(f"preprocessor.transform failed: {type(e).__name__}: {e}")
             # Try a safer variant
             try:
@@ -1280,6 +1607,65 @@ def _ensure_home_away(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+        raise RuntimeError("Startup sanity-predict failed: " + "; ".join(failures))
+def _coerce_bool(s: pd.Series) -> pd.Series:
+    """
+    Normalize a pandas Series to boolean values for dataset ingestion.
+
+    Intended Use:
+        - Converts various representations of boolean-like values (e.g., "True", "yes", "1", etc.) to actual bools.
+        - Handles edge cases where the input Series is not of boolean dtype (e.g., object, string, int).
+        - Used for standardizing 'is_home', 'is_away', or similar columns in NFL datasets.
+
+    Args:
+        s (pd.Series): Input Series with possible boolean or boolean-like values.
+
+    Returns:
+        pd.Series: Series of bools suitable for downstream feature engineering.
+    """
+    truthy = {"true", "t", "1", "yes", "y"}
+    if pd.api.types.is_bool_dtype(s):
+        return s.astype(bool)
+    return s.astype(str).str.strip().str.lower().isin(truthy)
+
+
+def _ensure_home_away(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Ensure DataFrame contains 'home_team' and 'away_team' columns.
+
+    Logic:
+        - If 'home_team' and 'away_team' exist, return as-is.
+        - If 'team', 'opponent_team', and 'is_home' exist, derive home/away columns.
+        - If neither set is present, log a warning and return the DataFrame unchanged.
+          This means downstream features relying on home/away context may be unavailable,
+          and only synthetic/statistical features can be used for predictions.
+
+    Args:
+        df (pd.DataFrame): Input DataFrame.
+
+    Returns:
+        pd.DataFrame: DataFrame with ensured 'home_team' and 'away_team' columns if possible.
+    """
+    cols = set(df.columns)
+    if {"home_team", "away_team"}.issubset(cols):
+        # Already has required columns
+        return df
+    if {"team", "opponent_team", "is_home"}.issubset(cols):
+        # Derive home/away columns from fallback structure
+        is_home = _coerce_bool(df["is_home"])
+        return df.assign(
+            is_home=is_home,
+            home_team=np.where(is_home, df["team"], df["opponent_team"]),
+            away_team=np.where(is_home, df["opponent_team"], df["team"]),
+        )
+    # Missing both canonical and fallback columns; log and return unchanged
+    log.warning(
+        "Dataset missing home/away columns and team/opponent fallback; synthetic features only. "
+        "Predictions may be limited or inaccurate due to lack of home/away context."
+    )
+    return df
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """
@@ -1287,7 +1673,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     Hardened for resilient deployment: logs warnings but doesn't crash on missing artifacts.
     """
     global model_objects, dataset_df
+    """
+    FastAPI lifespan context manager for loading ML models and datasets at startup.
+    Hardened for resilient deployment: logs warnings but doesn't crash on missing artifacts.
+    """
+    global model_objects, dataset_df
     log.info("=" * 60)
+    log.info("STARTUP: NFL Prediction API v2.1.0")
     log.info("STARTUP: NFL Prediction API v2.1.0")
     log.info("=" * 60)
 
@@ -1469,16 +1861,36 @@ app = FastAPI(
     version="2.1.0",
     lifespan=lifespan,
 )
+        return pd.DataFrame()
+
+# Define the FastAPI application and CORS middleware BEFORE using @app.* decorators or app.mount.
+app = FastAPI(
+    title="NFL ML Predictions API",
+    version="2.1.0",
+    lifespan=lifespan,
+)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     # If you sometimes spin up preview deployments on Vercel:
+    allow_origins=ALLOWED_ORIGINS,
+    # If you sometimes spin up preview deployments on Vercel:
     allow_origin_regex=ALLOW_ORIGIN_REGEX,
+    allow_credentials=False,                   # if you send cookies/auth
     allow_credentials=False,                   # if you send cookies/auth
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],                      # or list explicitly if you prefer
     expose_headers=["*"],                     # optional: if you need to read custom headers
+    allow_headers=["*"],                      # or list explicitly if you prefer
+    expose_headers=["*"],                     # optional: if you need to read custom headers
 )
+
+
+@app.options("/{rest_of_path:path}")
+async def preflight_ok(rest_of_path: str) -> Response:
+    """Return 200 for any OPTIONS route so clients never see a 400 preflight."""
+    return Response(status_code=200)
+
 
 
 @app.options("/{rest_of_path:path}")
@@ -1497,6 +1909,7 @@ if SERVE_FRONTEND:
         log.warning("SERVE_FRONTEND=true but no frontend build found.")
 
 
+
 # -----------------------
 # Schemas
 # -----------------------
@@ -1509,7 +1922,15 @@ class PredictionRequest(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+    model_config = ConfigDict(from_attributes=True)
+
+
 class PredictionResponse(BaseModel):
+    season: int
+    week: int
+    home_team: str
+    away_team: str
+    game_id: str
     season: int
     week: int
     home_team: str
@@ -1521,6 +1942,7 @@ class PredictionResponse(BaseModel):
     away_win_probability: float
     point_diff: float
     ts: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    ts: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     mode: str
     prediction_source: str
     win_classifier_used: bool
@@ -1528,7 +1950,18 @@ class PredictionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+    model_config = ConfigDict(from_attributes=True)
+
+
 class HealthResponse(BaseModel):
+    """
+    HealthResponse describes the API health payload.
+
+    Fields:
+        status: 'healthy' or 'unhealthy'
+        mode: operational mode from loaded models (e.g. 'production') or 'none'
+        reason: human-readable reason for current health
+    """
     """
     HealthResponse describes the API health payload.
 
@@ -1543,8 +1976,15 @@ class HealthResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+    model_config = ConfigDict(from_attributes=True)
+
 
 class ScheduleGame(BaseModel):
+    """
+    Represents a scheduled NFL game, including basic details and optional ML predictions.
+
+    Used in the /schedule/next-week endpoint to return game info with injected predictions.
+    """
     """
     Represents a scheduled NFL game, including basic details and optional ML predictions.
 
@@ -1553,10 +1993,14 @@ class ScheduleGame(BaseModel):
     season: int
     week: int
     kickoff: Optional[datetime] = None
+    kickoff: Optional[datetime] = None
     home_team: str
     home_abbr: str
     away_team: str
     away_abbr: str
+    game_id: Optional[str] = None
+    home_logo: Optional[str] = None
+    away_logo: Optional[str] = None
     game_id: Optional[str] = None
     home_logo: Optional[str] = None
     away_logo: Optional[str] = None
@@ -2254,6 +2698,45 @@ def list_teams() -> Dict[str, Any]:
     uniq = sorted(set(teams.tolist()))
     return {"count": len(uniq), "teams": uniq}
 
+    """
+    Health endpoint: returns service status and model mode.
+
+    Defensive access used because `model_objects` is a dict loaded at startup.
+    Returns healthy when models are present and a sensible default for mode.
+    """
+    if model_objects:
+        # model_objects is a dict - prefer .get for safe access
+        if isinstance(model_objects, dict):
+            mode = model_objects.get("mode", "production")
+        else:
+            # fallback to attribute access for backward compatibility
+            mode = getattr(model_objects, "mode", "production")
+        return HealthResponse(status="healthy", mode=mode, reason="models loaded")
+    # Not ready yet
+    return HealthResponse(status="unhealthy", mode="none", reason="models not loaded")
+
+
+
+
+
+@app.get("/teams")
+def list_teams() -> Dict[str, Any]:
+    """List team abbreviations available in the currently loaded dataset.
+
+    This is a small ease-of-use endpoint for frontend dropdowns and manual testing.
+    """
+    if dataset_df is None or dataset_df.empty:
+        return {"count": 0, "teams": []}
+
+    fh = _feature_helpers()
+    map_fn = fh.to_team_abbr if (fh is not None and hasattr(fh, "to_team_abbr")) else to_team_abbr
+    home = dataset_df["home_team"] if "home_team" in dataset_df.columns else pd.Series(dtype=str)
+    away = dataset_df["away_team"] if "away_team" in dataset_df.columns else pd.Series(dtype=str)
+    teams = pd.concat([home, away], ignore_index=True)
+    teams = teams.dropna().astype(str).str.upper().map(map_fn)
+    uniq = sorted(set(teams.tolist()))
+    return {"count": len(uniq), "teams": uniq}
+
 
 @app.get("/debug")
 def debug_info() -> Dict[str, Any]:
@@ -2266,6 +2749,8 @@ def debug_info() -> Dict[str, Any]:
         mpath = MODELS_DIR / "metadata.json"
         if mpath.is_file():
             out["metadata"] = json.loads(mpath.read_text(encoding="utf-8"))
+
+        # Support timestamped training reports like training_reportYYYYMMDD_HHMMSS.json
 
         # Support timestamped training reports like training_reportYYYYMMDD_HHMMSS.json
         tr = _glob_latest(MODELS_DIR, "training_report*.json")
@@ -2293,14 +2778,37 @@ def debug_info() -> Dict[str, Any]:
                 "query": "TB vs ATL 2025 W15",
                 "matches": int(test_mask.sum()),
                 "home_prior_pf_avg_3": float(dataset_df.loc[test_mask, "home_prior_pf_avg_3"].iloc[0]) if test_mask.sum() > 0 else None,
+
+        # Dataset diagnostics
+        out["dataset_info"] = {
+            "path": str(DEFAULT_DATASET),
+            "exists": DEFAULT_DATASET.exists(),
+            "rows": len(dataset_df) if dataset_df is not None else 0,
+            "columns": list(dataset_df.columns)[:10] if dataset_df is not None and not dataset_df.empty else [],
+        }
+
+        # Test a specific game lookup
+        if dataset_df is not None and not dataset_df.empty:
+            test_mask = (
+                (dataset_df["season"] == 2025) &
+                (dataset_df["week"] == 15) &
+                (dataset_df["home_team"] == "TB") &
+                (dataset_df["away_team"] == "ATL")
+            )
+            out["test_lookup"] = {
+                "query": "TB vs ATL 2025 W15",
+                "matches": int(test_mask.sum()),
+                "home_prior_pf_avg_3": float(dataset_df.loc[test_mask, "home_prior_pf_avg_3"].iloc[0]) if test_mask.sum() > 0 else None,
             }
     except Exception as e:
         out["error"] = f"{type(e).__name__}: {e}"
     return out
 
 
+
 @app.get("/report/training")
 def report_training() -> Dict[str, Any]:
+    # Prefer latest timestamped report, fallback to legacy name
     # Prefer latest timestamped report, fallback to legacy name
     tr = _glob_latest(MODELS_DIR, "training_report*.json") or (MODELS_DIR / "training_report.json" if (MODELS_DIR / "training_report.json").exists() else None)
     if tr is None or not tr.exists():
@@ -2308,8 +2816,10 @@ def report_training() -> Dict[str, Any]:
     return json.loads(tr.read_text(encoding="utf-8"))
 
 
+
 @app.get("/report/calibration")
 def report_calibration() -> Dict[str, Any]:
+    # Prefer latest timestamped report, fallback to legacy name
     # Prefer latest timestamped report, fallback to legacy name
     tr = _glob_latest(MODELS_DIR, "training_report*.json") or (MODELS_DIR / "training_report.json" if (MODELS_DIR / "training_report.json").exists() else None)
     if tr is None or not tr.exists():
@@ -2395,7 +2905,12 @@ def get_next_week_schedule() -> FullSchedule:
     now = pd.Timestamp.now(tz="UTC")
     future = df[df.get("kickoff_ts_utc", pd.Series(dtype="datetime64[ns, UTC]")).notna() & (df["kickoff_ts_utc"] >= now)] if "kickoff_ts_utc" in df else pd.DataFrame()
     current_week = int(future["week"].min()) if isinstance(future, pd.DataFrame) and not future.empty else int(df["week"].max())
+    future = df[df.get("kickoff_ts_utc", pd.Series(dtype="datetime64[ns, UTC]")).notna() & (df["kickoff_ts_utc"] >= now)] if "kickoff_ts_utc" in df else pd.DataFrame()
+    current_week = int(future["week"].min()) if isinstance(future, pd.DataFrame) and not future.empty else int(df["week"].max())
     week_games = df[df["week"] == current_week].copy()
+
+    logo_map = _get_team_logo_map()
+
 
     logo_map = _get_team_logo_map()
 
@@ -2406,12 +2921,30 @@ def get_next_week_schedule() -> FullSchedule:
             a = to_team_abbr(r["away_team"])
             kickoff_val = r.get("kickoff_ts_utc")
             if hasattr(kickoff_val, "to_pydatetime"):
+            if hasattr(kickoff_val, "to_pydatetime"):
                 kickoff_val = kickoff_val.to_pydatetime()
+            game_id = _compute_game_id(season=int(r["season"]), week=int(r["week"]), home_team=h, away_team=a)
+            home_logo = logo_map.get(h)
+            away_logo = logo_map.get(a)
             game_id = _compute_game_id(season=int(r["season"]), week=int(r["week"]), home_team=h, away_team=a)
             home_logo = logo_map.get(h)
             away_logo = logo_map.get(a)
             games.append(
                 ScheduleGame(
+                    season=int(r["season"]),
+                    week=int(r["week"]),
+                    game_id=game_id,
+                    home_team=h,
+                    home_abbr=h,
+                    away_team=a,
+                    away_abbr=a,
+                    home_logo=home_logo,
+                    away_logo=away_logo,
+                    predicted_home_score=None,
+                    predicted_away_score=None,
+                    home_win_probability=None,
+                    away_win_probability=None,
+                    kickoff=kickoff_val,
                     season=int(r["season"]),
                     week=int(r["week"]),
                     game_id=game_id,
@@ -3058,6 +3591,21 @@ def predict_next_week() -> Dict[str, Any]:
     """
     if model_objects is None:
         raise HTTPException(500, "Models not loaded.")
+    """
+    Batch prediction endpoint for all scheduled games in the next NFL week.
+
+    Logic:
+        - Determines the next prediction week and season using current NFL context.
+        - Loads the schedule CSV and filters games for the upcoming week.
+        - For each game, runs the prediction logic and aggregates results.
+        - Collects errors for games where prediction fails, ensuring robust batch output.
+        - Returns context, predictions, error details, and summary metrics.
+
+    Returns:
+        dict: Contains context, list of game predictions (with errors if any), total games, and count of successful predictions.
+    """
+    if model_objects is None:
+        raise HTTPException(500, "Models not loaded.")
     try:
         ctx = get_current_nfl_context()
 <<<<<<< HEAD
@@ -3104,6 +3652,27 @@ def predict_next_week() -> Dict[str, Any]:
                     "win_classifier_used": not pr_dict["win_fallback"],
                     "ts": datetime.now(timezone.utc).isoformat(),
                 }
+                home_team, away_team = normalize_team_pair(g.get("home_team"), g.get("away_team"))
+                season = int(g["season"])
+                week = int(g["week"])
+
+                pr_dict = infer_single_game_prediction(
+                    dataset_df=dataset_df,
+                    model_objects=model_objects,
+                    home_team=home_team,
+                    away_team=away_team,
+                    season=season,
+                    week=week,
+                )
+                game_id = _compute_game_id(season=season, week=week, home_team=home_team, away_team=away_team)
+                pr_payload = {
+                    **pr_dict,
+                    "game_id": game_id,
+                    "mode": str(model_objects.get("mode", "production")),
+                    "prediction_source": "model" if not (pr_dict["feature_fallback"] or pr_dict["win_fallback"]) else "fallback",
+                    "win_classifier_used": not pr_dict["win_fallback"],
+                    "ts": datetime.now(timezone.utc).isoformat(),
+                }
                 out.append(
                     {
                         "game_id": game_id,
@@ -3111,9 +3680,24 @@ def predict_next_week() -> Dict[str, Any]:
                         "week": week,
                         "home_team": home_team,
                         "away_team": away_team,
+                        "game_id": game_id,
+                        "season": season,
+                        "week": week,
+                        "home_team": home_team,
+                        "away_team": away_team,
                         "kickoff": str(g.get("gameday", "TBD")),
                         "prediction": pr_payload,
+                        "prediction": pr_payload,
                     }
+                )
+                _append_prediction_history_to_disk(
+                    request_payload={
+                        "home_team": home_team,
+                        "away_team": away_team,
+                        "season": season,
+                        "week": week,
+                    },
+                    prediction_payload=pr_payload,
                 )
                 _append_prediction_history_to_disk(
                     request_payload={
@@ -3127,6 +3711,7 @@ def predict_next_week() -> Dict[str, Any]:
             except Exception as e:
                 out.append({"game_id": str(g.get("game_id", "unknown")), "error": str(e)})
 
+
         return {
             "context": ctx,
             "games": out,
@@ -3135,4 +3720,6 @@ def predict_next_week() -> Dict[str, Any]:
         }
     except Exception as e:
         log.error("Next-week prediction error: %s", e, exc_info=True)
+        raise HTTPException(500, f"Failed to predict next week: {e}")
+
         raise HTTPException(500, f"Failed to predict next week: {e}")

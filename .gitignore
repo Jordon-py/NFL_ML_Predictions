@@ -110,6 +110,7 @@ node_modules
 
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 node_modules
 node_modules
@@ -122,3 +123,8 @@ frontend/node_modules/
 *.bundle
 
 >>>>>>> cd97fecac (chore: update .gitignore to include backup bundles and clean up node artifacts)
+=======
+## Backup bundles
+*.bundle
+
+>>>>>>> e830235acc489dc81436e2a91bd690360a3d1c62

@@ -14,7 +14,24 @@
 
 export class HttpError extends Error {
   constructor(message, { status, url, body } = {}) {
+/**
+* File Metrics:
+* - Purpose: One tiny, consistent fetch wrapper for the whole app.
+* - Why: Every endpoint gets the same error handling, JSON parsing, and abort support.
+*
+* Key Concepts:
+* - AbortController cancels in-flight requests when components unmount.
+* - "HttpError" carries status + body for better debugging.
+*
+* Learning Checkpoints:
+* - You should be able to answer: "Where do I change my API base URL?"
+* - You should be able to answer: "Where do errors get normalized?"
+*/
+
+export class HttpError extends Error {
+  constructor(message, { status, url, body } = {}) {
     super(message);
+    this.name = "HttpError";
     this.name = "HttpError";
     this.status = status;
     this.url = url;
@@ -74,7 +91,88 @@ export async function fetchJson(path, options = {}) {
  * @property {string} reason - Human-readable health status description
  */
 
+ * @typedef {Object} HealthStatus
+ * @property {string} status - "healthy" | "unhealthy"
+ * @property {string} mode - "production" | "debug" | "none"
+ * @property {string} reason - Human-readable health status description
+ */
+
 /**
+ * @typedef {Object} PredictionEntry
+ * @property {string} game_id
+ * @property {number} season
+ * @property {number} week
+ * @property {string} home_team
+ * @property {string} away_team
+ * @property {number} home_score
+ * @property {number} away_score
+ * @property {number} home_win_probability
+ * @property {number} away_win_probability
+ * @property {string} ts - ISO timestamp
+ */
+
+/**
+ * @typedef {Object} HistoryResponse
+ * @property {PredictionEntry[]} entries
+ * @property {number} total
+ */
+
+/**
+ * Get backend health status.
+ * @returns {Promise<HealthStatus>}
+ */
+export async function health() {
+  return fetchJson("/health");
+}
+
+/** @returns {Promise<HealthStatus>} */
+export async function getHealthStatus() {
+  return health();
+}
+
+/**
+ * Fetch upcoming NFL games for the next week.
+ * @returns {Promise<Array>} List of games
+ */
+export async function getNextWeekSchedule() {
+  const res = await fetchJson("/schedule/next-week");
+  if (Array.isArray(res)) return res;
+  if (res && Array.isArray(res.games)) return res.games;
+  if (res && Array.isArray(res.ScheduleGame)) return res.ScheduleGame;
+  return [];
+}
+
+/**
+ * Request a prediction for a specific game matchup.
+ * @param {Object} payload
+ * @param {string} payload.homeTeam
+ * @param {string} payload.awayTeam
+ * @param {number} payload.season
+ * @param {number} payload.week
+ * @returns {Promise<Object>} The prediction result
+ */
+export async function predictGame(payload) {
+  const body = {
+    home_team: String(payload ? payload.homeTeam : "").trim().toUpperCase(),
+    away_team: String(payload ? payload.awayTeam : "").trim().toUpperCase(),
+    season: Number(payload ? payload.season : undefined),
+    week: Number(payload ? payload.week : undefined),
+  };
+  const res = await fetchJson("/predict", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  return res;
+}
+
+/**
+ * Trigger backend model retraining.
+ * @returns {Promise<Object>}
+ */
+export async function startTraining() {
+  const tryPost = async (path) => {
+    try {
+      return await fetchJson(path, { method: "POST" });
  * @typedef {Object} PredictionEntry
  * @property {string} game_id
  * @property {number} season
@@ -215,7 +313,38 @@ export async function getStatusOverview() {
       const history = res.history ?? {
         metrics: { total_predictions: Number(dataset?.rows ?? 0), win_rate: 0.58 }
       };
+export async function getStatusOverview() {
+  try {
+    const res = await fetchJson("/status/overview");
 
+    if (res && typeof res === "object") {
+      const dataset = res.dataset ?? { rows: 0 };
+      // Normalization: Ensure history.metrics exists
+      const history = res.history ?? {
+        metrics: { total_predictions: Number(dataset?.rows ?? 0), win_rate: 0.58 }
+      };
+
+      return {
+        ...res,
+        health: res.health ?? { status: "unknown" },
+        dataset,
+        history,
+      };
+    }
+
+    return {
+      health: { status: "unknown" },
+      dataset: { rows: 0 },
+      history: { metrics: { total_predictions: 0, win_rate: 0 } },
+    };
+  } catch (err) {
+    console.warn("Status overview unavailable");
+    return {
+      health: { status: "unknown" },
+      dataset: { rows: 0 },
+      history: { metrics: { total_predictions: 0, win_rate: 0 } }
+    };
+  }
       return {
         ...res,
         health: res.health ?? { status: "unknown" },

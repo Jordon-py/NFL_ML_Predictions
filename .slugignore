@@ -1,6 +1,5 @@
-# Safe minimal slugignore - Backend (FastAPI) only for Heroku
-
-## Exclude entire frontend (deployed separately on Vercel)
+# Heroku slugignore (FastAPI backend)
+# Keep backend code + required model/data artifacts; exclude dev/frontend cruft.
 
 frontend/*
 
@@ -8,27 +7,7 @@ frontend/*
 
 */node_modules/
 
-## Development artifacts
-
-**/*.map
-.cache/
-tmp/
-logs/
-__pycache__/
-.vscode/
-.github/
-*.md
-docs/
-tests/
-.git/
-.github/
-frontend/node_modules/
-frontend/src/
-frontend/public/
-backend/__pycache__/
-backend/logs/
-backend/metrics/data/game_features_new.csv
-*.pyc
+# Local Python environments
 .venv/
 venv/
 .pytest_cache
