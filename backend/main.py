@@ -260,8 +260,19 @@ def _infer_raw_feature_columns(model_objects: Dict[str, Any], df: Optional[pd.Da
     except Exception:
         feature_names = []
 
+<<<<<<< HEAD
     numeric: List[str] = []
     categorical: List[str] = []
+=======
+    def _load_dataset(self) -> None:
+        """Load the most recent game_features*.csv into memory."""
+        try:
+            path: Path
+
+            path = 'NFL_ML_Predictions/backend/data/game_features_20251201.csv'
+                # Fallback default filename under data dir
+            path = DATA_DIR / "game_features_20251201.csv"
+>>>>>>> 57f097c90 (Implement structural updates and optimizations in the codebase)
 
     if feature_names:
         # Without types, assume non-string columns in dataset are numeric; otherwise mark as categorical.
