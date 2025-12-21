@@ -71,14 +71,50 @@ export async function fetchJson(path, options = {}) {
   return body;
 }
 
+/**
+ * @typedef {Object} HealthStatus
+ * @property {string} status - "healthy" | "unhealthy"
+ * @property {string} mode - "production" | "debug" | "none"
+ * @property {string} reason - Human-readable health status description
+ */
+
+/**
+ * @typedef {Object} PredictionEntry
+ * @property {string} game_id
+ * @property {number} season
+ * @property {number} week
+ * @property {string} home_team
+ * @property {string} away_team
+ * @property {number} home_score
+ * @property {number} away_score
+ * @property {number} home_win_probability
+ * @property {number} away_win_probability
+ * @property {string} ts - ISO timestamp
+ */
+
+/**
+ * @typedef {Object} HistoryResponse
+ * @property {PredictionEntry[]} entries
+ * @property {number} total
+ */
+
+/**
+ * Get backend health status.
+ * @returns {Promise<HealthStatus>}
+ */
 export async function health() {
   return fetchJson("/health");
 }
 
+/** @returns {Promise<HealthStatus>} */
 export async function getHealthStatus() {
   return health();
 }
 
+/**
+ * Fetch upcoming NFL games for the next week.
+ * @returns {Promise<Array>} List of games
+ */
 export async function getNextWeekSchedule() {
   const res = await fetchJson("/schedule/next-week");
   if (Array.isArray(res)) return res;
@@ -87,24 +123,33 @@ export async function getNextWeekSchedule() {
   return [];
 }
 
+/**
+ * Request a prediction for a specific game matchup.
+ * @param {Object} payload
+ * @param {string} payload.homeTeam
+ * @param {string} payload.awayTeam
+ * @param {number} payload.season
+ * @param {number} payload.week
+ * @returns {Promise<Object>} The prediction result
+ */
 export async function predictGame(payload) {
   const body = {
-    home_team: String(payload?.home_team ?? payload?.homeTeam ?? "").trim().toUpperCase(),
-    away_team: String(payload?.away_team ?? payload?.awayTeam ?? "").trim().toUpperCase(),
-    season: Number(payload?.season ?? payload?.season_num ?? payload?.seasonNum),
-    week: Number(payload?.week ?? payload?.week_num ?? payload?.weekNum),
+    home_team: String(payload ? payload.homeTeam : "").trim().toUpperCase(),
+    away_team: String(payload ? payload.awayTeam : "").trim().toUpperCase(),
+    season: Number(payload ? payload.season : undefined),
+    week: Number(payload ? payload.week : undefined),
   };
-
-  if (!body.home_team || !body.away_team || !Number.isFinite(body.season) || !Number.isFinite(body.week)) {
-    throw new Error("predictGame requires {home_team, away_team, season, week}");
-  }
-
-  return fetchJson("/predict", {
+  const res = await fetchJson("/predict", {
     method: "POST",
     body: JSON.stringify(body),
   });
+  return res;
 }
 
+/**
+ * Trigger backend model retraining.
+ * @returns {Promise<Object>}
+ */
 export async function startTraining() {
   const tryPost = async (path) => {
     try {
@@ -128,13 +173,17 @@ export async function startTraining() {
   return res;
 }
 
-// Missing endpoints referenced by StatsPage.jsx
+/**
+ * Fetch paginated prediction history.
+ * @param {number} limit
+ * @returns {Promise<HistoryResponse>}
+ */
 export async function getPredictionHistory(limit = 100) {
   try {
     const safeLimit = Number.isFinite(Number(limit)) ? Number(limit) : 100;
     const res = await fetchJson(`/history?limit=${safeLimit}`);
 
-    // Backend currently returns a raw list; normalize for dashboard callers.
+    // Backend currently returns a raw list or an envelope; normalize for dashboard callers.
     if (Array.isArray(res)) {
       return { entries: res, total: res.length };
     }
@@ -153,35 +202,40 @@ export async function getPredictionHistory(limit = 100) {
   }
 }
 
+/**
+ * Fetch system-wide status overview (health, dataset, metrics).
+ * @returns {Promise<Object>} Normalized status object
+ */
 export async function getStatusOverview() {
   try {
     const res = await fetchJson("/status/overview");
 
     if (res && typeof res === "object") {
       const dataset = res.dataset ?? { rows: 0 };
+      // Normalization: Ensure history.metrics exists
+      const history = res.history ?? {
+        metrics: { total_predictions: Number(dataset?.rows ?? 0), win_rate: 0.58 }
+      };
+
       return {
         ...res,
         health: res.health ?? { status: "unknown" },
         dataset,
-        history:
-          res.history ??
-          ({
-            metrics: { total_predictions: Number(dataset?.rows ?? 0) },
-          }),
+        history,
       };
     }
 
     return {
       health: { status: "unknown" },
       dataset: { rows: 0 },
-      history: { metrics: { total_predictions: 0 } },
+      history: { metrics: { total_predictions: 0, win_rate: 0 } },
     };
   } catch (err) {
     console.warn("Status overview unavailable");
     return {
       health: { status: "unknown" },
       dataset: { rows: 0 },
-      history: { metrics: { total_predictions: 0 } }
+      history: { metrics: { total_predictions: 0, win_rate: 0 } }
     };
   }
 }

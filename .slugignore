@@ -50,6 +50,6 @@ frontend/.vercel/
 # Large duplicate artifacts not needed at runtime (we use backend/data/prod-models by default)
 models/
 backend/OUTDIR/
-backend/20*/
+
 backend/prod-models/
 backend/models/
