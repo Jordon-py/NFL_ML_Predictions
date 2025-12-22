@@ -317,6 +317,148 @@ def _predict_home_win_prob(bundle: InferenceBundle, X_raw: pd.DataFrame, point_d
     p = 1.0 / (1.0 + math.exp(-0.25 * float(point_diff)))
     return float(np.clip(p, 0.0, 1.0)), True
 
+def _get_feature_columns(bundle: InferenceBundle) -> Tuple[List[str], List[str], List[str]]:
+    """Return numeric, categorical, and combined feature columns."""
+    raw = bundle.meta.get("raw_feature_columns", {}) if bundle and bundle.meta else {}
+    numeric = list(raw.get("numeric", []) or [])
+    categorical = list(raw.get("categorical", []) or [])
+    if not numeric and not categorical:
+        all_cols = bundle.raw_feature_columns
+        return all_cols, [], all_cols
+    return numeric, categorical, numeric + categorical
+
+def _dataset_means(df: pd.DataFrame, numeric_cols: List[str]) -> Dict[str, float]:
+    """Compute per-column means with numeric coercion."""
+    if df is None or df.empty:
+        return {}
+    means: Dict[str, float] = {}
+    for col in numeric_cols:
+        if col in df.columns:
+            series = pd.to_numeric(df[col], errors="coerce")
+            m = series.mean()
+            if not pd.isna(m):
+                means[col] = float(m)
+    return means
+
+def _roll_forward_team_features(
+    df: pd.DataFrame,
+    team: str,
+    season: int,
+    week: int,
+    target_side: str,
+    numeric_cols: List[str],
+) -> Dict[str, float]:
+    """Roll forward numeric features from the most recent completed game for a team."""
+    if df is None or df.empty:
+        return {}
+    if "season" not in df.columns or "week" not in df.columns:
+        return {}
+
+    season_num = pd.to_numeric(df["season"], errors="coerce").fillna(0).astype(int)
+    week_num = pd.to_numeric(df["week"], errors="coerce").fillna(0).astype(int)
+    time_key = season_num * 100 + week_num
+    cutoff = int(season) * 100 + int(week)
+
+    team_mask = ((df["home_team"] == team) | (df["away_team"] == team)) & (time_key < cutoff)
+    if "home_points_for" in df.columns and "away_points_for" in df.columns:
+        team_mask &= df["home_points_for"].notna() & df["away_points_for"].notna()
+
+    if not team_mask.any():
+        return {}
+
+    last_idx = time_key[team_mask].idxmax()
+    last_game = df.loc[last_idx]
+    last_side = "home" if str(last_game.get("home_team")) == team else "away"
+
+    out: Dict[str, float] = {}
+    target_prefix = f"{target_side}_"
+    source_prefix = f"{last_side}_"
+    for col in numeric_cols:
+        if not col.startswith(target_prefix):
+            continue
+        source_col = source_prefix + col[len(target_prefix):]
+        if source_col in last_game and pd.notna(last_game[source_col]):
+            try:
+                out[col] = float(last_game[source_col])
+            except Exception:
+                continue
+    return out
+
+def _build_future_row(
+    df: pd.DataFrame,
+    bundle: InferenceBundle,
+    home: str,
+    away: str,
+    season: int,
+    week: int,
+) -> pd.Series:
+    """Build a prediction row for future games using rolled-forward team features."""
+    numeric_cols, categorical_cols, _ = _get_feature_columns(bundle)
+    means = _dataset_means(df, numeric_cols)
+
+    features: Dict[str, Any] = {}
+    features.update(_roll_forward_team_features(df, home, season, week, "home", numeric_cols))
+    features.update(_roll_forward_team_features(df, away, season, week, "away", numeric_cols))
+
+    # Team identifiers (categorical)
+    for col in categorical_cols:
+        if col == "home_team":
+            features[col] = home
+        elif col == "away_team":
+            features[col] = away
+        elif col == "has_home_team":
+            features[col] = True
+        elif col.startswith("home_team_"):
+            features[col] = col == f"home_team_{home}"
+        elif col.startswith("away_team_"):
+            features[col] = col == f"away_team_{away}"
+
+    # Neutral defaults for market/rest features if missing
+    if "home_moneyline_prob" in numeric_cols and pd.isna(features.get("home_moneyline_prob")):
+        features["home_moneyline_prob"] = means.get("home_moneyline_prob", 0.5)
+    if "away_moneyline_prob" in numeric_cols and pd.isna(features.get("away_moneyline_prob")):
+        features["away_moneyline_prob"] = means.get("away_moneyline_prob", 0.5)
+    if "home_rest" in numeric_cols and pd.isna(features.get("home_rest")):
+        features["home_rest"] = means.get("home_rest", 7.0)
+    if "away_rest" in numeric_cols and pd.isna(features.get("away_rest")):
+        features["away_rest"] = means.get("away_rest", 7.0)
+
+    # Derived diffs
+    if "moneyline_prob_diff" in numeric_cols:
+        h = features.get("home_moneyline_prob")
+        a = features.get("away_moneyline_prob")
+        if pd.notna(h) and pd.notna(a):
+            features["moneyline_prob_diff"] = float(h) - float(a)
+
+    if "rest_diff" in numeric_cols:
+        h = features.get("home_rest")
+        a = features.get("away_rest")
+        if pd.notna(h) and pd.notna(a):
+            features["rest_diff"] = float(h) - float(a)
+
+    if "elo_diff_pre" in numeric_cols:
+        h = features.get("home_elo_pre")
+        a = features.get("away_elo_pre")
+        if pd.notna(h) and pd.notna(a):
+            features["elo_diff_pre"] = float(h) - float(a)
+
+    for col in numeric_cols:
+        if col.startswith("home_minus_away_"):
+            suffix = col[len("home_minus_away_"):]
+            h_col = f"home_{suffix}"
+            a_col = f"away_{suffix}"
+            h = features.get(h_col)
+            a = features.get(a_col)
+            if pd.notna(h) and pd.notna(a):
+                features[col] = float(h) - float(a)
+
+    # Fill any remaining numeric gaps with dataset means or zeros
+    for col in numeric_cols:
+        if col not in features or pd.isna(features.get(col)):
+            features[col] = means.get(col, 0.0)
+
+    return pd.Series(features)
+
 def infer_prediction_from_dataset(
     dataset_df: pd.DataFrame,
     bundle: InferenceBundle,
@@ -324,44 +466,36 @@ def infer_prediction_from_dataset(
     away_team: str,
     season: int,
     week: int,
-) -> Dict[str, Any]:
+) -> Tuple[Dict[str, Any], bool]:
     """Main prediction inference function using dataset lookup."""
     # Normalize team abbreviations
     fh = _feature_helpers()
     to_team_abbr_fn = fh.to_team_abbr if (fh is not None and hasattr(fh, "to_team_abbr")) else lambda x: x
     home = to_team_abbr_fn(str(home_team).upper().strip())
     away = to_team_abbr_fn(str(away_team).upper().strip())
-    
-    # Find matching game in dataset
-    mask = (
-        (dataset_df["season"] == int(season)) &
-        (dataset_df["week"] == int(week)) &
-        (dataset_df["home_team"] == home) &
-        (dataset_df["away_team"] == away)
-    )
-    matches = dataset_df.loc[mask]
-    
-    if matches.empty:
-        # Provide debug information
-        week_games = dataset_df.loc[
-            (dataset_df["season"] == int(season)) & (dataset_df["week"] == int(week)),
-            ["home_team", "away_team"]
-        ].drop_duplicates().head(25)
-        
-        raise HTTPException(
-            status_code=404,
-            detail={
-                "message": "Game not found in dataset for season/week/home/away.",
-                "season": int(season),
-                "week": int(week),
-                "home_team": home,
-                "away_team": away,
-                "available_pairs_sample": week_games.to_dict(orient="records"),
-            },
+
+    feature_fallback = False
+    if dataset_df is None or dataset_df.empty:
+        row = _build_future_row(pd.DataFrame(), bundle, home, away, season, week)
+        feature_fallback = True
+    else:
+        mask = (
+            (dataset_df["season"] == int(season)) &
+            (dataset_df["week"] == int(week)) &
+            (dataset_df["home_team"] == home) &
+            (dataset_df["away_team"] == away)
         )
-    
-    row = matches.iloc[0]
-    raw_cols = bundle.raw_feature_columns
+        matches = dataset_df.loc[mask]
+        if matches.empty:
+            row = _build_future_row(dataset_df, bundle, home, away, season, week)
+            feature_fallback = True
+        else:
+            row = matches.iloc[0]
+
+    numeric_cols, categorical_cols, raw_cols = _get_feature_columns(bundle)
+    if raw_cols:
+        row = row.reindex(raw_cols)
+
     X_raw = _as_1row_df(row)[raw_cols]
     
     # Predict raw scores
@@ -383,7 +517,7 @@ def infer_prediction_from_dataset(
     ens_home_score = (home_raw * 0.75) + (sim_results["sim_home_score"] * 0.25)
     ens_away_score = (away_raw * 0.75) + (sim_results["sim_away_score"] * 0.25)
     
-    return {
+    result = {
         "home_team": home,
         "away_team": away,
         "season": int(season),
@@ -400,6 +534,7 @@ def infer_prediction_from_dataset(
             "ensemble_weight": "75/25"
         }
     }
+    return result, feature_fallback
 
 # Application lifecycle management
 @asynccontextmanager
@@ -591,7 +726,7 @@ async def predict_game(payload: PredictionRequest) -> PredictionResponse:
     try:
         # High-granularity trial for inference
         try:
-            result = infer_prediction_from_dataset(
+            result, feature_fallback = infer_prediction_from_dataset(
                 dataset_df=dataset_df,
                 bundle=model_objects,
                 home_team=payload.home_team,
@@ -612,13 +747,20 @@ async def predict_game(payload: PredictionRequest) -> PredictionResponse:
             away_team=result["away_team"]
         )
         
+        source_parts = []
+        if feature_fallback:
+            source_parts.append("feature_fallback")
+        if result.get("prob_used_fallback"):
+            source_parts.append("win_fallback")
+        prediction_source = "+".join(source_parts) if source_parts else "model"
+
         response_data = {
             **result,
             "game_id": game_id,
             "point_diff": result["home_score"] - result["away_score"],
             "ts": datetime.now(timezone.utc),
             "mode": "production",
-            "prediction_source": "model",
+            "prediction_source": prediction_source,
             "win_classifier_used": not result["prob_used_fallback"],
         }
         
