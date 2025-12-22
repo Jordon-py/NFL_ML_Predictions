@@ -100,7 +100,7 @@ This report documents incremental changes to the NFL_ML_Predictions repository, 
     - Removed the unused `nflreadpy` dependency (prevented Heroku startup crashes) and cleaned duplicate helpers and sample routes in `main.py`.
     - Added `_infer_raw_feature_columns` so `/predict` can assemble features even when `metadata.json` lacks them; now returns a clear 503 with retrain guidance if inference still fails.
     - Default dataset now points to `backend/data/game_features.csv` instead of an empty path, improving startup reliability.
-    - API client now honors `VITE_API_BASE` or `VITE_API_URL`, centralizes the Heroku fallback, and exposes `normalizePredictError` for friendlier UI messaging on 503/422 cases.
+    - API client now honors `VITE_API_BASE_URL`, centralizes the Heroku fallback, and exposes `normalizePredictError` for friendlier UI messaging on 503/422 cases.
   - Why Made: Production /predict was failing when metadata omitted `raw_feature_columns`, and Heroku previously crashed on `nflreadpy` imports. Frontend needed clearer base resolution and user-friendly error messaging.
   - Impact: `/health` and `/schedule/next-week` remain healthy; `/predict` degrades gracefully (503 with guidance) instead of failing ambiguously. Frontend will target the correct API in hosted environments and display clearer errors.
   - Quality Gates: Build: Pending (no codegen). Lint/Typecheck: Pending. Smoke: Pending `/predict` after retrain.
@@ -175,8 +175,8 @@ This report documents incremental changes to the NFL_ML_Predictions repository, 
   - Files Modified: `frontend/package.json`, `frontend/src/api/client.js`.
   - Change Description:
     - engines: Relaxed `npm` constraint from `"10.0.0"` to `">=10.0.0 <11"` to silence EBADENGINE warnings on Vercel (which commonly runs npm 10.8.x). `node` remains `20.x`.
-    - API client: Added a one-time console warning in hosted environments when `VITE_API_BASE` is not set and the client falls back to the Heroku URL, guiding maintainers to configure `VITE_API_BASE` in Vercel.
-  - Why Made: Vercel build logs showed EBADENGINE warnings due to a too-strict npm pin. Some production 404s stem from frontend hitting the same-origin path; the client now nudges maintainers to set `VITE_API_BASE` explicitly.
+    - API client: Added a one-time console warning in hosted environments when `VITE_API_BASE_URL` is not set and the client falls back to the Heroku URL, guiding maintainers to configure `VITE_API_BASE_URL` in Vercel.
+  - Why Made: Vercel build logs showed EBADENGINE warnings due to a too-strict npm pin. Some production 404s stem from frontend hitting the same-origin path; the client now nudges maintainers to set `VITE_API_BASE_URL` explicitly.
   - Impact: Clean build logs on Vercel; clearer runtime diagnostics for API base configuration in production. No behavior change in dev (Vite proxy still used).
   - Quality Gates: Build: PASS. Lint/Typecheck: PASS. Tests: N/A.
 
@@ -184,8 +184,8 @@ This report documents incremental changes to the NFL_ML_Predictions repository, 
   - Files Modified: `scripts/deploy.ps1`, `vercel.json` (root), `frontend/vercel.json`.
   - Change Description:
     - Deployment script now aligns with backend CORS behavior: sets `RESTRICT_CORS=true` and `ALLOWED_ORIGINS=...` (instead of unused `CORS_ORIGINS`), and verifies via `/debug`.
-    - Added `VITE_API_BASE` env key to both Vercel configs to match the frontend client; retained `VITE_API_URL` and `REACT_APP_API_URL` for backward compatibility.
-  - Why Made: Backend only honors `ALLOWED_ORIGINS` when `RESTRICT_CORS=true`; the previous script set `CORS_ORIGINS`, which was ignored. Frontend client expects `VITE_API_BASE` in production.
+    - Added `VITE_API_BASE_URL` env key to both Vercel configs to match the frontend client.
+  - Why Made: Backend only honors `ALLOWED_ORIGINS` when `RESTRICT_CORS=true`; the previous script set `CORS_ORIGINS`, which was ignored. Frontend client expects `VITE_API_BASE_URL` in production.
   - Impact: Successful CORS configuration on Heroku and correct API base injection on Vercel builds. Fewer production 404s/misroutes.
   - Quality Gates: Build: PASS. Lint/Typecheck: PASS. Tests: N/A.
 
@@ -197,7 +197,7 @@ This report documents incremental changes to the NFL_ML_Predictions repository, 
   - Config vars for CORS: set `RESTRICT_CORS=true` and `ALLOWED_ORIGINS` to a comma-separated list of origins (script handles this).
 - Vercel (Vite SPA):
   - Root `vercel.json` builds `frontend` and outputs to `frontend/dist`, with SPA rewrites to `/index.html`.
-  - Set `VITE_API_BASE` in Vercel Project Settings to your Heroku backend URL for production deployments.
+  - Set `VITE_API_BASE_URL` in Vercel Project Settings to your Heroku backend URL for production deployments.
 
 References: Heroku CLI install/use, container stack via `heroku.yml`, Vite on Vercel and Environment Variables (links captured via docs fetch).
 
@@ -359,12 +359,12 @@ References: Heroku CLI install/use, container stack via `heroku.yml`, Vite on Ve
 
 - **Date/Time**: 2025-10-31 / 22:05 UTC.
 - **Files Modified**: `frontend/src/api/client.js`.
-- **Change Description**: Fixed API base resolution to avoid accidental same-origin requests like `http://localhost:3000/predict`. In local development (served from `localhost`/`127.0.0.1`), the client now targets `http://127.0.0.1:8000` directly. In hosted environments, it uses `VITE_API_BASE` when provided, with the Heroku URL as fallback.
+- **Change Description**: Fixed API base resolution to avoid accidental same-origin requests like `http://localhost:3000/predict`. In local development (served from `localhost`/`127.0.0.1`), the client now targets `http://127.0.0.1:8000` directly. In hosted environments, it uses `VITE_API_BASE_URL` when provided, with the Heroku URL as fallback.
 - **Why Made**: Users reported prediction calls attempting to hit the frontend origin (`localhost:3000`) instead of the FastAPI backend or Heroku, causing failures when no proxy was active.
 - **Impact**: Dev and prod environments consistently call the correct backend without relying on a Vite proxy. Reduces CORS/proxy confusion and eliminates front-end-origin `/predict` calls.
 - **Metrics Post-Change**:
   - Build: PASS (`vite build` successful)
-  - Network: Requests in dev go to `http://127.0.0.1:8000/*`; in prod to `VITE_API_BASE` or Heroku fallback.
+  - Network: Requests in dev go to `http://127.0.0.1:8000/*`; in prod to `VITE_API_BASE_URL` or Heroku fallback.
 
 - **Date/Time**: 2025-11-01 / 17:41 UTC.
 - **Files Modified**: `backend/pipeline_enhanced.py`.

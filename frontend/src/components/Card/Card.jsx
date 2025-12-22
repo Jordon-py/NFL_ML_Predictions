@@ -75,8 +75,21 @@ const buildCardClassNames = ({ hasPrediction, loading, error }) =>
     .join(' ');
 
 /** Compute the human-readable kickoff time string. */
-const getKickoffDisplayTime = (kickoff) =>
-  kickoff ? new Date(kickoff).toLocaleString() : 'TBD';
+const getKickoffDisplayTime = (kickoff) => {
+  if (!kickoff) return 'TBD';
+  const d = new Date(kickoff);
+  if (isNaN(d.getTime())) {
+    // Attempt to handle "YYYY-MM-DD HH:MM" format if raw Date fails
+    return kickoff;
+  }
+  return d.toLocaleString([], { 
+    weekday: 'short', 
+    month: 'short', 
+    day: 'numeric', 
+    hour: '2-digit', 
+    minute: '2-digit' 
+  });
+};
 
 /**
  * Derive convenient flags and values from the prediction object.
@@ -88,7 +101,9 @@ const derivePredictionMeta = (prediction) => {
     prediction?.away_score != null ||
     prediction?.point_diff != null;
 
-  const classifierUsed = prediction?.win_classifier_used === true;
+  const sim = prediction?.simulation_metrics;
+  const isExpert = !!sim;
+  const classifierUsed = !isExpert && prediction?.win_classifier_used === true;
 
   const maxConfidence = formatProbabilityAsPercentage(
     Math.max(
@@ -97,7 +112,7 @@ const derivePredictionMeta = (prediction) => {
     )
   );
 
-  return { hasScoreDetails, classifierUsed, maxConfidence };
+  return { hasScoreDetails, classifierUsed, isExpert, maxConfidence, sim };
 };
 
 /**
@@ -175,7 +190,7 @@ export default function Card({
 
   const kickoffDisplayTime = getKickoffDisplayTime(kickoff);
 
-  const { hasScoreDetails, classifierUsed, maxConfidence } =
+  const { hasScoreDetails, classifierUsed, isExpert, maxConfidence, sim } =
     derivePredictionMeta(prediction);
 
   // Local debug state for a brief visual click cue
@@ -274,6 +289,7 @@ export default function Card({
     // Reset is distinct from "open" – no fallback to onClick.
   };
 
+  
   return (
     <article
       className={[
@@ -298,132 +314,146 @@ export default function Card({
         </div>
       )}
 
-      {/* Top bar: optional icon/title/status */}
-      {(title || status || icon) && (
-        <div className={styles.topBar}>
-          <div className={styles.left}>
-            {icon && (
-              <span className={styles.icon} aria-hidden>
-                {icon}
-              </span>
-            )}
-            {title && <strong className={styles.title}>{title}</strong>}
-          </div>
-          {status && <span className={styles.status}>{status}</span>}
-        </div>
-      )}
-
-      {/* Matchup row: logos + full team names */}
-      <div className={styles.matchupRow}>
-        <div id="away" className={styles.gameCard}>
-          {away_logo && (
-            <img
-              src={away_logo}
-              alt={`${away_team} logo`}
-              id="away-logo"
-              className={styles.gameCardLogo}
-              loading="lazy"
-            />
-          )}
-
-          <span className="game-card__label">Away</span>
-          <span className="game-card__name">{awayFullName}</span>
-        </div>
-
-        <div className="game-card__vs">VS</div>
-
-        <div className="game-card__team game-card__team--home">
-          {home_logo && (
-            <img
-              src={home_logo}
-              alt={`${home_team} logo`}
-              id="home-logo"
-              className={styles.gameCardLogo}
-              loading="lazy"
-            />
-          )}
-
-          <span className={styles.gameCardLabel}>Home</span>
-          <span className={styles.gameCardName}>{homeFullName}</span>
-        </div>
-      </div>
-
-      {/* Kickoff metadata */}
-      <div className={styles.kickoffRow}>
-        <time
-          className={styles.kickoffTime}
-          dateTime={kickoff ? new Date(kickoff).toISOString() : undefined}
-        >
-          {kickoffDisplayTime}
-        </time>
-      </div>
-
-      {/* Prediction body / footer */}
-      <footer className="game-card__footer">
-        {loading ? (
-          <span className="game-card__prediction--loading">
-            <span className={styles.spinner} aria-label="Loading" /> Fetching
-            prediction...
-          </span>
-        ) : hasPrediction ? (
-          <>
-            {/* Reset button: clears prediction via parent handler */}
-            <button
-              id="reset-button"
-              type="button"
-              className={styles.resetButton}
-              onClick={handleReset}
-              aria-label="Reset prediction"
-            >
-              Reset
-            </button>
-
-            <div className={styles.predictionBody}>
-              <div className={styles.badgeRow}>
-                <span className={styles.badge}>
-                  {classifierUsed ? 'Classifier' : 'Logistic fallback'}
-                </span>
-                {typeof maxConfidence === 'number' && (
-                  <span className={styles.badge}>
-                    Confidence {maxConfidence}%
+      {/* Card content lives in a single inner wrapper so overlays + progress bars can be positioned safely */}
+      <div className={styles.cardInner}>
+        {/* Header: optional title/status + kickoff time */}
+        <header className={styles.head}>
+          {(title || status || icon) && (
+            <div className={styles.topBar}>
+              <div className={styles.left}>
+                {icon && (
+                  <span className={styles.icon} aria-hidden>
+                    {icon}
                   </span>
                 )}
+                {title && <strong className={styles.title}>{title}</strong>}
               </div>
 
-              {/* Optional numeric details if present */}
-              {hasScoreDetails && (
-                <div className={styles.predScore}>
-                  <span>Score:</span>
-                  <b>
-                    {away_team}{' '}
-                    {typeof prediction.away_score === 'number'
-                      ? Math.round(prediction.away_score)
-                      : '-'}{' '}
-                    - {home_team}{' '}
-                    {typeof prediction.home_score === 'number'
-                      ? Math.round(prediction.home_score)
-                      : '-'}{' '}
-                    {prediction.point_diff != null && (
-                      <em className={styles.diff}>
-                        {' '}
-                        diff:{' '}
-                        {typeof prediction.point_diff === 'number' &&
-                        typeof prediction.point_diff.toFixed === 'function'
-                          ? prediction.point_diff.toFixed(1)
-                          : prediction.point_diff}
-                      </em>
-                    )}
-                  </b>
-                </div>
-              )}
+              {status && <span className={styles.status}>{status}</span>}
             </div>
-          </>
-        ) : (
-          <span className="game-card__prediction game-card__prediction--empty">
-            Predictions not available yet
-          </span>
-        )}
-      </footer>
+          )}
+
+          <div className={styles.kickoffRow}>
+            <time
+              className={styles.kickoffTime}
+              dateTime={kickoff ? new Date(kickoff).toISOString() : undefined}
+            >
+              {kickoffDisplayTime}
+            </time>
+          </div>
+        </header>
+
+        {/* Matchup row: logos + full team names */}
+        <div className={styles.teamRow}>
+          <div
+            id="away"
+            className={`${styles.gameCard} game-card__team game-card__team--away`}
+          >
+            {away_logo && (
+              <img
+                src={away_logo}
+                alt={`${away_team} logo`}
+                id="away-logo"
+                className={styles.gameCardLogo}
+                loading="lazy"
+              />
+            )}
+
+            <span className={`${styles.gameCardLabel} game-card__label`}>Away</span>
+            <span className={`${styles.gameCardName} game-card__name`}>{awayFullName}</span>
+          </div>
+
+          <div className={`${styles.vs} game-card__vs`}>VS</div>
+
+          <div
+            className={`${styles.gameCard} game-card__team game-card__team--home`}
+          >
+            {home_logo && (
+              <img
+                src={home_logo}
+                alt={`${home_team} logo`}
+                id="home-logo"
+                className={styles.gameCardLogo}
+                loading="lazy"
+              />
+            )}
+
+            <span className={`${styles.gameCardLabel} game-card__label`}>Home</span>
+            <span className={`${styles.gameCardName} game-card__name`}>{homeFullName}</span>
+          </div>
+        </div>
+
+        {/* Prediction body / footer */}
+        <footer className={`${styles.gameCardFooter} game-card__footer`}>
+          {loading ? (
+            <span className="game-card__prediction--loading">
+              <span className={styles.spinner} aria-label="Loading" /> Fetching
+              prediction...
+            </span>
+          ) : hasPrediction ? (
+            <>
+              {/* Reset button: clears prediction via parent handler */}
+              <button
+                id="reset-button"
+                type="button"
+                className={styles.resetButton}
+                onClick={handleReset}
+                aria-label="Reset prediction"
+              >
+                Reset
+              </button>
+
+              <div className={styles.predictionBody}>
+                <div className={styles.badgeRow}>
+                  {isExpert ? (
+                    <span className={`${styles.badge} ${styles.expertBadge}`}>
+                      Ensemble Mixture (ML + MC)
+                    </span>
+                  ) : (
+                    <span className={styles.badge}>
+                      {classifierUsed ? 'Joblib Classifier' : 'Logistic fallback'}
+                    </span>
+                  )}
+                  {typeof maxConfidence === 'number' && (
+                    <span className={styles.badge}>
+                      Confidence {maxConfidence}%
+                    </span>
+                  )}
+                </div>
+
+                {/* Optional numeric details if present */}
+                <div className={styles.predScore}>
+                  <div className={styles.scoreRow}>
+                    <span>Predicted Score:</span>
+                    <b>
+                      {away_team} {Math.round(prediction.away_score ?? 0)} -{' '}
+                      {home_team} {Math.round(prediction.home_score ?? 0)}
+                    </b>
+                  </div>
+                  {isExpert && (
+                    <div className={styles.expertRange}>
+                      <span>Range:</span>
+                      <em>
+                        {Math.round(sim.sim_away_score - 1.28 * sim.sim_std_away)}–
+                        {Math.round(sim.sim_away_score + 1.28 * sim.sim_std_away)}
+                      </em>
+                      <span> vs </span>
+                      <em>
+                        {Math.round(sim.sim_home_score - 1.28 * sim.sim_std_home)}–
+                        {Math.round(sim.sim_home_score + 1.28 * sim.sim_std_home)}
+                      </em>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </>
+          ) : (
+            <span className="game-card__prediction game-card__prediction--empty">
+              Predictions not available yet
+            </span>
+          )}
+        </footer>
+      </div>
 
       {/* Optional progress meter (e.g., confidence, pipeline completeness) */}
       {typeof progress === 'number' && isFinite(progress) && (

@@ -1,369 +1,199 @@
 /**
-* File Metrics:
-* - Purpose: One tiny, consistent fetch wrapper for the whole app.
-* - Why: Every endpoint gets the same error handling, JSON parsing, and abort support.
-*
-* Key Concepts:
-* - AbortController cancels in-flight requests when components unmount.
-* - "HttpError" carries status + body for better debugging.
-*
-* Learning Checkpoints:
-* - You should be able to answer: "Where do I change my API base URL?"
-* - You should be able to answer: "Where do errors get normalized?"
-*/
+ * NFL Prediction App — Core API Client (Expert v1.2)
+ * ================================================
+ * 
+ * A robust, high-performance fetch wrapper engineered for the NFL ML Predictions ecosystem.
+ * Features:
+ *  - Unified error handling with custom HttpError class.
+ *  - Request timeout and cancellation via AbortController.
+ *  - Environment-aware URL resolution with trailing-slash normalization.
+ *  - Defensive JSON parsing resilient to empty or malformed responses.
+ *  - Data normalization layers to bridge backend-frontend schema drift.
+ */
 
-export class HttpError extends Error {
-  constructor(message, { status, url, body } = {}) {
 /**
-* File Metrics:
-* - Purpose: One tiny, consistent fetch wrapper for the whole app.
-* - Why: Every endpoint gets the same error handling, JSON parsing, and abort support.
-*
-* Key Concepts:
-* - AbortController cancels in-flight requests when components unmount.
-* - "HttpError" carries status + body for better debugging.
-*
-* Learning Checkpoints:
-* - You should be able to answer: "Where do I change my API base URL?"
-* - You should be able to answer: "Where do errors get normalized?"
-*/
-
+ * Custom Error class for API-originated failures.
+ */
 export class HttpError extends Error {
   constructor(message, { status, url, body } = {}) {
     super(message);
     this.name = "HttpError";
-    this.name = "HttpError";
     this.status = status;
     this.url = url;
     this.body = body;
+
+    if (Error.captureStackTrace) {
+      Error.captureStackTrace(this, HttpError);
+    }
+  }
+
+  toJSON() {
+    return { name: this.name, message: this.message, status: this.status, url: this.url, body: this.body };
   }
 }
 
-// If you use Vite proxy, set BASE_URL = "" (empty string) and call "/api/..."
-const RAW_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
-const BASE_URL = RAW_BASE_URL.replace(/\/+$/, ""); // "" works great with Vite proxy
-export const API_BASE = BASE_URL;
+// ---------------------------------------------------------
+// Configuration & Utilities
+// ---------------------------------------------------------
 
+const RAW_BASE_URL = import.meta.env?.VITE_API_BASE_URL ?? "http://127.0.0.1:8000";
+export const API_BASE = RAW_BASE_URL.replace(/\/+$/, "");
+
+const DEFAULT_TIMEOUT = 15000;
+
+/**
+ * Resilient JSON reader that handles empty responses and parse errors gracefully.
+ */
 async function safeReadJson(res) {
   try {
-    return await res.json();
-  } catch {
-    return null; // sometimes backends return empty bodies
+    const text = await res.text();
+    if (!text || text.trim().length === 0) return null;
+    return JSON.parse(text);
+  } catch (err) {
+    console.warn(`[API Client] JSON parse failure: ${err.message}`);
+    return null;
   }
 }
 
 /**
- * fetchJson(path, options)
- * - path: "/api/..." style
- * - options: { method, headers, body, signal }
+ * The core fetch engine with timeout, headers, and error normalization.
  */
 export async function fetchJson(path, options = {}) {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  const url = `${BASE_URL}${normalizedPath}`;
+  const url = `${API_BASE}${normalizedPath}`;
 
-  const res = await fetch(url, {
-    method: "GET",
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
-    },
-  });
+  const controller = new AbortController();
+  const timeoutMs = options.timeout ?? DEFAULT_TIMEOUT;
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-  // Try to parse body (even for errors) so your UI can show useful messages
-  const body = await safeReadJson(res);
-
-  if (!res.ok) {
-    throw new HttpError(`Request failed (${res.status})`, {
-      status: res.status,
-      url,
-      body,
+  try {
+    const res = await fetch(url, {
+      method: "GET", // default
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...(options.headers || {}),
+      },
+      signal: controller.signal,
     });
+
+    const body = await safeReadJson(res);
+
+    if (!res.ok) {
+      const detail = body?.detail || body?.message || res.statusText;
+      const errorMessage = `API Error: ${res.status} (${detail})`;
+
+      throw new HttpError(errorMessage, {
+        status: res.status,
+        url,
+        body,
+      });
+    }
+
+    return body;
+  } catch (err) {
+    if (err.name === "AbortError") {
+      throw new HttpError(`Request timed out after ${timeoutMs}ms`, { url, status: 408 });
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+// ---------------------------------------------------------
+// Domain Endpoints
+// ---------------------------------------------------------
+
+/**
+ * Retrieve system health and model readiness.
+ */
+export async function getHealthStatus() {
+  return fetchJson("/health");
+}
+
+/**
+ * Legacy alias for getHealthStatus.
+ */
+export const health = getHealthStatus;
+
+/**
+ * Fetch the upcoming week's matchup schedule.
+ * Normalizes between {games: []} and direct array responses.
+ */
+export async function getNextWeekSchedule() {
+  const data = await fetchJson("/schedule/next-week");
+  if (Array.isArray(data)) return data;
+  return data?.games ?? data?.ScheduleGame ?? [];
+}
+
+/**
+ * Submit a game for ML inference.
+ * Re-maps camelCase keys to backend snake_case.
+ */
+export async function predictGame(payload) {
+  const home = payload?.homeTeam || payload?.home_team;
+  const away = payload?.awayTeam || payload?.away_team;
+
+  if (!home || !away) {
+    throw new Error("[API Client] predictGame requires home_team and away_team");
   }
 
-  return body;
-}
-
-/**
- * @typedef {Object} HealthStatus
- * @property {string} status - "healthy" | "unhealthy"
- * @property {string} mode - "production" | "debug" | "none"
- * @property {string} reason - Human-readable health status description
- */
-
- * @typedef {Object} HealthStatus
- * @property {string} status - "healthy" | "unhealthy"
- * @property {string} mode - "production" | "debug" | "none"
- * @property {string} reason - Human-readable health status description
- */
-
-/**
- * @typedef {Object} PredictionEntry
- * @property {string} game_id
- * @property {number} season
- * @property {number} week
- * @property {string} home_team
- * @property {string} away_team
- * @property {number} home_score
- * @property {number} away_score
- * @property {number} home_win_probability
- * @property {number} away_win_probability
- * @property {string} ts - ISO timestamp
- */
-
-/**
- * @typedef {Object} HistoryResponse
- * @property {PredictionEntry[]} entries
- * @property {number} total
- */
-
-/**
- * Get backend health status.
- * @returns {Promise<HealthStatus>}
- */
-export async function health() {
-  return fetchJson("/health");
-}
-
-/** @returns {Promise<HealthStatus>} */
-export async function getHealthStatus() {
-  return health();
-}
-
-/**
- * Fetch upcoming NFL games for the next week.
- * @returns {Promise<Array>} List of games
- */
-export async function getNextWeekSchedule() {
-  const res = await fetchJson("/schedule/next-week");
-  if (Array.isArray(res)) return res;
-  if (res && Array.isArray(res.games)) return res.games;
-  if (res && Array.isArray(res.ScheduleGame)) return res.ScheduleGame;
-  return [];
-}
-
-/**
- * Request a prediction for a specific game matchup.
- * @param {Object} payload
- * @param {string} payload.homeTeam
- * @param {string} payload.awayTeam
- * @param {number} payload.season
- * @param {number} payload.week
- * @returns {Promise<Object>} The prediction result
- */
-export async function predictGame(payload) {
   const body = {
-    home_team: String(payload ? payload.homeTeam : "").trim().toUpperCase(),
-    away_team: String(payload ? payload.awayTeam : "").trim().toUpperCase(),
-    season: Number(payload ? payload.season : undefined),
-    week: Number(payload ? payload.week : undefined),
+    home_team: String(home).trim().toUpperCase(),
+    away_team: String(away).trim().toUpperCase(),
+    season: Number(payload.season || new Date().getFullYear()),
+    week: Number(payload.week || 1),
   };
-  const res = await fetchJson("/predict", {
+
+  return fetchJson("/predict", {
     method: "POST",
     body: JSON.stringify(body),
   });
-  return res;
 }
 
 /**
- * Trigger backend model retraining.
- * @returns {Promise<Object>}
- */
-export async function startTraining() {
-  const tryPost = async (path) => {
-    try {
-      return await fetchJson(path, { method: "POST" });
- * @typedef {Object} PredictionEntry
- * @property {string} game_id
- * @property {number} season
- * @property {number} week
- * @property {string} home_team
- * @property {string} away_team
- * @property {number} home_score
- * @property {number} away_score
- * @property {number} home_win_probability
- * @property {number} away_win_probability
- * @property {string} ts - ISO timestamp
- */
-
-/**
- * @typedef {Object} HistoryResponse
- * @property {PredictionEntry[]} entries
- * @property {number} total
- */
-
-/**
- * Get backend health status.
- * @returns {Promise<HealthStatus>}
- */
-export async function health() {
-  return fetchJson("/health");
-}
-
-/** @returns {Promise<HealthStatus>} */
-export async function getHealthStatus() {
-  return health();
-}
-
-/**
- * Fetch upcoming NFL games for the next week.
- * @returns {Promise<Array>} List of games
- */
-export async function getNextWeekSchedule() {
-  const res = await fetchJson("/schedule/next-week");
-  if (Array.isArray(res)) return res;
-  if (res && Array.isArray(res.games)) return res.games;
-  if (res && Array.isArray(res.ScheduleGame)) return res.ScheduleGame;
-  return [];
-}
-
-/**
- * Request a prediction for a specific game matchup.
- * @param {Object} payload
- * @param {string} payload.homeTeam
- * @param {string} payload.awayTeam
- * @param {number} payload.season
- * @param {number} payload.week
- * @returns {Promise<Object>} The prediction result
- */
-export async function predictGame(payload) {
-  const body = {
-    home_team: String(payload ? payload.homeTeam : "").trim().toUpperCase(),
-    away_team: String(payload ? payload.awayTeam : "").trim().toUpperCase(),
-    season: Number(payload ? payload.season : undefined),
-    week: Number(payload ? payload.week : undefined),
-  };
-  const res = await fetchJson("/predict", {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
-  return res;
-}
-
-/**
- * Trigger backend model retraining.
- * @returns {Promise<Object>}
- */
-export async function startTraining() {
-  const tryPost = async (path) => {
-    try {
-      return await fetchJson(path, { method: "POST" });
-    } catch (err) {
-      if (err instanceof HttpError) {
-        if (err.status === 404 || err.status === 405) return null;
-        const detail = err.body?.detail ?? err.body;
-        const msg =
-          typeof detail === "string"
-            ? detail
-            : `Training request failed (${err.status})`;
-        throw new Error(msg);
-      }
-      throw err;
-    }
-  };
-
-  const res = (await tryPost("/retrain")) ?? (await tryPost("/train"));
-  if (res == null) throw new Error("Training endpoint not available");
-  return res;
-}
-
-/**
- * Fetch paginated prediction history.
- * @param {number} limit
- * @returns {Promise<HistoryResponse>}
+ * Fetch historical prediction accuracy and logs.
  */
 export async function getPredictionHistory(limit = 100) {
-  // Gracefully handle missing endpoint until implemented on backend
-  try {
-    return await fetchJson(`/history?limit=${limit}`);
-  try {
-    const safeLimit = Number.isFinite(Number(limit)) ? Number(limit) : 100;
-    const res = await fetchJson(`/history?limit=${safeLimit}`);
-
-    // Backend currently returns a raw list or an envelope; normalize for dashboard callers.
-    if (Array.isArray(res)) {
-      return { entries: res, total: res.length };
-    }
-
-    if (res && Array.isArray(res.entries)) {
-      return {
-        entries: res.entries,
-        total: Number.isFinite(Number(res.total)) ? Number(res.total) : res.entries.length,
-      };
-    }
-
-    return { entries: [], total: 0 };
-  } catch (err) {
-    console.warn("History endpoint unavailable, falling back to empty");
-    return { entries: [], total: 0 };
-  }
+  const data = await fetchJson(`/history?limit=${limit}`);
+  // Return normalized { entries, total } shape
+  if (Array.isArray(data)) return { entries: data, total: data.length };
+  return {
+    entries: data?.entries ?? [],
+    total: data?.total ?? data?.entries?.length ?? 0
+  };
 }
 
 /**
- * Fetch system-wide status overview (health, dataset, metrics).
- * @returns {Promise<Object>} Normalized status object
+ * Get a high-level overview of system status, metrics, and data scales.
  */
 export async function getStatusOverview() {
-  try {
-    const res = await fetchJson("/status/overview");
-
-    if (res && typeof res === "object") {
-      const dataset = res.dataset ?? { rows: 0 };
-      // Normalization: Ensure history.metrics exists
-      const history = res.history ?? {
-        metrics: { total_predictions: Number(dataset?.rows ?? 0), win_rate: 0.58 }
-      };
-export async function getStatusOverview() {
-  try {
-    const res = await fetchJson("/status/overview");
-
-    if (res && typeof res === "object") {
-      const dataset = res.dataset ?? { rows: 0 };
-      // Normalization: Ensure history.metrics exists
-      const history = res.history ?? {
-        metrics: { total_predictions: Number(dataset?.rows ?? 0), win_rate: 0.58 }
-      };
-
-      return {
-        ...res,
-        health: res.health ?? { status: "unknown" },
-        dataset,
-        history,
-      };
-    }
-
-    return {
-      health: { status: "unknown" },
-      dataset: { rows: 0 },
-      history: { metrics: { total_predictions: 0, win_rate: 0 } },
-    };
-  } catch (err) {
-    console.warn("Status overview unavailable");
-    return {
-      health: { status: "unknown" },
-      dataset: { rows: 0 },
-      history: { metrics: { total_predictions: 0, win_rate: 0 } }
-    };
-  }
-      return {
-        ...res,
-        health: res.health ?? { status: "unknown" },
-        dataset,
-        history,
-      };
-    }
-
-    return {
-      health: { status: "unknown" },
-      dataset: { rows: 0 },
-      history: { metrics: { total_predictions: 0, win_rate: 0 } },
-    };
-  } catch (err) {
-    console.warn("Status overview unavailable");
-    return {
-      health: { status: "unknown" },
-      dataset: { rows: 0 },
-      history: { metrics: { total_predictions: 0, win_rate: 0 } }
-    };
-  }
+  const data = await fetchJson("/status/overview");
+  return {
+    health: data?.health ?? { status: "unknown" },
+    dataset: data?.dataset ?? { rows: 0 },
+    history: data?.history ?? { metrics: { total_predictions: 0, win_rate: 0 } }
+  };
 }
+
+/**
+ * Utility to generate an AbortController for component cleanup.
+ */
+export function createAbortController() {
+  return new AbortController();
+}
+
+/** Default Export Object */
+export default {
+  fetchJson,
+  getHealthStatus,
+  health,
+  getNextWeekSchedule,
+  predictGame,
+  getPredictionHistory,
+  getStatusOverview,
+  createAbortController,
+  HttpError,
+  API_BASE,
+};

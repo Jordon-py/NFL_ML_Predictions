@@ -17,7 +17,7 @@ This report consolidates prior docs and session notes into a single, living sour
 ## System Overview
 
 - Backend: FastAPI on 127.0.0.1:8000 (Heroku in prod), scikit-learn models loaded via joblib.
-- Frontend: React + Vite; dev uses proxy, prod uses `VITE_API_URL`.
+- Frontend: React + Vite; dev uses proxy, prod uses `VITE_API_BASE_URL`.
 - Artifacts: `backend/models/` contains preprocessor, win classifier, and metadata with expected features.
 - Data Flow: CSV datasets → feature engineering → training pipeline → joblib artifacts → FastAPI `/predict` → UI.
 

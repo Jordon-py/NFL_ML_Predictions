@@ -794,12 +794,12 @@ The following functions are **exact duplicates** across multiple dataset builder
   function normalizeBase(base) {
   ```
 
-- Issue: Property `VITE_API_BASE` does not exist on type (import.meta.env).
+- Issue: Property `VITE_API_BASE_URL` does not exist on type (import.meta.env).
 - Fix: Use optional chaining or default.
 - Syntax Example:
 
   ```javascript
-  const ENV_BASE = String(import.meta.env?.VITE_API_BASE ?? "");
+  const ENV_BASE = String(import.meta.env?.VITE_API_BASE_URL ?? "");
   ```
 
 ## File: frontend/src/components/TeamGrid.jsx

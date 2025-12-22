@@ -13,40 +13,35 @@
 :root {
   /* PRESERVED COLOR TOKENS */
   --c-brand-1: #0080ff;
-  --c-brand-1-soft: #0080ff1f;
+  --c-brand-1-soft: lch(29.54% 44.53 284.62);
   --c-brand-2: #003264;
   --c-ink: #0f172a;
-  --c-ink-soft: #64748b;
+  --c-ink-soft: #93aed4;
   --c-surface: #0b1120;
   --c-surface-soft: #020617;
   --c-border-subtle: #1e293b;
   --c-border-strong: #334155;
 
   --radius-card: 16px;
-  --shadow-soft: 0 18px 40px rgba(15, 23, 42, 0.45);
+  --shadow-soft: 0 18px 40px rgba(6, 20, 52, 0.489);
 
   /* Layout Configuration */
-  --grid-gap: clamp(1.5rem, 3vw, 30px);
-  --card-min-width: 280px;
+  --grid-gap: clamp(2.5rem, 3vw, 30px);
+  --card-min-width: 350px;
 }
 
 /* --- Scope: Grid Container --- */
 .team-grid {
-  container-type: inline-size;
-  container-name: team-grid;
   width: 100%;
-  box-sizing: border-box;
+  max-width: 100%;
+  /* Enable container queries below (they key off `team-grid`) */
+  container-name: team-grid;
+  container-type: inline-size;
 }
 
 .team-grid__grid {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;;
-  margin-right: auto;  /* Fluid Auto-Fit Strategy */
-  grid-template-columns: repeat(2, 400px);
-  gap: 2.5rem;
   width: 100%;
-  justify-content: center;
+  max-width: 100%;
 }
 
 /* --- Responsive logic via Container Queries --- */
@@ -60,9 +55,10 @@
 }
 
 /* Medium Context (Tablet/Half-width) */
-@container team-grid (min-width: 481px) and (max-width: 960px) {
+@container team-grid (min-width: 481px) and (max-width: 1960px) {
   .team-grid__grid {
-    grid-template-columns: repeat(2, 460px);
+    grid-template-columns: repeat(3, 420px);
+    flex-grow: 1;
   }
 }
 
@@ -70,7 +66,7 @@
 .game-card {
   position: relative;
   border-radius: var(--radius-card);
-  padding: 1.5rem; /* Adjusted from 4rem which seemed excessive for card content */
+  padding: 1.75rem; /* Adjusted from 4rem which seemed excessive for card content */
 
   /* PRESERVED VISUAL STYLING */
   background:
@@ -93,7 +89,7 @@
 
 /* Hover Effects */
 .game-card:hover {
-  transform: translateY(-3px);
+  transform: translateY(-7px);
   box-shadow: 0 22px 50px rgba(15, 23, 42, 0.7);
   border-color: var(--c-brand-1); /* Fallback removed, relying on var */
 }
@@ -119,8 +115,9 @@
 .game-card__header {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
   font-size: 0.75rem;
+  gap: 1.3rem;
   color: var(--c-ink-soft);
   position: relative;
   z-index: 1;

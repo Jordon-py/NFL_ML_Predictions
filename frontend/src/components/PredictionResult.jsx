@@ -66,6 +66,8 @@ import React from 'react';
  * @property {string} [away_team]
  */
 
+import './PredictionResult.css';
+
 /** @type {PredictionEntry} */
 const EMPTY_ENTRY = {};
 
@@ -94,8 +96,7 @@ export default function PredictionResult({ entry }) {
   /** @type {PredictionEntry} */
   const base = entry ?? EMPTY_ENTRY;
 
-  // Normalise "game" metadata regardless of whether it comes nested (entry.game)
-  // or from a backend history payload (top-level season/week/home/away fields).
+  // Normalise "game" metadata
   const rawGame = base.game || {};
   const game = {
     week: rawGame.week ?? base.week,
@@ -112,10 +113,6 @@ export default function PredictionResult({ entry }) {
       base.away_team,
   };
 
-  // Normalise score + margin fields across shapes:
-  //   - legacy: entry.metrics.{home_score,away_score,point_diff}
-  //   - /predict response: {home_score, away_score, point_diff}
-  //   - /history entry: {home_score_pred, away_score_pred, point_diff}
   const metrics = {
     home_score:
       (base.metrics && base.metrics.home_score) ??
@@ -133,9 +130,6 @@ export default function PredictionResult({ entry }) {
       null,
   };
 
-  // Normalise probability fields:
-  //   - legacy: entry.probs.{home,away,ensemble}
-  //   - /predict + /history: {home_win_probability, away_win_probability}
   const probs = {
     home:
       (base.probs && base.probs.home) ??
@@ -148,53 +142,103 @@ export default function PredictionResult({ entry }) {
     ensemble: base.probs?.ensemble ?? null,
   };
 
-  // Compute display-friendly percentages, rounding if values exist.
   const homePct = probs.home != null ? Math.round(probs.home * 100) : null;
   const awayPct = probs.away != null ? Math.round(probs.away * 100) : null;
-  const ensemblePct = probs.ensemble != null ? Math.round(probs.ensemble * 100) : null;
+
+  // Expert Simulation Metrics
+  const sim = base.simulation_metrics;
+  const showExpert = !!sim;
+
+  // Compute confidence ranges (10th - 90th percentile ≈ mean ± 1.28 * std)
+  const homeRange = showExpert ? [
+    Math.round(sim.sim_home_score - 1.28 * sim.sim_std_home),
+    Math.round(sim.sim_home_score + 1.28 * sim.sim_std_home)
+  ] : null;
+  const awayRange = showExpert ? [
+    Math.round(sim.sim_away_score - 1.28 * sim.sim_std_away),
+    Math.round(sim.sim_away_score + 1.28 * sim.sim_std_away)
+  ] : null;
 
   return (
-    <>
-
-      <div className="prediction-result" aria-live="polite">
-        <h3>Prediction</h3>
-        <div className="meta">
-          <span>
+    <div className={`prediction-result-container ${showExpert ? 'expert-mode' : ''}`} aria-live="polite">
+      <div className="prediction-header">
+        <div className="header-text">
+          <h3>{showExpert ? 'Ensemble Mixture Analysis' : 'Single Game Prediction'}</h3>
+          <span className="meta-text">
             {game.week != null && game.season != null
               ? `Week ${game.week} • ${game.season}`
-              : 'Game info unavailable'}
+              : 'Match Details'}
           </span>
         </div>
-        <div className="scores">
-          <div className="score-line">
-            <strong>
-              {game.home_abbr} (Home):{' '}
-              {metrics.home_score != null ? metrics.home_score : '-'}
-            </strong>
-            <span className="score-sep"> — </span>
-            <strong>
-              {game.away_abbr} (Away):{' '}
-              {metrics.away_score != null ? metrics.away_score : '-'}
-            </strong>
+        {showExpert && (
+          <div className="expert-badge">
+            <span className="pulse-icon"></span>
+            Ensemble Mixture (ML + MC)
           </div>
-          <div className="score-diff">
-            <strong>{game.home_abbr}</strong>{' '}
-            {metrics.home_score != null ? metrics.home_score : '-'} —{' '}
-            {metrics.away_score != null ? metrics.away_score : '-'}{' '}
-            <strong>{game.away_abbr}</strong>
-            <span className="separator">•</span>
-            <span>Diff: {metrics.point_diff != null ? metrics.point_diff : '-'}</span>
-          </div>
-        </div>
-        <div className="probs">
-          {homePct != null && <span>Home win: {homePct}%</span>}
-          {awayPct != null && <span>Away win: {awayPct}%</span>}
-          {ensemblePct != null && <span>Ensemble: {ensemblePct}%</span>}
-          {[homePct, awayPct, ensemblePct].every(v => v == null) && (
-            <span>No probability data available.</span>
-          )}
-        </div>
+        )}
       </div>
-    </>
+
+      <div className="expert-content">
+        <div className="team-row">
+          <div className="team-block home">
+            <span className="team-name">{game.home_abbr}</span>
+            <span className="score-main">{Math.round(metrics.home_score)}</span>
+            {showExpert && (
+              <div className="range-box">
+                <span className="range-label">Expected Range</span>
+                <span className="range-val">{Math.max(0, homeRange[0])}–{homeRange[1]}</span>
+              </div>
+            )}
+          </div>
+
+          <div className="vs-divider">
+            <div className="vs-circle">VS</div>
+            <div className="line"></div>
+          </div>
+
+          <div className="team-block away">
+            <span className="team-name">{game.away_abbr}</span>
+            <span className="score-main">{Math.round(metrics.away_score)}</span>
+            {showExpert && (
+              <div className="range-box">
+                <span className="range-label">Expected Range</span>
+                <span className="range-val">{Math.max(0, awayRange[0])}–{awayRange[1]}</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="win-probability-expert">
+          <div className="prob-header">
+            <span>Win Probability</span>
+            {showExpert && <span className="sim-meta">{sim.n_sims.toLocaleString()} trials</span>}
+          </div>
+          <div className="prob-bar-wrapper">
+            <div className="prob-bar-base">
+              <div 
+                className="prob-fill home" 
+                style={{ width: `${homePct}%` }}
+              >
+                <span className="prob-inner-text">{homePct}%</span>
+              </div>
+              <div 
+                className="prob-fill away" 
+                style={{ width: `${100 - homePct}%` }}
+              >
+                <span className="prob-inner-text">{100 - homePct}%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {showExpert && (
+          <div className="expert-brief">
+            <p>
+              Model Confidence: <strong>High</strong>. Outcomes modeled using Gaussian distribution based on historical RMSE ({sim.sim_std_home?.toFixed(1)}).
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

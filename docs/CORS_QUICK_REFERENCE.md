@@ -27,13 +27,13 @@ heroku config:set CORS_ORIGINS="..." -a nfl-predict
 **Production:**
 
 ```bash
-VITE_API_URL=https://nfl-predict-ecf5a5bd34fe.herokuapp.com
+VITE_API_BASE_URL=https://nfl-predict-ecf5a5bd34fe.herokuapp.com
 ```
 
 **Development:**
 
 ```bash
-VITE_API_URL=http://127.0.0.1:8000
+VITE_API_BASE_URL=http://127.0.0.1:8000
 ```
 
 ---
@@ -45,10 +45,10 @@ VITE_API_URL=http://127.0.0.1:8000
 | `.env` (root) | Backend env vars | `CORS_ORIGINS` |
 | `backend/.env` | Local backend dev | `CORS_ORIGINS` |
 | `backend/main.py` | CORS middleware | Lines 265-278 |
-| `frontend/.env` | Local frontend dev | `VITE_API_URL=http://127.0.0.1:8000` |
-| `frontend/.env.production` | Production frontend | `VITE_API_URL=https://nfl-predict-...` |
+| `frontend/.env` | Local frontend dev | `VITE_API_BASE_URL=http://127.0.0.1:8000` |
+| `frontend/.env.production` | Production frontend | `VITE_API_BASE_URL=https://nfl-predict-...` |
 | `frontend/vite.config.js` | Dev proxy | Proxies `/api`, `/schedule`, `/predict` |
-| `vercel.json` | Vercel build | Sets `VITE_API_URL` |
+| `vercel.json` | Vercel build | Sets `VITE_API_BASE_URL` |
 
 ---
 
@@ -111,7 +111,7 @@ python backend/build_csv_datasets.py --start 2016 --end 2026 --out-dir backend/d
 
 ### Wrong API URL in Frontend?
 
-- Vercel: Settings → Environment Variables → Check `VITE_API_URL`
+- Vercel: Settings → Environment Variables → Check `VITE_API_BASE_URL`
 - Rebuild: `vercel --prod`
 
 ---

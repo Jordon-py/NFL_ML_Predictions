@@ -22,21 +22,21 @@ Features:
 
 Quick start
 -----------
-python build_csv_datasetsv3.py --start 2019 --end 2025 --out-dir './data/heroku-models' --save-dominance-matrix --encode 'onehot' --save-dominance-matrix --dominance-log ./data/dominance_log.txt
+python build_csv_datasetsv3.py --start 2019 --end 2025 --out-dir './data/datasets' --save-dominance-matrix --encode 'onehot' --save-dominance-matrix --dominance-log ./data/dominance_log.txt
 
 
 Additional quick starts (common option combinations):
 
 - Build without team encodings and skip calibration rows (useful when
     creating numeric-only training sets or debugging):
-    python build_csv_datasetsv3.py --start 2014 --end 2025 --out-dir ./data --encode 'onehot' --no-calibration-rows --save-dominance-matrix --legacy-root-copy
+    python build_csv_datasetsv3.py --start 2014 --end 2025 --out-dir ./data/datasets --encode 'onehot' --no-calibration-rows --save-dominance-matrix --legacy-root-copy
 
 - Build and persist pairwise dominance artifacts (matrix and human-readable log):
-    python build_csv_datasetsv3.py --start 2018 --end 2025 --out-dir ./data --save-dominance-matrix --dominance-log ./data/dominance_log.txt
+    python build_csv_datasetsv3.py --start 2018 --end 2025 --out-dir ./data/datasets --save-dominance-matrix --dominance-log ./data/dominance_log.txt
 
 - Create dataset and also write a legacy root-level copy for compatibility
     with older pipelines / CI hooks:
-    python build_csv_datasetsv3.py --start 2018 --end 2025 --out-dir ./data --legacy-root-copy
+    python build_csv_datasetsv3.py --start 2018 --end 2025 --out-dir ./data/datasets --legacy-root-copy
 
 Outputs
 -------

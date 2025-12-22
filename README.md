@@ -449,9 +449,9 @@ team logos, or theme tokens.
          `/schedule`, `/predict`, `/history`, `/health`, `/debug` to
          `http://127.0.0.1:8000` during local development. Ensure your backend is
          running on port **8000** for the dev proxy to work.
-     - Production base URL: `frontend/.env` (key: `VITE_API_BASE`) — set this to
+     - Production base URL: `frontend/.env` (key: `VITE_API_BASE_URL`) — set this to
          your deployed backend (e.g., `https://nfl-predict-ecf5a5bd34fe.herokuapp.com/`).
-         The client reads `import.meta.env.VITE_API_BASE` in
+         The client reads `import.meta.env.VITE_API_BASE_URL` in
          `frontend/src/api/client.js`.
 
 7) Charts, data formatting and date/time
@@ -534,9 +534,7 @@ The backend and frontend are properly configured for cross-origin requests:
     heroku config:set ALLOWED_ORIGINS="https://nfl-ml-predictions.vercel.app,http://localhost:3000" -a nfl-predict
     ```
 
-2. **Frontend API base**: Set `VITE_API_BASE` in Vercel project settings or `frontend/.env.production`.
-
-    Note: the frontend client prefers `VITE_API_BASE`. `VITE_API_URL` is still recognized in some docs for backward compatibility but `VITE_API_BASE` is the canonical env key used by `frontend/src/api/client.js`.
+2. **Frontend API base**: Set `VITE_API_BASE_URL` in Vercel project settings or `frontend/.env.production`.
 
 For detailed CORS and API configuration guide, see [docs/CORS_API_CONFIGURATION.md](docs/CORS_API_CONFIGURATION.md)
 

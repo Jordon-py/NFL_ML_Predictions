@@ -111,7 +111,7 @@ CORS_ORIGINS=http://localhost:3000,https://localhost:3000,https://nfl-ml-predict
 #### `frontend/.env` (Local Development)
 
 ```bash
-VITE_API_URL=http://127.0.0.1:8000
+VITE_API_BASE_URL=http://127.0.0.1:8000
 ```
 
 **Purpose:** Points local frontend to local backend
@@ -119,7 +119,7 @@ VITE_API_URL=http://127.0.0.1:8000
 #### `frontend/.env.production` (Vercel Deployment)
 
 ```bash
-VITE_API_URL=https://nfl-predict-ecf5a5bd34fe.herokuapp.com
+VITE_API_BASE_URL=https://nfl-predict-ecf5a5bd34fe.herokuapp.com
 ```
 
 **Purpose:** Points production frontend to Heroku backend
@@ -129,12 +129,12 @@ VITE_API_URL=https://nfl-predict-ecf5a5bd34fe.herokuapp.com
 ```json
 {
   "env": {
-    "VITE_API_URL": "https://nfl-predict-ecf5a5bd34fe.herokuapp.com"
+    "VITE_API_BASE_URL": "https://nfl-predict-ecf5a5bd34fe.herokuapp.com"
   }
 }
 ```
 
-**Purpose:** Ensures VITE_API_URL is set during Vercel build
+**Purpose:** Ensures VITE_API_BASE_URL is set during Vercel build
 
 #### `frontend/vite.config.js` (Development Proxy)
 
@@ -157,7 +157,7 @@ server: {
 **File:** `frontend/src/api/client.js`
 
 ```javascript
-const BASE_URL = import.meta.env.VITE_API_URL || 
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || 
                  'https://nfl-predict-ecf5a5bd34fe.herokuapp.com';
 
 async function api(path, opts = {}) {
@@ -172,7 +172,7 @@ async function api(path, opts = {}) {
 
 **Key Features:**
 
-- Reads `VITE_API_URL` from environment
+- Reads `VITE_API_BASE_URL` from environment
 - Falls back to Heroku URL if not set
 - Sets JSON content type by default
 - Provides error handling and logging
@@ -291,7 +291,7 @@ Failed to fetch
 
 1. **Check Frontend Environment Variable:**
    - In Vercel dashboard → Project Settings → Environment Variables
-   - Verify `VITE_API_URL` is set correctly
+   - Verify `VITE_API_BASE_URL` is set correctly
 
 2. **Check Browser Console:**
 
@@ -342,8 +342,8 @@ git push heroku main
 
 ### Before Deploying Frontend to Vercel
 
-- [ ] Verify `VITE_API_URL` in `frontend/.env.production`
-- [ ] Set `VITE_API_URL` in Vercel project settings
+- [ ] Verify `VITE_API_BASE_URL` in `frontend/.env.production`
+- [ ] Set `VITE_API_BASE_URL` in Vercel project settings
 - [ ] Test locally with `npm run dev --prefix frontend`
 - [ ] Verify API calls work from localhost
 

@@ -51,13 +51,13 @@ This checklist helps verify that the NFL ML Predictions backend and frontend are
 
 - [x] **Production Environment**
   - File: `frontend/.env.production`
-  - Variable: `VITE_API_URL`
+  - Variable: `VITE_API_BASE_URL`
   - Value: `https://nfl-predict-ecf5a5bd34fe.herokuapp.com`
   - ✅ Points to Heroku backend (no comma-separated values)
 
 - [x] **Development Environment**
   - File: `frontend/.env`
-  - Variable: `VITE_API_URL`
+  - Variable: `VITE_API_BASE_URL`
   - Value: `http://127.0.0.1:8000`
   - ✅ Points to local backend
 
@@ -69,14 +69,14 @@ This checklist helps verify that the NFL ML Predictions backend and frontend are
 
 - [x] **API Client**
   - File: `frontend/src/api/client.js`
-  - Uses VITE_API_URL: Yes
+  - Uses VITE_API_BASE_URL: Yes
   - Fallback URL: Heroku backend
   - JSON headers: Set by default
   - Error handling: Implemented
 
 - [x] **Vercel Configuration**
   - File: `vercel.json`
-  - VITE_API_URL set: Yes
+  - VITE_API_BASE_URL set: Yes
   - Build command: Configured
   - Output directory: `frontend/build`
 
@@ -148,7 +148,7 @@ Total: 4/4 tests passed
 ### Step 4: Deploy Frontend to Vercel
 
 ```bash
-# Ensure VITE_API_URL is set in Vercel project settings
+# Ensure VITE_API_BASE_URL is set in Vercel project settings
 # Login to Vercel
 vercel login
 
@@ -241,7 +241,7 @@ git push heroku main
 
 1. Check Vercel environment variables:
    - Go to Vercel dashboard → Project → Settings → Environment Variables
-   - Verify `VITE_API_URL` = `https://nfl-predict-ecf5a5bd34fe.herokuapp.com`
+   - Verify `VITE_API_BASE_URL` = `https://nfl-predict-ecf5a5bd34fe.herokuapp.com`
 
 2. Rebuild frontend:
    ```bash

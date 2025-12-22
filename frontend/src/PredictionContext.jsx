@@ -35,7 +35,7 @@ import React, {
     useMemo,
     useReducer
 } from 'react';
-import { getNextWeekSchedule, health, predictGame } from './api/nfl.js';
+import { getNextWeekSchedule, health, predictGame } from './api/client.js';
 import {
     MAX_HISTORY_ENTRIES,
     PREDICTION_HISTORY_KEY,
@@ -306,9 +306,12 @@ export function PredictionProvider( { children } )
     let mounted = true;
     const fetchSchedule = async () =>
     {
+      console.info( "[PredictionContext] Initiating schedule fetch..." );
       try {
         const response = await getNextWeekSchedule();
         if ( !mounted ) return;
+
+        console.debug( "[PredictionContext] Schedule response received:", response );
 
         // Backend returns FullSchedule object with ScheduleGame array.
         // Support both old (direct array) and new (object wrapper) formats.
@@ -317,20 +320,19 @@ export function PredictionProvider( { children } )
           : ( response?.ScheduleGame ?? response?.games ?? [] );
 
         if ( !Array.isArray( scheduleData ) || scheduleData.length === 0 ) {
-          console.warn( '[PredictionContext] Schedule response is empty or invalid:', response );
+          console.warn( '[PredictionContext] Schedule response is empty or invalid. Check backend logs for path resolution issues.', response );
           return;
         }
 
-        console.info( `[scheduleData] Fetched ${scheduleData.length} games from backend schedule API.` );
-        // Extract week from first game and coerce to number. Accept several
-        // possible field names to be resilient against backend shape changes.
-        const rawWeek = scheduleData[ 0 ]?.week ?? scheduleData[ 0 ]?.week_num ?? scheduleData[ 0 ]?.weekNum;
+        // Extract week from first game and coerce to number.
+        const firstGame = scheduleData[ 0 ];
+        const rawWeek = firstGame?.week ?? firstGame?.week_num ?? firstGame?.weekNum;
         const week = Number.isFinite( Number( rawWeek ) ) ? Number( rawWeek ) : 1;
+        
         setSchedule( scheduleData, week );
-
-        console.log( `[PredictionContext] Loaded ${scheduleData.length} games for Week ${week}` );
+        console.info( `[PredictionContext] Success: Loaded ${scheduleData.length} games for Week ${week}` );
       } catch ( err ) {
-        console.error( '[PredictionContext] Failed to fetch schedule:', err );
+        console.error( '[PredictionContext] Failed to fetch schedule. Backend might be down or unreachable.', err );
       }
     };
     fetchSchedule();

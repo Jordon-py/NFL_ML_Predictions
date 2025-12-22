@@ -38,7 +38,7 @@ Prod builds:
   - `DATASET_PATH` — CSV used for schema checks and future-row assembly
   - `ALLOW_FALLBACK_PREDICTIONS` — allow imputation-based predictions when engineered columns are missing
   - `CORS_ORIGINS` — comma-separated list for FastAPI CORS
-- Frontend: uses Vite proxy in dev; in prod, set `VITE_API_URL` or configure `frontend/src/api/client.js`
+- Frontend: uses Vite proxy in dev; in prod, set `VITE_API_BASE_URL` or configure `frontend/src/api/client.js`
 
 ## Common Issues & Fixes
 

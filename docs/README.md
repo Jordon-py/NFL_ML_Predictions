@@ -54,7 +54,7 @@ Redundant or historical docs have been moved to [legacy/](legacy/) to lighten th
 │                        FRONTEND                             │
 │  Vercel: https://nfl-ml-predictions.vercel.app             │
 │  Tech: React + Vite                                         │
-│  Config: VITE_API_URL → Backend                            │
+│  Config: VITE_API_BASE_URL → Backend                            │
 └─────────────────────────────────────────────────────────────┘
                             ↓ HTTP/JSON
 ┌─────────────────────────────────────────────────────────────┐
@@ -78,7 +78,7 @@ Redundant or historical docs have been moved to [legacy/](legacy/) to lighten th
 http://localhost:3000,https://localhost:3000,https://nfl-ml-predictions.vercel.app,https://nfl-predict-frontend.vercel.app
 ```
 
-**Frontend VITE_API_URL:**
+**Frontend VITE_API_BASE_URL:**
 
 ```bash
 # Production

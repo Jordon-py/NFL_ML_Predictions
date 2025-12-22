@@ -37,13 +37,13 @@ CORS_ORIGINS=http://localhost:3000,https://localhost:3000,https://nfl-ml-predict
 **Before:**
 ```bash
 # ❌ WRONG - Comma-separated API URL
-VITE_API_URL=https://nfl-predict-ecf5a5bd34fe.herokuapp.com,localhost:8000
+VITE_API_BASE_URL=https://nfl-predict-ecf5a5bd34fe.herokuapp.com,localhost:8000
 ```
 
 **After:**
 ```bash
 # ✅ CORRECT - Single API URL
-VITE_API_URL=https://nfl-predict-ecf5a5bd34fe.herokuapp.com
+VITE_API_BASE_URL=https://nfl-predict-ecf5a5bd34fe.herokuapp.com
 ```
 
 ---
@@ -100,7 +100,7 @@ VITE_API_URL=https://nfl-predict-ecf5a5bd34fe.herokuapp.com
 │  │  • https://nfl-ml-predictions.vercel.app            │  │
 │  │  • https://nfl-predict-frontend.vercel.app          │  │
 │  │  • React + Vite                                      │  │
-│  │  • VITE_API_URL → Backend                           │  │
+│  │  • VITE_API_BASE_URL → Backend                           │  │
 │  └──────────────────────────────────────────────────────┘  │
 │  ┌──────────────────────────────────────────────────────┐  │
 │  │  Local Development                                   │  │
@@ -163,7 +163,7 @@ VITE_API_URL=https://nfl-predict-ecf5a5bd34fe.herokuapp.com
 ### Frontend Verification
 
 - ✅ **Environment Variables**
-  - `VITE_API_URL` correctly set for dev and prod
+  - `VITE_API_BASE_URL` correctly set for dev and prod
   - Points to correct backend URL
 
 - ✅ **API Client**
@@ -223,7 +223,7 @@ curl https://nfl-predict-ecf5a5bd34fe.herokuapp.com/health
 
 ```bash
 # Set environment variable in Vercel dashboard or use CLI
-vercel env add VITE_API_URL production
+vercel env add VITE_API_BASE_URL production
 
 # Deploy
 cd frontend

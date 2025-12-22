@@ -22,12 +22,8 @@ export class HttpError extends Error {
   }
 }
 
-// If you use Vite proxy, set BASE_URL = "" (empty string) and call "/api/..."
-const RAW_BASE_URL =
-  import.meta.env.VITE_API_BASE ??
-  import.meta.env.VITE_API_BASE_URL ??
-  import.meta.env.VITE_API_URL ??
-  "";
+// If you use Vite proxy, set VITE_API_BASE_URL = "" (empty string) and call "/api/..."
+const RAW_BASE_URL = import.meta.env?.VITE_API_BASE_URL ?? "";
 const BASE_URL = RAW_BASE_URL.replace(/\/+$/, ""); // "" works great with Vite proxy
 export const API_BASE = BASE_URL;
 

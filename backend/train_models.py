@@ -28,7 +28,7 @@ Environment variables:
     RANDOM_SEED   - Random state for reproducibility (default: 42)
 
 Usage:
-    python train_models.py --data 'data/heroku-models/game_features_20251218.csv' --out 'data/heroku-models/models`'
+    python train_models.py --data 'data/heroku-models/game_features_20251221.csv' --out 'data/heroku-models`'
 """
 
 # File: backend/train_models.py

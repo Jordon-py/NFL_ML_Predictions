@@ -73,8 +73,7 @@ git push heroku main --force | Out-Host
 
 Write-Host "[8/8] Deploying frontend to Vercel..." -ForegroundColor Cyan
 # Use repo root vercel.json; suppress prompts
-$env:VITE_API_URL = $ApiBaseUrl
-$env:REACT_APP_API_URL = $ApiBaseUrl
+$env:VITE_API_BASE_URL = $ApiBaseUrl
 vercel --prod --yes | Tee-Object -Variable vercelOut | Out-Host
 
 # Try to parse the production URL from the captured output

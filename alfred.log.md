@@ -460,7 +460,7 @@ ModuleNotFoundError: No module named 'pydantic._internal'
 - Consolidated duplicate `_glob_latest` helper and removed stray example `/retrain` snippet from `main.py`.
 - Added `_infer_raw_feature_columns` to derive model features from the preprocessor or dataset when `metadata.json` is missing them; `/predict` now returns a clear 503 instead of hard-failing.
 - Set `DEFAULT_DATASET` to `backend/data/game_features.csv` (was empty path) so startup uses the engineered dataset by default.
-- API client now respects `VITE_API_BASE` **or** `VITE_API_URL`, retains a single Heroku fallback constant, and surfaces friendlier errors for metadata-related 503s and validation 422s.
+- API client now respects `VITE_API_BASE_URL`, retains a single Heroku fallback constant, and surfaces friendlier errors for metadata-related 503s and validation 422s.
 
 ### Status
 
