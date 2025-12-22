@@ -112,6 +112,8 @@ node_modules/
 *.txt
 
 !README.md
+!requirements.txt
+!requirements-lock.txt
 
 
 ## AI tooling
