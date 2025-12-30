@@ -1,6 +1,6 @@
 {
   "dependencies": {
-    "vercel": "^25.2.0",
+    "vercel": "^25.2.3",
     "vit": "^0.0.1",
     "vite": "^7.2.4"
   }
