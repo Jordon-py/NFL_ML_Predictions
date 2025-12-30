@@ -13,7 +13,12 @@ import styles from './Card.module.css'; // CSS module styles
 
 /**
  * Local lookup of NFL team abbreviations → full team names.
- * Shared by all Card instances; not recreated per render.
+ * This is intentionally defined at the module level so it is:
+ * - shared by all Card instances
+ * - not recreated on every render
+ *
+ * Callers MAY still pass an `nfl_teams` prop to override/extend this map
+ * (e.g., for historical teams), but if they do not, we fall back here.
  */
 const NFL_TEAMS_MAP = {
   ARI: 'Arizona Cardinals',
@@ -119,7 +124,7 @@ const derivePredictionMeta = (prediction) => {
  * @typedef {Object} Matchup
  * @property {string} away_team   - Abbreviation for away team, e.g. "KC".
  * @property {string} home_team   - Abbreviation for home team, e.g. "DAL".
- * @property {string | number | Date} [kickoff] - Kickoff timestamp.
+ * @property {string | number | Date} [kickoff] - Kickoff timestamp (any Date-compatible type).
  * @property {string} [away_logo] - URL for away team logo.
  * @property {string} [home_logo] - URL for home team logo.
  */
@@ -128,10 +133,10 @@ const derivePredictionMeta = (prediction) => {
  * @typedef {Object} Prediction
  * @property {number} [home_win_probability] - 0–1 probability home team wins.
  * @property {number} [away_win_probability] - 0–1 probability away team wins.
- * @property {number} [home_score]
- * @property {number} [away_score]
- * @property {number} [point_diff]
- * @property {boolean} [win_classifier_used]
+ * @property {number} [home_score]           - Predicted or actual home score.
+ * @property {number} [away_score]           - Predicted or actual away score.
+ * @property {number} [point_diff]           - Predicted margin (home - away, usually).
+ * @property {boolean} [win_classifier_used] - Whether a classifier model was used.
  */
 
 /**
@@ -146,49 +151,54 @@ const derivePredictionMeta = (prediction) => {
  * @property {string} [error]
  * @property {number} [index]
  * @property {() => void} [onClick]
- * @property {(matchup: Matchup) => void} [onReset]
- * @property {Record<string, string>} [nfl_teams]
+ * @property {(matchup: Matchup) => void} [onReset] - Optional callback when the reset button is clicked.
+ * @property {Record<string, string>} [nfl_teams]   - Optional override for team name map.
  */
 
 /**
  * Card v2 - Prop-driven & motion-aware.
  *
+ * Props:
+ *  - matchup: { away_team, home_team, kickoff, away_logo, home_logo }
+ *  - prediction?: {
+ *        home_win_probability,
+ *        away_win_probability,
+ *        home_score?,
+ *        away_score?,
+ *        point_diff?,
+ *        win_classifier_used?
+ *    }
+ *  - title?: string   (e.g., "AI Node")
+ *  - status?: string  (e.g., "Active" | "Idle" | "Error")
+ *  - icon?: ReactNode
+ *  - progress?: number (0..100)
+ *  - loading?: boolean
+ *  - error?: string
+ *  - index?: number     (stagger animation index)
+ *  - onClick?: () => void
+ *  - onReset?: (matchup: Matchup) => void
+ *  - nfl_teams?: Record<abbr, fullName> override map
+ *
  * @param {CardProps} props
  */
 export default function Card({
-  nfl_teams,
   matchup,
   prediction,
-  title,
-  status,
-  icon,
-  progress,
   loading = false,
   error,
   index = 0,
   onClick,
   onReset,
 }) {
-  React.useDebugValue('Card');
-
-  // If we do not have a matchup, nothing to render.
   if (!matchup) return null;
 
-  const { away_team, home_team, kickoff, away_logo, home_logo } = matchup;
-  const hasPrediction = !!prediction;
+  const awayTeam = matchup.away_team ?? '';
+  const homeTeam = matchup.home_team ?? '';
+  const awayName = NFL_TEAMS_MAP[awayTeam] ?? awayTeam;
+  const homeName = NFL_TEAMS_MAP[homeTeam] ?? homeTeam;
 
-  // 1) Derived data that does not depend on component state
-  const teamNameMap = getTeamNameMap(nfl_teams);
-  const awayFullName = teamNameMap[away_team] || away_team;
-  const homeFullName = teamNameMap[home_team] || home_team;
-
-  const cardClassNames = buildCardClassNames({
-    hasPrediction,
-    loading,
-    error,
-  });
-
-  const kickoffDisplayTime = getKickoffDisplayTime(kickoff);
+  const kickoff = matchup.kickoff ? new Date(matchup.kickoff) : null;
+  const kickoffLabel = kickoff && !Number.isNaN(kickoff.getTime()) ? kickoff.toLocaleString() : 'TBD';
 
   const { hasScoreDetails, classifierUsed, isExpert, maxConfidence, sim } =
     derivePredictionMeta(prediction);
@@ -262,15 +272,10 @@ export default function Card({
     if (!onClick) return;
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
-      handleArticleClick();
+      onClick();
     }
   };
 
-  /**
-   * Handle click on the "Reset" button.
-   * - Stop the click from bubbling up to the card’s <article> onClick.
-   * - Notify the parent via `onReset(matchup)` so it can clear prediction state.
-   */
   const handleReset = (event) => {
     try {
       event?.stopPropagation?.();
@@ -293,16 +298,15 @@ export default function Card({
   return (
     <article
       className={[
-        cardClassNames,
-        debugClicked ? styles.debugClicked : '',
+        'game-card',
+        loading ? 'game-card--loading' : '',
+        error ? 'game-card--error' : '',
       ]
         .filter(Boolean)
         .join(' ')}
-      // Custom CSS var used by Card.module.css for staggered animations.
-      // @ts-ignore - allow custom property name in inline style.
+      // @ts-ignore custom property used by some animations
       style={{ '--i': index }}
-      aria-pressed={loading ? 'true' : 'false'}
-      onClick={handleArticleClick}
+      onClick={onClick}
       onKeyDown={onClick ? handleKeyDown : undefined}
       role={onClick ? 'button' : undefined}
       tabIndex={onClick ? 0 : -1}

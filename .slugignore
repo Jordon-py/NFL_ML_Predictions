@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Heroku slugignore (FastAPI backend)
 # Keep backend code + required model/data artifacts; exclude dev/frontend cruft.
 
@@ -146,3 +147,45 @@ backend/OUTDIR/
 
 backend/prod-models/
 backend/models/
+=======
+# Heroku slugignore (FastAPI backend)
+# Keep backend code + required model/data artifacts; exclude dev/frontend cruft.
+
+# Frontend (deployed separately on Vercel)
+frontend/
+
+# Node modules
+node_modules/
+**/node_modules/
+
+# Local Python environments
+.venv/
+venv/
+backend/.venv/
+backend/venv/
+env/
+ENV/
+
+**/*.map
+.cache/
+tmp/
+logs/
+__pycache__/
+.vscode/
+.github/
+*.md
+docs/
+tests/
+.git/
+.github/
+frontend/node_modules/
+frontend/src/
+frontend/public/
+backend/__pycache__/
+backend/logs/
+backend/metrics/data/game_features_new.csv
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+>>>>>>> e908bfb18 (Prod/nfl ml vercel (#67))

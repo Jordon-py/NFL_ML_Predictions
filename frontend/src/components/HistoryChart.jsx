@@ -54,44 +54,42 @@ const toDateOrNull = (value) => {
   if (value == null) return null;
   const d = value instanceof Date ? value : new Date(value);
   return isNaN(d.getTime()) ? null : d;
-};
+}
 
-/* ---------- normalization helpers (keep render logic clean) ---------- */
+function extractHomeWinProbability(event) {
+  // Prioritise explicit fields; tolerate multiple shapes
+  if (!event) return null;
+  if (typeof event.home_win_probability === "number") return event.home_win_probability;
+  if (event?.prediction?.home_win_probability != null) return event.prediction.home_win_probability;
+  if (event?.probs?.home != null) return event.probs.home;
+  if (event?.probs?.ensemble != null) return event.probs.ensemble;
+  return null;
+}
 
-/** Prefer `ts`, then `time`, then `game.ts`; return a Date or null. */
-const extractTimestamp = (event) =>
-  toDateOrNull(
-    firstNonNullish(event?.ts, event?.time, event?.game?.ts, null)
-  );
+function toWholePercent(prob) {
+  if (prob == null || !Number.isFinite(Number(prob))) return null;
+  return Math.round(Number(prob) * 100);
+}
+
+function buildGameLabel(event, index) {
+  const g = event?.game ?? event?.request ?? null;
+  if (g) {
+    const season = g.season ?? "";
+    const week = g.week ? `W${g.week}` : "";
+    const away = (g.away_abbr || g.away_team || g.away) ?? "away";
+    const home = (g.home_abbr || g.home_team || g.home) ?? "home";
+    return `${season} ${week} ${away}@${home}`.trim();
+  }
+  return `prediction-${index}`;
+}
+
 
 /**
  * Prefer `probs.home`, fallback to other sources; return [0..1] or null.
  * Note: we include probs.ensemble and probs.away so we can still render *some*
  * probability even if the shape varies between callers.
  */
-const extractHomeWinProbability = (event) =>
-  firstNonNullish(
-    event?.probs?.home,
-    event?.probs?.ensemble,
-    event?.probs?.away,
-    event?.home_win_probability,
-    null
-  );
 
-/** Build a readable game label, or a generic entry label if no game info exists. */
-const buildGameLabel = (event, index) => {
-  const g = event?.game;
-
-  if (g?.season && g?.week && g?.away_abbr && g?.home_abbr) {
-    return `${g.season} W${g.week} ${g.away_abbr}@${g.home_abbr}`;
-  }
-
-  if (g?.away_abbr || g?.home_abbr) {
-    return `${g?.away_abbr ?? "Away"} @ ${g?.home_abbr ?? "Home"}`;
-  }
-
-  return `Entry ${index + 1}`;
-};
 
 /**
  * HistoryChart component
@@ -162,10 +160,22 @@ export default function HistoryChart({ history: historyOverride = [] }) {
   }
 
   return (
+
     <section className="history-chart" aria-live="polite">
       <header>
         <h2>Prediction History</h2>
+       
         <small>
+          {statsSummary.totalCount} item(s)
+          {statsSummary.mostRecentDate && (
+            <>
+              {" "}
+              • last: {statsSummary.mostRecentDate.toLocaleString()}
+            </>
+          )}
+          {statsSummary.averageHomeWinPercent != null && (
+            <> • avg home win: {statsSummary.averageHomeWinPercent}%</>
+          )}
           {statsSummary.totalCount} item(s)
           {statsSummary.mostRecentDate && (
             <>
@@ -179,6 +189,20 @@ export default function HistoryChart({ history: historyOverride = [] }) {
         </small>
       </header>
 
+      <ol className="history-points a-text-fade-slide">
+        {chartPoints.slice(0, 16).map((row) => (
+          <li key={row.index} title={row.label}>
+            <code>
+              {row.timestamp ? row.timestamp.toLocaleString() : "—"}
+            </code>
+            {" — "}
+            <strong>
+              {row.homeWinPercent != null ? `${row.homeWinPercent}%` : "n/a"}
+            </strong>{" "}
+            <em>({row.label})</em>
+          </li>
+        ))}
+      </ol>
       <ol className="history-points a-text-fade-slide">
         {chartPoints.slice(0, 16).map((row) => (
           <li key={row.index} title={row.label}>

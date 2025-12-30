@@ -1,3 +1,8 @@
+<<<<<<< HEAD
+# Archived: API and CORS Verification Checklist
+
+This document has been archived during documentation consolidation. See `docs/DOCS_CONSOLIDATED.md` for the current, canonical guidance. The original version is available in repository history if needed.
+=======
 # API and CORS Verification Checklist
 
 ## Overview
@@ -319,3 +324,4 @@ git push heroku main
 
 **Verification Completed:** 2025-10-13  
 **Next Review:** After next deployment
+>>>>>>> cd97fecacdc0a2f3d4ee6cd29effaa9619489d75
