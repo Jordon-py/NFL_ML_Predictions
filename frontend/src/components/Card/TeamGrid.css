@@ -28,49 +28,11 @@
 /* Root section */
 
 .team-grid {
-    width: 100%;
-    max-width: 30rem;
-    /* margin: 0 auto; */
-    padding: 1.5rem 1rem 2.5rem;
-    display: flex;
-    /* gap: 1.5rem; */
-    flex-direction: column;
-}
-
-/* Header */
-
-.team-grid__header {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-}
-
-.team-grid__heading {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.team-grid__badge {
-  padding: 0.15rem 0.6rem;
-  border-radius: 999px;
-  border: 1px solid var(--c-border-subtle);
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--c-ink-soft);
-  background: rgba(15, 23, 42, 0.65);
-}
-
-.team-grid__title {
-  font-size: 1.4rem;
-  font-weight: 600;
-  color: #e5e7eb;
-}
-
-.team-grid__subtitle {
-  font-size: 0.9rem;
-  color: var(--c-ink-soft);
+  width: 100%;
+  max-width: 100%;
+  /* Enable container queries below (they key off `team-grid`) */
+  container-name: team-grid;
+  container-type: inline-size;
 }
 
 /* Grid */
@@ -80,37 +42,13 @@
   max-width: 100%;
 }
 
-/* Empty / loading state */
+/* --- Responsive logic via Container Queries --- */
 
-.team-grid__empty {
-  min-height: 180px;
-  border-radius: var(--radius-card);
-  border: 1px dashed var(--c-border-subtle);
-  display: grid;
-  place-items: center;
-  padding: 1.25rem;
-  color: var(--c-ink-soft);
-  background: radial-gradient(circle at top, #0b112040, #020617 60%);
-}
-
-.team-grid__empty-text {
-  text-align: center;
-  max-width: 360px;
-  font-size: 0.95rem;
-}
-
-.team-grid__spinner {
-  width: 32px;
-  height: 32px;
-  border-radius: 999px;
-  border: 3px solid var(--c-border-subtle);
-  border-top-color: var(--c-brand-1);
-  animation: team-grid-spin 0.7s linear infinite;
-}
-
-@keyframes team-grid-spin {
-  to {
-    transform: rotate(360deg);
+/* Compact Context (Mobile/Sidebar) */
+@container team-grid (max-width: 480px) {
+  .team-grid__grid {
+    grid-template-columns: 1fr; /* Force single stack */
+    gap: 1.25rem;
   }
 }
 
@@ -122,6 +60,7 @@
   }
 }
 
+/* --- Component: Game Card --- */
 .game-card {
   position: relative;
   border-radius: var(--radius-card);
