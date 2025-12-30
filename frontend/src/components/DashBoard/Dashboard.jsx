@@ -124,6 +124,7 @@ export default function Dashboard({
             </div>
           </div>
         </section>
+      )}
 
         <section className="prediction-results-section advanced" aria-live="polite">
           <PredictionResult entry={current} />
