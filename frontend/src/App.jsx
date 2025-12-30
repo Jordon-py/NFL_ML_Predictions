@@ -3,7 +3,7 @@
  * 
  * Root React application component for the NFL prediction UI.
  * 
- * - Provides prediction context to all children via PredictionProvider.
+ * - Holds shared prediction state in App and passes it via props.
  * - Wraps the UI in a shared ErrorBoundary for global error handling.
  * - Defines top-level routes using React Router (Dashboard, History, Stats, Settings, 404).
  * - All prediction logic and state live in child components (e.g., TeamGrid, HistoryPage).
@@ -21,8 +21,8 @@
 
 import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { PredictionProvider } from './PredictionContext';
 import ErrorBoundary from './components/ErrorBoundary';
+import { usePredictionState } from './hooks/usePredictionState';
 
 // Lazy load components for better performance
 const Dashboard = lazy(() => import('./components/DashBoard/Dashboard'));
@@ -49,25 +49,72 @@ function NotFoundPage() {
   );
 }
 
-// Main App Component with centralized context and error handling
+// Main App Component with shared state and error handling
 function App() {
+  const predictionState = usePredictionState();
+
+  const {
+    schedule,
+    week,
+    teams,
+    predictions,
+    loading,
+    errors,
+    current,
+    history,
+    health,
+    setPrediction,
+    setLoading,
+    setError,
+    pushHistory,
+    resetHistory,
+    count,
+  } = predictionState;
+
   return (
     <ErrorBoundary>
-      <PredictionProvider>
-        <Router>
-          <div className="app-container">
-            <Suspense fallback={<div role="status" aria-live="polite">Loading...</div>}>
-              <Routes>
-                <Route path="/" element={<Dashboard />} />
-                <Route path="/history" element={<HistoryPage />} />
-                <Route path="/stats" element={<StatsPage />} />
-                <Route path="/settings" element={<SettingsPage />} />
-                <Route path="*" element={<NotFoundPage />} />
-              </Routes>
-            </Suspense>
-          </div>
-        </Router>
-      </PredictionProvider>
+      <Router>
+        <div className="app-container">
+          <Suspense fallback={<div role="status" aria-live="polite">Loading...</div>}>
+            <Routes>
+              <Route
+                path="/"
+                element={(
+                  <Dashboard
+                    schedule={schedule}
+                    week={week}
+                    teams={teams}
+                    predictions={predictions}
+                    loading={loading}
+                    errors={errors}
+                    current={current}
+                    history={history}
+                    health={health}
+                    setPrediction={setPrediction}
+                    setLoading={setLoading}
+                    setError={setError}
+                    pushHistory={pushHistory}
+                  />
+                )}
+              />
+              <Route
+                path="/history"
+                element={(
+                  <HistoryPage
+                    history={history}
+                    health={health}
+                    onClearHistory={resetHistory}
+                    historyCount={count}
+                  />
+                )}
+              />
+              <Route path="/stats" element={<StatsPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
+              <Route path="*" element={<NotFoundPage />} />
+            </Routes>
+          </Suspense>
+        </div>
+      </Router>
     </ErrorBoundary>
   );
 }

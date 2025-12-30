@@ -29,14 +29,14 @@ FRONTEND_BUILD = FRONTEND_DIST  # Alias for compatibility
 TRUTHY = {"true", "t", "1", "yes", "y"}
 
 
-def _load_env() -> None:
-    """
-    Load .env from backend or repo root.
-    """
-    dotenv_loaded = load_dotenv(BACKEND_DIR / ".env")
+def _load_env( dotenv_path: Path) -> None:
+    """Load .env from backend or repo root. Prefers backend/.env."""
+    dotenv_loaded = load_dotenv(dotenv_path)
     if not dotenv_loaded:
-        load_dotenv(BASE_DIR / ".env")
-_load_env()
+        return load_dotenv(BASE_DIR / ".env")
+    return dotenv_loaded
+
+
 
 
 # Data and schedule defaults (lazily loaded to avoid startup failures)

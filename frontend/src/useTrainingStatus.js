@@ -18,7 +18,7 @@
  *   - If you add more status states, keep them documented so render logic stays predictable.
  */
 
-import {useCallback, useRef, useState} from 'react';
+import {useRef, useState} from 'react';
 // Example: import { getTrainingStatus } from './api/client.js';
 
 export default function useTrainingStatus(pollMs = 2500, maxMs = 120000) {
@@ -28,13 +28,13 @@ export default function useTrainingStatus(pollMs = 2500, maxMs = 120000) {
   const intervalRef = useRef(null);
   const timeoutRef = useRef(null);
 
-  // Stop helper clears both timers. We memoise so dependants can use it safely.
-  const stop = useCallback(() => {
+  // Stop helper clears both timers.
+  const stop = () => {
     if (intervalRef.current) {clearInterval(intervalRef.current); intervalRef.current = null;}
     if (timeoutRef.current) {clearTimeout(timeoutRef.current); timeoutRef.current = null;}
-  }, []);
+  };
 
-  const startPolling = useCallback(() => {
+  const startPolling = () => {
     stop();
     setStatus({state: 'checking'});
 
@@ -45,12 +45,13 @@ export default function useTrainingStatus(pollMs = 2500, maxMs = 120000) {
         // setStatus(s);
 
         // Placeholder logic for demo purposes
-        setStatus((prev) => (prev.state === 'checking' ? {state: 'running'} : {state: 'done'}));
-
-        // When training finishes, stop polling.
-        if (['done', 'failed'].includes(status.state)) {
-          stop();
-        }
+        setStatus((prev) => {
+          const next = prev.state === 'checking' ? {state: 'running'} : {state: 'done'};
+          if (['done', 'failed'].includes(next.state)) {
+            stop();
+          }
+          return next;
+        });
       } catch (e) {
         setStatus({state: 'failed', error: e.message});
         stop();
@@ -62,7 +63,7 @@ export default function useTrainingStatus(pollMs = 2500, maxMs = 120000) {
       setStatus((s) => (s.state === 'done' ? s : {state: 'timeout'}));
       stop();
     }, maxMs);
-  }, [pollMs, maxMs, status.state, stop]);
+  };
 
   return {status, startPolling, stop};
 }

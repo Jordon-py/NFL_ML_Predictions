@@ -2,7 +2,7 @@
  * PredictionResult.jsx
  * --------------------
  * Component Purpose:
- *   Present the most recent prediction entry supplied by the context.
+ *   Present the most recent prediction entry supplied by the parent.
  *
  * Core Logic Overview:
  *   - Guard against `null` entries and return a helpful empty message.
@@ -10,8 +10,8 @@
  *   - Render structured sections (meta, scores, probabilities) for clarity.
  *
  * Modification Guide:
- *   - Keep heavy calculations out of the component—normalise data inside the
- *     context or dedicated selectors.
+ *   - Keep heavy calculations out of the component—normalise data in
+ *     parent state or dedicated helpers.
  *   - When adding new metrics, ensure you handle `null`/`undefined` so the UI
  *     never crashes while the backend evolves.
  */
@@ -142,6 +142,7 @@ export default function PredictionResult({ entry }) {
     ensemble: base.probs?.ensemble ?? null,
   };
 
+
   const homePct = probs.home != null ? Math.round(probs.home * 100) : null;
   const awayPct = probs.away != null ? Math.round(probs.away * 100) : null;
 
@@ -150,13 +151,13 @@ export default function PredictionResult({ entry }) {
   const showExpert = !!sim;
 
   // Compute confidence ranges (10th - 90th percentile ≈ mean ± 1.28 * std)
-  const homeRange = showExpert ? [
-    Math.round(sim.sim_home_score - 1.28 * sim.sim_std_home),
-    Math.round(sim.sim_home_score + 1.28 * sim.sim_std_home)
+  const homeRange = showExpert && sim.sim_home_score != null && sim.sim_home_sd != null ? [
+    Math.round(sim.sim_home_score - 1.28 * sim.sim_home_sd),
+    Math.round(sim.sim_home_score + 1.28 * sim.sim_home_sd)
   ] : null;
-  const awayRange = showExpert ? [
-    Math.round(sim.sim_away_score - 1.28 * sim.sim_std_away),
-    Math.round(sim.sim_away_score + 1.28 * sim.sim_std_away)
+  const awayRange = showExpert && sim.sim_away_score != null && sim.sim_away_sd != null ? [
+    Math.round(sim.sim_away_score - 1.28 * sim.sim_away_sd),
+    Math.round(sim.sim_away_score + 1.28 * sim.sim_away_sd)
   ] : null;
 
   return (
@@ -178,12 +179,13 @@ export default function PredictionResult({ entry }) {
         )}
       </div>
 
+
       <div className="expert-content">
         <div className="team-row">
           <div className="team-block home">
             <span className="team-name">{game.home_abbr}</span>
             <span className="score-main">{Math.round(metrics.home_score)}</span>
-            {showExpert && (
+            {showExpert && homeRange && (
               <div className="range-box">
                 <span className="range-label">Expected Range</span>
                 <span className="range-val">{Math.max(0, homeRange[0])}–{homeRange[1]}</span>
@@ -199,7 +201,7 @@ export default function PredictionResult({ entry }) {
           <div className="team-block away">
             <span className="team-name">{game.away_abbr}</span>
             <span className="score-main">{Math.round(metrics.away_score)}</span>
-            {showExpert && (
+            {showExpert && awayRange && (
               <div className="range-box">
                 <span className="range-label">Expected Range</span>
                 <span className="range-val">{Math.max(0, awayRange[0])}–{awayRange[1]}</span>
@@ -211,7 +213,7 @@ export default function PredictionResult({ entry }) {
         <div className="win-probability-expert">
           <div className="prob-header">
             <span>Win Probability</span>
-            {showExpert && <span className="sim-meta">{sim.n_sims.toLocaleString()} trials</span>}
+            {showExpert && <span className="sim-meta">{sim.sim_n?.toLocaleString() ?? '2000'} trials</span>}
           </div>
           <div className="prob-bar-wrapper">
             <div className="prob-bar-base">
@@ -234,7 +236,7 @@ export default function PredictionResult({ entry }) {
         {showExpert && (
           <div className="expert-brief">
             <p>
-              Model Confidence: <strong>High</strong>. Outcomes modeled using Gaussian distribution based on historical RMSE ({sim.sim_std_home?.toFixed(1)}).
+              Model Confidence: <strong>High</strong>. Outcomes modeled using Gaussian distribution based on historical RMSE ({sim.sim_home_sd?.toFixed(1)}).
             </p>
           </div>
         )}

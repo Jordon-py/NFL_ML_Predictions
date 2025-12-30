@@ -13,11 +13,11 @@
  * Data contract (input):
  *   Primary usage:
  *     <HistoryChart />
- *     - Reads history from PredictionContext via selector hooks.
+ *     - Reads history from props (empty array fallback).
  *
  *   Optional override:
  *     <HistoryChart history={arrayOfEvents} />
- *     - If `history` is provided and is an array, it is used instead of context.
+ *     - If `history` is provided and is an array, it is used directly.
  *
  *   Expected event shape (loose union — missing fields are tolerated):
  *     {
@@ -34,13 +34,12 @@
  *     }
  *
  * Key ideas:
- *   • Selector hooks (usePredictionHistory) hide context + defensive checks.
+ *   • Simple props keep render logic easy to follow.
  *   • Normalization helpers (extractTimestamp / extractHomeWinProbability / buildGameLabel) keep render logic clean.
- *   • useMemo caches derived rows and summary stats so we don’t recompute on every render.
+ *   • Derived rows and summary stats are computed inline for simplicity.
  *   • We fail gracefully: missing fields render "—" or "n/a" instead of throwing.
  */
-import React, { useMemo } from "react";
-import { usePredictionHistory } from "../hooks/predictionSelectors.js";
+import React from "react";
 
 /* ---------- tiny utilities ---------- */
 
@@ -98,13 +97,10 @@ const buildGameLabel = (event, index) => {
  * HistoryChart component
  *
  * Props:
- *   - history (optional): if provided and is an array, it overrides context history.
- *     Otherwise we use history from PredictionContext via usePredictionHistory().
+ *   - history (optional): if provided and is an array, it is used directly.
  */
-export default function HistoryChart({ history: historyOverride }) {
-  // 1) Get a normalized history array, preferring explicit `history` if valid.
-  //    The selector hides the context access + "is this an array?" checks.
-  const historyItems = usePredictionHistory(historyOverride);
+export default function HistoryChart({ history: historyOverride = [] }) {
+  const historyItems = Array.isArray(historyOverride) ? historyOverride : [];
 
   /**
    * chartPoints: normalized, render-ready rows
@@ -113,19 +109,17 @@ export default function HistoryChart({ history: historyOverride }) {
    *   - homeWinPercent: integer percent or null
    *   - label: string
    */
-  const chartPoints = useMemo(() => {
-    return historyItems.map((event, index) => {
-      const timestamp = extractTimestamp(event);
-      const prob = extractHomeWinProbability(event);
+  const chartPoints = historyItems.map((event, index) => {
+    const timestamp = extractTimestamp(event);
+    const prob = extractHomeWinProbability(event);
 
-      return {
-        index,
-        timestamp,
-        homeWinPercent: toWholePercent(prob),
-        label: buildGameLabel(event, index),
-      };
-    });
-  }, [historyItems]);
+    return {
+      index,
+      timestamp,
+      homeWinPercent: toWholePercent(prob),
+      label: buildGameLabel(event, index),
+    };
+  });
 
   /**
    * statsSummary: small header stats we can show users
@@ -133,27 +127,25 @@ export default function HistoryChart({ history: historyOverride }) {
    *   - mostRecentDate: Date|null (based on first item in the array)
    *   - averageHomeWinPercent: integer percent or null
    */
-  const statsSummary = useMemo(() => {
-    const percentValues = chartPoints
-      .map((p) => p.homeWinPercent)
-      .filter((n) => typeof n === "number");
+  const percentValues = chartPoints
+    .map((p) => p.homeWinPercent)
+    .filter((n) => typeof n === "number");
 
-    const averageHomeWinPercent = percentValues.length
-      ? Math.round(
-          percentValues.reduce((a, b) => a + b, 0) / percentValues.length
-        )
-      : null;
+  const averageHomeWinPercent = percentValues.length
+    ? Math.round(
+        percentValues.reduce((a, b) => a + b, 0) / percentValues.length
+      )
+    : null;
 
-    const mostRecentDate = historyItems[0]
-      ? extractTimestamp(historyItems[0])
-      : null;
+  const mostRecentDate = historyItems[0]
+    ? extractTimestamp(historyItems[0])
+    : null;
 
-    return {
-      totalCount: historyItems.length,
-      mostRecentDate,
-      averageHomeWinPercent,
-    };
-  }, [chartPoints, historyItems]);
+  const statsSummary = {
+    totalCount: historyItems.length,
+    mostRecentDate,
+    averageHomeWinPercent,
+  };
 
   /* ---------- render ---------- */
 

@@ -24,7 +24,7 @@
 //   - client.js normalizes getPredictionHistory() into { entries, total, limit }
 //     and getStatusOverview() into a safe shape.
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import NavBar from "../components/NavBar/NavBar.jsx";
 import HistoryChart from "../components/HistoryChart.jsx";
 import {
@@ -177,22 +177,15 @@ export default function StatsPage() {
       : "n/a";
 
   // Match schedule rows to predictions by either canonical id or composite key.
-  const historyMap = useMemo(() => {
-    const map = new Map();
+  const historyMap = new Map();
+  for (const entry of history) {
+    if (!entry) continue;
 
-    for (const entry of history) {
-      if (!entry) continue;
+    if (entry.game_id) historyMap.set(entry.game_id, entry);
 
-      // 1) canonical backend id
-      if (entry.game_id) map.set(entry.game_id, entry);
-
-      // 2) composite key
-      const key = toGameKey(entry);
-      if (key) map.set(key, entry);
-    }
-
-    return map;
-  }, [history]);
+    const key = toGameKey(entry);
+    if (key) historyMap.set(key, entry);
+  }
 
   const scheduleRows = Array.isArray(schedule) ? schedule : [];
   const currentWeek =

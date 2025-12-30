@@ -1,16 +1,7 @@
-// Shared helpers for PredictionContext
+// Shared helpers for prediction state and UI normalization.
 
 export const PREDICTION_HISTORY_KEY = "prediction_history";
 export const MAX_HISTORY_ENTRIES = 100;
-
-/**
- * Safely access import.meta.env without tripping TS definitions.
- * @returns {Record<string, any> | undefined}
- */
-export function getMetaEnv() {
-  const meta = typeof import.meta !== "undefined" ? /** @type {any} */ (import.meta) : undefined;
-  return meta?.env;
-}
 
 /**
  * Build a consistent game key from either schedule rows or prediction entries.
@@ -57,6 +48,15 @@ export function parseTeamsCsv(text) {
   if (!text) return {};
   const lines = text.trim().split(/\r?\n/);
   const out = {};
+  // Frontend aliases to match backend normalization
+  const ALIASES = {
+    "LA": "LAR",
+    "STL": "LAR",
+    "SD": "LAC",
+    "OAK": "LV"
+  };
+
+  // 1. Build canonical map
   for (let i = 1; i < lines.length; i += 1) {
     const line = lines[i].trim();
     if (!line) continue;
@@ -70,5 +70,13 @@ export function parseTeamsCsv(text) {
       logoUrl: (logoUrl || "").trim(),
     };
   }
+
+  // 2. Populate aliases
+  Object.entries(ALIASES).forEach(([alias, canonical]) => {
+    if (out[canonical] && !out[alias]) {
+      out[alias] = out[canonical];
+    }
+  });
+
   return out;
 }

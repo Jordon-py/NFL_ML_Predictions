@@ -5,7 +5,7 @@
 //
 // Interacts With:
 //   - TeamGrid (parent grid layout).
-//   - PredictionContext (provides `matchup` + `prediction` data).
+//   - Parent container (provides `matchup` + `prediction` data).
 //   - Backend /predict responses (home/away win probabilities, scores).
 
 import React from 'react';

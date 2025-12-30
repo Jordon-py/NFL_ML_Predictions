@@ -1,6 +1,4 @@
-// Button.jsx
 import React from "react";
-
 /**
  * Button (Minimal + Spinner)
  * ------------------------------------------------------------

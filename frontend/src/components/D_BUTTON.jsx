@@ -3,42 +3,30 @@
  * -----------------------------------
  * Purpose:
  *   Provide a single, accessible control to clear the prediction history.
- *   Uses the context action (resetHistory) and also syncs localStorage.
+ *   Uses a parent-provided handler and relies on App state to persist.
  *
  * Contract:
  *   - No props required.
  *   - When clicked, clears history and announces the action to screen readers.
  *
  * Notes:
- *   - The PredictionProvider persists history under KEY = "prediction_history".
- *   - We call resetHistory() and then proactively write [] to localStorage to
- *     ensure immediate UI consistency for components reading from storage.
+ *   - The parent state owns persistence; this button just triggers it.
  */
-import { useCallback } from 'react';
-import { usePredictions } from '../PredictionContext.jsx';
+import React from "react";
 
-const KEY = 'prediction_history';
 
-export default function D_BUTTON() {
-  const { resetHistory, count } = usePredictions();
-
-  const onClear = useCallback(() => {
-    try {
-      resetHistory();
-      // Force storage sync for consumers that hydrate from localStorage
-      localStorage.setItem(KEY, JSON.stringify([]));
-      // Optional console note in dev
-      if (import.meta?.env?.DEV) console.info('[D_BUTTON] Cleared prediction history');
-    } catch (err) {
-      console.error('Failed to clear history:', err);
+export default function D_BUTTON({ onClear, count = 0 }) {
+  const handleClear = () => {
+        if (typeof onClear === 'function') {
+          onClear();
     }
-  }, [resetHistory]);
+  };
 
   return (
     <button
       type="button"
       className="clear-history-button"
-      onClick={onClear}
+      onClick={handleClear}
       aria-label="Clear prediction history"
       title="Clear prediction history"
       disabled={count === 0}

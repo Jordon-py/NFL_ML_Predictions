@@ -2,7 +2,7 @@
  * predictionHelpers.js
  * ---------------------
  * Utility functions for normalizing prediction data across the app.
- * Separated from PredictionContext to maintain Vite Fast Refresh compatibility.
+ * Separated from UI components to keep Vite Fast Refresh stable.
  */
 
 /**

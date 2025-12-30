@@ -63,6 +63,20 @@ def resolve_model_path(key: str, filename: str) -> Path:
     return p.resolve()
 
 
+def to_pandas_safe(obj) -> pd.DataFrame:
+    """Accept pandas or Polars DataFrame/LazyFrame; return pandas.DataFrame."""
+    if obj.__class__.__module__.startswith("pandas"):
+        return obj
+    if hasattr(obj, "collect"):
+        obj = obj.collect()
+    if hasattr(obj, "to_pandas"):
+        try:
+            return obj.to_pandas(use_pyarrow_extension_array=False)
+        except TypeError:
+            return obj.to_pandas()
+    raise TypeError(f"Unsupported table type for to_pandas_safe: {type(obj)}")
+
+
 # ---------------------------------------------------------------------------
 # Normalization helpers
 # ---------------------------------------------------------------------------
@@ -285,10 +299,20 @@ def ensure_actual_winner(df: pd.DataFrame) -> pd.DataFrame:
     """
     out = df.copy()
     
+    
     if "home_win" in out.columns:
         win_series = pd.Series(out["home_win"], index=out.index, dtype="boolean")
     elif {"home_points_for", "away_points_for"}.issubset(out.columns):
-        win_series = pd.Series(out["home_points_for"] > out["away_points_for"], index=out.index, dtype="boolean")
+        # Handle NA scores (future games) gracefully
+        # If scores are NA, comparison is NA (using nullable boolean)
+        pf = pd.to_numeric(out["home_points_for"], errors="coerce")
+        pa = pd.to_numeric(out["away_points_for"], errors="coerce")
+        
+        # Where both valid, calculate win
+        mask_valid = pf.notna() & pa.notna()
+        win_series = pd.Series(pd.NA, index=out.index, dtype="boolean")
+        win_series.loc[mask_valid] = (pf[mask_valid] > pa[mask_valid])
+        
     elif "winner" in out.columns:
         winner_col = out["winner"]
         if pd.api.types.is_bool_dtype(winner_col.dtype):
@@ -298,7 +322,10 @@ def ensure_actual_winner(df: pd.DataFrame) -> pd.DataFrame:
             win_series.loc[winner_col == out["home_team"]] = True
             win_series.loc[winner_col == out["away_team"]] = False
     else:
-        raise ValueError("Need either 'home_win', scores, or 'winner' to infer outcome.")
+        # If still failing, check if we can just default to all NA (e.g. inference only)
+        # But for training this is bad. For live prediction, it's expected for limited rows.
+        # Let's inspect columns to help debugging
+        raise ValueError(f"Need either 'home_win', scores, or 'winner' to infer outcome. Found: {list(out.columns)}")
 
     out["home_win"] = win_series
     actual = pd.Series(pd.NA, index=out.index, dtype="string")
@@ -335,5 +362,6 @@ __all__ = [
     'coerce_season_week',
     'make_time_key',
     'ensure_actual_winner',
-    'process_dataset'
+    'process_dataset',
+    '_rolling_prior_stats'
 ]

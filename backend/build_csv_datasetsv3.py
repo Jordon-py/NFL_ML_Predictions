@@ -29,10 +29,10 @@ Additional quick starts (common option combinations):
 
 - Build without team encodings and skip calibration rows (useful when
     creating numeric-only training sets or debugging):
-    python build_csv_datasetsv3.py --start 2014 --end 2025 --out-dir ./data/datasets --encode 'onehot' --no-calibration-rows --save-dominance-matrix --legacy-root-copy
+    python build_csv_datasetsv3.py --start 2019 --end 2025 --out-dir ./data/datasets --encode 'onehot' --no-calibration-rows --save-dominance-matrix --legacy-root-copy ./data/dominance_log.txt
 
 - Build and persist pairwise dominance artifacts (matrix and human-readable log):
-    python build_csv_datasetsv3.py --start 2018 --end 2025 --out-dir ./data/datasets --save-dominance-matrix --dominance-log ./data/dominance_log.txt
+    python build_csv_datasetsv3.py --start 2019 --end 2025 --out-dir ./data/datasets --save-dominance-matrix --dominance-log ./data/dominance_log.txt
 
 - Create dataset and also write a legacy root-level copy for compatibility
     with older pipelines / CI hooks:
@@ -68,7 +68,7 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.linear_model import Ridge
 
 # Shared feature engineering utilities
-from utils.feature_helpers import (
+from backend.utils.feature_helpers import (
     make_time_key,
     _rolling_prior_stats,
     _ffill_prior_features,
@@ -261,116 +261,18 @@ def load_team_game_metrics(pbp_path: Path) -> pd.DataFrame:
     pbp["season"] = pbp["season"].astype(int)
     pbp["week"] = pbp["week"].astype(int)
 
-    for col in [
-        "epa",
-        "success",
-        "pass",
-        "xpass",
-        "pass_attempt",
-        "rush_attempt",
-        "third_down_converted",
-        "third_down_failed",
-        "interception",
-        "fumble_lost",
-        "yards_gained",
-    ]:
-        if col in pbp.columns:
-            pbp[col] = pbp[col].fillna(0.0)
-        else:
-            pbp[col] = 0.0
+    # Delegate to shared feature engine for consistent metric calculation
+    # We pass the raw PBP dataframe to the engine
+    if pbp is None or pbp.empty:
+        return pd.DataFrame(columns=["season", "week", "game_id", "team"])
 
-    pbp["turnover"] = pbp["interception"] + pbp["fumble_lost"]
-    pbp["explosive_play"] = ((pbp["pass"] == 1.0) & (pbp["yards_gained"] >= 20)) | (
-        (pbp["rush_attempt"] == 1.0) & (pbp["yards_gained"] >= 15)
-    )
+    # Ensure required columns for engine
+    pbp["season"] = pbp["season"].astype(int)
+    pbp["week"] = pbp["week"].astype(int)
 
-    off_group = ["season", "week", "game_id", "posteam"]
-    off_agg = (
-        pbp.groupby(off_group)
-        .agg(
-            off_epa_per_play=("epa", "mean"),
-            off_success_rate=("success", "mean"),
-            off_pass_rate=("pass", "mean"),
-            off_expected_pass_rate=("xpass", "mean"),
-            off_pass_attempts=("pass_attempt", "sum"),
-            off_rush_attempts=("rush_attempt", "sum"),
-            off_turnovers=("turnover", "sum"),
-            off_explosive_rate=("explosive_play", "mean"),
-            off_third_down_conv=("third_down_converted", "sum"),
-            off_third_down_fail=("third_down_failed", "sum"),
-        )
-        .reset_index()
-    )
-
-    off_agg["off_third_down_total"] = (
-        off_agg["off_third_down_conv"] + off_agg["off_third_down_fail"]
-    )
-    off_agg["off_third_down_pct"] = np.where(
-        off_agg["off_third_down_total"] > 0,
-        off_agg["off_third_down_conv"] / off_agg["off_third_down_total"],
-        np.nan,
-    )
-    off_agg["off_pass_over_expected"] = (
-        off_agg["off_pass_rate"] - off_agg["off_expected_pass_rate"]
-    )
-
-    def_group = ["season", "week", "game_id", "defteam"]
-    def_agg = (
-        pbp.groupby(def_group)
-        .agg(
-            def_epa_allowed=("epa", "mean"),
-            def_success_rate_allowed=("success", "mean"),
-            def_explosive_rate_allowed=("explosive_play", "mean"),
-            def_takeaways=("turnover", "sum"),
-            def_pass_attempts_faced=("pass_attempt", "sum"),
-            def_rush_attempts_faced=("rush_attempt", "sum"),
-        )
-        .reset_index()
-    )
-    def_agg["def_epa_per_play"] = -def_agg["def_epa_allowed"]
-    total_def_plays = (
-        def_agg["def_pass_attempts_faced"] + def_agg["def_rush_attempts_faced"]
-    )
-    def_agg["def_takeaway_rate"] = np.where(
-        total_def_plays > 0,
-        def_agg["def_takeaways"] / total_def_plays,
-        np.nan,
-    )
-
-    metrics = off_agg.rename(columns={"posteam": "team"}).merge(
-        def_agg.rename(columns={"defteam": "team"}),
-        on=["season", "week", "game_id", "team"],
-        how="outer",
-    )
-
-    metrics["off_total_plays"] = metrics["off_pass_attempts"].fillna(0) + metrics[
-        "off_rush_attempts"
-    ].fillna(0)
-    metrics["off_turnover_rate"] = np.where(
-        metrics["off_total_plays"] > 0,
-        metrics["off_turnovers"].fillna(0) / metrics["off_total_plays"],
-        np.nan,
-    )
-
-    metrics = metrics.drop(
-        columns=[
-            "off_third_down_total",
-            "def_epa_allowed",
-            "def_pass_attempts_faced",
-            "def_rush_attempts_faced",
-            "off_pass_attempts",
-            "off_rush_attempts",
-            "off_turnovers",
-            "off_third_down_conv",
-            "off_third_down_fail",
-            "def_takeaways",
-            "off_total_plays",
-            "off_pass_rate",
-            "off_expected_pass_rate",
-        ],
-        errors="ignore",
-    )
-
+    from backend.utils.feature_engine import calculate_team_metrics
+    metrics = calculate_team_metrics(pbp)
+    
     return metrics.reset_index(drop=True)
 
 
@@ -733,8 +635,10 @@ def add_features(
             right=advanced_metrics, on=["season", "week", "game_id", "team"], how="left"
         )
 
-    for w in windows:
-        long = _rolling_prior_stats(long, window=w, advanced_cols=advanced_cols)
+    
+    # Use shared engine for rolling features
+    from backend.utils.feature_engine import calculate_rolling_features
+    long = calculate_rolling_features(long, windows)
 
     if advanced_cols:
         long = long.drop(columns=advanced_cols, errors="ignore")
@@ -1654,7 +1558,7 @@ def create_target_features(df: pd.DataFrame) -> pd.DataFrame:
 # ---------------------------------------------------------------------
 
 
-def build_dataset(
+def  build_dataset(
     start_season: int,
     end_season: int,
     out_dir: Path,

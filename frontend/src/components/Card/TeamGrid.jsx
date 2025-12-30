@@ -8,7 +8,7 @@
  * and user interactions with optimized render cycles.
  */
 
-import React, { useMemo } from 'react';
+import React from 'react';
 import Card from './Card';
 import './TeamGrid.css';
 import cardStyles from './Card.module.css';
@@ -40,40 +40,34 @@ export default function TeamGrid({
   features = {}
 }) {
   
-  /**
-   * Memoized list of game items with enriched metadata.
-   * Prevents excessive re-mapping on parent state updates.
-   */
-  const gameItems = useMemo(() => {
-    return (games || []).map((game, index) => {
-      const gkey = buildGameKey(game);
-      
-      // Normalize team data using the provided teams metadata map
-      const homeTeam = game.home_abbr || game.home_team;
-      const awayTeam = game.away_abbr || game.away_team;
-      
-      const homeInfo = teams[homeTeam] || {};
-      const awayInfo = teams[awayTeam] || {};
+  const gameItems = (games || []).map((game, index) => {
+    const gkey = buildGameKey(game);
 
-      return {
-        key: gkey,
-        index,
-        matchup: {
-          game_id: gkey,
-          home_team: homeTeam,
-          away_team: awayTeam,
-          kickoff: game.kickoff,
-          home_logo: homeInfo.logoUrl,
-          away_logo: awayInfo.logoUrl,
-          season: game.season,
-          week: game.week
-        },
-        prediction: predictions[gkey],
-        isLoading: !!loading[gkey],
-        error: errors[gkey]
-      };
-    });
-  }, [games, teams, predictions, loading, errors]);
+    // Normalize team data using the provided teams metadata map
+    const homeTeam = game.home_abbr || game.home_team;
+    const awayTeam = game.away_abbr || game.away_team;
+
+    const homeInfo = teams[homeTeam] || {};
+    const awayInfo = teams[awayTeam] || {};
+
+    return {
+      key: gkey,
+      index,
+      matchup: {
+        game_id: gkey,
+        home_team: homeTeam,
+        away_team: awayTeam,
+        kickoff: game.kickoff,
+        home_logo: homeInfo.logoUrl,
+        away_logo: awayInfo.logoUrl,
+        season: game.season,
+        week: game.week
+      },
+      prediction: predictions[gkey],
+      isLoading: !!loading[gkey],
+      error: errors[gkey]
+    };
+  });
 
   // Empty State Handling
   if (!games || games.length === 0) {

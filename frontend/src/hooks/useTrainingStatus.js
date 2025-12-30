@@ -1,4 +1,4 @@
-import {useState, useCallback} from 'react';
+import {useState} from 'react';
 import {startTraining, getHealthStatus} from '../api/client.js';
 
 /**
@@ -28,7 +28,7 @@ export function useTrainingStatus() {
    * Start the model retraining process
    * Updates status through the training lifecycle
    */
-  const startRetraining = useCallback(async () => {
+  const startRetraining = async () => {
     if (isLoading) return;
 
     setIsLoading(true);
@@ -57,13 +57,13 @@ export function useTrainingStatus() {
     } finally {
       setIsLoading(false);
     }
-  }, [isLoading]);
+  };
 
   /**
    * Poll training status until completion
    * Checks health endpoint to see if models have been reloaded
    */
-  const pollTrainingStatus = useCallback(async () => {
+  const pollTrainingStatus = async () => {
     // Polling loop: keep an interval handle so we can stop it explicitly.
     const pollInterval = setInterval(async () => {
       try {
@@ -89,7 +89,7 @@ export function useTrainingStatus() {
         console.error('[Training] Timed out after 5 minutes');
       }
     }, 300000);
-  }, [status]);
+  };
 
   return {
     status,

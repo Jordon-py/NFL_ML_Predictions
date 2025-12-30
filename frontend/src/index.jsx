@@ -22,7 +22,6 @@ import App from './App';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import ErrorBoundary from './components/ErrorBoundary';
-import { PredictionProvider } from './PredictionContext';
 
 import './styles/base.css';        // ← load first
 import './styles/theme-grid.css';  // ← load second
@@ -44,11 +43,7 @@ const root = ReactDOM.createRoot(rootElement);
 root.render(
   <React.StrictMode>
     <ErrorBoundary>
-      <PredictionProvider>
-       
-          <App />
-      
-      </PredictionProvider>
+      <App />
     </ErrorBoundary>
   </React.StrictMode>
 );

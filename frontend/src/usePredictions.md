@@ -1,155 +1,54 @@
-# usePredictions Hook
+# Prediction State (No Context)
+
+Note: This file name is legacy; the hook is `usePredictionState`.
 
 ## Overview
 
-`usePredictions` is a custom React hook that provides centralized access to the NFL prediction application's state management. It follows the Context + Reducer pattern for predictable, testable state updates across components.
+The frontend now uses a simple state hook in `App.jsx` and passes data down via props.
+No React Context is used for predictions.
 
 ## What It Does
 
-- **State Access**: Provides current prediction and historical predictions
-- **Actions**: Exposes methods to update state (set current, add to history, reset)
-- **Selectors**: Computed values like history count and latest entry
-- **Persistence**: Automatically syncs with localStorage
-- **Type Safety**: Ensures usage within PredictionProvider context
+- **State Access**: current prediction, history, schedule, teams, and health
+- **Actions**: update prediction maps, history, and loading/error flags
+- **Persistence**: localStorage sync for prediction history
+- **Effects**: schedule load + health polling + team metadata fetch
 
 ## Syntax & Usage
 
 ```javascript
-import { usePredictions } from '../PredictionContext.jsx';
+import { usePredictionState } from "./hooks/usePredictionState";
 
-function MyComponent() {
-  const { state, actions, selectors } = usePredictions();
+function App() {
+  const {
+    history,
+    current,
+    setPrediction,
+    pushHistory,
+  } = usePredictionState();
 
-  // Access current state
-  const currentPrediction = state.current;
-  const predictionHistory = state.history;
-
-  // Use actions
-  const handleNewPrediction = (predictionData) => {
-    actions.setCurrent(predictionData);
-    actions.pushHistory(predictionData);
-  };
-
-  // Use selectors
-  const totalPredictions = selectors.count;
-  const mostRecent = selectors.latest;
-
-  return (
-    <div>
-      <p>Total predictions: {totalPredictions}</p>
-      {/* Component JSX */}
-    </div>
-  );
+  // Pass the state and actions to pages/components via props.
+  return <Dashboard history={history} current={current} />;
 }
 ```
 
 ## Data Structure
 
-### State Object
-
 ```javascript
 {
-  current: PredictionEntry | null,  // Latest prediction result
-  history: PredictionEntry[]        // Array of past predictions (newest first)
+  current: PredictionEntry | null,
+  history: PredictionEntry[],
+  schedule: Array,
+  teams: Record<string, { name: string, logoUrl: string }>,
+  health: { status: string, mode: string, reason: string },
+  predictions: Record<string, PredictionEntry>,
+  loading: Record<string, boolean>,
+  errors: Record<string, string | null>
 }
 ```
-
-### PredictionEntry Shape
-
-```javascript
-{
-  ts: string,           // ISO timestamp
-  source: string,       // 'teamgrid' or other
-  game: {
-    season: number,
-    week: number,
-    home_abbr: string,
-    away_abbr: string
-  },
-  metrics: {
-    home_score: number,
-    away_score: number,
-    point_diff: number
-  },
-  probs: {
-    home: number,       // Home win probability (0-1)
-    away: number,       // Away win probability (0-1)
-    ensemble: number    // Combined probability
-  }
-}
-```
-
-## Interaction Diagram
-
-```mermaid
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   Components    │────│ usePredictions   │────│ PredictionContext│
-│                 │    │                  │    │                 │
-│ • TeamGrid      │    │ • state          │    │ • Reducer       │
-│ • PredictionResult│  │ • actions        │    │ • Actions       │
-│ • HistoryChart  │    │ • selectors      │    │ • Persistence   │
-│ • NavBar        │    │                  │    │                 │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
-         │                       │                       │
-         └───────────────────────┼───────────────────────┘
-                                 │
-                    ┌────────────┴────────────┐
-                    │     localStorage       │
-                    │ "prediction_history"   │
-                    └─────────────────────────┘
-```
-
-## Key Interactions
-
-1. **Components** → `usePredictions()` → **Context Provider**
-   - Components call the hook to access shared state
-   - Hook validates context availability (throws if not wrapped)
-
-2. **Actions Flow**:
-   - Component calls `actions.setCurrent(entry)`
-   - Hook dispatches to reducer
-   - Reducer updates state immutably
-   - All consuming components re-render
-
-3. **Persistence**:
-   - State changes trigger `useEffect`
-   - History array serialized to localStorage
-   - Hydrated on app startup
-
-4. **Selectors**:
-   - Computed values (count, latest) derived from state
-   - Automatically update when state changes
 
 ## Best Practices
 
-- **Always wrap in PredictionProvider**: App must be wrapped at root level
-- **Use actions for updates**: Never mutate state directly
-- **Leverage selectors**: For derived/computed values
-- **Handle loading states**: Check `state.current` for null before rendering
-- **Error boundaries**: Wrap components that use predictions
-
-## Common Patterns
-
-```javascript
-// Pattern 1: Check for current prediction
-const { state } = usePredictions();
-if (!state.current) return <div>No prediction yet</div>;
-
-// Pattern 2: Add new prediction
-const { actions } = usePredictions();
-const newEntry = toEntry(predictionData);
-actions.setCurrent(newEntry);
-actions.pushHistory(newEntry);
-
-// Pattern 3: Reset on logout
-const { actions } = usePredictions();
-actions.resetHistory();
-```
-
-## Educational Notes
-
-- **Why Context + Reducer?** Provides predictable state updates without prop drilling
-- **Immutability**: All updates create new state objects for React's reconciliation
-- **Memoization**: Actions and selectors are memoized to prevent unnecessary re-renders
-- **Hydration**: Safe localStorage loading prevents crashes on malformed data
-- **Type Safety**: Runtime checks ensure proper usage within provider tree
+- Keep prediction state in the App layer to avoid prop drilling across routes.
+- Use the provided handlers (setPrediction, pushHistory, setLoading, setError).
+- Pass only the props needed by each component.
