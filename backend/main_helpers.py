@@ -68,7 +68,13 @@ def load_inference_bundle(models_dir: Path) -> InferenceBundle:
         val = artifacts.get(key) or meta.get(key) or default
         if not val: return None
         p = Path(str(val))
-        return p if p.is_absolute() else (models_dir / p)
+        if p.is_absolute():
+            if p.exists():
+                return p
+            # Fall back to the local models_dir using the basename for portability.
+            fallback = models_dir / p.name
+            return fallback if fallback.exists() else p
+        return models_dir / p
 
     pre_path = _resolve_path("preprocessor", "preprocessor.joblib")
     home_path = _resolve_path("home_model", "home_model.joblib")

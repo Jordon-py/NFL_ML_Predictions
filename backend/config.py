@@ -40,16 +40,13 @@ def _resolve_models_dir() -> Path:
     candidates = [
         BASE_DIR / "20260102" / "models",
         BASE_DIR / "models",
-        BASE_DIR / "models" / "prod_models",
-        BASE_DIR / "data" / "prod-models" / "models",
-        BASE_DIR / "data" / "legacy_data" / "prod-models" / "models",
     ]
     for candidate in candidates:
         if (candidate / "metadata.json").exists():
             return candidate.resolve()
 
     # Fall back to the original default for a clearer error path.
-    return (BASE_DIR / "data" / "prod-models" / "models").resolve()
+    return (BASE_DIR / "models").resolve()
 
 MODELS_DIR = _resolve_models_dir()
 
@@ -61,11 +58,9 @@ def resolve_cors():
     origins = [o.strip() for o in origins_env.split(",") if o.strip()]
     if not origins:
         origins = ["*"]
-    origin_regex = (
-        os.getenv("CORS_ORIGINS_REGEX")
-        or os.getenv("CORS_ORIGIN_REGEX")
-        or ""
-    ).strip() or None
+    origin_regex = os.getenv("CORS_ORIGINS_REGEX", "https://.*\\.vercel\\.app$").strip()
+    if origin_regex == str:
+        origin_regex = origin_regex.split(",")
     return origins, origin_regex
 
 def load_schedule_data_safe(season: int):
