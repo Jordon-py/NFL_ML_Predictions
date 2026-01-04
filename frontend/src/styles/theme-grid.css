@@ -12,7 +12,7 @@
   text-align: center;
 }
 h1 {
-  font-family: 'Playfair', 'Lucida Sans Unicode', 'Lucida Grande', 'Lucida Sans', Arial, sans-serif;
+  font-family: 'Orbitron', 'Playfair', 'Lucida Sans Unicode', 'Lucida Grande', 'Lucida Sans', Arial, sans-serif;
 }
 
 h2.nfl-matchups {
@@ -25,11 +25,9 @@ h2.nfl-matchups {
   color: oklch(95% 0.05 240);
   /* Slightly off-white for depth */
   margin: 0;
-  animation: textFadeSlide 1s var(--a-ease) both;
+  animation: textFadeSlide 2s var(--a-ease) both;
   /* Apply text intro */
 }
-
-
 p.nfl-matchups {
   font-size: clamp(1rem, 2vw + 0.5rem, 1.25rem);
   color: oklch(85% 0.05 240 / 0.9);
