@@ -13,7 +13,7 @@
  * Straightforward container for predictions, schedule display, history, and LLM chat.
  */
 
-import React from "react";
+import { useState, useEffect } from "react";
 import { getDebugInfo, predictGame } from "../../api/client.js";
 import TeamGrid from "../Card/TeamGrid";
 import PredictionResult from "../PredictionResult";
@@ -38,9 +38,9 @@ export default function Dashboard({
   setError,
   pushHistory,
 }) {
-  const [debugInfo, setDebugInfo] = React.useState(null);
+  const [debugInfo, setDebugInfo] = useState(null);
 
-  React.useEffect(() => {
+  useEffect(() => {
     let active = true;
     getDebugInfo()
       .then((data) => {
@@ -53,7 +53,6 @@ export default function Dashboard({
   }, []);
 
   const handlePredict = async (game) => {
-    console.info('handle predict', game);
     if (!game) return;
 
     const key = buildGameKey(game);
@@ -146,7 +145,6 @@ export default function Dashboard({
             </div>
           </div>
         </section>
-      )}
 
         <section className="prediction-results-section advanced" aria-live="polite">
           <PredictionResult entry={current} />

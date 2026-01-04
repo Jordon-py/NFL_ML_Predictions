@@ -38,24 +38,21 @@ Tips & Next Steps:
 - If prediction fails, hit /debug for quick diagnosis.
 """
 
+import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
-from datetime import datetime as _dt
 
 import numpy as np
 import pandas as pd
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
-try:
-    import nflreadpy as nfl
-except Exception:  # pragma: no cover
-    nfl = None  # type: ignore
-
+from backend.config import TRUTHY, load_schedule_data_safe
 
 router = APIRouter()
+log = logging.getLogger(__name__)
 
 
 # -------------------------
@@ -96,6 +93,7 @@ class ScheduleGame(BaseModel):
     home_team: str
     away_team: str
     game_id: Optional[str] = None
+    stadium: Optional[str] = None
 
 class NextWeekGamesResponse(BaseModel):
     games: List[ScheduleGame]
@@ -141,56 +139,142 @@ def _is_pipeline(obj: Any) -> bool:
 def _safe_logistic_from_diff(diff: float) -> float:
     return float(1.0 / (1.0 + np.exp(-0.3 * diff)))
 
-def _load_schedule_df(season: int) -> pd.DataFrame:
-    # 1) nflreadpy (if available)
-    if nfl is not None and os.getenv("OFFLINE_MODE", "false").lower() != "true":
-        try:
-            df = nfl.load_schedules(season).to_pandas()
-            if df is not None and not df.empty:
-                return df
-        except Exception:
-            pass
+_SEASON_COLS = ["season", "season_year", "year"]
+_WEEK_COLS = ["week", "week_num", "week_number"]
+_HOME_COLS = ["home_team", "home", "home_abbr", "home_code"]
+_AWAY_COLS = ["away_team", "away", "away_abbr", "away_code"]
+_GAME_ID_COLS = ["game_id", "gameid", "game_key", "gameId"]
+_STADIUM_COLS = ["stadium", "venue", "stadium_name"]
 
-    # 2) explicit CSV path override
-    csv_path = os.getenv("SCHEDULE_CSV_PATH")
-    if csv_path:
-        p = Path(csv_path)
-        if p.exists():
-            return pd.read_csv(p)
+def _pick_col(df: pd.DataFrame, candidates: List[str]) -> Optional[str]:
+    for c in candidates:
+        if c in df.columns:
+            return c
+    lower_map = {c.lower(): c for c in df.columns}
+    for c in candidates:
+        hit = lower_map.get(c.lower())
+        if hit:
+            return hit
+    return None
 
-    # 3) common repo locations
+def _current_season_week() -> Tuple[int, int]:
+    try:
+        import nflreadpy as nfl  # optional dependency
+        return int(nfl.get_current_season()), int(nfl.get_current_week())
+    except Exception:
+        now = datetime.now(timezone.utc)
+        return int(now.year), 1
+
+def _resolve_schedule_candidates(path_str: str, backend_dir: Path, repo_root: Path) -> List[Path]:
+    p = Path(path_str)
+    if p.is_absolute():
+        return [p]
+    return [backend_dir / p, repo_root / p]
+
+def _load_schedule_csv(csv_path: Path) -> Optional[pd.DataFrame]:
+    try:
+        df = pd.read_csv(csv_path)
+        df.columns = [c.strip() for c in df.columns]
+        return df
+    except Exception as exc:
+        log.warning("Failed to read schedule CSV %s: %s", csv_path, exc)
+        return None
+
+def get_schedule(season: Optional[int] = None) -> pd.DataFrame:
+    """
+    Load an NFL schedule DataFrame with reasonable fallbacks.
+
+    Order of precedence:
+      1) nflreadpy (if available and OFFLINE_MODE=false)
+      2) SCHEDULE_PATH environment override
+      3) common repo locations
+    """
+    use_season = season or _current_season_week()[0]
+    offline = os.getenv("OFFLINE_MODE", "false").strip().lower() in TRUTHY
+
+    if not offline:
+        df = load_schedule_data_safe(use_season)
+        if isinstance(df, pd.DataFrame) and not df.empty:
+            df = df.copy()
+            df.columns = [c.strip() for c in df.columns]
+            return df
+
     backend_dir = Path(__file__).resolve().parent
-    candidates = [
-        backend_dir / "data" / f"Nfl_schedule_{season}.csv",
-        backend_dir / f"Nfl_schedule_{season}.csv",
-        backend_dir / "schedules.csv",
-    ]
+    repo_root = backend_dir.parent
+    candidates: List[Path] = []
+
+    csv_path = os.getenv("SCHEDULE_PATH")
+    if csv_path:
+        candidates.extend(_resolve_schedule_candidates(csv_path, backend_dir, repo_root))
+
+    candidates.extend(
+        [
+            backend_dir / "data" / f"Nfl_schedule_{use_season}.csv",
+            backend_dir / f"Nfl_schedule_{use_season}.csv",
+            repo_root / "data" / f"Nfl_schedule_{use_season}.csv",
+            repo_root / f"Nfl_schedule_{use_season}.csv",
+        ]
+    )
+
     for c in candidates:
         if c.exists():
-            return _clean_schedule_df(pd.read_csv(c))
+            df = _load_schedule_csv(c)
+            if isinstance(df, pd.DataFrame):
+                return df
 
     return pd.DataFrame()
 
 def _infer_next_week(schedule_df: pd.DataFrame) -> Tuple[int, int]:
+    season_default, week_default = _current_season_week()
     if schedule_df is None or schedule_df.empty:
-        return (datetime.now().year, 1)
+        return (season_default, week_default)
 
-    season = int(schedule_df["season"].dropna().iloc[0]) if "season" in schedule_df.columns else datetime.now().year
+    season_col = _pick_col(schedule_df, _SEASON_COLS)
+    week_col = _pick_col(schedule_df, _WEEK_COLS)
 
-    if "week" not in schedule_df.columns:
-        return (season, 1)
+    season = season_default
+    df_use = schedule_df
+    if season_col:
+        seasons = pd.to_numeric(schedule_df[season_col], errors="coerce").dropna().astype(int)
+        if not seasons.empty:
+            season = season_default if season_default in seasons.values else int(seasons.max())
+        df_use = schedule_df[pd.to_numeric(schedule_df[season_col], errors="coerce") == season]
 
-    completed = schedule_df.copy()
-    if "home_score" in completed.columns:
-        completed = completed[pd.to_numeric(completed["home_score"], errors="coerce").notna()]
-    if "away_score" in completed.columns:
-        completed = completed[pd.to_numeric(completed["away_score"], errors="coerce").notna()]
+    if week_col:
+        weeks = pd.to_numeric(df_use[week_col], errors="coerce").dropna().astype(int)
+        if weeks.empty:
+            return (season, week_default)
 
-    if completed.empty:
-        return (season, int(pd.to_numeric(schedule_df["week"], errors="coerce").dropna().min() or 1))
+        now = datetime.utcnow()
+        kickoff_series = df_use.apply(_parse_kickoff, axis=1)
+        if kickoff_series.notna().any():
+            future_mask = kickoff_series.notna() & (kickoff_series >= now)
+            if future_mask.any():
+                future_weeks = pd.to_numeric(df_use.loc[future_mask, week_col], errors="coerce").dropna().astype(int)
+                if not future_weeks.empty:
+                    return (season, int(future_weeks.min()))
 
-    last_week = int(pd.to_numeric(completed["week"], errors="coerce").dropna().max())
-    return (season, last_week + 1)
+        candidate_weeks = weeks[weeks >= week_default]
+        if not candidate_weeks.empty:
+            return (season, int(candidate_weeks.min()))
+
+        return (season, int(weeks.max()))
+
+    return (season, week_default)
+
+def _select_next_week_rows(schedule_df: pd.DataFrame) -> Tuple[pd.DataFrame, int, int]:
+    season, week = _infer_next_week(schedule_df)
+    df_use = schedule_df.copy() if isinstance(schedule_df, pd.DataFrame) else pd.DataFrame()
+
+    season_col = _pick_col(df_use, _SEASON_COLS)
+    week_col = _pick_col(df_use, _WEEK_COLS)
+
+    if season_col:
+        df_use = df_use[pd.to_numeric(df_use[season_col], errors="coerce") == season]
+    if week_col:
+        df_use = df_use[pd.to_numeric(df_use[week_col], errors="coerce") == week]
+
+    return df_use, season, week
 
 def _find_game_row(dataset: pd.DataFrame, home: str, away: str, season: int, week: int) -> Optional[pd.Series]:
     if dataset is None or dataset.empty:
@@ -291,6 +375,10 @@ def _parse_kickoff(row: pd.Series) -> Optional[datetime]:
         if pd.notna(gameday):
             dt = pd.to_datetime(gameday, errors="coerce")
             return None if pd.isna(dt) else dt.to_pydatetime()
+        for col in ("kickoff", "game_datetime", "game_date", "date"):
+            if col in row and pd.notna(row.get(col)):
+                dt = pd.to_datetime(row.get(col), errors="coerce")
+                return None if pd.isna(dt) else dt.to_pydatetime()
     except Exception:
         return None
     return None
@@ -349,7 +437,7 @@ def _append_prediction_history(request: Request, req_body: Dict[str, Any], predi
     persistent store or an append-only log with rotation.
     """
     entry = {
-        "ts": _dt.utcnow().isoformat(),
+        "ts": datetime.utcnow().isoformat(),
         "request": req_body,
         "prediction": prediction.model_dump() if hasattr(prediction, "model_dump") else prediction.__dict__,
     }
@@ -403,41 +491,41 @@ def debug(request: Request) -> DebugResponse:
 
 @router.get("/schedule/next-week", response_model=NextWeekGamesResponse)
 def schedule_next_week(request: Request, season: int = 2025) -> NextWeekGamesResponse:
-    # small in-memory cache (fast refresh while developing)
-    cache_key = f"schedule_{season}"
-    cached = getattr(request.app.state, "schedule_cache", {})
-    if isinstance(cached, dict) and cache_key in cached:
-        df = cached[cache_key]
-    else:
-        df = _load_schedule_df(season)
-        if not isinstance(cached, dict):
-            cached = {}
-        cached[cache_key] = df
-        request.app.state.schedule_cache = cached
+    df = get_schedule(season=season)
+    df_next, use_season, use_week = _select_next_week_rows(df)
 
-    if df is None or df.empty:
-        return NextWeekGamesResponse(games=[])
-
-    use_season, nxt_week = _infer_next_week(df)
-    if "week" in df.columns:
-        dfw = df[pd.to_numeric(df["week"], errors="coerce") == nxt_week].copy()
-    else:
-        dfw = df.copy()
+    home_col = _pick_col(df_next, _HOME_COLS)
+    away_col = _pick_col(df_next, _AWAY_COLS)
+    game_id_col = _pick_col(df_next, _GAME_ID_COLS)
+    stadium_col = _pick_col(df_next, _STADIUM_COLS)
 
     games: List[ScheduleGame] = []
-    for _, r in dfw.iterrows():
-        home = str(r.get("home_team", r.get("home", ""))).strip()
-        away = str(r.get("away_team", r.get("away", ""))).strip()
+    for _, r in df_next.iterrows():
+        home = str(r.get(home_col, "") if home_col else r.get("home", "")).strip().upper()
+        away = str(r.get(away_col, "") if away_col else r.get("away", "")).strip().upper()
+        if not home or not away:
+            continue
+        stadium = str(r.get(stadium_col, "") if stadium_col else r.get("stadium", "")).strip()
+        game_id = None
+        if game_id_col:
+            raw_id = r.get(game_id_col)
+            if pd.notna(raw_id):
+                game_id = str(raw_id).strip()
+        if not game_id:
+            game_id = f"{use_season}-{use_week}-{home}-{away}"
+
         games.append(
             ScheduleGame(
                 season=int(use_season),
-                week=int(nxt_week),
+                week=int(use_week),
                 kickoff=_parse_kickoff(r),
                 home_team=home,
                 away_team=away,
-                game_id=str(r.get("game_id")) if "game_id" in dfw.columns else None,
+                game_id=game_id,
+                stadium=stadium,
             )
         )
+
     return NextWeekGamesResponse(games=games)
 
 @router.get("/teams/logos", response_model=TeamLogosResponse)

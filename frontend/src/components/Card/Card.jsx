@@ -195,6 +195,10 @@ const derivePredictionMeta = (prediction) => {
 export default function Card({
   matchup,
   prediction,
+  title,
+  status,
+  icon,
+  progress,
   loading = false,
   error,
   index = 0,
@@ -215,6 +219,9 @@ export default function Card({
   const kickoffDateTime =
     kickoff && !Number.isNaN(kickoff.getTime()) ? kickoff.toISOString() : undefined;
 
+  // Local debug state for a brief visual click cue
+  const [debugClicked, setDebugClicked] = React.useState(false);
+
   const { hasScoreDetails, classifierUsed, isExpert, maxConfidence, sim, homeScore, awayScore } =
     derivePredictionMeta(prediction);
   const hasPrediction =
@@ -223,8 +230,7 @@ export default function Card({
       prediction?.home_win_probability != null ||
       prediction?.away_win_probability != null);
 
-  // Local debug state for a brief visual click cue
-  const [debugClicked, setDebugClicked] = React.useState(false);
+  const cardClassName = buildCardClassNames({ hasPrediction, loading, error, debugClicked });
 
   /**
    * Main click handler wrapper.
@@ -278,7 +284,9 @@ export default function Card({
         /* noop */
       }
 
-      onClick();
+      if (typeof onClick === 'function') {
+        onClick();
+      }
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('[Card] onClick handler threw', err);
@@ -312,8 +320,6 @@ export default function Card({
     // Reset is distinct from "open" - no fallback to onClick.
   };
 
-  const cardClassName = buildCardClassNames({ hasPrediction, loading, error, debugClicked });
-
   return (
     <article
       className={cardClassName + (loading ? 'game-card--loading' : '') + (error ? 'game-card--error' : '')}
@@ -326,9 +332,9 @@ export default function Card({
       aria-busy={loading ? 'true' : undefined}
     >
       <header className="game-card__header">
-        <span className="game-card__week">Week {matchup.week ?? '—'}</span>
+        <span className="game-card__week">Week {matchup.week ?? '-'}</span>
         <time className="game-card__kickoff" dateTime={kickoff?.toISOString?.()}>
-          {kickoffLabel}
+          {kickoffDisplayTime}
         </time>
       </header>
 

@@ -321,5 +321,3 @@ git push heroku main
 
 **Verification Completed:** 2025-10-13  
 **Next Review:** After next deployment
->>>>>>> cd97fecacdc0a2f3d4ee6cd29effaa9619489d75
->>>>>>> 58e17d277bf99cd2b57ef695e06390f62504dffb

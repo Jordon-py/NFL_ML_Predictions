@@ -283,6 +283,5 @@ DAL
 model
 Home win: 60%
 Point diff: 9.7
-Score: 30.3–20.6
+Score: 30.3-20.6
 Saved Predictions
->>>>>>> 58e17d277bf99cd2b57ef695e06390f62504dffb

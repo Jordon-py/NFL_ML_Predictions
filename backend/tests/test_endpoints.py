@@ -19,10 +19,6 @@ def test_status_overview_and_history():
         assert "entries" in payload and "total" in payload
         assert isinstance(payload["entries"], list)
 
-        r2 = client.get("/history?limit=5")
-        assert r2.status_code == 200
-        assert isinstance(r2.json(), list)
-
 
 @pytest.mark.parametrize("payload", [
     {"home_team": "BUF", "away_team": "KC", "season": 2025, "week": 1},

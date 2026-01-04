@@ -18,16 +18,11 @@
 import { fetchJson } from "./fetch";
 
 export async function getHealthStatus() {
-  const res = await fetchJson("/health");
-  console.log('getHealthStatus', res);
-
-  return res;
+  return fetchJson("/health");
 }
 
 export async function getDebugInfo() {
-  const res = await fetchJson("/debug");
-  console.log("getDebugInfo", res);
-  return res;
+  return fetchJson("/debug");
 }
 
 export async function getNextWeekSchedule() {
@@ -37,38 +32,28 @@ export async function getNextWeekSchedule() {
       "Content-Type": "application/json",
     },
   });
-
   return Array.isArray(data?.games) ? data.games : [];
 }
 
 export async function predictGame(payload) {
-  const res = await fetchJson("/predict", {
+  return fetchJson("/predict", {
     method: "POST",
     body: JSON.stringify(payload),
   });
-  console.log('predictGame', res);
-
-  return res;
 }
 
 export async function chatLLM(payload) {
-  const res = await fetchJson("/llm/chat", {
+  return fetchJson("/llm/chat", {
     method: "POST",
     body: JSON.stringify(payload),
   });
-  console.log('chatLLM', res);
-
-  return res;
 }
 
 export async function explainPrediction(payload) {
-  const res = await fetchJson("/predict/explain", {
+  return fetchJson("/predict/explain", {
     method: "POST",
     body: JSON.stringify(payload),
   });
-  console.log('explainPrediction', res);
-
-  return res;
 }
 
 export async function getPredictionHistory(limit = 100) {
@@ -78,9 +63,13 @@ export async function getPredictionHistory(limit = 100) {
       "Content-Type": "application/json",
     },
   });
-  console.log('getPredictionHistory', data);
-  if (Array.isArray(data)) return { entries: data, total: data.length };
-  return { entries: data?.entries ?? [], total: data?.total ?? data?.entries?.length ?? 0 };
+  if (Array.isArray(data)) {
+    return { entries: data, total: data.length };
+  }
+  if (data && Array.isArray(data.entries)) {
+    return { entries: data.entries, total: data.total ?? data.entries.length };
+  }
+  return { entries: [], total: 0 };
 }
 
 export async function getStatusOverview() {
@@ -90,10 +79,12 @@ export async function getStatusOverview() {
       "Content-Type": "application/json",
     },
   });
-  console.log('getStatusOverview', data);
-  return {
-    health: data ? data.health : { status: "unknown" },
-    dataset: data ? data.dataset : { rows: 0 },
-    history: data ? data.history : { metrics: { total_predictions: 0, win_rate: 0 } },
-  };
+  if (!data) {
+    return {
+      health: { status: "unknown", mode: "unknown", reason: "no data" },
+      dataset: { rows: 0, features: 0 },
+      history: { total_predictions: 0, win_rate: null, note: "no data" },
+    };
+  }
+  return data;
 }

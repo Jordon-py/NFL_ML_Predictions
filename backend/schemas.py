@@ -12,7 +12,8 @@ FILE: backend/schemas.py
 PURPOSE: Canonical Pydantic models for NFL Prediction API contracts.
 """
 from __future__ import annotations
-
+import datetime
+import fastapi
 from typing import Optional, Any, Dict, List
 from pydantic import BaseModel, Field
 
@@ -89,6 +90,24 @@ class StatusOverviewResponse(BaseModel):
     dataset: DatasetInfo
     history: HistoryMetrics
 
+class ScheduleEntry(BaseModel):
+    home_team: str
+    away_team: str
+    season: int
+    week: int
+    kickoff: Optional[datetime.datetime] = None
+    game_id: Optional[str] = None
+    home_abbr: Optional[str] = None
+    away_abbr: Optional[str] = None
+    home_logo: Optional[str] = None
+    away_logo: Optional[str] = None
+    home_name: Optional[str] = None
+    away_name: Optional[str] = None
+    stadium: Optional[str] = None
+
+class ScheduleResponse(BaseModel):
+    games: List[ScheduleEntry]
+
 __all__ = [
     "PredictionRequest",
     "ScorePrediction",
@@ -102,4 +121,6 @@ __all__ = [
     "DatasetInfo",
     "HistoryMetrics",
     "StatusOverviewResponse",
+    "ScheduleEntry",
+    "ScheduleResponse",
 ]

@@ -47,6 +47,8 @@ from backend.schemas import (
     HealthResponse,
     StatusOverviewResponse,
     HistoryResponse,
+    ScheduleResponse,
+    ScheduleEntry,
 )
 from backend.services.prediction_service import PredictionService
 from backend.services.inference_row import build_model_input_row
@@ -60,8 +62,13 @@ from backend.main_helpers import (
 )
 from backend.ollama.llm_ollama import explain_prediction as llm_explain_prediction, chat_messages as llm_chat_messages
 from backend.routes import (
-    _infer_next_week as _infer_next_week_routes,
-    _load_schedule_df as _load_schedule_df_routes,
+    _select_next_week_rows as _select_next_week_rows_routes,
+    _pick_col as _pick_col_routes,
+    _HOME_COLS as _HOME_COLS_ROUTES,
+    _AWAY_COLS as _AWAY_COLS_ROUTES,
+    _GAME_ID_COLS as _GAME_ID_COLS_ROUTES,
+    _STADIUM_COLS as _STADIUM_COLS_ROUTES,
+    get_schedule as _load_schedule_df_routes,
     _load_team_logos_map as _load_team_logos_map_routes,
     _parse_kickoff as _parse_kickoff_routes,
     router as legacy_router,
@@ -191,6 +198,17 @@ async def lifespan(app: FastAPI):
         _validate_feature_schema(state["bundle"], state["dataset"])
         state["service"] = PredictionService(state["bundle"], state["dataset"])
         _get_team_meta_map()
+        app.state.dataset = state["dataset"]
+        bundle = state["bundle"]
+        app.state.models = {
+            "preprocessor": getattr(bundle, "preprocessor", None),
+            "home_model": getattr(bundle, "home_model", None),
+            "away_model": getattr(bundle, "away_model", None),
+            "win_clf": getattr(bundle, "hist_win_clf", None),
+            "models_dir": str(CFG_MODELS_DIR),
+        }
+        app.state.team_logos = state.get("team_logos") or {}
+        app.state.started_at = datetime.now(timezone.utc).isoformat()
         log.info("Startup complete: Models and dataset ready.")
     except Exception as e:
         log.error(f"Startup failed: {e}", exc_info=True)
@@ -205,8 +223,8 @@ cors_origins, cors_origin_regex = resolve_cors()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
-    allow_origin_regex=cors_origin_regex or None,
-    allow_credentials=True,
+    allow_origin_regex=cors_origin_regex,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -221,48 +239,58 @@ def _require_ready() -> PredictionService:
 
 @app.get("/health", response_model=HealthResponse)
 async def health():
-    if state["service"]:
-        return HealthResponse(status="ok", mode="ml-inference", reason="Models loaded and ready")
-    return HealthResponse(status="initializing", mode="none", reason="Startup in progress or failed")
+    return HealthResponse(status="ok", mode="ml-inference", reason="Models loaded and ready")
 
-@app.get("/schedule/next-week")
-async def get_next_week_schedule(season: int = 2025) -> Dict[str, Any]:
-    df = _load_schedule_df_routes(season)
-    if df is None or df.empty:
-        return {"games": []}
-
-    use_season, nxt_week = _infer_next_week_routes(df)
+@app.get("/schedule/next-week", response_model=ScheduleResponse)
+async def get_next_week_schedule() -> ScheduleResponse:
+    df = _load_schedule_df_routes()
+    df_next, use_season, use_week = _select_next_week_rows_routes(df)
     team_meta = _get_team_meta_map()
-    if "week" in df.columns:
-        dfw = df[pd.to_numeric(df["week"], errors="coerce") == nxt_week].copy()
-    else:
-        dfw = df.copy()
 
-    games = []
-    for _, row in dfw.iterrows():
-        home = str(row.get("home_team", row.get("home", ""))).strip().upper()
-        away = str(row.get("away_team", row.get("away", ""))).strip().upper()
+    home_col = _pick_col_routes(df_next, _HOME_COLS_ROUTES)
+    away_col = _pick_col_routes(df_next, _AWAY_COLS_ROUTES)
+    game_id_col = _pick_col_routes(df_next, _GAME_ID_COLS_ROUTES)
+    stadium_col = _pick_col_routes(df_next, _STADIUM_COLS_ROUTES)
+
+    games: list[ScheduleEntry] = []
+    for _, row in df_next.iterrows():
+        home = str(row.get(home_col, "") if home_col else row.get("home", "")).strip().upper()
+        away = str(row.get(away_col, "") if away_col else row.get("away", "")).strip().upper()
         if not home or not away:
             continue
+
         home_info = team_meta.get(home, {})
         away_info = team_meta.get(away, {})
-        game_id = str(row.get("game_id", "")).strip() or _build_game_id(use_season, nxt_week, home, away)
-        games.append({
-            "season": int(use_season),
-            "week": int(nxt_week),
-            "kickoff": _parse_kickoff_routes(row),
-            "home_team": home,
-            "away_team": away,
-            "game_id": game_id,
-            "home_abbr": home,
-            "away_abbr": away,
-            "home_logo": home_info.get("logoUrl"),
-            "away_logo": away_info.get("logoUrl"),
-            "home_name": home_info.get("name") or home,
-            "away_name": away_info.get("name") or away,
-        })
 
-    return {"games": games}
+        game_id = ""
+        if game_id_col:
+            raw_id = row.get(game_id_col)
+            if pd.notna(raw_id):
+                game_id = str(raw_id).strip()
+        if not game_id:
+            game_id = _build_game_id(use_season, use_week, home, away)
+
+        stadium = row.get(stadium_col, "") if stadium_col else row.get("stadium", "")
+
+        games.append(
+            ScheduleEntry(
+                season=int(use_season),
+                week=int(use_week),
+                kickoff=_parse_kickoff_routes(row),
+                home_team=home,
+                away_team=away,
+                game_id=game_id,
+                home_abbr=home,
+                away_abbr=away,
+                home_logo=home_info.get("logoUrl"),
+                away_logo=away_info.get("logoUrl"),
+                home_name=home_info.get("name") or home,
+                away_name=away_info.get("name") or away,
+                stadium=stadium,
+            )
+        )
+
+    return ScheduleResponse(games=games)
 
 @app.get("/debug")
 async def debug() -> Dict[str, Any]:
@@ -341,6 +369,26 @@ async def predict(req: PredictionRequest, request: Request):
     payload = _build_prediction_payload(req, res)
     _append_prediction_history_to_disk(req.model_dump(), payload)
     return payload
+
+@app.get("/predict/next-week")
+async def predict_next_week() -> Dict[str, Any]:
+    service = _require_ready()
+    schedule = await get_next_week_schedule()
+    games: list[Dict[str, Any]] = []
+
+    for game in schedule.games:
+        req = PredictionRequest(
+            home_team=game.home_team,
+            away_team=game.away_team,
+            season=game.season,
+            week=game.week,
+        )
+        prediction = _build_prediction_payload(req, service.predict(req))
+        item = game.model_dump()
+        item["prediction"] = prediction
+        games.append(item)
+
+    return {"games": games}
 
 @app.post("/predict/explain")
 async def explain(payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
