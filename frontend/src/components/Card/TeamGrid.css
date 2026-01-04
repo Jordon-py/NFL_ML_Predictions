@@ -42,13 +42,37 @@
   max-width: 100%;
 }
 
-/* --- Responsive logic via Container Queries --- */
+/* Empty / loading state */
 
-/* Compact Context (Mobile/Sidebar) */
-@container team-grid (max-width: 480px) {
-  .team-grid__grid {
-    grid-template-columns: 1fr; /* Force single stack */
-    gap: 1.25rem;
+.team-grid__empty {
+  min-height: 180px;
+  border-radius: var(--radius-card);
+  border: 1px dashed var(--c-border-subtle);
+  display: grid;
+  place-items: center;
+  padding: 1.25rem;
+  color: var(--c-ink-soft);
+  background: radial-gradient(circle at top, #0b112040, #020617 60%);
+}
+
+.team-grid__empty-text {
+  text-align: center;
+  max-width: 360px;
+  font-size: 0.95rem;
+}
+
+.team-grid__spinner {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  border: 3px solid var(--c-border-subtle);
+  border-top-color: var(--c-brand-1);
+  animation: team-grid-spin 0.7s linear infinite;
+}
+
+@keyframes team-grid-spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 
@@ -60,7 +84,6 @@
   }
 }
 
-/* --- Component: Game Card --- */
 .game-card {
   position: relative;
   border-radius: var(--radius-card);

@@ -141,20 +141,13 @@ def _is_pipeline(obj: Any) -> bool:
 def _safe_logistic_from_diff(diff: float) -> float:
     return float(1.0 / (1.0 + np.exp(-0.3 * diff)))
 
-def _clean_schedule_df(df: pd.DataFrame) -> pd.DataFrame:
-    if df is None or df.empty:
-        return df
-    cleaned = df.copy()
-    cleaned.columns = [str(c).strip() for c in cleaned.columns]
-    return cleaned
-
 def _load_schedule_df(season: int) -> pd.DataFrame:
     # 1) nflreadpy (if available)
     if nfl is not None and os.getenv("OFFLINE_MODE", "false").lower() != "true":
         try:
             df = nfl.load_schedules(season).to_pandas()
             if df is not None and not df.empty:
-                return _clean_schedule_df(df)
+                return df
         except Exception:
             pass
 
@@ -163,7 +156,7 @@ def _load_schedule_df(season: int) -> pd.DataFrame:
     if csv_path:
         p = Path(csv_path)
         if p.exists():
-            return _clean_schedule_df(pd.read_csv(p))
+            return pd.read_csv(p)
 
     # 3) common repo locations
     backend_dir = Path(__file__).resolve().parent

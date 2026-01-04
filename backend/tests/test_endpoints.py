@@ -1,12 +1,3 @@
-# ==========================================
-# File: backend/tests/test_endpoints.py
-# Role: Backend test module.
-# Input Data: Test fixtures and sample payloads.
-# Output Data: Pytest assertions and results.
-# Dependencies: json, pytest, fastapi, backend
-# Notes: Uses unified endpoints; legacy batch prediction tested via /legacy.
-# ==========================================
-
 import json
 import pytest
 from fastapi.testclient import TestClient
@@ -27,6 +18,10 @@ def test_status_overview_and_history():
         payload = r2.json()
         assert "entries" in payload and "total" in payload
         assert isinstance(payload["entries"], list)
+
+        r2 = client.get("/history?limit=5")
+        assert r2.status_code == 200
+        assert isinstance(r2.json(), list)
 
 
 @pytest.mark.parametrize("payload", [
@@ -54,7 +49,7 @@ def test_predict_endpoint(payload):
 
 def test_predict_next_week_or_service_unavailable():
     with TestClient(app) as client:
-        r = client.get("/legacy/predict/next-week")
+        r = client.get("/predict/next-week")
         assert r.status_code in (200, 503)
         if r.status_code == 200:
             j = r.json()

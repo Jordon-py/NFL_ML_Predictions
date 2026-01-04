@@ -137,8 +137,6 @@ const derivePredictionMeta = (prediction) => {
  * @typedef {Object} Matchup
  * @property {string} away_team   - Abbreviation for away team, e.g. "KC".
  * @property {string} home_team   - Abbreviation for home team, e.g. "DAL".
- * @property {string} [away_name] - Display name for the away team.
- * @property {string} [home_name] - Display name for the home team.
  * @property {string | number | Date} [kickoff] - Kickoff timestamp (any Date-compatible type).
  * @property {string} [away_logo] - URL for away team logo.
  * @property {string} [home_logo] - URL for home team logo.
@@ -197,10 +195,6 @@ const derivePredictionMeta = (prediction) => {
 export default function Card({
   matchup,
   prediction,
-  title,
-  status,
-  icon,
-  progress,
   loading = false,
   error,
   index = 0,
@@ -239,8 +233,6 @@ export default function Card({
    * - Preserves original semantics: call onClick() with no event arg.
    */
   const handleArticleClick = () => {
-    if (typeof onClick !== 'function') return;
-
     try {
       // Visual dev cue
       setDebugClicked(true);
@@ -324,20 +316,21 @@ export default function Card({
 
   return (
     <article
-      className={cardClassName}
+      className={cardClassName + (loading ? 'game-card--loading' : '') + (error ? 'game-card--error' : '')}
       // @ts-ignore custom property used by some animations
       style={{ '--i': index }}
       onClick={handleArticleClick}
       onKeyDown={onClick ? handleKeyDown : undefined}
       role={onClick ? 'button' : undefined}
       tabIndex={onClick ? 0 : -1}
+      aria-busy={loading ? 'true' : undefined}
     >
-      {/* Loading indicator overlay (small spinner) */}
-      {loading && (
-        <div className={styles.loadingIndicator} aria-hidden="true">
-          <div className={styles.spinner} />
-        </div>
-      )}
+      <header className="game-card__header">
+        <span className="game-card__week">Week {matchup.week ?? '—'}</span>
+        <time className="game-card__kickoff" dateTime={kickoff?.toISOString?.()}>
+          {kickoffLabel}
+        </time>
+      </header>
 
       {/* Card content lives in a single inner wrapper so overlays + progress bars can be positioned safely */}
       <div className={styles.cardInner}>
