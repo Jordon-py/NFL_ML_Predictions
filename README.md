@@ -497,7 +497,6 @@ team logos, or theme tokens.
 If you'd like, I can also add short code snippets to the README for the most
 common edits (e.g., replacing the header text with an `<img>` logo) — say
 which snippets you'd like and I'll append them
-=======
 
 backend/data/             # CSV artifacts
   team_game_base.csv
@@ -585,7 +584,6 @@ See [DEPLOYMENT_FIXED.md](DEPLOYMENT_FIXED.md) for detailed deployment troublesh
 
 ## License
 
-=======
 backend/scripts/
   build_csvs.py    # Builds the four CSVs and auto-writes schema files
   main.py            # FastAPI service: /health, /predict, /predict_raw, /retrain
