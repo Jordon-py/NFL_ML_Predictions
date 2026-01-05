@@ -140,6 +140,12 @@ const derivePredictionMeta = (prediction) => {
  * @property {string | number | Date} [kickoff] - Kickoff timestamp (any Date-compatible type).
  * @property {string} [away_logo] - URL for away team logo.
  * @property {string} [home_logo] - URL for home team logo.
+ * @property {string} [away_color] - Primary color for away team (hex).
+ * @property {string} [home_color] - Primary color for home team (hex).
+ * @property {string} [away_color2] - Secondary color for away team (hex).
+ * @property {string} [home_color2] - Secondary color for home team (hex).
+ * @property {string} [away_wordmark] - Wordmark URL for away team.
+ * @property {string} [home_wordmark] - Wordmark URL for home team.
  */
 
 /**
@@ -213,6 +219,12 @@ export default function Card({
   const homeFullName = matchup.home_name ?? NFL_TEAMS_MAP[homeTeam] ?? homeTeam;
   const awayLogo = matchup.away_logo;
   const homeLogo = matchup.home_logo;
+  const awayColor = matchup.away_color;
+  const homeColor = matchup.home_color;
+  const awayColor2 = matchup.away_color2;
+  const homeColor2 = matchup.home_color2;
+  const awayWordmark = matchup.away_wordmark;
+  const homeWordmark = matchup.home_wordmark;
 
   const kickoff = matchup.kickoff ? new Date(matchup.kickoff) : null;
   const kickoffDisplayTime = getKickoffDisplayTime(matchup.kickoff);
@@ -231,6 +243,15 @@ export default function Card({
       prediction?.away_win_probability != null);
 
   const cardClassName = buildCardClassNames({ hasPrediction, loading, error, debugClicked });
+  const cardStyle = {
+    "--i": index,
+    ...(awayColor ? { "--away-color": awayColor } : {}),
+    ...(homeColor ? { "--home-color": homeColor } : {}),
+    ...(awayColor2 ? { "--away-color-2": awayColor2 } : {}),
+    ...(homeColor2 ? { "--home-color-2": homeColor2 } : {}),
+  };
+  const awayTeamStyle = awayWordmark ? { "--team-wordmark": `url(${awayWordmark})` } : undefined;
+  const homeTeamStyle = homeWordmark ? { "--team-wordmark": `url(${homeWordmark})` } : undefined;
 
   /**
    * Main click handler wrapper.
@@ -324,7 +345,7 @@ export default function Card({
     <article
       className={cardClassName + (loading ? 'game-card--loading' : '') + (error ? 'game-card--error' : '')}
       // @ts-ignore custom property used by some animations
-      style={{ '--i': index }}
+      style={cardStyle}
       onClick={handleArticleClick}
       onKeyDown={onClick ? handleKeyDown : undefined}
       role={onClick ? 'button' : undefined}
@@ -372,6 +393,7 @@ export default function Card({
           <div
             id="away"
             className={`${styles.gameCard} game-card__team game-card__team--away`}
+            style={awayTeamStyle}
           >
             {awayLogo && (
               <img
@@ -391,6 +413,7 @@ export default function Card({
 
           <div
             className={`${styles.gameCard} game-card__team game-card__team--home`}
+            style={homeTeamStyle}
           >
             {homeLogo && (
               <img

@@ -18,14 +18,20 @@
 // Environment-based API configuration
 // fetch.js (minimal-but-strong)
 
-const RAW_BASE =
-  window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" ? import.meta.env.VITE_DEV_ENV : import.meta.env.VITE_API_BASE_URL;
+const isLocalhost =
+  window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+const DEV_BASE =
+  import.meta.env.VITE_API_DEV ||
+  import.meta.env.VITE_DEV_ENV ||
+  import.meta.env.VITE_API_BASE_DEV;
+const PROD_BASE = import.meta.env.VITE_API_BASE_URL;
+const RAW_BASE = isLocalhost ? (DEV_BASE || PROD_BASE) : PROD_BASE;
 
 // ✅ Fail fast instead of silently becoming "undefined/"
 if (!RAW_BASE) {
   throw new Error(
-    "[fetch.js] Missing VITE_API_BASE_URL (prod) or VITE_API_DEV (dev). " +
-    "On Vercel, set VITE_API_BASE_URL in Project → Settings → Environment Variables."
+    "[fetch.js] Missing VITE_API_BASE_URL (prod) or VITE_API_DEV/VITE_DEV_ENV (dev). " +
+    "On Vercel, set VITE_API_BASE_URL in Project > Settings > Environment Variables."
   );
 }
 
@@ -80,7 +86,7 @@ export async function fetchJson(path, options = {}) {
 
     const headers = {
       Accept: "application/json",
-      ...(options.headers || {}),
+      ...(options.headers),
     };
 
     // ✅ Only send Content-Type when we actually send a JSON body

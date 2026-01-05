@@ -44,7 +44,7 @@ import {
 import "./StatsPage.css";
 
 // Keep this small so the page stays fast, but large enough for trend charts.
-const HISTORY_LIMIT = 50;
+const HISTORY_LIMIT = 500;
 
 /** Build a stable composite key that works for BOTH schedule rows and history entries. */
 function toGameKey(game) {

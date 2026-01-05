@@ -26,13 +26,19 @@ export async function getDebugInfo() {
 }
 
 export async function getNextWeekSchedule() {
-  const data = await fetchJson("/schedule/next-week", {
-    method: "GET",
-    headers: {
-      "Content-Type": "application/json",
-    },
-  });
-  return Array.isArray(data?.games) ? data.games : [];
+  const data = await fetchJson("/schedule/next-week");
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.games)) return data.games;
+  if (Array.isArray(data?.schedule)) return data.schedule;
+  return [];
+}
+
+export async function getTeamLogos() {
+  const data = await fetchJson("/teams/logos");
+  if (data && typeof data === "object" && data.teams && typeof data.teams === "object") {
+    return data.teams;
+  }
+  return {};
 }
 
 export async function predictGame(payload) {

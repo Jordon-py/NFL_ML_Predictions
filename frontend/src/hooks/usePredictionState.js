@@ -24,6 +24,7 @@ import {
   getNextWeekSchedule,
   getHealthStatus as fetchHealth,
   getPredictionHistory,
+  getTeamLogos,
 } from "../api/client.js";
 import {
   buildGameKey,
@@ -74,6 +75,44 @@ function normalizeSchedule(rows) {
       away_name: game?.away_name || game?.away_team || away,
       game_id: gameId,
     };
+  });
+}
+
+function applyTeamMeta(rows, teamMeta) {
+  if (!Array.isArray(rows)) return [];
+  if (!teamMeta || typeof teamMeta !== "object") return rows;
+
+  return rows.map((game) => {
+    if (!game) return game;
+
+    const homeCode = normalizeTeamCode(game?.home_abbr || game?.home_team);
+    const awayCode = normalizeTeamCode(game?.away_abbr || game?.away_team);
+    const homeMeta = homeCode ? teamMeta[homeCode] : null;
+    const awayMeta = awayCode ? teamMeta[awayCode] : null;
+
+    if (!homeMeta && !awayMeta) return game;
+
+    const next = { ...game };
+
+    if (!next.home_logo && homeMeta?.logoUrl) next.home_logo = homeMeta.logoUrl;
+    if (!next.away_logo && awayMeta?.logoUrl) next.away_logo = awayMeta.logoUrl;
+
+    if (homeMeta?.name && (!next.home_name || next.home_name === next.home_team || next.home_name === homeCode)) {
+      next.home_name = homeMeta.name;
+    }
+    if (awayMeta?.name && (!next.away_name || next.away_name === next.away_team || next.away_name === awayCode)) {
+      next.away_name = awayMeta.name;
+    }
+
+    if (!next.home_color && homeMeta?.primaryColor) next.home_color = homeMeta.primaryColor;
+    if (!next.home_color2 && homeMeta?.secondaryColor) next.home_color2 = homeMeta.secondaryColor;
+    if (!next.away_color && awayMeta?.primaryColor) next.away_color = awayMeta.primaryColor;
+    if (!next.away_color2 && awayMeta?.secondaryColor) next.away_color2 = awayMeta.secondaryColor;
+
+    if (!next.home_wordmark && homeMeta?.wordmark) next.home_wordmark = homeMeta.wordmark;
+    if (!next.away_wordmark && awayMeta?.wordmark) next.away_wordmark = awayMeta.wordmark;
+
+    return next;
   });
 }
 
@@ -160,17 +199,23 @@ export function usePredictionState() {
     let active = true;
 
     const init = async () => {
-      const [scheduleRes, historyRes] = await Promise.allSettled([
+      const [scheduleRes, historyRes, logosRes] = await Promise.allSettled([
         getNextWeekSchedule(),
         getPredictionHistory(MAX_HISTORY_ENTRIES),
+        getTeamLogos(),
       ]);
 
       if (!active) return;
 
       if (scheduleRes.status === "fulfilled") {
         const normalized = normalizeSchedule(scheduleRes.value);
-        setSchedule(normalized);
-        const derivedWeek = toNumberOrNull(normalized?.[0]?.week);
+        const teamMeta =
+          logosRes.status === "fulfilled" && logosRes.value && typeof logosRes.value === "object"
+            ? logosRes.value
+            : {};
+        const enriched = applyTeamMeta(normalized, teamMeta);
+        setSchedule(enriched);
+        const derivedWeek = toNumberOrNull(enriched?.[0]?.week);
         setWeek(derivedWeek);
       } else {
         setSchedule([]);

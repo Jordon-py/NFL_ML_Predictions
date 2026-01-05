@@ -101,6 +101,9 @@ class NextWeekGamesResponse(BaseModel):
 class TeamMeta(BaseModel):
     logoUrl: str
     name: Optional[str] = None
+    primaryColor: Optional[str] = None
+    secondaryColor: Optional[str] = None
+    wordmark: Optional[str] = None
 
 class TeamLogosResponse(BaseModel):
     teams: Dict[str, TeamMeta]
@@ -213,6 +216,10 @@ def get_schedule(season: Optional[int] = None) -> pd.DataFrame:
             backend_dir / f"Nfl_schedule_{use_season}.csv",
             repo_root / "data" / f"Nfl_schedule_{use_season}.csv",
             repo_root / f"Nfl_schedule_{use_season}.csv",
+            backend_dir / "data" / "NFL_Schedule.csv",
+            backend_dir / "NFL_Schedule.csv",
+            repo_root / "data" / "NFL_Schedule.csv",
+            repo_root / "NFL_Schedule.csv",
         ]
     )
 
@@ -384,8 +391,12 @@ def _parse_kickoff(row: pd.Series) -> Optional[datetime]:
     return None
 
 def _load_team_logos_map(csv_path: Path) -> Dict[str, Dict[str, str]]:
-    """Flexible CSV parser: tries to find abbr + logo url columns."""
-    df = pd.read_csv(csv_path)
+    """Flexible CSV parser: tries to find abbr + logo + brand columns."""
+    try:
+        df = pd.read_csv(csv_path)
+    except Exception as exc:
+        log.warning("Failed to read team logos CSV %s: %s", csv_path, exc)
+        return {}
     if df is None or df.empty:
         return {}
 
@@ -393,8 +404,20 @@ def _load_team_logos_map(csv_path: Path) -> Dict[str, Dict[str, str]]:
 
     # best-effort column detection
     abbr_candidates = ["team_abbr", "abbr", "team", "team_code", "team_id"]
-    logo_candidates = ["logoUrl", "logo_url", "logo", "team_logo", "url"]
-    name_candidates = ["name", "team_name", "full_name", "team_full_name"]
+    logo_candidates = [
+        "team_logo_squared",
+        "team_logo_espn",
+        "team_logo_wikipedia",
+        "logoUrl",
+        "logo_url",
+        "logo",
+        "team_logo",
+        "url",
+    ]
+    name_candidates = ["team_name", "name", "team", "home_team", "away_team"]
+    primary_color_candidates = ["team_color", "primary_color", "color", "color1"]
+    secondary_color_candidates = ["team_color2", "team_color3", "team_color4", "secondary_color", "color2"]
+    wordmark_candidates = ["team_wordmark", "wordmark"]
 
     def pick(colnames: List[str]) -> Optional[str]:
         for c in colnames:
@@ -403,13 +426,17 @@ def _load_team_logos_map(csv_path: Path) -> Dict[str, Dict[str, str]]:
         # case-insensitive fallback
         lower_map = {c.lower(): c for c in df.columns}
         for c in colnames:
-            if c.lower() in lower_map:
-                return lower_map[c.lower()]
+            hit = lower_map.get(c.lower())
+            if hit:
+                return hit
         return None
 
     abbr_col = pick(abbr_candidates)
     logo_col = pick(logo_candidates)
     name_col = pick(name_candidates)
+    primary_col = pick(primary_color_candidates)
+    secondary_col = pick(secondary_color_candidates)
+    wordmark_col = pick(wordmark_candidates)
 
     if not abbr_col or not logo_col:
         return {}
@@ -420,11 +447,23 @@ def _load_team_logos_map(csv_path: Path) -> Dict[str, Dict[str, str]]:
         logo = str(r.get(logo_col, "")).strip()
         if not abbr or not logo:
             continue
-        item = {"logoUrl": logo}
+        item: Dict[str, str] = {"logoUrl": logo}
         if name_col:
             nm = str(r.get(name_col, "")).strip()
             if nm:
                 item["name"] = nm
+        if primary_col:
+            primary = str(r.get(primary_col, "")).strip()
+            if primary:
+                item["primaryColor"] = primary
+        if secondary_col:
+            secondary = str(r.get(secondary_col, "")).strip()
+            if secondary:
+                item["secondaryColor"] = secondary
+        if wordmark_col:
+            wordmark = str(r.get(wordmark_col, "")).strip()
+            if wordmark:
+                item["wordmark"] = wordmark
         out[abbr] = item
     return out
 
@@ -536,8 +575,13 @@ def team_logos(request: Request) -> TeamLogosResponse:
         return TeamLogosResponse(teams=cached)
 
     backend_dir = Path(__file__).resolve().parent
+    repo_root = backend_dir.parent
     # common locations in your repo
     candidates = [
+        repo_root / "team_logos.csv",
+        repo_root / "data" / "team_logos.csv",
+        backend_dir / "team_logos.csv",
+        backend_dir / "data" / "team_logos.csv",
         backend_dir / "team_logo.csv",
         backend_dir / "data" / "team_logo.csv",
     ]

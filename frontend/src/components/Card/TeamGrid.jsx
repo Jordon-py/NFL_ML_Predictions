@@ -55,6 +55,12 @@ export default function TeamGrid({
         kickoff: game.kickoff,
         home_logo: game.home_logo,
         away_logo: game.away_logo,
+        home_color: game.home_color,
+        away_color: game.away_color,
+        home_color2: game.home_color2,
+        away_color2: game.away_color2,
+        home_wordmark: game.home_wordmark,
+        away_wordmark: game.away_wordmark,
         season: game.season,
         week: game.week
       },

@@ -28,8 +28,6 @@
 /* Root section */
 
 .team-grid {
-  width: 100%;
-  max-width: 100%;
   /* Enable container queries below (they key off `team-grid`) */
   container-name: team-grid;
   container-type: inline-size;
@@ -39,7 +37,7 @@
 
 .team-grid__grid {
   width: 100%;
-  max-width: 100%;
+  max-width: 1200px;
 }
 
 /* Empty / loading state */
@@ -67,7 +65,7 @@
   border-radius: 999px;
   border: 3px solid var(--c-border-subtle);
   border-top-color: var(--c-brand-1);
-  animation: team-grid-spin 0.7s linear infinite;
+  animation: team-grid-spin 0.9s linear infinite;
 }
 
 @keyframes team-grid-spin {
@@ -78,21 +76,24 @@
 
 /* Medium Context (Tablet/Half-width) */
 @container team-grid (min-width: 481px) and (max-width: 1960px) {
-  .team-grid__grid {
-    grid-template-columns: repeat(3, 420px);
+  .team-grid__grid {  
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(var(--card-min-width), 1fr));
     flex-grow: 1;
+    justify-content: space-around;
+    align-items: center;  
   }
 }
 
 .game-card {
   position: relative;
   border-radius: var(--radius-card);
-  padding: 1.75rem; /* Adjusted from 4rem which seemed excessive for card content */
+  padding: 2rem; /* Adjusted from 4rem which seemed excessive for card content */
 
   /* PRESERVED VISUAL STYLING */
   background:
-    radial-gradient(circle at 0% 0%, var(--c-brand-1-soft), transparent 60%),
-    linear-gradient(145deg, #020617, #020617 45%, #020617 100%);
+    radial-gradient(circle at top, lch(12.48% 50.02 298.39 / 0.473), transparent 20%),
+    linear-gradient(145deg, lch(15.37% 56.93 299.04 / 0.724), lch(7.86% 22.89 282.19 / 0.327) 15%, lch(0.76% 15.34 290.29 / 0.792) 39%);
   border: 1px solid var(--c-border-subtle);
   box-shadow: var(--shadow-soft);
   display: flex;
@@ -108,16 +109,16 @@
 /* Hover Effects */
 .game-card:hover {
   transform: translateY(-7px);
-  box-shadow: 0 22px 50px rgba(15, 23, 42, 0.7);
+  box-shadow: 0 22px 50px lch(48.92% 86.75 292.13 / 0.58);
   border-color: var(--c-brand-1); /* Fallback removed, relying on var */
 }
 
 .game-card::before {
   content: "";
   position: absolute;
-  inset: -40%;
-  background: radial-gradient(circle at 0 0,
-      rgba(56, 189, 248, 0.2),
+  inset: -20%;
+  background: radial-gradient(circle at top,
+      lch( 48.92% 86.75 292.13 / 0.58),
       transparent 55%);
   opacity: 0;
   transition: opacity 150ms ease-out;
@@ -126,7 +127,7 @@
 
 .game-card:hover {
   transform: translateY(-3px);
-  box-shadow: 0 22px 50px rgba(15, 23, 42, 0.7);
+  box-shadow: 0 22px 50px lch(48.92% 86.75 292.13 / 0.58);
   border-color: var(--c-brand-1-70, var(--c-brand-1));
 }
 

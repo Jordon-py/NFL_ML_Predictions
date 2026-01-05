@@ -19,7 +19,7 @@ def test_health_endpoint_returns_healthy():
         r = client.get("/health")
     assert r.status_code == 200
     json = r.json()
-    assert json.get("status") in {"ok", "initializing"}
+    assert json.get("status") in {"healthy", "unhealthy"}
     assert "mode" in json and "reason" in json
 
 

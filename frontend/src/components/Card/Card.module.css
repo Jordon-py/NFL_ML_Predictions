@@ -38,6 +38,11 @@
   flex-direction: column;
   gap: 1.2rem;
 
+  --home-color: var(--lch-primary);
+  --away-color: var(--lch-accent);
+  --home-color-2: var(--home-color);
+  --away-color-2: var(--away-color);
+
   /* Stronger glass read (still subtle) */
   backdrop-filter: blur(10px) saturate(140%);
 
@@ -127,6 +132,20 @@
 
   mix-blend-mode: screen;
   opacity: 0.8;
+}
+
+/* Matchup accent strip uses team colors to anchor the matchup identity. */
+.card::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 6px;
+  background: linear-gradient(90deg, var(--away-color-2), var(--home-color-2));
+  opacity: 0.85;
+  pointer-events: none;
+  z-index: 0;
 }
 
 /* Hover/focus: cleaner lift + controlled glow (no harsh jump) */
@@ -270,6 +289,24 @@
   justify-content: flex-start;
   gap: 0.55rem;
   min-width: 0;
+  position: relative;
+  isolation: isolate;
+}
+
+.gameCard::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--team-wordmark) center / contain no-repeat;
+  opacity: 0.08;
+  filter: grayscale(100%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.gameCard > * {
+  position: relative;
+  z-index: 1;
 }
 
 /* "VS" */
@@ -479,7 +516,7 @@
 
 .progressBar {
   height: 100%;
-  background: linear-gradient(90deg, var(--lch-accent), var(--lch-primary));
+  background: linear-gradient(90deg, var(--away-color), var(--home-color));
 }
 
 /* State variants */

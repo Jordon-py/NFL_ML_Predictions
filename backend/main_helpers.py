@@ -90,18 +90,73 @@ def load_inference_bundle(models_dir: Path) -> InferenceBundle:
         hist_win_clf=joblib.load(hist_path) if hist_path and hist_path.exists() else None,
     )
 
-def load_dataset_df(data_dir: Path) -> pd.DataFrame:
+def _score_dataset_file(path: Path, expected_features: List[str]) -> Optional[tuple[int, int]]:
+    try:
+        cols = pd.read_csv(path, nrows=0).columns
+    except Exception as e:
+        log.warning("Dataset header read failed for %s: %s", path, e)
+        return None
+    missing = sum(1 for c in expected_features if c not in cols)
+    return missing, len(cols)
+
+def _pick_best_dataset(files: List[Path], expected_features: List[str]) -> Optional[tuple[Path, int]]:
+    scored: List[tuple[int, int, str, Path]] = []
+    for path in files:
+        score = _score_dataset_file(path, expected_features)
+        if score is None:
+            continue
+        missing, col_count = score
+        scored.append((missing, -col_count, path.name, path))
+    if not scored:
+        return None
+    scored.sort()
+    best = scored[0]
+    return best[3], best[0]
+
+def load_dataset_df(data_dir: Path, expected_features: Optional[List[str]] = None) -> pd.DataFrame:
     dataset_path = os.getenv("DATASET_PATH")
     if dataset_path:
         p = Path(dataset_path)
-        p = (data_dir / p).resolve() if not p.is_absolute() else p.resolve()
+        if not p.is_absolute():
+            cwd_candidate = p.resolve()
+            data_candidate = (data_dir / p).resolve()
+            p = cwd_candidate if cwd_candidate.exists() else data_candidate
+        else:
+            p = p.resolve()
         if not p.exists():
             raise FileNotFoundError(f"DATASET_PATH not found: {p}")
+        if expected_features:
+            score = _score_dataset_file(p, expected_features)
+            if score is not None:
+                missing, _ = score
+                if missing:
+                    candidates = sorted(data_dir.glob("game_features_*.csv")) if data_dir.is_dir() else []
+                    best = _pick_best_dataset(candidates, expected_features) if candidates else None
+                    if best and best[1] == 0 and best[0] != p:
+                        log.warning(
+                            "DATASET_PATH missing %d expected features; using %s",
+                            missing,
+                            best[0],
+                        )
+                        return pd.read_csv(best[0])
         return pd.read_csv(p)
+
+    if data_dir.is_file():
+        return pd.read_csv(data_dir)
 
     files = sorted(data_dir.glob("game_features_*.csv"))
     if not files:
         raise FileNotFoundError(f"No game_features_*.csv in {data_dir}")
+    if expected_features:
+        best = _pick_best_dataset(files, expected_features)
+        if best:
+            if best[1] > 0:
+                log.warning(
+                    "No dataset fully matches model features; best missing %d: %s",
+                    best[1],
+                    best[0],
+                )
+            return pd.read_csv(best[0])
     if len(files) != 1:
         raise FileNotFoundError(
             f"Expected exactly one game_features_*.csv in {data_dir}; set DATASET_PATH explicitly."

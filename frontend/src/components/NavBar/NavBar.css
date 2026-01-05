@@ -47,24 +47,25 @@
 
 /* Enhancement 8: Improved contrast on dark nav; keep structure unchanged */
 .navBar {
-  display: flexbox;
-  flex-direction: row;
+  display: flex;
+  flex-direction: column;
   justify-content: space-around;
   align-items: center;
   background: radial-gradient(circle at top, lch(48.92% 86.75 292.13 / 0.58) 2%,lch(21.62% 43.66 288.28 / 0.524) 30%, lch(3.25% 34.27 297.01 / 0.921) 40%);
   color: lch(100% 0.01 296.81);
   /* improved contrast */
   position: sticky;
-  top: 0;
-  left: 0;
-  right: 0;
-  width: 100vw;
+  
   animation: outLineGlow;
   z-index: 1000;
   transition: background-color 1.9s, box-shadow 1.7s ease-in-out;
   font-family: 'Cinzel', system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
   /* Enhancement 2 */
   box-sizing: border-box;
+  top: 0;
+  left: 0;
+  right: 0;
+  width: auto;
 }
 
 /* mobile breakpoint controlled below at 700px */
@@ -86,7 +87,7 @@
     flex-direction: row;
     justify-content: space-around;
     align-items: center;
-    width: 100vw;
+    width: auto;
     background: sticky;
     top: 0; 
     left: 0;
@@ -103,7 +104,7 @@
 
 /* Enhancement 6: Sticking polish; subtle depth and border */
 .navBar.sticking {
-  background: radial-gradient(circle at top, #0b112040, #020617 60%);
+  background: radial-gradient(circle at top, lch(48.92% 86.75 292.13 / 0.58) 2%,lch(21.62% 43.66 288.28 / 0.524) 30%, lch(3.25% 34.27 297.01 / 0.921) 40%);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   backdrop-filter: blur(7px);
   -webkit-backdrop-filter: blur(7px);
