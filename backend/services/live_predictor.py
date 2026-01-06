@@ -18,8 +18,7 @@ row for a specific matchup on-the-fly.
 
 import logging
 import time
-from typing import Optional, Dict, List, Tuple, Any
-from datetime import datetime
+from typing import Dict, List, Tuple, Any
 import pandas as pd
 import numpy as np
 
@@ -31,7 +30,7 @@ except ImportError:
     HAS_NFLREADPY = False
 
 from backend.utils.feature_engine import calculate_team_metrics, calculate_rolling_features
-from backend.utils.feature_helpers import to_pandas_safe, make_time_key, process_dataset, ensure_actual_winner
+from backend.utils.feature_helpers import to_pandas_safe, make_time_key, process_dataset
 
 log = logging.getLogger(__name__)
 
@@ -43,12 +42,12 @@ class LiveDataCache:
         self._ttl = ttl_seconds
     
     def get(self, key: str):
-        if key in self._cache:
-            data, timestamp = self._cache[key]
-            if time.time() - timestamp < self._ttl:
-                return data
-            else:
-                del self._cache[key]
+        if key not in self._cache:
+            return None
+        data, timestamp = self._cache[key]
+        if time.time() - timestamp < self._ttl:
+            return data
+        del self._cache[key]
         return None
     
     def set(self, key: str, value: Any):
@@ -72,10 +71,10 @@ def fetch_live_data(seasons: List[int]) -> Tuple[pd.DataFrame, pd.DataFrame]:
     cache_key = f"live_data_{min(seasons)}_{max(seasons)}"
     cached = _CACHE.get(cache_key)
     if cached:
-        log.info(f"Using cached live data for seasons {seasons}")
+        log.info("Using cached live data for seasons %s", seasons)
         return cached
 
-    log.info(f"Fetching live data from nflreadpy for seasons {seasons}...")
+    log.info("Fetching live data from nflreadpy for seasons %s...", seasons)
     
     # 1. Load PBP
     # We want full PBP to compute team metrics
@@ -121,11 +120,10 @@ def build_live_row(
     # Determine window of data needed. 
     # To get rolling 5 averages, we likely need the current season plus 
     # maybe previous season if we are early in the year.
-    seasons_to_load = [season]
+    seasons_to_load = {season}
     if week < 5:
-        seasons_to_load.append(season - 1)
-        
-    pbp, sch = fetch_live_data(sorted(list(set(seasons_to_load))))
+        seasons_to_load.add(season - 1)
+    pbp, sch = fetch_live_data(sorted(seasons_to_load))
     
     if pbp.empty or sch.empty:
         raise RuntimeError("Could not fetch live PBP/Schedule data.")
@@ -139,8 +137,7 @@ def build_live_row(
     # We must ensure we replicate the logic from build_csv_datasetsv3
     
     # Normalize schedule
-    s = sch.copy()
-    s = process_dataset(s) # Coerce types
+    s = process_dataset(s.copy())  # Coerce types
     
     # Filter to relevant columns to match builder
     keep_cols = [
@@ -194,7 +191,6 @@ def build_live_row(
         long = long.merge(metrics, on=["season", "week", "game_id", "team"], how="left")
         
     # --- 4. Rolling Calculations ---
-    from backend.utils.feature_engine import calculate_rolling_features
     long = calculate_rolling_features(long, windows=(3, 5))
     
     # --- 5. Extract/Assemble the Target Row ---
@@ -204,104 +200,61 @@ def build_live_row(
     # We need to find the specific game if it exists in schedule, or fabricate it if it's a hypothetical partial row
     
     target_game = s[
-        (s["season"] == season) & 
-        (s["week"] == week) & 
-        (s["home_team"] == home_team) & 
+        (s["season"] == season) &
+        (s["week"] == week) &
+        (s["home_team"] == home_team) &
         (s["away_team"] == away_team)
     ]
-    
-    if len(target_game) == 0:
-        # Hypothetical / Future game not in schedule yet?
-        # Or just didn't find it.
-        # We can reconstruct it from the 'long' components of the TEAMS involved.
-        log.warning(f"Matchup {home_team} vs {away_team} not found in schedule. Constructing synthetic row.")
-        
-        # We need the PRIOR stats for Home Team and Away Team
-        # Get the latest 'long' row for home_team BEFORE this week
-        
-        # Filter long for correct team and time < target
-        target_time = season * 100 + week
-        
-        home_hist = long[
-            (long["team"] == home_team) & 
-            (long["time_key"] < target_time)
-        ].sort_values("time_key").iloc[-1:] 
-        
-        away_hist = long[
-            (long["team"] == away_team) & 
-            (long["time_key"] < target_time)
-        ].sort_values("time_key").iloc[-1:]
-        
-        # If no history (e.g. Week 1), we might have NaNs, which is handled by imputer later
-        
-        # We need to pull the 'prior_X' columns
-        prior_cols = [c for c in long.columns if c.startswith("prior_")]
-        
-        row_dict = {
-            "season": season,
-            "week": week,
-            "home_team": home_team,
-            "away_team": away_team,
-            "time_key": target_time
-        }
-        
-        # Fill Home Priors
-        if not home_hist.empty:
-            for c in prior_cols:
-                row_dict[f"home_{c}"] = home_hist.iloc[0][c]
-                
-        # Fill Away Priors
-        if not away_hist.empty:
-            for c in prior_cols:
-                row_dict[f"away_{c}"] = away_hist.iloc[0][c]
-                
-        final_row = pd.DataFrame([row_dict])
-            
+
+    prior_cols = [c for c in long.columns if c.startswith("prior_")]
+    target_time = season * 100 + week
+    row_dict = {
+        "season": season,
+        "week": week,
+        "home_team": home_team,
+        "away_team": away_team,
+        "time_key": target_time,
+    }
+
+    def _fill_priors(target: Dict[str, Any], prefix: str, source: pd.Series | None):
+        if source is None:
+            return
+        for c in prior_cols:
+            target[f"{prefix}_{c}"] = source.get(c)
+
+    if target_game.empty:
+        log.warning(
+            "Matchup %s vs %s not found in schedule. Constructing synthetic row.",
+            home_team,
+            away_team,
+        )
+        home_hist = (
+            long[(long["team"] == home_team) & (long["time_key"] < target_time)]
+            .sort_values("time_key")
+            .iloc[-1:]
+        )
+        away_hist = (
+            long[(long["team"] == away_team) & (long["time_key"] < target_time)]
+            .sort_values("time_key")
+            .iloc[-1:]
+        )
+        _fill_priors(row_dict, "home", home_hist.iloc[0] if not home_hist.empty else None)
+        _fill_priors(row_dict, "away", away_hist.iloc[0] if not away_hist.empty else None)
     else:
-        # Game exists in schedule (e.g. it's on the schedule for this week)
-        gid = target_game.iloc[0]["game_id"]
-        
-        # Get the calculated 'long' rows for this game
-        # The 'long' df has rolling features (which are priors) already attached to this row?
-        # WAIT. calculate_rolling_features attaches PRIOR stats to the current row.
-        # So row N has stats from N-1, N-2...
-        # So we just need to grab the row for this game_id!
-        
+        gid = target_game.iloc[0].get("game_id")
         h_row = long[(long["game_id"] == gid) & (long["team"] == home_team)]
         a_row = long[(long["game_id"] == gid) & (long["team"] == away_team)]
-        
         if h_row.empty or a_row.empty:
             raise ValueError("Could not find processed rows for game.")
-            
-        # Merge to Wide Format (Home + Away)
-        # We manually build the wide row to match training format
-        
-        base_cols = [c for c in h_row.columns if c.startswith("prior_")]
-        
-        row_dict = {
-            "season": season,
-            "week": week,
-            "game_id": gid,
-            "home_team": home_team,
-            "away_team": away_team,
-            "time_key": season * 100 + week
-        }
-
-        # Copy priors
-        for c in base_cols:
-            if c in h_row.columns:
-                row_dict[f"home_{c}"] = h_row.iloc[0][c]
-            if c in a_row.columns:
-                row_dict[f"away_{c}"] = a_row.iloc[0][c]
-                
-        # Copy other context (Moneyline, etc if in schedule)
-        # The target_game row has them
+        row_dict["game_id"] = gid
+        _fill_priors(row_dict, "home", h_row.iloc[0])
+        _fill_priors(row_dict, "away", a_row.iloc[0])
         tg = target_game.iloc[0]
         for ctx in ["away_moneyline", "home_moneyline", "spread_line", "total_line", "away_rest", "home_rest"]:
             if ctx in tg:
                 row_dict[ctx] = tg[ctx]
-                
-        final_row = pd.DataFrame([row_dict])
+
+    final_row = pd.DataFrame([row_dict])
 
     # --- 6. Final Feature Engineering (Diffs, etc) ---
     # Calculate diffs (home_minus_away_...)
@@ -322,79 +275,79 @@ def build_live_row(
 
 def infer_from_row(row_df: pd.DataFrame, bundle: Any) -> Tuple[Dict[str, Any], bool]:
     """
-    Run the full inference pipeline (Models + MC Simulation) on a single pre-built row.
+    Run inference on a single pre-built row using the bundle's models.
     """
-    from backend.main import MonteCarloSimulator, _predict_regressor, _predict_home_win_prob, _get_feature_columns
-    
-    # Validation
     if row_df is None or row_df.empty:
         raise ValueError("Cannot infer from empty row.")
 
-    # Extract metadata before processing
     meta_row = row_df.iloc[0]
     home_team = str(meta_row.get("home_team", "UNKNOWN"))
     away_team = str(meta_row.get("away_team", "UNKNOWN"))
     season = int(meta_row.get("season", 0))
     week = int(meta_row.get("week", 0))
 
-    numeric_cols, categorical_cols, raw_cols = _get_feature_columns(bundle)
-    
-    # Ensure columns exist
-    row = row_df.iloc[0].copy()
-    
-    # Fallback / Fill missing cols with 0 or defaults if somehow missing
-    for c in raw_cols:
-        if c not in row:
-            row[c] = 0 # Naive fill, but pipeline imputer handles it better if present as NaN?
-            
-    # Realign
-    row_features = row.reindex(raw_cols).to_frame().T
-    
-    # 1) Score regressors
-    home_raw = _predict_regressor(bundle.home_model, bundle.preprocessor, row_features)
-    away_raw = _predict_regressor(bundle.away_model, bundle.preprocessor, row_features)
+    preprocessor = getattr(bundle, "preprocessor", None)
+    raw_cols = getattr(preprocessor, "feature_names_in_", None)
+    if raw_cols is None:
+        raw_cols = getattr(bundle, "raw_feature_columns", None)
+        if isinstance(raw_cols, dict):
+            raw_cols = (raw_cols.get("numeric") or []) + (raw_cols.get("categorical") or [])
+    raw_cols = list(raw_cols) if raw_cols is not None else list(row_df.columns)
 
-    # 2) Monte Carlo realism
-    # Simple game key
-    game_key = f"{int(season)}_{int(week)}_{home_team}_{away_team}"
-    
-    sim_engine = MonteCarloSimulator(bundle)
-    sim_results = sim_engine.simulate(home_raw, away_raw, key=game_key)
+    row_features = row_df.reindex(columns=raw_cols, fill_value=0)
+    X = preprocessor.transform(row_features) if preprocessor is not None else row_features
 
-    # 3) Win prob
-    hist_win_prob, used_fallback = _predict_home_win_prob(bundle, row_features, float(home_raw - away_raw))
+    home_raw = float(bundle.home_model.predict(X)[0])
+    away_raw = float(bundle.away_model.predict(X)[0])
+    point_diff = home_raw - away_raw
 
-    # 4) Blend: 75% model + 25% MC
-    final_win_prob = (hist_win_prob * 0.75) + (float(sim_results["sim_win_prob"]) * 0.25)
-    ens_home_score = (home_raw * 0.75) + (float(sim_results["sim_home_score"]) * 0.25)
-    ens_away_score = (away_raw * 0.75) + (float(sim_results["sim_away_score"]) * 0.25)
-    
-    # 5) Winner string
-    if final_win_prob > 0.5:
-        winner = home_team
-    elif final_win_prob < 0.5:
-        winner = away_team
+    def _extract_home_proba(win_clf: Any, proba_row: np.ndarray) -> float | None:
+        classes = getattr(win_clf, "classes_", None)
+        if classes is None:
+            return None
+        classes_list = list(classes)
+        lowered = [str(c).strip().lower() for c in classes_list]
+        if "home" in lowered:
+            return float(proba_row[lowered.index("home")])
+        if "true" in lowered:
+            return float(proba_row[lowered.index("true")])
+        for key in (1, True):
+            if key in classes_list:
+                return float(proba_row[classes_list.index(key)])
+        return None
+
+    win_clf = getattr(bundle, "hist_win_clf", None) or getattr(bundle, "win_clf", None)
+    used_fallback = True
+    if win_clf is not None and hasattr(win_clf, "predict_proba"):
+        probs = np.asarray(win_clf.predict_proba(X)[0], dtype=float)
+        mapped = _extract_home_proba(win_clf, probs)
+        if mapped is not None and np.isfinite(mapped):
+            proba_home = float(mapped)
+            used_fallback = False
+        else:
+            proba_home = float(1.0 / (1.0 + np.exp(-point_diff / 7.0)))
     else:
-        winner = "TIE"
+        proba_home = float(1.0 / (1.0 + np.exp(-point_diff / 7.0)))
+
+    final_win_prob = float(np.clip(proba_home, 0.0, 1.0))
+    winner = home_team if final_win_prob >= 0.5 else away_team
 
     result = {
         "home_team": home_team,
         "away_team": away_team,
         "season": int(season),
         "week": int(week),
-        "predicted_home_score": round(ens_home_score),
-        "predicted_away_score": round(ens_away_score),
+        "predicted_home_score": round(home_raw),
+        "predicted_away_score": round(away_raw),
         "win_probability": float(final_win_prob),
-        # Helper for away win probability
         "away_win_probability": float(1.0 - float(final_win_prob)),
         "winner": winner,
         "prob_used_fallback": bool(used_fallback),
         "details": {
-            **sim_results,
             "raw_home": float(home_raw),
             "raw_away": float(away_raw),
-            "ensemble_weight": "75/25",
+            "point_diff": float(point_diff),
         }
     }
 
-    return result, False
+    return result, used_fallback

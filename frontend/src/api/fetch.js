@@ -7,43 +7,28 @@
 // Notes: Centralizes timeouts and error handling.
 // ==========================================
 
-// fetch.js
 /**
- * Custom fetch function with timeout and error handling
- * Environment-based API configuration
- * Safely parse JSON, return null for empty/invalid responses
- * fetch function with educational comments
+ * Core fetch wrapper with timeout, error handling, and environment-aware URL resolution.
  */
 
-// Environment-based API configuration
-// fetch.js (minimal-but-strong)
-const isLocalhost =
-  window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
-   ;
-const DEV_BASE =
-  (import.meta.env.VITE_API_DEV || import.meta.env.VITE_API_BASE_URL)
-    ||
-  import.meta.env.VITE_DEV_ENV ||
-  import.meta.env.VITE_API_BASE_DEV;
-const PROD_BASE = import.meta.env.VITE_API_BASE_URL;
-const RAW_BASE = isLocalhost ? (DEV_BASE || PROD_BASE) : PROD_BASE;
+// Environment-based API configuration (simplified)
+const isLocalhost = ["localhost", "127.0.0.1"].includes(window.location.hostname);
 
-console.log("API_BASE RAW_BASE:", RAW_BASE);
+const API_BASE_RAW = isLocalhost
+  ? (import.meta.env.VITE_API_DEV || import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_DEV_ENV)
+  : import.meta.env.VITE_API_BASE_URL;
 
-// ✅ Fail fast if missing OR empty
-if (!RAW_BASE || String(RAW_BASE).trim() === "") {
+if (!API_BASE_RAW?.trim()) {
   throw new Error(
-    "[fetch.js] Missing VITE_API_BASE_URL (prod) or VITE_API_DEV/VITE_DEV_ENV (dev). " +
-    "On Vercel, set VITE_API_BASE_URL in Project > Settings > Environment Variables."
+    "[fetch.js] Missing API base URL. Set VITE_API_BASE_URL (prod) or VITE_API_DEV (dev) in environment."
   );
 }
 
-// ✅ Normalize: trim + remove ONLY trailing slashes (keeps https:// intact)
-export const API_BASE = String(RAW_BASE).trim().replace(/\/+$/, "");
-
-console.log("API_BASE API_BASE:", API_BASE);
+// Normalize: trim and remove trailing slashes
+export const API_BASE = API_BASE_RAW.trim().replace(/\/+$/, "");
 
 const DEFAULT_TIMEOUT = 25000;
+
 
 
 export class HttpError extends Error {

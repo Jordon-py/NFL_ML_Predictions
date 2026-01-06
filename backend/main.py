@@ -60,18 +60,19 @@ from .main_helpers import (
     _append_prediction_history_to_disk,
     prediction_history_entries,
     _prediction_history_lock,
-)
-from .ollama.llm_ollama import explain_prediction as llm_explain_prediction, chat_messages as llm_chat_messages
-from .routes import (
+    # New imports from refactor
+    get_schedule as _load_schedule_df_routes,
     _select_next_week_rows as _select_next_week_rows_routes,
     _pick_col as _pick_col_routes,
+    _load_team_logos_map as _load_team_logos_map_routes,
+    _parse_kickoff as _parse_kickoff_routes,
     _HOME_COLS as _HOME_COLS_ROUTES,
     _AWAY_COLS as _AWAY_COLS_ROUTES,
     _GAME_ID_COLS as _GAME_ID_COLS_ROUTES,
     _STADIUM_COLS as _STADIUM_COLS_ROUTES,
-    get_schedule as _load_schedule_df_routes,
-    _load_team_logos_map as _load_team_logos_map_routes,
-    _parse_kickoff as _parse_kickoff_routes,
+)
+from .ollama.llm_ollama import explain_prediction as llm_explain_prediction, chat_messages as llm_chat_messages
+from .routes import (
     TeamLogosResponse,
     router as legacy_router,
 )
@@ -106,15 +107,16 @@ def _build_game_id(season: int, week: int, home_team: str, away_team: str) -> st
     parts = [season, week, home_team, away_team]
     return "-".join(str(p) for p in parts if p is not None and str(p).strip())
 
+def _normalize_team_code(value: str) -> str:
+    """Normalize team abbreviation to uppercase."""
+    return str(value or "").strip().upper()
+
+
 def _get_team_meta_map() -> Dict[str, Dict[str, str]]:
     """Load team metadata once and cache it for schedule/prediction enrichment."""
     cached = state.get("team_logos")
     if isinstance(cached, dict):
         return cached
-
-
-def _normalize_team_code(value: str) -> str:
-    return str(value or "").strip().upper()
 
     _dir = Path(__file__).resolve().parent
     repo_root = _dir.parent
@@ -136,6 +138,7 @@ def _normalize_team_code(value: str) -> str:
 
     state["team_logos"] = team_map or {}
     return state["team_logos"]
+
 
 # -------------------------------------
 # FUNCTIONS ----- 
@@ -311,9 +314,9 @@ async def lifespan(app: FastAPI):
             "home_model": getattr(bundle, "home_model", None),
             "away_model": getattr(bundle, "away_model", None),
             "hist_win_clf": getattr(bundle, "hist_win_clf", None),
-            "win_clf": getattr(bundle, "win_clf", None) or getattr(bundle, "win_model", None),
             "models_dir": str(CFG_MODELS_DIR),
         }
+        app.state.service = state["service"]  # Expose service for routes.py
         app.state.team_logos = state.get("team_logos") or {}
         app.state.started_at = datetime.now(timezone.utc).isoformat()
         log.info("Startup complete: Models and dataset ready.")
