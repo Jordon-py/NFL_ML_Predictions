@@ -148,7 +148,7 @@ export default function HistoryChart({ history: historyOverride = [] }) {
     <section className="history-chart" aria-live="polite">
       <header>
         <h2>Prediction History</h2>
-       
+
         <small>
           {statsSummary.totalCount} item(s)
           {statsSummary.mostRecentDate && (

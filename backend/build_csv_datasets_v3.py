@@ -76,6 +76,7 @@ import pandas as pd
 
 # Shared feature engineering utilities
 from utils.feature_helpers import (
+from utils.feature_helpers import (
     make_time_key,
     _rolling_prior_stats,
     _ffill_prior_features,
@@ -290,7 +291,9 @@ def load_team_game_metrics(pbp_path: Path, seasons: List[int]) -> pd.DataFrame:
     pbp["week"] = pbp["week"].astype(int)
 
     from utils.feature_engine import calculate_team_metrics
+    from utils.feature_engine import calculate_team_metrics
     metrics = calculate_team_metrics(pbp)
+
 
     return metrics.reset_index(drop=True)
 
@@ -662,7 +665,9 @@ def add_features(
         )
 
 
+
     # Use shared engine for rolling features
+    from utils.feature_engine import calculate_rolling_features
     from utils.feature_engine import calculate_rolling_features
     long = calculate_rolling_features(long, windows)
 
@@ -752,7 +757,7 @@ def add_features(
     wide = _impute_remaining_prior_nans(wide)
     final_cols = ordered_cols + prior_feature_cols + diff_feature_cols
 
-    
+
     extra_cols = [
         "home_moneyline",
         "away_moneyline",

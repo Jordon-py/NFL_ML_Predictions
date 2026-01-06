@@ -35,7 +35,7 @@ log = logging.getLogger(__name__)
 def calculate_team_metrics(pbp: pd.DataFrame) -> pd.DataFrame:
     """
     Aggregates raw play-by-play data into per-team per-game advanced metrics.
-    
+
     Returns:
         DataFrame with columns: [season, week, game_id, team, off_epa_per_play, ...]
     """
@@ -63,7 +63,7 @@ def calculate_team_metrics(pbp: pd.DataFrame) -> pd.DataFrame:
 
     df["turnover"] = df["interception"] + df["fumble_lost"]
     df["explosive_play"] = (
-        ((df["pass"] == 1.0) & (df["yards_gained"] >= 20)) | 
+        ((df["pass"] == 1.0) & (df["yards_gained"] >= 20)) |
         ((df["rush_attempt"] == 1.0) & (df["yards_gained"] >= 15))
     )
 
@@ -84,11 +84,11 @@ def calculate_team_metrics(pbp: pd.DataFrame) -> pd.DataFrame:
         agg["off_turnovers"] / agg["off_total_plays"],
         0.0
     )
-    
+
     # We also need Defensive EPA (opponent's offensive EPA)
-    # This requires Self-Join logic or processing defteam. 
+    # This requires Self-Join logic or processing defteam.
     # For simplicity/speed in live inference, we'll process 'defteam'
-    
+
     def_grp = ["season", "week", "game_id", "defteam"]
     def_agg = df.groupby(def_grp).agg(
         def_epa_allowed=("epa", "mean"),
@@ -97,7 +97,7 @@ def calculate_team_metrics(pbp: pd.DataFrame) -> pd.DataFrame:
         def_takeaways=("turnover", "sum"),
         def_plays_faced=("epa", "count") # rough count
     ).reset_index()
-    
+
     def_agg["def_epa_per_play"] = -1 * def_agg["def_epa_allowed"]
     def_agg["def_takeaway_rate"] = np.where(
         def_agg["def_plays_faced"] > 0,
@@ -112,14 +112,14 @@ def calculate_team_metrics(pbp: pd.DataFrame) -> pd.DataFrame:
 
     # Outer merge to handle teams that might have only played one side (shouldn't happen in standard games)
     merged = off_stats.merge(
-        def_stats, 
-        on=["season", "week", "game_id", "team"], 
+        def_stats,
+        on=["season", "week", "game_id", "team"],
         how="outer"
     ).fillna(0.0)
-    
+
     # Drop temp cols
     merged = merged.drop(columns=[
-        "off_pass_attempts", "off_rush_attempts", "off_turnovers", 
+        "off_pass_attempts", "off_rush_attempts", "off_turnovers",
         "off_total_plays", "def_epa_allowed", "def_takeaways", "def_plays_faced"
     ], errors="ignore")
 
@@ -127,21 +127,21 @@ def calculate_team_metrics(pbp: pd.DataFrame) -> pd.DataFrame:
 
 
 def calculate_rolling_features(
-    team_games: pd.DataFrame, 
+    team_games: pd.DataFrame,
     windows: Tuple[int, ...] = (3, 5)
 ) -> pd.DataFrame:
     """
     Computes rolling averages for a long-format DataFrame (one row per team-game).
-    
+
     Args:
         team_games: DataFrame sorted by team, season, week. Must allow multiple seasons.
                     Columns: [team, time_key, off_epa_per_play, ...]
     """
     df = team_games.copy()
-    
+
     if "time_key" not in df.columns:
         df["time_key"] = make_time_key(df)
-        
+
     # Columns to roll - basically any numeric stat that isn't ID or Result
     exclude = {"season", "week", "game_id", "team", "opponent", "time_key", "is_home", "win", "points_for", "points_against", "game_date"}
     numeric_cols = [c for c in df.columns if c not in exclude and pd.api.types.is_numeric_dtype(df[c])]
@@ -150,10 +150,10 @@ def calculate_rolling_features(
     # _rolling_prior_stats expects specific column naming or we can loop manually
     # The existing helper in build_csv_dataset is robust, let's reuse/wrap it logic here
     # or rely on the imported `_rolling_prior_stats`.
-    
+
     for w in windows:
         # Note: _rolling_prior_stats modifies in place or returns new?
         # It returns new DF with `prior_X_N` columns
         df = _rolling_prior_stats(df, window=w, advanced_cols=numeric_cols)
-        
+
     return df

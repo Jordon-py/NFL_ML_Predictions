@@ -1,7 +1,7 @@
 # Heroku slugignore (FastAPI backend)
 # Keep backend code + required model/data artifacts; exclude dev/frontend cruft.
 
-frontend/*
+frontend/*/*
 
 ## Node modules (largest space saver)
 
@@ -121,8 +121,6 @@ node_modules/
 ## Deployment configs
 
 node_modules
-node_modules
-node_modules
 node_modules/
 frontend/node_modules/
 .cache/
@@ -142,11 +140,11 @@ tests/
 frontend/.vercel/
 
 # Large duplicate artifacts not needed at runtime (we use backend/data/prod-models by default)
-models/
-backend/OUTDIR/
+
+backend/OUTDIR/*
 
 backend/prod-models/
 backend/models/
 !backend/models/**
-!backend/20260102/models/**
+
 !backend/data/datasets/**

@@ -17,27 +17,34 @@
 
 // Environment-based API configuration
 // fetch.js (minimal-but-strong)
-
 const isLocalhost =
-  window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+  window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+   ;
 const DEV_BASE =
-  import.meta.env.VITE_API_DEV ||
+  (import.meta.env.VITE_API_DEV || import.meta.env.VITE_API_BASE_URL)
+    ||
   import.meta.env.VITE_DEV_ENV ||
   import.meta.env.VITE_API_BASE_DEV;
 const PROD_BASE = import.meta.env.VITE_API_BASE_URL;
 const RAW_BASE = isLocalhost ? (DEV_BASE || PROD_BASE) : PROD_BASE;
 
-// ✅ Fail fast instead of silently becoming "undefined/"
-if (!RAW_BASE) {
+console.log("API_BASE RAW_BASE:", RAW_BASE);
+
+// ✅ Fail fast if missing OR empty
+if (!RAW_BASE || String(RAW_BASE).trim() === "") {
   throw new Error(
     "[fetch.js] Missing VITE_API_BASE_URL (prod) or VITE_API_DEV/VITE_DEV_ENV (dev). " +
     "On Vercel, set VITE_API_BASE_URL in Project > Settings > Environment Variables."
   );
 }
 
-// ✅ Normalize: store WITHOUT trailing slash
-export const API_BASE = String(RAW_BASE);
-const DEFAULT_TIMEOUT = 15000;
+// ✅ Normalize: trim + remove ONLY trailing slashes (keeps https:// intact)
+export const API_BASE = String(RAW_BASE).trim().replace(/\/+$/, "");
+
+console.log("API_BASE API_BASE:", API_BASE);
+
+const DEFAULT_TIMEOUT = 25000;
+
 
 export class HttpError extends Error {
   constructor(message, { status, url, body } = {}) {
@@ -53,7 +60,7 @@ export class HttpError extends Error {
 async function readBody(response) {
   const text = await response.text(); // ✅ single read
   if (!text) return { data: null, rawText: "" };
-  
+
   const contentType = response.headers.get("content-type") || "";
   const isJson = contentType.includes("application/json");
 

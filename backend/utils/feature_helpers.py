@@ -50,14 +50,14 @@ log = logging.getLogger(__name__)
 def resolve_model_path(key: str, filename: str) -> Path:
     """
     Resolve a model artifact path with optional env override MODEL_PATH_<KEY>.
-    
+
     Args:
         key: Model identifier (e.g., 'home_model', 'preprocessor')
         filename: Default filename if env var not set
-        
+
     Returns:
         Path: Resolved absolute path to model artifact
-        
+
     Example:
         >>> resolve_model_path('home_model', 'home_model.joblib')
         Path('/path/to/home_model.joblib')
@@ -65,7 +65,7 @@ def resolve_model_path(key: str, filename: str) -> Path:
     env_val = os.getenv(f"MODEL_PATH_{key.upper()}")
     if env_val and str(env_val).strip():
         return Path(env_val).expanduser().resolve()
-    
+
     p = Path(filename)
     if not p.is_absolute():
         p = MODELS_DIR / filename
@@ -92,20 +92,20 @@ def to_pandas_safe(obj) -> pd.DataFrame:
 def to_team_abbr(t: str) -> str:
     """
     Normalize team abbreviations to canonical form.
-    
+
     Args:
         t: Team abbreviation or name
-        
+
     Returns:
         str: Canonical team abbreviation (uppercase)
-        
+
     Example:
         >>> to_team_abbr("WSH")  # Returns "WAS"
         >>> to_team_abbr("HOU")  # Returns "HOU" (unchanged)
     """
     fix_map = {
-        "WSH": "WAS", "HST": "HOU", "CLV": "CLE", 
-        "BLT": "BAL", "ARZ": "ARI", "LA": "LAR", 
+        "WSH": "WAS", "HST": "HOU", "CLV": "CLE",
+        "BLT": "BAL", "ARZ": "ARI", "LA": "LAR",
         "STL": "LAR", "SD": "LAC", "OAK": "LV"
     }
     return fix_map.get(str(t).upper(), str(t).upper())
@@ -114,13 +114,13 @@ def to_team_abbr(t: str) -> str:
 def coerce_season_week(df: pd.DataFrame) -> pd.DataFrame:
     """
     Safely convert season/week columns to nullable integer types.
-    
+
     Args:
         df: DataFrame with potential season/week columns
-        
+
     Returns:
         pd.DataFrame: Copy with coerced season/week columns
-        
+
     Example:
         >>> df = pd.DataFrame({'season': ['2023', '2024'], 'week': ['1', '2']})
         >>> result = coerce_season_week(df)
@@ -137,13 +137,13 @@ def coerce_season_week(df: pd.DataFrame) -> pd.DataFrame:
 def make_time_key(df: pd.DataFrame) -> pd.Series:
     """
     Build a monotonic key for chronological sorting (season*100 + week).
-    
+
     Args:
         df: DataFrame containing season and week columns
-        
+
     Returns:
         pd.Series: Numeric time key for sorting
-        
+
     Example:
         >>> df = pd.DataFrame({'season': [2023, 2023], 'week': [1, 2]})
         >>> make_time_key(df)  # Returns [202301, 202302]
@@ -156,20 +156,20 @@ def make_time_key(df: pd.DataFrame) -> pd.Series:
 def _normalize_feature_cols(raw: Any) -> List[str]:
     """
     Flatten raw_feature_columns metadata into a simple list of column names.
-    
+
     Args:
         raw: Feature columns input (dict, list, or single value)
-        
+
     Returns:
         List[str]: Flat list of feature column names
-        
+
     Example:
         >>> _normalize_feature_cols({'numeric': ['a', 'b'], 'categorical': ['c']})
         ['a', 'b', 'c']
     """
     if raw is None:
         return []
-    
+
     if isinstance(raw, dict):
         cols: List[str] = []
         for key in ("numeric", "categorical"):
@@ -177,10 +177,10 @@ def _normalize_feature_cols(raw: Any) -> List[str]:
             if isinstance(vals, (list, tuple, set, np.ndarray, pd.Index)):
                 cols.extend([str(c) for c in vals])
         return cols
-    
+
     if isinstance(raw, (list, tuple, set, np.ndarray, pd.Index)):
         return [str(c) for c in raw]
-    
+
     return [str(raw)]
 
 
@@ -194,15 +194,15 @@ def _rolling_prior_stats(
 ) -> pd.DataFrame:
     """
     Compute rolling *prior* stats per team with shift(1) to avoid leakage.
-    
+
     Args:
         team_game_stats: DataFrame of team-game level stats
         window: Rolling window size
         advanced_cols: Additional columns to compute rolling stats for
-        
+
     Returns:
         pd.DataFrame: Enhanced with prior_* columns
-        
+
     Note:
         Uses shift(1) to ensure no future information leakage
     """
@@ -238,10 +238,10 @@ def _rolling_prior_stats(
 def _ffill_prior_features(wide: pd.DataFrame) -> pd.DataFrame:
     """
     Forward-fill prior_* columns per team to keep future weeks NaN-safe.
-    
+
     Args:
         wide: Wide-format DataFrame with prior_* columns
-        
+
     Returns:
         pd.DataFrame: With forward-filled prior features
     """
@@ -266,10 +266,10 @@ def _ffill_prior_features(wide: pd.DataFrame) -> pd.DataFrame:
 def _impute_remaining_prior_nans(wide: pd.DataFrame) -> pd.DataFrame:
     """
     Fill remaining prior_* NaNs with neutral values (0.0; medians for QB pct).
-    
+
     Args:
         wide: DataFrame with prior_* columns
-        
+
     Returns:
         pd.DataFrame: With imputed missing values
     """
@@ -286,29 +286,29 @@ def _impute_remaining_prior_nans(wide: pd.DataFrame) -> pd.DataFrame:
 
     if prior_cols:
         out[prior_cols] = out[prior_cols].fillna(0.0)
-    
+
     for c, med in median_map.items():
         out[c] = out[c].where(out[c].notna(), med)
-    
+
     return out
 
 
 def ensure_actual_winner(df: pd.DataFrame) -> pd.DataFrame:
     """
     Ensure `home_win` boolean and `actual_winner` string columns exist.
-    
+
     Args:
         df: DataFrame with game outcome information
-        
+
     Returns:
         pd.DataFrame: With home_win and actual_winner columns
-        
+
     Raises:
         ValueError: If unable to infer game outcome from available columns
     """
     out = df.copy()
-    
-    
+
+
     if "home_win" in out.columns:
         win_series = pd.Series(out["home_win"], index=out.index, dtype="boolean")
     elif {"home_points_for", "away_points_for"}.issubset(out.columns):
@@ -316,12 +316,12 @@ def ensure_actual_winner(df: pd.DataFrame) -> pd.DataFrame:
         # If scores are NA, comparison is NA (using nullable boolean)
         pf = pd.to_numeric(out["home_points_for"], errors="coerce")
         pa = pd.to_numeric(out["away_points_for"], errors="coerce")
-        
+
         # Where both valid, calculate win
         mask_valid = pf.notna() & pa.notna()
         win_series = pd.Series(pd.NA, index=out.index, dtype="boolean")
         win_series.loc[mask_valid] = (pf[mask_valid] > pa[mask_valid])
-        
+
     elif "winner" in out.columns:
         winner_col = out["winner"]
         if pd.api.types.is_bool_dtype(winner_col.dtype):
@@ -347,13 +347,13 @@ def ensure_actual_winner(df: pd.DataFrame) -> pd.DataFrame:
 def process_dataset(df: pd.DataFrame) -> pd.DataFrame:
     """
     Safe preprocessing hook: coerce season/week and return copy.
-    
+
     Args:
         df: Raw dataset DataFrame
-        
+
     Returns:
         pd.DataFrame: Preprocessed copy
-        
+
     Note:
         Gracefully handles errors by returning original DataFrame
     """
@@ -367,7 +367,7 @@ def process_dataset(df: pd.DataFrame) -> pd.DataFrame:
 # Export public API
 __all__ = [
     'resolve_model_path',
-    'to_team_abbr', 
+    'to_team_abbr',
     'coerce_season_week',
     'make_time_key',
     'ensure_actual_winner',

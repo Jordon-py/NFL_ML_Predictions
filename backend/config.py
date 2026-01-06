@@ -18,12 +18,25 @@ TRUTHY = {"1", "true", "yes", "y", "on"}
 
 BASE_DIR = Path(__file__).resolve().parent
 REPO_ROOT = BASE_DIR.parent
+DEFAULT_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "https://nfl-ml-predictions.vercel.app",
+    "https://nfl-predict.vercel.app",
+    "https://new-nfl-predict.vercel.app",
+]
+DEFAULT_ORIGIN_REGEX = r"https://.*\.vercel\.app$"
 
 def _resolve_data_dir() -> Path:
     env_data_dir = os.getenv("DATA_DIR")
     if env_data_dir:
         p = Path(env_data_dir)
         return (BASE_DIR / p).resolve() if not p.is_absolute() else p.resolve()
+    dataset_dir = BASE_DIR / "data" / "dataset"
+    if dataset_dir.exists():
+        return dataset_dir.resolve()
     default_dir = BASE_DIR / "data" / "datasets"
     if default_dir.exists():
         return default_dir.resolve()
@@ -39,6 +52,7 @@ def _resolve_models_dir() -> Path:
 
     candidates = [
         BASE_DIR / "20260102" / "models",
+        BASE_DIR / "data" / "models",
         BASE_DIR / "models",
     ]
     for candidate in candidates:
@@ -50,17 +64,27 @@ def _resolve_models_dir() -> Path:
 
 MODELS_DIR = _resolve_models_dir()
 
+def _split_origins(raw: str) -> list[str]:
+    return [o.strip().rstrip("/") for o in raw.split(",") if o.strip()]
+
 def resolve_cors():
     """
-    Minimal CORS resolver; keep your existing env-driven CORS behavior if you want.
+    Resolve allowed origins and regex from env, with safe defaults for dev + previews.
     """
-    origins_env = os.getenv("ALLOWED_ORIGINS") or os.getenv("CORS_ORIGINS", "")
-    origins = [o.strip() for o in origins_env.split(",") if o.strip()]
-    if not origins:
-        origins = ["*"]
-    origin_regex = os.getenv("CORS_ORIGINS_REGEX", "https://.*\\.vercel\\.app$").strip()
-    if origin_regex == str:
-        origin_regex = origin_regex.split(",")
+    raw_origins = os.getenv("ALLOWED_ORIGINS") or os.getenv("CORS_ORIGINS", "")
+    env_origins = _split_origins(raw_origins)
+    restrict = os.getenv("RESTRICT_CORS", "false").strip().lower() in TRUTHY
+
+    if restrict:
+        origins = env_origins or DEFAULT_ALLOWED_ORIGINS
+    else:
+        origins = list(dict.fromkeys([*DEFAULT_ALLOWED_ORIGINS, *env_origins]))
+
+    origin_regex = (
+        os.getenv("ALLOW_ORIGIN_REGEX")
+        or os.getenv("CORS_ORIGINS_REGEX")
+        or DEFAULT_ORIGIN_REGEX
+    )
     return origins, origin_regex
 
 def load_schedule_data_safe(season: int):

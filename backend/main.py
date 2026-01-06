@@ -112,6 +112,10 @@ def _get_team_meta_map() -> Dict[str, Dict[str, str]]:
     if isinstance(cached, dict):
         return cached
 
+
+def _normalize_team_code(value: str) -> str:
+    return str(value or "").strip().upper()
+
     _dir = Path(__file__).resolve().parent
     repo_root = _dir.parent
     candidates = [
@@ -138,8 +142,8 @@ def _get_team_meta_map() -> Dict[str, Dict[str, str]]:
 # -------------------------------------
 def _build_prediction_payload(req: PredictionRequest, res: PredictionResponse) -> Dict[str, Any]:
     """Flatten model output into the unified API response shape."""
-    home_code = str(req.home_team).strip().upper()
-    away_code = str(req.away_team).strip().upper()
+    home_code = _normalize_team_code(req.home_team)
+    away_code = _normalize_team_code(req.away_team)
     home_score = float(res.scores.home_score)
     away_score = float(res.scores.away_score)
     team_meta = _get_team_meta_map()
@@ -323,6 +327,7 @@ app = FastAPI(title="NFL ML Predictions API", lifespan=lifespan)
 
 # CORS Middleware
 cors_origins, cors_origin_regex = resolve_cors()
+cors_restrict = os.getenv("RESTRICT_CORS", "false").strip().lower() in TRUTHY
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
@@ -375,8 +380,8 @@ async def get_next_week_schedule(season: int | None = None) -> ScheduleResponse:
 
     games: list[ScheduleEntry] = []
     for _, row in df_next.iterrows():
-        home = str(row.get(home_col, "") if home_col else row.get("home", "")).strip().upper()
-        away = str(row.get(away_col, "") if away_col else row.get("away", "")).strip().upper()
+        home = _normalize_team_code(row.get(home_col, "") if home_col else row.get("home", ""))
+        away = _normalize_team_code(row.get(away_col, "") if away_col else row.get("away", ""))
         if not home or not away:
             continue
 
@@ -419,7 +424,6 @@ async def get_team_logos() -> TeamLogosResponse:
 
 @app.get("/debug")
 async def debug() -> Dict[str, Any]:
-    origins, origin_regex = resolve_cors()
     dataset = state["dataset"]
     rows = int(len(dataset)) if dataset is not None else 0
     cols = int(dataset.shape[1]) if dataset is not None else 0
@@ -437,9 +441,9 @@ async def debug() -> Dict[str, Any]:
             "shape": [rows, cols],
             "sample_cols": list(dataset.columns[:25]) if dataset is not None else [],
         },
-        "cors_origins": origins,
-        "cors_origin_regex": origin_regex,
-        "restrict_cors": os.getenv("RESTRICT_CORS", "false").strip().lower() in TRUTHY,
+        "cors_origins": cors_origins,
+        "cors_origin_regex": cors_origin_regex,
+        "restrict_cors": cors_restrict,
     }
 
 @app.post("/debug/predict-input")
