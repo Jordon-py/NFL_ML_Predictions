@@ -112,3 +112,5 @@ data/
 
 ## Deployment configs
 !vercel.json
+.vercel
+.env*.local
