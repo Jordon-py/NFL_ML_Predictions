@@ -20,8 +20,7 @@ KEY FUNCTIONS/CLASSES:
 import logging
 import json
 import os
-import re
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from dataclasses import dataclass
 from typing import Dict, Any, List, Optional
 from threading import Lock
@@ -67,23 +66,39 @@ def load_inference_bundle(models_dir: Path) -> InferenceBundle:
 
     artifacts = meta.get("artifacts", meta)
 
+    def _normalize_path_value(value: Any) -> str:
+        val_str = str(value).strip()
+        if len(val_str) >= 2 and val_str[0] == val_str[-1] and val_str[0] in ("'", '"'):
+            val_str = val_str[1:-1].strip()
+        return val_str
+
     def _looks_like_windows_abs(value: str) -> bool:
-        return bool(re.match(r"^[A-Za-z]:[\\\\/]", value))
+        try:
+            win_path = PureWindowsPath(value)
+        except Exception:
+            return False
+        return bool(win_path.drive) and win_path.is_absolute()
 
     def _resolve_path(key: str, default: Optional[str] = None) -> Optional[Path]:
         val = artifacts.get(key) or meta.get(key) or default
         if not val:
             return None
-        val_str = str(val)
+        val_str = _normalize_path_value(val)
+        if not val_str:
+            return None
         p = Path(val_str)
-        if p.is_absolute() or _looks_like_windows_abs(val_str):
-            if p.exists():
-                return p
-            # Fall back to the local models_dir using the basename for portability.
-            fallback = models_dir / p.name
-            return fallback
+        if p.is_absolute() and p.exists():
+            return p
+
         candidate = models_dir / p
-        return candidate
+        if candidate.exists():
+            return candidate
+
+        if _looks_like_windows_abs(val_str):
+            win_path = PureWindowsPath(val_str)
+            return models_dir / win_path.name
+
+        return models_dir / p.name
 
     pre_path = _resolve_path("preprocessor", "preprocessor.joblib")
     home_path = _resolve_path("home_model", "home_model.joblib")
