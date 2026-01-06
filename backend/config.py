@@ -54,13 +54,14 @@ def resolve_cors():
     """
     Minimal CORS resolver; keep your existing env-driven CORS behavior if you want.
     """
-    origins_env = os.getenv("ALLOWED_ORIGINS") or os.getenv("CORS_ORIGINS", "")
-    origins = [o.strip() for o in origins_env.split(",") if o.strip()]
+    origins_env = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000") or os.getenv("CORS_ORIGINS", "https://.*\\.vercel\\.app$")
+    origins = [o.strip() for o in origins_env.split(",")]
+    print(len(origins), origins)
+   
     if not origins:
         origins = ["*"]
     origin_regex = os.getenv("CORS_ORIGINS_REGEX", "https://.*\\.vercel\\.app$").strip()
-    if origin_regex == str:
-        origin_regex = origin_regex.split(",")
+    print(len(origin_regex), origin_regex)
     return origins, origin_regex
 
 def load_schedule_data_safe(season: int):

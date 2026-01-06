@@ -18,14 +18,12 @@
 // Environment-based API configuration
 // fetch.js (minimal-but-strong)
 
-const isLocalhost =
-  window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
-const DEV_BASE =
-  import.meta.env.VITE_API_DEV ||
-  import.meta.env.VITE_DEV_ENV ||
-  import.meta.env.VITE_API_BASE_DEV;
-const PROD_BASE = import.meta.env.VITE_API_BASE_URL;
-const RAW_BASE = isLocalhost ? (DEV_BASE || PROD_BASE) : PROD_BASE;
+const isLocalhost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+
+const DEV_BASE = import.meta.env.VITE_DEV_ENV || 'http://127.0.0.1:8000';
+const PROD_BASE = import.meta.env.VITE_API_BASE_URL || 'https://nfl-predict-ecf5a5bd34fe.herokuapp.com';
+const RAW_BASE = !isLocalhost ? (DEV_BASE || PROD_BASE) : PROD_BASE;
+console.log("API_BASE USED:", RAW_BASE);
 
 // ✅ Fail fast instead of silently becoming "undefined/"
 if (!RAW_BASE) {
