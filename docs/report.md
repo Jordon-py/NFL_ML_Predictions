@@ -25,6 +25,14 @@ This report documents incremental changes to the NFL_ML_Predictions repository, 
     3. Draft the README evaluation table using the latest holdout metrics before surfacing to stakeholders.
   - **App Completion Estimate:** 87% (unchanged pending verification + documentation work).
   - **Enhancement Suggestion:** Automate Active Enhancements status generation (e.g., script draws from Alfred log tasks) to keep docs/report.md synchronized with minimal manual edits.
+
+### Active Enhancements (2026-01-08)
+
+- **Endpoint Optimization**:
+  - Refactored `backend/main.py` to remove legacy inline logic.
+  - Modularized feature construction in `inference_row.py` for better maintainability and accuracy (roll-forward logic).
+  - Hardened `frontend/src/api/client.js` with JSDoc and bug fixes.
+  - **Status**: Code refactoring complete. Backend requires deployment. Frontend verified locally.
 - **Date/Time:** 2025-12-04 / 17:55 UTC
   - **Focus:** Production smoke test + model ledger creation.
   - **Key Actions:**

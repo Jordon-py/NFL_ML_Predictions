@@ -314,7 +314,7 @@ def get_schedule(season: Optional[int] = None) -> pd.DataFrame:
 
     return pd.DataFrame()
 
-def _parse_kickoff(row: pd.Series) -> Optional[datetime]:
+def parse_kickoff(row: pd.Series) -> Optional[datetime]:
     try:
         gameday = row.get("gameday")
         gametime = row.get("gametime")
@@ -358,7 +358,7 @@ def _infer_next_week(schedule_df: pd.DataFrame) -> tuple[int, int]:
         return (season, week_default)
 
     # Try to find the first week with future games
-    kickoff_series = df_use.apply(_parse_kickoff, axis=1)
+    kickoff_series = df_use.apply(parse_kickoff, axis=1)
     if kickoff_series.notna().any():
         try:
             ts_series = pd.to_datetime(kickoff_series, utc=True)
@@ -379,7 +379,7 @@ def _infer_next_week(schedule_df: pd.DataFrame) -> tuple[int, int]:
     return (season, int(weeks.max()))
 
 
-def _select_next_week_rows(schedule_df: pd.DataFrame) -> tuple[pd.DataFrame, int, int]:
+def select_next_week_rows(schedule_df: pd.DataFrame) -> tuple[pd.DataFrame, int, int]:
     season, week = _infer_next_week(schedule_df)
     df_use = schedule_df.copy() if isinstance(schedule_df, pd.DataFrame) else pd.DataFrame()
 
@@ -393,7 +393,7 @@ def _select_next_week_rows(schedule_df: pd.DataFrame) -> tuple[pd.DataFrame, int
 
     return df_use, season, week
 
-def _load_team_logos_map(csv_path: Path) -> Dict[str, Dict[str, str]]:
+def get_team_meta(csv_path: Path) -> Dict[str, Dict[str, str]]:
     try:
         df = pd.read_csv(csv_path)
     except Exception as exc:

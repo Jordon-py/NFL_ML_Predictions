@@ -60,16 +60,15 @@ from .main_helpers import (
     _append_prediction_history_to_disk,
     prediction_history_entries,
     _prediction_history_lock,
-    # New imports from refactor
-    get_schedule as _load_schedule_df_routes,
-    _select_next_week_rows as _select_next_week_rows_routes,
-    _pick_col as _pick_col_routes,
-    _load_team_logos_map as _load_team_logos_map_routes,
-    _parse_kickoff as _parse_kickoff_routes,
-    _HOME_COLS as _HOME_COLS_ROUTES,
-    _AWAY_COLS as _AWAY_COLS_ROUTES,
-    _GAME_ID_COLS as _GAME_ID_COLS_ROUTES,
-    _STADIUM_COLS as _STADIUM_COLS_ROUTES,
+    get_schedule,
+    select_next_week_rows,
+    get_team_meta,
+    parse_kickoff,
+    _pick_col,
+    _HOME_COLS,
+    _AWAY_COLS,
+    _GAME_ID_COLS,
+    _STADIUM_COLS,
 )
 from .ollama.llm_ollama import explain_prediction as llm_explain_prediction, chat_messages as llm_chat_messages
 from .routes import (
@@ -133,7 +132,7 @@ def _get_team_meta_map() -> Dict[str, Dict[str, str]]:
     team_map: Dict[str, Dict[str, str]] = {}
     for csv_path in candidates:
         if csv_path.exists():
-            team_map = _load_team_logos_map_routes(csv_path)
+            team_map = get_team_meta(csv_path)
             break
 
     state["team_logos"] = team_map or {}
@@ -360,29 +359,33 @@ async def health():
 
 @app.get("/schedule/next-week", response_model=ScheduleResponse)
 async def get_next_week_schedule(season: int | None = None) -> ScheduleResponse:
-    df = _load_schedule_df_routes(season=season)
+    df = get_schedule(season=season)
+    
+    # Fallback to local JSON if CSV fails/empty (legacy behavior)
     if not isinstance(df, pd.DataFrame) or df.empty:
         fallback_path = Path(__file__).resolve().parent / "post_schedule.json"
         if fallback_path.exists():
             try:
                 raw = json.loads(fallback_path.read_text(encoding="utf-8"))
-                games = raw.get("games") if isinstance(raw, dict) else None
-                if isinstance(games, list) and games:
-                    df = pd.DataFrame(games)
+                games_list = raw.get("games")
+                if isinstance(games_list, list) and games_list:
+                    df = pd.DataFrame(games_list)
             except Exception as exc:
                 log.warning("Schedule fallback read failed for %s: %s", fallback_path, exc)
         if not isinstance(df, pd.DataFrame):
             df = pd.DataFrame()
-    df_next, use_season, use_week = _select_next_week_rows_routes(df)
+            
+    df_next, use_season, use_week = select_next_week_rows(df)
     team_meta = _get_team_meta_map()
 
-    home_col = _pick_col_routes(df_next, _HOME_COLS_ROUTES)
-    away_col = _pick_col_routes(df_next, _AWAY_COLS_ROUTES)
-    game_id_col = _pick_col_routes(df_next, _GAME_ID_COLS_ROUTES)
-    stadium_col = _pick_col_routes(df_next, _STADIUM_COLS_ROUTES)
+    home_col = _pick_col(df_next, _HOME_COLS)
+    away_col = _pick_col(df_next, _AWAY_COLS)
+    game_id_col = _pick_col(df_next, _GAME_ID_COLS)
+    stadium_col = _pick_col(df_next, _STADIUM_COLS)
 
     games: list[ScheduleEntry] = []
     for _, row in df_next.iterrows():
+        # Identify Teams
         home = _normalize_team_code(row.get(home_col, "") if home_col else row.get("home", ""))
         away = _normalize_team_code(row.get(away_col, "") if away_col else row.get("away", ""))
         if not home or not away:
@@ -391,6 +394,7 @@ async def get_next_week_schedule(season: int | None = None) -> ScheduleResponse:
         home_info = team_meta.get(home, {})
         away_info = team_meta.get(away, {})
 
+        # Resolve Game ID
         game_id = ""
         if game_id_col:
             raw_id = row.get(game_id_col)
@@ -405,7 +409,7 @@ async def get_next_week_schedule(season: int | None = None) -> ScheduleResponse:
             ScheduleEntry(
                 season=int(use_season),
                 week=int(use_week),
-                kickoff=_parse_kickoff_routes(row),
+                kickoff=parse_kickoff(row),
                 home_team=home,
                 away_team=away,
                 game_id=game_id,
@@ -413,8 +417,9 @@ async def get_next_week_schedule(season: int | None = None) -> ScheduleResponse:
                 away_abbr=away,
                 home_logo=home_info.get("logoUrl"),
                 away_logo=away_info.get("logoUrl"),
-                home_name=home_info.get("name") or home,
-                away_name=away_info.get("name") or away,
+                # Prefer name from metadata -> schedule -> abbr
+                home_name=home_info.get("name") or str(row.get("home_team_name", "")) or home,
+                away_name=away_info.get("name") or str(row.get("away_team_name", "")) or away,
                 stadium=stadium,
             )
         )

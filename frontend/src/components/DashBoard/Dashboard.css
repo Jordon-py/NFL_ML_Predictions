@@ -4,7 +4,7 @@
 
 .dashboard {
   position: relative;
-  width: 1400px;
+  width: 100vw;
   min-height: 100vh;
   overflow-y: visible;
   margin: 0 auto;

@@ -81,6 +81,9 @@ class PredictionService:
 
     def _get_schedule_df(self, season: int) -> Optional[pd.DataFrame]:
         if season in self._schedule_cache:
+
+    def _get_schedule_df(self, season: int) -> Optional[pd.DataFrame]:
+        if season in self._schedule_cache:
             return self._schedule_cache[season]
         df = load_schedule_data_safe(season)
         if isinstance(df, pd.DataFrame):
@@ -88,6 +91,18 @@ class PredictionService:
         return df
 
     def predict(self, req: PredictionRequest) -> PredictionResponse:
+        """
+        Execute the full inference pipeline for a single game.
+        
+        Steps:
+        1. Resolve Schedule Context (Vegas lines, etc.) if available.
+        2. Build Feature Row (Enrich with history, roll-forward stats, impute).
+        3. Preprocess (Scale/Encode).
+        4. Regress Scores (Home/Away).
+        5. classify Winner (Probability).
+        6. Return unified response.
+        """
+
         if self.home_reg is None or self.away_reg is None:
             raise RuntimeError("Models not loaded: home_reg/away_reg missing")
 

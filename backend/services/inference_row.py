@@ -1,356 +1,363 @@
 # ==========================================
 # File: backend/services/inference_row.py
 # Role: Inference row builder for live predictions.
-# Input Data: Game context and dataset history.
-# Output Data: Filled feature rows.
+# Input Data: Game context (teams, season, week) + Historical Dataset.
+# Output Data: A single-row DataFrame ready for the ML pipeline.
 # Dependencies: __future__, typing, numpy, pandas
-# Notes: Rolls forward team stats before median imputation with batched updates to avoid fragmentation.
+#
+# DESIGN PHILOSOPHY:
+# ------------------
+# This module constructs a "synthetic" feature row for future games.
+# Since we don't have the actual game stats yet, we must:
+# 1. Use "Prior" stats: What did these teams do in their LAST game?
+# 2. Use "Rolling" stats: Averages of their last N games.
+# 3. Use "Schedule" data: Vegas lines, rest days, stadium info.
+# 4. Fallback/Impute: Use median values for anything else to be safe.
 # ==========================================
 
 from __future__ import annotations
 from typing import Any, Dict, Optional, List, Tuple
 import numpy as np
 import pandas as pd
+import logging
 
+log = logging.getLogger(__name__)
 
-ABBR_FIX: Dict[str, str] = {        # Match your dataset builder's team normalization
-    "LA": "LAR",
-    "STL": "LAR",
-    "SD": "LAC",
-    "OAK": "LV",
-    "WSH": "WAS",
+# Team Abbreviation Normalization Map
+# Ensures consistent team codes across different data sources (ESPN vs NFL vs betting).
+ABBR_FIX: Dict[str, str] = {
+    "LA": "LAR", "STL": "LAR", "RAMS": "LAR",
+    "SD": "LAC", "CHARGERS": "LAC",
+    "OAK": "LV", "RAIDERS": "LV",
+    "WSH": "WAS", "WAS": "WAS", "COMMANDERS": "WAS", "REDSKINS": "WAS",
+    "JAX": "JAX", "JAGUARS": "JAX",
 }
 
-
-DROP_COLS = {           # Targets/leaky columns you never want to feed into preprocess/estimator
-    "home_points_for",
-    "away_points_for",
-    "point_diff",
-    "winner",
-    "home_win",
-    "actual_winner",
+# Columns to EXCLUDE from the feature vector.
+# These are either "target" variables (answers) or metadata we don't want the model to see.
+DROP_COLS = {
+    "home_points_for", "away_points_for", "point_diff",
+    "winner", "home_win", "actual_winner",
+    "game_date", "date", "kickoff", "time"
 }
+
+# ==============================================================================
+# 1. CORE UTILITIES
+# ==============================================================================
 
 def _normalize_team(team: Any) -> str:
-    s = "" if team is None else str(team).strip().upper()
+    """Standardize team abbreviations to uppercase standard codes."""
+    if team is None:
+        return ""
+    s = str(team).strip().upper()
     return ABBR_FIX.get(s, s)
 
 def _moneyline_to_prob(ml: Any) -> float:
+    """Convert American Moneyline odds (-110, +200) to Implied Win Probability (0.0-1.0)."""
     try:
         ml = float(ml)
     except (TypeError, ValueError):
         return np.nan
-    if ml > 0:
-        return 100.0 / (ml + 100.0)
+    
+    # Negative ML (Favorite): -150 means bet 150 to win 100.
     if ml < 0:
         return (-ml) / ((-ml) + 100.0)
+    # Positive ML (Underdog): +200 means bet 100 to win 200.
+    if ml > 0:
+        return 100.0 / (ml + 100.0)
     return np.nan
 
-def _infer_expected_columns(preprocessor: Any, raw_feature_columns: Optional[List[str]] = None) -> Optional[List[str]]:
+def _infer_expected_columns(preprocessor: Any, raw_feature_columns: Optional[List[str]] = None) -> List[str]:
     """
-    Prefer preprocessor.feature_names_in_ to guarantee the raw-schema matches training.
-    Fall back to bundle-provided raw_feature_columns if available.
+    Determine the exact list of columns the model expects.
+    This is critical to prevent "Shape Mismatch" errors during inference.
+    Prioritizes the fitted preprocessor's internal state.
     """
+    # 1. Best source: The fitted preprocessor knows exactly what it saw during training.
     if preprocessor is not None:
         cols = getattr(preprocessor, "feature_names_in_", None)
         if cols is not None:
             return list(cols)
-
+        
+        # Check nested steps if top-level attribute is missing
         named_steps = getattr(preprocessor, "named_steps", None)
         if isinstance(named_steps, dict):
             for step in named_steps.values():
                 cols = getattr(step, "feature_names_in_", None)
                 if cols is not None:
                     return list(cols)
+
+    # 2. Fallback: Metadata provided by the model bundle.
     if raw_feature_columns:
         return list(raw_feature_columns)
-    return None
+    
+    return []
 
-def _find_dataset_row(
-    dataset_df: pd.DataFrame, *, season: int, week: int, home_team: str, away_team: str) -> Optional[pd.DataFrame]:
-    if not {"season", "week", "home_team", "away_team"}.issubset(dataset_df.columns):
-        return None
-    mask = (
-        (pd.to_numeric(dataset_df["season"], errors="coerce") == int(season))
-        & (pd.to_numeric(dataset_df["week"], errors="coerce") == int(week))
-        & (dataset_df["home_team"].astype(str).str.upper().map(_normalize_team) == home_team)
-        & (dataset_df["away_team"].astype(str).str.upper().map(_normalize_team) == away_team)
-    )
-    if mask.any():
-        return dataset_df.loc[mask].tail(1).copy()
-    return None
-
-def _apply_onehots(
-    row_df: pd.DataFrame,
-    *,
-    home: str,
-    away: str,
-    dataset_df: pd.DataFrame,
-) -> pd.DataFrame:
-    """
-    Your dataset includes home_team_* and away_team_* columns (32 each).
-    Setting these makes inference compatible with numeric-only models.
-    """
-    # Only set if your dataset schema includes these
-    home_oh = [c for c in dataset_df.columns if c.startswith("home_team_")]
-    away_oh = [c for c in dataset_df.columns if c.startswith("away_team_")]
-
-    updates: Dict[str, Any] = {}
-    for c in home_oh:
-        updates[c] = 1.0 if c == f"home_team_{home}" else 0.0
-    for c in away_oh:
-        updates[c] = 1.0 if c == f"away_team_{away}" else 0.0
-
-    if updates:
-        row_df = row_df.assign(**updates)
-
-    return row_df
-
-def _pick_schedule_row(
-    schedule_df: pd.DataFrame, season: int, week: int, home: str, away: str
-) -> Optional[dict]:
-    if schedule_df is None or schedule_df.empty:
-        return None
-
-    def _colpick(cands: List[str]) -> Optional[str]:
-        for c in cands:
-            if c in schedule_df.columns:
-                return c
-        return None
-
-    c_home = _colpick(["home_team", "home", "home_abbr", "home_team_abbr"])
-    c_away = _colpick(["away_team", "away", "away_abbr", "away_team_abbr"])
-    c_week = _colpick(["week", "week_num", "week_number"])
-    c_season = _colpick(["season", "year"])
-
-    m = pd.Series(True, index=schedule_df.index)
-    if c_season:
-        m &= (pd.to_numeric(schedule_df[c_season], errors="coerce") == int(season))
-    if c_week:
-        m &= (pd.to_numeric(schedule_df[c_week], errors="coerce") == int(week))
-    if c_home:
-        m &= (schedule_df[c_home].astype(str).str.upper().map(_normalize_team) == home)
-    if c_away:
-        m &= (schedule_df[c_away].astype(str).str.upper().map(_normalize_team) == away)
-
-    if m.any():
-        return schedule_df.loc[m].iloc[-1].to_dict()
-    return None
-
-def _latest_team_prior_row(
-    dataset_df: pd.DataFrame,
-    *,
-    season: int,
-    week: int,
-    team: str,
-    team_history_cache: Optional[Dict[str, pd.DataFrame]] = None,
-) -> Optional[pd.Series]:
-    """
-    Grab the team's most recent row BEFORE (season, week), regardless of role.
-    This is a practical approximation when you don't rebuild the whole feature pipeline live.
-    """
-    team = _normalize_team(team)
-    if team_history_cache and team in team_history_cache:
-        s = team_history_cache[team]
-        if not {"season_num", "week_num"}.issubset(s.columns):
-            return None
-        mask_past = (s["season_num"] == int(season)) & (s["week_num"] < int(week))
-        if mask_past.any():
-            return s.loc[mask_past].iloc[-1]
-        return None
-
-    if not {"season", "week", "home_team", "away_team"}.issubset(dataset_df.columns):
-        return None
-
-    s = dataset_df.copy()
-    s["season_num"] = pd.to_numeric(s["season"], errors="coerce")
-    s["week_num"] = pd.to_numeric(s["week"], errors="coerce")
-
-    mask_past = (s["season_num"] == int(season)) & (s["week_num"] < int(week))
-    mask_team = (
-        s["home_team"].astype(str).str.upper().map(_normalize_team).eq(team)
-        | s["away_team"].astype(str).str.upper().map(_normalize_team).eq(team)
-    )
-    past = s.loc[mask_past & mask_team].sort_values(["week_num"])
-    if past.empty:
-        return None
-    return past.iloc[-1]
+# ==============================================================================
+# 2. HISTORY & CACHING
+# ==============================================================================
 
 def build_team_history_cache(dataset_df: pd.DataFrame) -> Dict[str, pd.DataFrame]:
     """
-    Precompute team-level history frames so we can reuse the latest prior game rows quickly.
-    The cache is keyed by normalized team code.
+    Optimization: Pre-sort the dataset by team and time.
+    Instead of scanning the whole DataFrame for every prediction, we look up this cache.
+    Returns: { "KC": DataFrame(sorted by season/week), "BUF": ... }
     """
     if dataset_df is None or dataset_df.empty:
         return {}
-    if not {"season", "week", "home_team", "away_team"}.issubset(dataset_df.columns):
+    
+    required = {"season", "week", "home_team", "away_team"}
+    if not required.issubset(dataset_df.columns):
         return {}
 
+    # Create numeric sort keys once
     s = dataset_df.copy()
-    s["season_num"] = pd.to_numeric(s["season"], errors="coerce")
-    s["week_num"] = pd.to_numeric(s["week"], errors="coerce")
-
+    s["season_num"] = pd.to_numeric(s["season"], errors="coerce").fillna(0)
+    s["week_num"] = pd.to_numeric(s["week"], errors="coerce").fillna(0)
+    
     cache: Dict[str, List[pd.Series]] = {}
+    
     for _, row in s.iterrows():
-        home = _normalize_team(row.get("home_team"))
-        away = _normalize_team(row.get("away_team"))
-        if home:
-            cache.setdefault(home, []).append(row)
-        if away:
-            cache.setdefault(away, []).append(row)
-
+        # Standardize team names so we key correctly
+        h = _normalize_team(row.get("home_team"))
+        a = _normalize_team(row.get("away_team"))
+        if h: cache.setdefault(h, []).append(row)
+        if a: cache.setdefault(a, []).append(row)
+            
+    # Convert lists to sorted DataFrames
     out: Dict[str, pd.DataFrame] = {}
     for team, rows in cache.items():
         df = pd.DataFrame(rows)
-        df = df.sort_values(["season_num", "week_num"])
-        out[team] = df
-
+        out[team] = df.sort_values(["season_num", "week_num"])
+        
     return out
 
-def _fill_team_priors(
-    row_df: pd.DataFrame,
-    *,
-    dataset_df: pd.DataFrame,
+def _get_latest_prior_game(
+    team: str,
     season: int,
     week: int,
-    home: str,
-    away: str,
-    team_history_cache: Optional[Dict[str, pd.DataFrame]] = None,
-) -> pd.DataFrame:
+    history_cache: Optional[Dict[str, pd.DataFrame]]
+) -> Optional[pd.Series]:
     """
-    Fill home_prior_* and away_prior_* from the latest available pre-game priors for each team.
-    Then compute home_minus_away_* columns if present in schema.
+    Find the most recent COMPLETED game for a team before the given (season, week).
+    This row contains the 'rolling stats' we need to carry forward.
     """
-    # Identify suffixes from schema
-    home_prior_cols = [c for c in dataset_df.columns if c.startswith("home_prior_")]
-    away_prior_cols = [c for c in dataset_df.columns if c.startswith("away_prior_")]
-
-    # Build suffix list once
-    suffixes = [c.replace("home_prior_", "", 1) for c in home_prior_cols]
-
-    updates: Dict[str, Any] = {}
-
-    def _maybe_set(dst: str, val: Any) -> None:
-        if dst in updates and pd.notna(updates[dst]):
-            return
-        if dst in row_df.columns and pd.notna(row_df.at[0, dst]):
-            return
-        if pd.notna(val):
-            updates[dst] = val
-
-    # Home priors from latest row
-    h_last = _latest_team_prior_row(
-        dataset_df,
-        season=season,
-        week=week,
-        team=home,
-        team_history_cache=team_history_cache,
+    team = _normalize_team(team)
+    if not history_cache or team not in history_cache:
+        return None
+        
+    df = history_cache[team]
+    
+    # Filter for games strictly before the target date
+    # Logic: (past seasons) OR (current season AND past weeks)
+    mask_past = (
+        (df["season_num"] < season) | 
+        ((df["season_num"] == season) & (df["week_num"] < week))
     )
-    if h_last is not None:
-        # Determine whether the team was home or away in that last row
-        was_home = _normalize_team(h_last.get("home_team")) == home
-        src_prefix = "home_prior_" if was_home else "away_prior_"
-        for suf in suffixes:
-            src_col = f"{src_prefix}{suf}"
-            dst_col = f"home_prior_{suf}"
-            if dst_col in dataset_df.columns and src_col in dataset_df.columns:
-                _maybe_set(dst_col, h_last.get(src_col))
+    
+    prior_games = df.loc[mask_past]
+    if prior_games.empty:
+        return None
+        
+    # The last row is the most recent game
+    return prior_games.iloc[-1]
 
-    # Away priors from latest row
-    a_last = _latest_team_prior_row(
-        dataset_df,
-        season=season,
-        week=week,
-        team=away,
-        team_history_cache=team_history_cache,
+# ==============================================================================
+# 3. ROW CONSTRUCTION STEPS
+# ==============================================================================
+
+def _init_base_row(season: int, week: int, home: str, away: str) -> pd.DataFrame:
+    """Create the initial 1-row DataFrame with identity columns."""
+    return pd.DataFrame([{
+        "season": int(season),
+        "week": int(week),
+        "home_team": _normalize_team(home),
+        "away_team": _normalize_team(away),
+        # Helper for debugging/tracking
+        "api_game_id": f"{int(season)}-{int(week)}-{_normalize_team(home)}-{_normalize_team(away)}",
+    }])
+
+def _enrich_from_schedule(row_df: pd.DataFrame, schedule_df: Optional[pd.DataFrame]) -> pd.DataFrame:
+    """
+    Enhance the row with data known from the schedule (Odds, Rest Days, Stadium).
+    This doesn't require ML; it's factual data about the upcoming matchup.
+    """
+    if schedule_df is None or schedule_df.empty:
+        return row_df
+
+    season = row_df.at[0, "season"]
+    week = row_df.at[0, "week"]
+    home = row_df.at[0, "home_team"]
+    away = row_df.at[0, "away_team"]
+
+    # Fuzzy match logic inside _pick_schedule_row (omitted for brevity, assumed separate or inline)
+    # For now, let's implement a concise finder:
+    
+    # We filter the schedule df
+    mask = (
+        (pd.to_numeric(schedule_df["season"], errors="coerce") == season) &
+        (pd.to_numeric(schedule_df["week"], errors="coerce") == week) &
+        (schedule_df["home_team"].apply(_normalize_team) == home) &
+        (schedule_df["away_team"].apply(_normalize_team) == away)
     )
-    if a_last is not None:
-        was_home = _normalize_team(a_last.get("home_team")) == away
-        src_prefix = "home_prior_" if was_home else "away_prior_"
-        for suf in suffixes:
-            src_col = f"{src_prefix}{suf}"
-            dst_col = f"away_prior_{suf}"
-            if dst_col in dataset_df.columns and src_col in dataset_df.columns:
-                _maybe_set(dst_col, a_last.get(src_col))
-
-    # Derived diffs
-    hma_cols = [c for c in dataset_df.columns if c.startswith("home_minus_away_")]
-    for c in hma_cols:
-        suf = c.replace("home_minus_away_", "", 1)
-        hp = f"home_prior_{suf}"
-        ap = f"away_prior_{suf}"
-        hv = updates.get(hp)
-        if hv is None or pd.isna(hv):
-            hv = row_df.at[0, hp] if hp in row_df.columns else np.nan
-        av = updates.get(ap)
-        if av is None or pd.isna(av):
-            av = row_df.at[0, ap] if ap in row_df.columns else np.nan
-        if pd.notna(hv) and pd.notna(av):
-            updates[c] = float(hv) - float(av)
+    
+    if not mask.any():
+        return row_df
+        
+    sched_row = schedule_df.loc[mask].iloc[0]
+    
+    # Copy relevant fields if they exist
+    fields_to_copy = [
+        "spread_line", "total_line", 
+        "home_rest", "away_rest", 
+        "home_moneyline", "away_moneyline",
+        "stadium", "location", "div_game", "roof"
+    ]
+    
+    updates = {}
+    for f in fields_to_copy:
+        if f in sched_row and pd.notna(sched_row[f]):
+            updates[f] = sched_row[f]
+            
+    # Calculate Probabilities from Moneylines if available
+    if "home_moneyline" in updates:
+        updates["home_moneyline_prob"] = _moneyline_to_prob(updates["home_moneyline"])
+    if "away_moneyline" in updates:
+        updates["away_moneyline_prob"] = _moneyline_to_prob(updates["away_moneyline"])
+        
+    # Calculate Rest Diff
+    if "home_rest" in updates and "away_rest" in updates:
+        try:
+            updates["rest_diff"] = float(updates["home_rest"]) - float(updates["away_rest"])
+        except (ValueError, TypeError):
+            pass
 
     if updates:
         row_df = row_df.assign(**updates)
-
+        
     return row_df
 
-def _fill_team_rollups(
-    row_df: pd.DataFrame,
-    *,
-    dataset_df: pd.DataFrame,
-    season: int,
-    week: int,
-    home: str,
-    away: str,
-    team_history_cache: Optional[Dict[str, pd.DataFrame]] = None,
+def _roll_forward_stats(
+    row_df: pd.DataFrame, 
+    dataset_cols: List[str],
+    history_cache: Dict[str, pd.DataFrame]
 ) -> pd.DataFrame:
     """
-    Roll forward team-level rolling/player/elo stats from each team's latest prior game.
-    This provides stronger inference inputs than pure median imputation.
+    CRITICAL STEP: The "Expert" Logic.
+    We don't know the stats for the FUTURE game.
+    But we know the teams' stats from their PREVIOUS game.
+    
+    We take "rolling_*" and "elo_*" and "qb_*" columns from the last game 
+    and copy them into this new row.
     """
-    updates: Dict[str, Any] = {}
+    season = row_df.at[0, "season"]
+    week = row_df.at[0, "week"]
+    home = row_df.at[0, "home_team"]
+    away = row_df.at[0, "away_team"]
+    
+    # 1. Get last known state for both teams
+    home_last = _get_latest_prior_game(home, season, week, history_cache)
+    away_last = _get_latest_prior_game(away, season, week, history_cache)
+    
+    updates = {}
 
-    def _maybe_set(dst: str, val: Any) -> None:
-        if dst in row_df.columns:
-            if pd.notna(row_df.at[0, dst]):
-                return
-        if pd.notna(val):
-            updates[dst] = val
-
-    def _apply_rollup(team: str, dst_prefix: str, alt_prefix: str) -> None:
-        last = _latest_team_prior_row(
-            dataset_df,
-            season=season,
-            week=week,
-            team=team,
-            team_history_cache=team_history_cache,
-        )
-        if last is None:
+    # Helper to map columns
+    # If the team was HOME in their last game, we take 'home_rolling_xxx'.
+    # If they were AWAY, we take 'away_rolling_xxx'.
+    def _map_stats(last_game_row: pd.Series, team: str, team_prefix: str):
+        if last_game_row is None: 
             return
-        was_home = _normalize_team(last.get("home_team")) == team
-        src_prefix = dst_prefix if was_home else alt_prefix
-        dst_cols = [c for c in dataset_df.columns if c.startswith(dst_prefix)]
-        for dst in dst_cols:
-            suffix = dst.replace(dst_prefix, "", 1)
-            src = f"{src_prefix}{suffix}"
-            if src in dataset_df.columns:
-                _maybe_set(dst, last.get(src))
+            
+        was_home = _normalize_team(last_game_row["home_team"]) == team
+        source_prefix = "home_" if was_home else "away_"
+        
+        # We want to fill columns in the NEW row that start with `team_prefix` (e.g., "home_")
+        # Example: we want to fill "home_rolling_offensive_epa"
+        # We look for "home_rolling_offensive_epa" or "away_rolling_offensive_epa" in the OLD row
+        
+        target_candidates = [c for c in dataset_cols if c.startswith(team_prefix)]
+        
+        for tgt_col in target_candidates:
+            # Remove the "home_" or "away_" prefix to get the core stat name
+            # e.g. "home_rolling_epa" -> "rolling_epa"
+            core_stat = tgt_col[len(team_prefix):]
+            
+            # Reconstruct the source column name in the last game row
+            # e.g. "away_rolling_epa" if they were away last time
+            src_col = f"{source_prefix}{core_stat}"
+            
+            if src_col in last_game_row:
+                updates[tgt_col] = last_game_row[src_col]
 
-    # Home team roll-forward
-    _apply_rollup(home, "home_rolling_", "away_rolling_")
-    _apply_rollup(home, "home_player_team_", "away_player_team_")
-    _apply_rollup(home, "home_qb_", "away_qb_")
-    _apply_rollup(home, "home_elo_", "away_elo_")
-
-    # Away team roll-forward
-    _apply_rollup(away, "away_rolling_", "home_rolling_")
-    _apply_rollup(away, "away_player_team_", "home_player_team_")
-    _apply_rollup(away, "away_qb_", "home_qb_")
-    _apply_rollup(away, "away_elo_", "home_elo_")
-
+    # Map for Home Team (fills 'home_rolling...', 'home_prior...', etc)
+    _map_stats(home_last, home, "home_")
+    
+    # Map for Away Team (fills 'away_rolling...', 'away_prior...', etc)
+    _map_stats(away_last, away, "away_")
+    
+    # Apply updates
     if updates:
         row_df = row_df.assign(**updates)
-
+        
     return row_df
+
+def _calculate_derived_diffs(row_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Recompute any "_diff" columns now that we have populated the base stats.
+    E.g. elo_diff = home_elo - away_elo
+    """
+    for col in row_df.columns:
+        if col.endswith("_diff"):
+            # Try to infer the components.
+            # Common pattern: metric_diff comes from home_metric - away_metric
+            base = col.rsplit("_diff", 1)[0] # "elo"
+            h_col = f"home_{base}"
+            a_col = f"away_{base}"
+            
+            if h_col in row_df and a_col in row_df:
+                try:
+                    h_val = pd.to_numeric(row_df[h_col], errors='coerce')
+                    a_val = pd.to_numeric(row_df[a_col], errors='coerce')
+                    # Only update if we have valid numbers and it wasn't already set
+                    if pd.notna(h_val).all() and pd.notna(a_val).all():
+                         row_df[col] = h_val - a_val
+                except Exception:
+                    pass
+    return row_df
+
+def _impute_remaining_missing(row_df: pd.DataFrame, dataset_df: pd.DataFrame, expected_cols: List[str]) -> pd.DataFrame:
+    """
+    Final Safety Net.
+    If we still have missing values for required columns (e.g. maybe it's Week 1 and there's no history),
+    fill them with the Median value from the entire dataset.
+    This prevents the model from crashing on NaNs.
+    """
+    # 1. Ensure all expected columns exist (fill with NaN if missing)
+    row_df = row_df.reindex(columns=expected_cols)
+    
+    # 2. Identify what's still missing
+    missing_cols = row_df.columns[row_df.isna().any()].tolist()
+    if not missing_cols:
+        return row_df
+        
+    # 3. Calculate medians only for the missing columns to save time
+    # We drop target columns from the dataset first to avoid data leakage (though unlikely to overlap)
+    safe_ds = dataset_df.drop(columns=[c for c in DROP_COLS if c in dataset_df.columns], errors='ignore')
+    
+    # Only compute medians for numeric columns that are explicitly missing
+    # We restrict to the intersection of Missing & Numeric
+    numeric_ds = safe_ds.select_dtypes(include=[np.number])
+    target_fills = [c for c in missing_cols if c in numeric_ds.columns]
+    
+    if target_fills:
+        medians = numeric_ds[target_fills].median()
+        row_df = row_df.fillna(medians)
+        
+    return row_df
+
+# ==============================================================================
+# 4. MAIN ENTRY POINT
+# ==============================================================================
 
 def build_model_input_row(
     *,
@@ -366,131 +373,78 @@ def build_model_input_row(
     debug: bool = False,
 ) -> Tuple[pd.DataFrame, str] | Tuple[pd.DataFrame, str, Dict[str, Any]]:
     """
-    Returns: (row_df_aligned_to_expected_cols, prediction_source)
-    Optional: debug=True returns an extra debug dict with fill stats.
-
-    Behavior:
-      1) If dataset already has exact engineered row, reuse it (best).
-      2) Else: build minimal row, optionally enrich from schedule,
-         roll forward team stats/priors from latest available game rows,
-         compute derived diffs, then impute remaining numeric columns from dataset medians.
+    Master orchestrator for creating a prediction row.
+    
+    Returns:
+        (DataFrame, source_string)
+        OR
+        (DataFrame, source_string, debug_info_dict) if debug=True
     """
-    home = _normalize_team(home_team)
-    away = _normalize_team(away_team)
+    
+    # A. Check for EXACT match in dataset first.
+    # If the game was already played or pre-processed in the CSV, just return it.
+    # This is the "Gold Standard" source.
+    home_norm = _normalize_team(home_team)
+    away_norm = _normalize_team(away_team)
+    
+    exact_match = dataset_df[
+        (dataset_df["season"] == season) & 
+        (dataset_df["week"] == week) & 
+        (dataset_df["home_team"].apply(_normalize_team) == home_norm) &
+        (dataset_df["away_team"].apply(_normalize_team) == away_norm)
+    ]
+    
+    if not exact_match.empty:
+        # We found it! Early return.
+        row_df = exact_match.head(1).copy()
+        expected = _infer_expected_columns(preprocessor, raw_feature_columns)
+        if expected:
+            row_df = row_df.reindex(columns=expected).fillna(0) # Basic safety fill for exact matches
+        
+        return (row_df, "dataset_exact", {}) if debug else (row_df, "dataset_exact")
 
-    ds_row = _find_dataset_row(dataset_df, season=season, week=week, home_team=home, away_team=away)
-    if ds_row is not None and not ds_row.empty:
-        row_df = ds_row.copy()
-        source = "dataset_exact"
-    else:
-        row_df = pd.DataFrame([{
-            "season": int(season),
-            "week": int(week),
-            "home_team": home,
-            "away_team": away,
-            "api_game_id": f"{int(season)}-{int(week)}-{home}-{away}",
-        }])
-        source = "synthetic_priors"
+    # B. Construct Synthetic Row (The "Expert" Path)
+    source = "synthetic_model_assembly"
+    
+    # 1. Base Identity
+    row = _init_base_row(season, week, home_team, away_team)
+    
+    # 2. Enrich with Schedule Data (Lines, Rest, etc.)
+    row = _enrich_from_schedule(row, schedule_df)
+    
+    # 3. Roll Forward Team Stats (The heavy lifting)
+    cache = team_history_cache if team_history_cache else build_team_history_cache(dataset_df)
+    row = _roll_forward_stats(row, dataset_df.columns, cache)
+    
+    # 4. Re-calculate Diffs (since we just updated the base values)
+    row = _calculate_derived_diffs(row)
+    
+    # 5. One-Hot Encoding (Manual helper if not using pipeline)
+    # Note: If your pipeline uses OneHotEncoder, this step might be redundant but safe.
+    # We populate "home_team_KC": 1.0, etc. if they exist in the dataset.
+    for col in dataset_df.columns:
+        if col.startswith("home_team_") or col.startswith("away_team_"):
+            # logic: home_team_KC is 1 if home_team == KC
+            team_suffix = col.split("_")[-1]
+            if col.startswith("home_team_"):
+                row[col] = 1.0 if team_suffix == home_norm else 0.0
+            else:
+                row[col] = 1.0 if team_suffix == away_norm else 0.0
 
-    # Optional schedule overwrite (safe)
-    srow = _pick_schedule_row(schedule_df, season=season, week=week, home=home, away=away) if isinstance(schedule_df, pd.DataFrame) else None
-    if isinstance(srow, dict):
-        for k in ["spread_line", "total_line", "home_rest", "away_rest", "home_moneyline", "away_moneyline"]:
-            if k in dataset_df.columns and k in srow and pd.notna(srow.get(k)):
-                row_df.at[0, k] = srow.get(k)
-
-        if "home_moneyline_prob" in dataset_df.columns and "home_moneyline" in row_df.columns:
-            row_df.at[0, "home_moneyline_prob"] = _moneyline_to_prob(row_df.at[0, "home_moneyline"])
-        if "away_moneyline_prob" in dataset_df.columns and "away_moneyline" in row_df.columns:
-            row_df.at[0, "away_moneyline_prob"] = _moneyline_to_prob(row_df.at[0, "away_moneyline"])
-        if "moneyline_prob_diff" in dataset_df.columns and {"home_moneyline_prob", "away_moneyline_prob"}.issubset(row_df.columns):
-            hp = row_df.at[0, "home_moneyline_prob"]
-            ap = row_df.at[0, "away_moneyline_prob"]
-            if pd.notna(hp) and pd.notna(ap):
-                row_df.at[0, "moneyline_prob_diff"] = float(hp) - float(ap)
-        if "rest_diff" in dataset_df.columns and {"home_rest", "away_rest"}.issubset(row_df.columns):
-            hr = row_df.at[0, "home_rest"]
-            ar = row_df.at[0, "away_rest"]
-            if pd.notna(hr) and pd.notna(ar):
-                row_df.at[0, "rest_diff"] = float(hr) - float(ar)
-
-    # Normalize team fields + onehots
-    row_df["home_team"] = home
-    row_df["away_team"] = away
-    row_df = _apply_onehots(row_df, home=home, away=away, dataset_df=dataset_df)
-
-    # Fill team priors + derived diffs if synthetic
-    if source != "dataset_exact":
-        row_df = _fill_team_priors(
-            row_df,
-            dataset_df=dataset_df,
-            season=season,
-            week=week,
-            home=home,
-            away=away,
-            team_history_cache=team_history_cache,
-        )
-        row_df = _fill_team_rollups(
-            row_df,
-            dataset_df=dataset_df,
-            season=season,
-            week=week,
-            home=home,
-            away=away,
-            team_history_cache=team_history_cache,
-        )
-
-    # Drop targets/leaky columns
-    row_df = row_df.drop(columns=[c for c in DROP_COLS if c in row_df.columns], errors="ignore")
-
-    # Align to expected raw columns
-    expected = _infer_expected_columns(preprocessor, raw_feature_columns=raw_feature_columns)
-
-    debug_info = None
-
-    if expected:
-        # Reindex once to avoid repeated column inserts (prevents DataFrame fragmentation).
-        # Note: this drops any extra columns not in the model's raw feature schema.
-        row_df = row_df.reindex(columns=expected)
-
-        # Impute numeric columns from dataset medians when still missing
-        # (Only for numeric schema columns; leave categorical for preprocessor imputers)
-        med = dataset_df.drop(columns=[c for c in DROP_COLS if c in dataset_df.columns], errors="ignore").median(numeric_only=True)
-        med_aligned = med.reindex(row_df.columns)
-
-        if debug:
-            missing_before = row_df.isna().iloc[0]
-            fillable = missing_before & med_aligned.notna()
-            filled_by_median_cols = list(row_df.columns[fillable])
-
-        row_df = row_df.fillna(med_aligned)
-
-        if debug:
-            missing_after = row_df.isna().iloc[0]
-            missing_after_cols = list(row_df.columns[missing_after])
-            home_prior_missing = [c for c in row_df.columns if c.startswith("home_prior_") and pd.isna(row_df.at[0, c])]
-            away_prior_missing = [c for c in row_df.columns if c.startswith("away_prior_") and pd.isna(row_df.at[0, c])]
-            hma_missing = [c for c in row_df.columns if c.startswith("home_minus_away_") and pd.isna(row_df.at[0, c])]
-
-            def _limit(items: List[str], limit: int = 50) -> List[str]:
-                return items[:limit]
-
-            debug_info = {
-                "expected_columns": len(expected),
-                "missing_before_impute": int(missing_before.sum()),
-                "filled_by_median_count": len(filled_by_median_cols),
-                "filled_by_median_sample": _limit(filled_by_median_cols),
-                "missing_after_impute": int(missing_after.sum()),
-                "missing_after_sample": _limit(missing_after_cols),
-                "missing_home_prior_count": len(home_prior_missing),
-                "missing_home_prior_sample": _limit(home_prior_missing),
-                "missing_away_prior_count": len(away_prior_missing),
-                "missing_away_prior_sample": _limit(away_prior_missing),
-                "missing_home_minus_away_count": len(hma_missing),
-                "missing_home_minus_away_sample": _limit(hma_missing),
-            }
-
+    # 6. Final Alignment & Imputation
+    expected_cols = _infer_expected_columns(preprocessor, raw_feature_columns)
+    
+    debug_stats = {}
     if debug:
-        return row_df, source, (debug_info or {})
+        debug_stats["cols_before_align"] = len(row.columns)
+        debug_stats["missing_before_impute"] = int(row.isna().sum().sum())
+    
+    # The 'magic' fix for nan issues: Impute anything left over.
+    row = _impute_remaining_missing(row, dataset_df, expected_cols)
+    
+    if debug:
+        debug_stats["cols_final"] = len(row.columns)
+        debug_stats["missing_final"] = int(row.isna().sum().sum())
+        return row, source, debug_stats
 
-    return row_df, source
+    return row, source

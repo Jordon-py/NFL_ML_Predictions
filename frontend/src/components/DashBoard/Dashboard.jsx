@@ -71,7 +71,9 @@ export default function Dashboard({
 
       const rawPrediction = await predictGame(payload);
       const entry = toEntry({ prediction: rawPrediction, game, source: "teamgrid" });
+      console.log(entry);
       const predictionKey = buildGameKey(entry) || key;
+      console.log(predictionKey);
       const normalizedEntry = {
         ...entry,
         game_id: predictionKey || entry.game_id,

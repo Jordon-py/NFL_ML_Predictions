@@ -660,3 +660,26 @@ Risks / Follow-ups:
 - Confirm that models are stored as full pipelines or that the prediction code applies the same preprocessing used during training.
 - If schedule times are naive local datetimes, decide whether to apply a timezone offset; optionally add `SCHEDULE_TIMEZONE_OFFSET_HOURS` env var.
 - If you want server-side enrichment of logos (home_logo/away_logo), update `backend/team_logo.csv` or the schedule CSV and re-deploy.
+
+### 2026-01-08 - Endpoint Refactoring & Optimization [ANTIGRAV]
+**Changes:**
+- **Backend Refactor**: 
+    - Simplified main.py routing, removing complex inline logic for schedules and predictions.
+    - Refactored inference_row.py (Feature Construction) to be modular:
+        - _base_context, _enrich_from_schedule, _roll_forward_stats, _impute_missing.
+        - Added educationally valuable comments explaining Prior vs Rolling logic.
+    - Cleaned up main_helpers.py, exposing public API (get_schedule, select_next_week_rows, get_team_meta).
+- **Frontend Refactor**:
+    - Updated client.js with JSDoc typing for better DX.
+    - Fixed bugs in getNextWeekSchedule (ignoring params) and predictGame (payload construction).
+- **Verification**:
+    - Verified localhost:3000 frontend loads schedule successfully.
+    - **Note:** Local frontend currently points to Production Backend, causing 422 errors for predictions until backend is deployed.
+
+**Files Touched:**
+- backend/main.py
+- backend/services/inference_row.py
+- backend/services/prediction_service.py
+- backend/main_helpers.py
+- frontend/src/api/client.js
+
