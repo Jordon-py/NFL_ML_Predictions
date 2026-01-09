@@ -80,9 +80,7 @@ class PredictionService:
         self._team_history_cache = build_team_history_cache(dataset)
 
     def _get_schedule_df(self, season: int) -> Optional[pd.DataFrame]:
-        if season in self._schedule_cache:
 
-    def _get_schedule_df(self, season: int) -> Optional[pd.DataFrame]:
         if season in self._schedule_cache:
             return self._schedule_cache[season]
         df = load_schedule_data_safe(season)
