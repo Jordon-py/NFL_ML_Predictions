@@ -51,9 +51,9 @@ def _resolve_models_dir() -> Path:
         return Path(env_models_dir).resolve()
 
     candidates = [
-        BASE_DIR / "20260102" / "models",
-        BASE_DIR / "data" / "models",
         BASE_DIR / "models",
+        BASE_DIR / "data" / "models",
+        BASE_DIR / "20260102" / "models",
     ]
     for candidate in candidates:
         if (candidate / "metadata.json").exists():

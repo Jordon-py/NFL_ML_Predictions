@@ -4,6 +4,7 @@
 fastapi==0.124.2
 uvicorn[standard]>=0.23.0,<0.25.0
 gunicorn>=21.2.0,<22.0.0
+httpx>=0.27.0,<1.0.0
 
 # Data science stack (carefully version-coordinated)
 # Updated to support NumPy 2.x and scikit-learn 1.7.x for model compatibility

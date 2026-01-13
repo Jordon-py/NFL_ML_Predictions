@@ -18,10 +18,9 @@ from pydantic import BaseModel, Field
 
 from backend.main_helpers import (
     get_schedule,
-    _select_next_week_rows,
+    select_next_week_rows,
     _pick_col,
-    _parse_kickoff,
-    _load_team_logos_map,
+    parse_kickoff,
     _append_prediction_history_to_disk,
     _HOME_COLS,
     _AWAY_COLS,
@@ -128,7 +127,7 @@ def debug(request: Request) -> DebugResponse:
 @router.get("/schedule/next-week", response_model=NextWeekGamesResponse)
 def schedule_next_week(request: Request, season: int = 2025) -> NextWeekGamesResponse:
     df = get_schedule(season=season)
-    df_next, use_season, use_week = _select_next_week_rows(df)
+    df_next, use_season, use_week = select_next_week_rows(df)
 
     home_col = _pick_col(df_next, _HOME_COLS)
     away_col = _pick_col(df_next, _AWAY_COLS)
@@ -154,7 +153,7 @@ def schedule_next_week(request: Request, season: int = 2025) -> NextWeekGamesRes
             ScheduleGame(
                 season=int(use_season),
                 week=int(use_week),
-                kickoff=_parse_kickoff(r),
+                kickoff=parse_kickoff(r),
                 home_team=home,
                 away_team=away,
                 game_id=game_id,

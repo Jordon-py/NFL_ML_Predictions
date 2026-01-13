@@ -3,14 +3,14 @@
   "framework": "vite",
   "outputDirectory": "dist",
   "devCommand": "npm run dev",
-  "installCommand": "npm install",
+  "installCommand": "npm ci",
   "rewrites": [
     {
       "source": "/(.*)",
-      "destination": "dist"
+      "destination": "/index.html"
     }
   ],
   "env": {
-    "VITE_API_BASE_URL": "https://nfl-predict-ecf5a5bd34fe.herokuapp.com/"
+    "VITE_API_BASE_URL": "https://nfl-predict-ecf5a5bd34fe.herokuapp.com"
   }
 }

@@ -108,10 +108,18 @@ const fetchPostseasonSchedule = async () => {
   }
 };
 
+/**
+ * Check if the backend is healthy and models are loaded.
+ * @returns {Promise<import('./types').HealthResponse>}
+ */
 export async function getHealthStatus() {
   return fetchJson("/health");
 }
 
+/**
+ * Retrieve debug information about the backend state, including dataset stats.
+ * @returns {Promise<Object>} Debug info object.
+ */
 export async function getDebugInfo() {
   return fetchJson("/debug");
 }
@@ -147,6 +155,10 @@ export async function getNextWeekSchedule(season = null) {
   return postseasonRows.length ? postseasonRows : scheduleRows;
 }
 
+/**
+ * Fetch team metadata (logos, colors, names).
+ * @returns {Promise<Object>} Dictionary of team metadata keyed by abbreviation.
+ */
 export async function getTeamLogos() {
   const data = await fetchJson("/teams/logos");
   if (data && typeof data === "object" && data.teams && typeof data.teams === "object") {
@@ -177,6 +189,11 @@ export async function predictGame(home, away, season, week) {
   });
 }
 
+/**
+ * simple chat interface for context-aware LLM interactions.
+ * @param {Object} payload - { messages: Array, prediction: Object }
+ * @returns {Promise<Object>} LLM response.
+ */
 export async function chatLLM(payload) {
   return fetchJson("/llm/chat", {
     method: "POST",
@@ -184,6 +201,11 @@ export async function chatLLM(payload) {
   });
 }
 
+/**
+ * Request an explanation for a specific prediction.
+ * @param {Object} payload - { home_team, away_team, season, week, ... }
+ * @returns {Promise<Object>} Explanation result.
+ */
 export async function explainPrediction(payload) {
   return fetchJson("/predict/explain", {
     method: "POST",
@@ -191,6 +213,11 @@ export async function explainPrediction(payload) {
   });
 }
 
+/**
+ * Get recent prediction history.
+ * @param {number} [limit=100] - Max number of entries.
+ * @returns {Promise<{entries: Array, total: number}>} History data.
+ */
 export async function getPredictionHistory(limit = 100) {
   const data = await fetchJson(`/history?limit=${limit}`, {
     method: "GET",
@@ -207,6 +234,10 @@ export async function getPredictionHistory(limit = 100) {
   return { entries: [], total: 0 };
 }
 
+/**
+ * Get a high-level overview of system status (health, history stats, dataset info).
+ * @returns {Promise<import('./types').StatusOverviewResponse>} Status overview.
+ */
 export async function getStatusOverview() {
   const data = await fetchJson("/status/overview", {
     method: "GET",

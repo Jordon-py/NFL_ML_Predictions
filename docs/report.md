@@ -48,6 +48,9 @@ This report documents incremental changes to the NFL_ML_Predictions repository, 
 
 ## Recent Changes
 
+- **Refactored & Doc-Enriched Backend**: `backend/main.py` and `inference_row.py` have been significantly cleaned up. Endpoints now use shared helpers, and core data science logic in `inference_row` is fully documented with "why" comments.
+- **Frontend JSDoc**: Added documentation to `client.js` methods.
+
 - Date/Time: 2025-12-08 / 23:59 UTC.
   - Files Modified: `backend/models/prod_models/*`, `backend/prod-models/models/*`, `alfred.log.md`, `docs/report.md`.
   - Change Description:

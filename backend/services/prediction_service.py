@@ -9,11 +9,9 @@
 
 # backend/services/prediction_service.py
 import logging
-from typing import Any, Optional
-
 import numpy as np
 import pandas as pd
-
+from typing import Any, Optional
 from backend.schemas import (
     PredictionRequest,
     PredictionResponse,
@@ -25,6 +23,36 @@ from backend.services.inference_row import build_model_input_row, build_team_his
 from backend.config import load_schedule_data_safe
 
 logger = logging.getLogger(__name__)
+
+def _pipeline_has_transform_step(model: Any) -> bool:
+    """Best-effort check for sklearn Pipeline-like objects that transform raw features."""
+    steps = getattr(model, "steps", None)
+    if not isinstance(steps, list) or not steps:
+        return False
+    for step in steps:
+        if not (isinstance(step, tuple) and len(step) >= 2):
+            continue
+        transformer = step[1]
+        if transformer is None:
+            continue
+        if callable(getattr(transformer, "transform", None)):
+            return True
+    return False
+
+def _accepts_raw_dataframe(model: Any) -> bool:
+    """Return True if the estimator likely expects the raw DataFrame (i.e. includes preprocessing)."""
+    if model is None:
+        return False
+    if _pipeline_has_transform_step(model):
+        return True
+
+    # CalibratedClassifierCV and similar wrappers may wrap a Pipeline.
+    for attr in ("estimator", "base_estimator"):
+        inner = getattr(model, attr, None)
+        if inner is not None and _pipeline_has_transform_step(inner):
+            return True
+
+    return False
 
 def _sigmoid(x: float) -> float:
     return 1.0 / (1.0 + np.exp(-x))
@@ -106,6 +134,7 @@ class PredictionService:
 
         schedule_df = self._get_schedule_df(req.season)
 
+        # Helper returns (row_df, source) when debug=False
         row_df, source = build_model_input_row(
             dataset_df=self.dataset,
             preprocessor=self.preprocessor,
@@ -116,28 +145,64 @@ class PredictionService:
             schedule_df=schedule_df,
             raw_feature_columns=self.raw_feature_columns,
             team_history_cache=self._team_history_cache,
+            debug=False,
         )
 
-        # Transform
-        X = row_df
-        if self.preprocessor is not None:
-            X = self.preprocessor.transform(row_df)
+        X_transformed = None
+
+        def _get_transformed() -> Any:
+            nonlocal X_transformed
+            if X_transformed is None:
+                if self.preprocessor is None:
+                    raise RuntimeError("preprocessor missing but transformed features requested")
+                X_transformed = self.preprocessor.transform(row_df)
+            return X_transformed
+
+        def _predict_regressor(model: Any) -> float:
+            errors: list[Exception] = []
+
+            if _accepts_raw_dataframe(model):
+                try:
+                    return float(model.predict(row_df)[0])
+                except Exception as e:
+                    errors.append(e)
+
+            if self.preprocessor is not None:
+                try:
+                    return float(model.predict(_get_transformed())[0])
+                except Exception as e:
+                    errors.append(e)
+
+            if errors:
+                raise errors[-1]
+            return float(model.predict(row_df)[0])
+
+        def _predict_proba_home(model: Any) -> tuple[Optional[float], bool]:
+            if model is None or not hasattr(model, "predict_proba"):
+                return None, False
+
+            probs = None
+            if _accepts_raw_dataframe(model):
+                try:
+                    probs = np.asarray(model.predict_proba(row_df)[0], dtype=float)
+                except Exception:
+                    probs = None
+
+            if probs is None and self.preprocessor is not None:
+                probs = np.asarray(model.predict_proba(_get_transformed())[0], dtype=float)
+
+            mapped = _extract_home_proba(model, probs) if probs is not None else None
+            if mapped is None or not np.isfinite(mapped):
+                return None, False
+            return float(mapped), True
 
         # Score regressors
-        p_home = float(self.home_reg.predict(X)[0])
-        p_away = float(self.away_reg.predict(X)[0])
+        p_home = _predict_regressor(self.home_reg)
+        p_away = _predict_regressor(self.away_reg)
         point_diff = p_home - p_away
 
         # Winner probabilities
-        win_classifier_used = False
-        proba_home = None
-
-        if self.win_clf is not None and hasattr(self.win_clf, "predict_proba"):
-            probs = np.asarray(self.win_clf.predict_proba(X)[0], dtype=float)
-            mapped = _extract_home_proba(self.win_clf, probs)
-            if mapped is not None and np.isfinite(mapped):
-                proba_home = float(mapped)
-                win_classifier_used = True
+        proba_home, win_classifier_used = _predict_proba_home(self.win_clf)
 
         # Fallback probability from point diff (simple + stable)
         if proba_home is None:

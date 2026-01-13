@@ -6,9 +6,10 @@
   font-family: var(--font-sans);
   /* Use variable or transparent if body handles it */
   background: linear-gradient(
-    180deg,
-    lch(15% 8 250 / 0.65),
-    lch(12% 6 250 / 0.35)
+    150deg,
+    lch(0% 0 0 / 0.75) 15%,
+    lch(61.66% 59.87 273.43 / 0.311) 20%,
+    lch(2.08% 3.66 247.27 / 0.75) 25%
   );
   border: 1px solid var(--lch-border);
   border-radius: calc(var(--r-md) + 6px);
@@ -27,7 +28,7 @@
   font-size: 3rem;
   color: white; 
   margin-bottom: 0.5rem;
-  text-shadow: 0 6px 18px rgba(0, 0, 0, 0.55);
+  text-shadow: 0 6px 18px rgba(0, 0, 0, 0.75);
 }
 
 .stats-page__lead {

@@ -208,8 +208,9 @@ export function usePredictionState() {
       try {
         const h = await fetchHealth();
         setHealth(h);
-      } catch {
-        setHealth({ status: "error", reason: "fetch failed" });
+      } catch (err) {
+        const message = err?.message || "fetch failed";
+        setHealth({ status: "error", reason: message });
       }
     };
     poll();
