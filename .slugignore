@@ -144,7 +144,6 @@ frontend/.vercel/
 backend/OUTDIR/*
 
 backend/prod-models/
-backend/models/
 !backend/models/**
 
 !backend/data/datasets/**
