@@ -105,7 +105,6 @@ frontend/public/data/
 *.pkl
 *.model
 !requirements.txt
-!runtime.txt
 !README.md
 !backend/data/prod-models/models/*.joblib
 !backend/data/prod-models/*.csv
