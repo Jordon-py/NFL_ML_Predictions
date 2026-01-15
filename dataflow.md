@@ -14,7 +14,7 @@ This document maps the flow of data across the NFL Prediction App, from frontend
 ### A. Game Prediction Flow
 
 1. **Trigger**: User clicks a matchup card in `TeamGrid.jsx`.
-2. **Frontend Call**: `api/client.js` -> `predictGame(payload)` sends POST to `/predict`.
+2. **Frontend Call**: `api/client.js` -> `predictGame(payload)` sends POST to `/api/predict`.
 3. **Backend Logic (`main.py`)**:
    - `predict(req)` calls `PredictionService.predict`.
    - `build_model_input_row` rolls forward team stats from the latest prior game, then aligns inputs to the model schema and fills numeric gaps from dataset medians.
@@ -26,7 +26,7 @@ This document maps the flow of data across the NFL Prediction App, from frontend
 ### B. Schedule Flow
 
 1. **Trigger**: `usePredictionState` initial load.
-2. **Frontend Call**: `getNextWeekSchedule()` sends GET to `/schedule/next-week`.
+2. **Frontend Call**: `getNextWeekSchedule()` sends GET to `/api/schedule/next-week`.
 3. **Backend Logic (`main.py`)**:
    - Loads schedule (nflreadpy or CSV fallback) and trims schedule CSV headers.
    - Infers next week and enriches each game with `game_id`, `home_name`, `away_name`, and logo URLs.
