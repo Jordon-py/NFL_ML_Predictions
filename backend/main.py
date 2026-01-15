@@ -106,6 +106,7 @@ from .services.prediction_service import PredictionService
 from .services.inference_row import build_model_input_row
 from .config import DATA_DIR as CFG_DATA_DIR, MODELS_DIR as CFG_MODELS_DIR, resolve_cors, TRUTHY
 from .main_helpers import (
+    InferenceBundle,
     load_inference_bundle,
     load_dataset_df,
     _append_prediction_history_to_disk,
@@ -125,6 +126,11 @@ from .ollama.llm_ollama import explain_prediction as llm_explain_prediction, cha
 from .routes import (
     TeamLogosResponse,
     router as legacy_router,
+)
+from .team_assets import (
+    normalize_abbr,
+    load_team_assets_map,
+    TeamAsset
 )
 if __name__ == "__main__" and __package__ is None:
     # Allow running as a script by ensuring repo root is on sys.path.
@@ -200,6 +206,12 @@ def _get_team_meta_map() -> Dict[str, Dict[str, str]]:
 
     state["team_logos"] = team_map or {}
     return state["team_logos"]
+
+def _clean_s(val: Any) -> Optional[str]:
+    """Convert nan or empty values to None for Pydantic Optional[str]."""
+    if val is None or (isinstance(val, float) and np.isnan(val)) or str(val).strip() == "":
+        return None
+    return str(val).strip()
 
 
 # -------------------------------------
@@ -526,105 +538,8 @@ def _append_prediction_history_to_disk(request_payload: Dict[str, Any], predicti
 # API models
 # ---------------------------
 
-class TeamCard(BaseModel):
-    key: str
-    value: Any
-
-
-class PredictionRequest(BaseModel):
-    home_team: str
-    away_team: str
-    season: int
-    week: int
-
-
-
-class PredictionResponse(BaseModel):
-    season: int
-    week: int
-    home_team: str
-    away_team: str
-    game_id: str
-    home_score: float
-    away_score: float
-    home_win_probability: float
-    away_win_probability: float
-    point_diff: float
-    ts: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    mode: str
-    prediction_source: str
-    win_classifier_used: bool
-    simulation_metrics: Optional[Dict[str, Any]] = None
-
-
-
-class ExplainRequest(BaseModel):
-    home_team: str
-    away_team: str
-    season: int
-    week: int
-    prediction: Optional[Dict[str, Any]] = None
-
-
-class ExplainResponse(BaseModel):
-    game_id: str
-    used_llm: bool
-    llm_model: Optional[str] = None
-    explanation: str
-    bullets: List[str] = Field(default_factory=list)
-    caveats: List[str] = Field(default_factory=list)
-    latency_ms: Optional[int] = None
-    error: Optional[str] = None
-
-
-class ChatMessage(BaseModel):
-    role: Literal["user", "assistant", "system"]
-    content: str
-
-
-class ChatRequest(BaseModel):
-    messages: List[ChatMessage]
-    prediction: Optional[Dict[str, Any]] = None
-
-
-class ChatResponse(BaseModel):
-    used_llm: bool
-    llm_model: Optional[str] = None
-    reply: str
-    latency_ms: Optional[int] = None
-    error: Optional[str] = None
-
-
-class HealthResponse(BaseModel):
-    status: str
-    mode: str
-    reason: str
-
-
-class ScheduleGame(BaseModel):
-    season: int
-    week: int
-    home_team: str
-    away_team: str
-    game_id: Optional[str] = None
-    kickoff: Optional[str] = None
-    home_score: Optional[float] = None
-    away_score: Optional[float] = None
-
-
-class ScheduleResponse(BaseModel):
-    games: List[ScheduleGame]
-
-
-class HistoryResponse(BaseModel):
-    entries: List[Dict[str, Any]]
-    total: int
-
-
-class StatusOverviewResponse(BaseModel):
-    health: HealthResponse
-    dataset: Dict[str, Any]
-    history: Dict[str, Any]
+# Prediction history entries (loaded from disk) are maintained in main_helpers
+# We use the refs provided by imports from main_helpers.
 
 # ---------------------------
 # LLM helper (best-effort)
@@ -900,8 +815,8 @@ app.add_middleware(
 
 
 
-@app.get("/api/teams/{team_abbr}", response_model=TeamCard)
-def teams_get(team_abbr: str) -> TeamCard:
+@app.get("/api/teams/{team_abbr}", response_model=TeamAsset)
+def teams_get(team_abbr: str) -> TeamAsset:
     """
     Get a team’s branding assets (preferred non-square logo included).
 
@@ -1089,8 +1004,8 @@ async def get_next_week_schedule(season: int | None = None) -> ScheduleResponse:
         home_info = team_meta.get(home, {})
         away_info = team_meta.get(away, {})
 
-        game_id = str(row.get(game_id_col)).strip() if game_id_col and pd.notna(row.get(game_id_col)) else _build_game_id(use_season, use_week, home, away)
-        stadium = row.get(stadium_col, "") if stadium_col else row.get("stadium", "")
+        game_id = _clean_s(row.get(game_id_col)) if game_id_col else _build_game_id(use_season, use_week, home, away)
+        stadium = _clean_s(row.get(stadium_col))
 
         games.append(
             ScheduleEntry(
@@ -1102,10 +1017,10 @@ async def get_next_week_schedule(season: int | None = None) -> ScheduleResponse:
                 game_id=game_id,
                 home_abbr=home,
                 away_abbr=away,
-                home_logo=home_info.get("logoUrl"),
-                away_logo=away_info.get("logoUrl"),
-                home_name=home_info.get("name") or str(row.get("home_team_name", "")) or home,
-                away_name=away_info.get("name") or str(row.get("away_team_name", "")) or away,
+                home_logo=_clean_s(home_info.get("logoUrl")),
+                away_logo=_clean_s(away_info.get("logoUrl")),
+                home_name=_clean_s(home_info.get("name")) or home,
+                away_name=_clean_s(away_info.get("name")) or away,
                 stadium=stadium,
             )
         )
