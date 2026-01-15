@@ -1002,11 +1002,11 @@ async def get_next_week_schedule(season: int | None = None) -> ScheduleResponse:
 
     return ScheduleResponse(games=games)
 
-@app.get("/teams/logos", response_model=TeamLogosResponse)
+@app.get("api/teams/logos", response_model=TeamLogosResponse)
 async def get_team_logos() -> TeamLogosResponse:
     return TeamLogosResponse(teams=_get_team_meta_map())
 
-@app.get("/debug")
+@app.get("api/debug")
 async def debug() -> Dict[str, Any]:
     origins, origin_regex = resolve_cors()
     dataset = state["dataset"]
@@ -1029,7 +1029,7 @@ async def debug() -> Dict[str, Any]:
     }
 
 
-@app.post("/predict", response_model=PredictionResponse)
+@app.post("api/predict", response_model=PredictionResponse)
 async def predict_game(payload: PredictionRequest) -> PredictionResponse:
     try:
         if USE_LIVE_PREDICTOR:
@@ -1104,7 +1104,7 @@ async def predict_game(payload: PredictionRequest) -> PredictionResponse:
     return PredictionResponse(**response_data)
 
 
-@app.post("/predict/explain", response_model=ExplainResponse)
+@app.post("api/predict/explain", response_model=ExplainResponse)
 async def predict_explain(payload: ExplainRequest) -> ExplainResponse:
     # If caller provides a prediction dict, explain that exact payload.
     if payload.prediction and isinstance(payload.prediction, dict):
@@ -1164,7 +1164,7 @@ cors_origins = os.getenv("CORS_ORIGINS", "").split(",")
 cors_origin_regex = os.getenv("CORS_ORIGIN_REGEX", "")
 restrict_cors = os.getenv("RESTRICT_CORS", "false").strip().lower() in TRUTHY
 
-@app.post("/debug/predict-input")
+@app.post("api/debug/predict-input")
 async def debug_predict_input(req: PredictionRequest) -> Dict[str, Any]:
     service = _require_ready()
     bundle = state.get("bundle")
@@ -1209,7 +1209,7 @@ async def debug_predict_input(req: PredictionRequest) -> Dict[str, Any]:
         "debug": debug_info,
     }
 
-@app.post("/predict", response_model=UnifiedPredictionResponse)
+@app.post("api/predict", response_model=UnifiedPredictionResponse)
 async def predict(req: PredictionRequest, request: Request):
     service = _require_ready()
     res = service.predict(req)
@@ -1217,7 +1217,7 @@ async def predict(req: PredictionRequest, request: Request):
     _append_prediction_history_to_disk(req.model_dump(), payload)
     return payload
 
-@app.get("/predict/next-week")
+@app.get("api/predict/next-week")
 async def predict_next_week() -> Dict[str, Any]:
     service = _require_ready()
     schedule = await get_next_week_schedule()
@@ -1237,7 +1237,7 @@ async def predict_next_week() -> Dict[str, Any]:
 
     return {"games": games}
 
-@app.post("/predict/explain")
+@app.post("api/predict/explain")
 async def explain(payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
     pred = _extract_prediction_payload(payload)
     home_team = payload.get("home_team") or pred.get("home_team")
@@ -1291,7 +1291,7 @@ async def explain(payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
         "error": llm_result.get("error"),
     }
 
-@app.post("/llm/chat")
+@app.post("api/llm/chat")
 async def llm_chat(payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
     messages = payload.get("messages")
     prediction = payload.get("prediction")
@@ -1319,14 +1319,14 @@ async def llm_chat(payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
         "error": result.get("error"),
     }
 
-@app.get("/history", response_model=HistoryResponse)
+@app.get("api/history", response_model=HistoryResponse)
 async def get_history(limit: int = 100):
     with _prediction_history_lock:
         data = prediction_history_entries[:limit]
         return HistoryResponse(entries=data, total=len(prediction_history_entries))
 
 
-@app.get("/status/models")
+@app.get("api/status/models")
 async def get_status_models() -> Dict[str, Any]:
     """Return model + dataset provenance (from training metadata), plus expected feature schema."""
     bundle = state.get("bundle")
@@ -1342,7 +1342,7 @@ async def get_status_models() -> Dict[str, Any]:
         "metadata": md,
     }
 
-@app.post("/admin/reload")
+@app.post("api/admin/reload")
 async def admin_reload() -> Dict[str, Any]:
     """Reload model bundle + dataset without restarting the server (local/dev only)."""
     if not ADMIN_ENABLED:
@@ -1374,7 +1374,7 @@ async def admin_reload() -> Dict[str, Any]:
         "dataset_path": state.get("dataset_path") or "",
     }
 
-@app.post("/admin/retrain")
+@app.post("api/admin/retrain")
 async def admin_retrain(payload: Dict[str, Any] = Body(default={})) -> Dict[str, Any]:
     """Train models on the newest dataset and hot-reload them (local/dev only).
 
@@ -1416,7 +1416,7 @@ async def admin_retrain(payload: Dict[str, Any] = Body(default={})) -> Dict[str,
         "production_ready": md.get("production_ready"),
     }
 
-@app.get("/status/overview", response_model=StatusOverviewResponse)
+@app.get("api/status/overview", response_model=StatusOverviewResponse)
 async def get_status_overview():
     h = await health()
     dataset_info = {
