@@ -94,3 +94,20 @@ export async function getStatusOverview() {
   }
   return data;
 }
+
+export async function getModelsStatus() {
+  return fetchJson("/status/models");
+}
+
+export async function reloadSystem() {
+  return fetchJson("/admin/reload", {
+    method: "POST",
+  });
+}
+
+export async function retrainModel(config = {}) {
+  return fetchJson("/admin/retrain", {
+    method: "POST",
+    body: JSON.stringify(config),
+  });
+}

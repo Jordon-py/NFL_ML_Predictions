@@ -67,15 +67,14 @@ from pathlib import Path
 import re
 import numbers
 try:
-    import nflreadpy as nfl  # type: ignore
+    import nflreadpy as nfl  
 except Exception:
-    nfl = None  # type: ignore
+    nfl = None  
 import numpy as np
 import pandas as pd
 
 
 # Shared feature engineering utilities
-from utils.feature_helpers import (
 from utils.feature_helpers import (
     make_time_key,
     _rolling_prior_stats,
@@ -278,6 +277,9 @@ def load_team_game_metrics(pbp_path: Path, seasons: List[int]) -> pd.DataFrame:
     if pbp.empty:
         return pd.DataFrame(columns=["season", "week", "game_id", "team"])
 
+    pbp["season"] = pd.to_numeric(pbp["season"], errors="coerce")
+    pbp["week"] = pd.to_numeric(pbp["week"], errors="coerce")
+    pbp = pbp.dropna(subset=["season", "week"])
     pbp["season"] = pbp["season"].astype(int)
     pbp["week"] = pbp["week"].astype(int)
 
@@ -286,11 +288,6 @@ def load_team_game_metrics(pbp_path: Path, seasons: List[int]) -> pd.DataFrame:
     if pbp is None or pbp.empty:
         return pd.DataFrame(columns=["season", "week", "game_id", "team"])
 
-    # Ensure required columns for engine
-    pbp["season"] = pbp["season"].astype(int)
-    pbp["week"] = pbp["week"].astype(int)
-
-    from utils.feature_engine import calculate_team_metrics
     from utils.feature_engine import calculate_team_metrics
     metrics = calculate_team_metrics(pbp)
 
@@ -1654,7 +1651,7 @@ def  build_dataset(
     out_dir.mkdir(parents=True, exist_ok=True)
 
     logging.info("Building dataset for seasons %d-%d", start_season, end_season)
-    logging.info("include_future=%s, encode=%s", include_future, encode)
+    logging.info("include_future=%s, encode=%s, production_mode=%s", include_future, encode, production_mode)
 
     # Choose NFL data backend (nflreadpy preferred).
     _select_backend()
@@ -1774,6 +1771,14 @@ def  build_dataset(
         "Dataset build complete: %d rows, %d columns, written to %s",
         len(df),
         len(df.columns),
+        df.columns,
+        df.dtypes,
+        df.info(),
+        df.describe(include='all'),
+        production_mode,
+        include_future,
+        encode,
+        NFL_BACKEND,
         dataset_path,
     )
 
@@ -1813,13 +1818,13 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
         description="Build NFL game-level dataset (one row per game)."
     )
-    p.add_argument("--start", type=int, default=2018, help="Start season (inclusive).")
-    p.add_argument("--end", type=int, default=2025, help="End season (inclusive).")
+    p.add_argument("--start", type=int, default=2016, help="Start season (inclusive).")
+    p.add_argument("--end", type=int, default=2026, help="End season (inclusive).")
     p.add_argument(
         "--out-dir",
         type=str,
-        default="data",
-        help="Output directory (default: ./data).",
+        default="./data/datasets",
+        help="Output directory (default: ./data/datasets).",
     )
     p.add_argument(
         "--legacy-root-copy",

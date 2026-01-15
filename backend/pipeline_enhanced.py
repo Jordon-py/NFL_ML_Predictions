@@ -21,9 +21,9 @@ A single, reliable training entrypoint that:
 
 CLI
 ---
-python pipeline_enhanced.py --data ./data/datasets/game_features_20260102.csv --production --splits 5 --embargo 1
-    [--production] \
-    [--holdout-season 2025 --holdout-week 6 --holdout-week-end 9] \
+python pipeline_enhanced.py --data C:/Users/iProg/Documents/clonednfl/NFL_ML_Predictions/backend/data/datasets/game_features_20260115.csv --splits 5 --embargo 1 --production
+    [--production] 
+    [--holdout-season 2025 --holdout-week 6 --holdout-week-end 9] 
     [--splits 5 --embargo 1]
 
 Notes
@@ -323,17 +323,20 @@ def build_preprocessor(feature_names: List[str]) -> ColumnTransformer:
 # Models / preprocessing
 # ----------------------
 def make_models() -> Dict[str, GradientBoostingRegressor]:
+    """Create score regressors with early stopping for better generalization."""
     params = dict(
         random_state=4211,
-        n_estimators=350,
+        n_estimators=500,           # Increased max; early stopping will cut off
         learning_rate=0.04,
         max_depth=3,
-        subsample=1.0,
+        subsample=0.8,              # Slight subsampling for regularization
+        validation_fraction=0.1,    # Hold out 10% for early stopping check
+        n_iter_no_change=15,        # Stop if no improvement for 15 rounds
+        tol=1e-4,                   # Minimum improvement threshold
     )
-
     return {
-        "home_reg": GradientBoostingRegressor(),
-        "away_reg": GradientBoostingRegressor(),
+        "home_reg": GradientBoostingRegressor(**params),
+        "away_reg": GradientBoostingRegressor(**params),
     }
 
     # NOTE: For CV we will train LogisticRegression on preprocessed arrays directly (no extra scaler).
@@ -379,7 +382,18 @@ def cross_validate_models(
     win_brier_tr, win_brier_va, win_ll_tr, win_ll_va, win_acc_tr, win_acc_va = [], [], [], [], [], []
 
     fold_rows = []
+    total_folds = splitter.get_n_splits()
+    fold_start_time = time.perf_counter()
+
     for fold, (tr_idx, va_idx) in enumerate(splitter.split(X, y_win, groups), start=1):
+        # Dev-friendly: log fold progress with ETA
+        elapsed = time.perf_counter() - fold_start_time
+        eta = (elapsed / fold) * (total_folds - fold) if fold > 0 else 0
+        logging.info(
+            "Fold %d/%d | Train=%d Val=%d | Elapsed=%.1fs ETA=%.1fs",
+            fold, total_folds, len(tr_idx), len(va_idx), elapsed, eta
+        )
+
         X_tr, X_va = X.iloc[tr_idx], X.iloc[va_idx]
         yh_tr, yj_tr = y_home.iloc[tr_idx], y_away.iloc[tr_idx]
         yw_tr, yw_va = y_win.iloc[tr_idx], y_win.iloc[va_idx]
@@ -836,7 +850,7 @@ def main():
     # 2) Cross-validated eval
     # --------------------
     eval_bundle, eval_summary = evaluate_models(
-        X_train, yh_tr, yj_tr, yw_te, groups_tr, n_splits=args.splits, embargo=args.embargo
+        X_train, yh_tr, yj_tr, yw_tr, groups_tr, n_splits=args.splits, embargo=args.embargo
     )
 
     # --------------------

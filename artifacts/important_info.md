@@ -14,7 +14,7 @@ _Last Updated:_ 2026-01-02 08:27:54
 - Prediction endpoint map: `docs/PREDICTION_ENDPOINT_MAP.md` and `docs/prediction_endpoint_map.svg` document the /predict flow.
 - Debug endpoint: `/debug` now uses `datetime`/`timezone` imports to prevent NameError during calls/tests.
 - predictionHelpers: `frontend/src/utils/predictionHelpers.js` is now used in `Dashboard.jsx` for prediction normalization.
-- Models directory: MODELS_DIR is set to `backend/20260102/models` for the latest artifacts.
+- Models directory: MODELS_DIR is set to `backend/20260115/models` for the latest artifacts.
 - Prediction UI: dashboard now stores predictions using the schedule-derived key and fills missing game fields via `toEntry`.
 - Debug visibility: `/debug/predict-input` reports missing/filled features, and the dashboard header shows the active models directory.
 - Inference quality: roll-forward logic now copies rolling/player/elo features from the latest prior game for each team.

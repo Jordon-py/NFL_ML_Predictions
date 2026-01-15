@@ -29,40 +29,28 @@ DEFAULT_ALLOWED_ORIGINS = [
 ]
 DEFAULT_ORIGIN_REGEX = r"https://.*\.vercel\.app$"
 
-def _resolve_data_dir() -> Path:
-    env_data_dir = os.getenv("DATA_DIR")
-    if env_data_dir:
-        p = Path(env_data_dir)
-        return (BASE_DIR / p).resolve() if not p.is_absolute() else p.resolve()
-    dataset_dir = BASE_DIR / "data" / "dataset"
-    if dataset_dir.exists():
-        return dataset_dir.resolve()
-    default_dir = BASE_DIR / "data" / "datasets"
-    if default_dir.exists():
-        return default_dir.resolve()
-    return (BASE_DIR / "data").resolve()
 
-# Keep your existing behavior: .env is owned by you; we just read env vars.
-DATA_DIR = _resolve_data_dir()
+# Relative paths for portability (Heroku/Vercel/Local)
+# NOTE: Ensure '20260115' folder is tracked in git if you rely on it!
+# Otherwise, fall back to generic 'models' folder.
 
-def _resolve_models_dir() -> Path:
-    env_models_dir = os.getenv("MODELS_DIR")
-    if env_models_dir:
-        return Path(env_models_dir).resolve()
+MODELS_DIR = (BASE_DIR / "20260115" / "models").resolve()
+if not MODELS_DIR.exists():
+    MODELS_DIR = (BASE_DIR / "models").resolve()
 
-    candidates = [
-        BASE_DIR / "20260102" / "models",
-        BASE_DIR / "data" / "models",
-        BASE_DIR / "models",
-    ]
-    for candidate in candidates:
-        if (candidate / "metadata.json").exists():
-            return candidate.resolve()
+# Dataset priority:
+# 1. Env var DATASET_PATH
+# 2. Env var DATA_DIR
+# 3. Default relative location
+DATA_DIR = (BASE_DIR / "data" / "datasets").resolve()
+if not DATA_DIR.exists():
+    DATA_DIR = (BASE_DIR / "data").resolve()
 
-    # Fall back to the original default for a clearer error path.
-    return (BASE_DIR / "models").resolve()
-
-MODELS_DIR = _resolve_models_dir()
+# Pre-set env vars for main.py (optional but helps consistency)
+if os.getenv("MODELS_DIR") is None:
+    os.environ["MODELS_DIR"] = str(MODELS_DIR)
+if os.getenv("DATA_DIR") is None:
+    os.environ["DATA_DIR"] = str(DATA_DIR)
 
 def _split_origins(raw: str) -> list[str]:
     return [o.strip().rstrip("/") for o in raw.split(",") if o.strip()]

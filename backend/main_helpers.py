@@ -67,27 +67,44 @@ def load_inference_bundle(models_dir: Path) -> InferenceBundle:
     def _resolve_path(key: str, default: Optional[str] = None) -> Optional[Path]:
         val = artifacts.get(key) or meta.get(key) or default
         if not val: return None
-        p = Path(str(val))
+        
+        # Normalize slashes and convert to string
+        val_str = str(val).replace("\\", "/")
+        
+        # If it looks like a Windows absolute path (e.g. C:/...) or any absolute path that doesn't exist
+        # we try to just use the filename in the current models_dir.
+        if ":" in val_str or val_str.startswith("/"):
+            p_name = val_str.split("/")[-1]
+            fallback = models_dir / p_name
+            if fallback.exists():
+                return fallback
+        
+        # Fallback to standard Path logic
+        p = Path(val_str)
         if p.is_absolute():
             if p.exists():
                 return p
-            # Fall back to the local models_dir using the basename for portability.
-            fallback = models_dir / p.name
-            return fallback if fallback.exists() else p
+            return models_dir / p.name
         return models_dir / p
 
     pre_path = _resolve_path("preprocessor", "preprocessor.joblib")
-    home_path = _resolve_path("home_model", "home_model.joblib")
-    away_path = _resolve_path("away_model", "away_model.joblib")
-    hist_path = _resolve_path("hist_win_model") or _resolve_path("win_model") or _resolve_path("win_clf_calibrated")
+    home_path = _resolve_path("home_model", "home_pipe.joblib")
+    away_path = _resolve_path("away_model", "away_pipe.joblib")
+    hist_path = _resolve_path("hist_win_model") or _resolve_path("win_model") or _resolve_path("win_pipe.joblib")
+
+    # Safe loads
+    def _safe_load(p: Optional[Path]):
+        if p and p.exists():
+            return joblib.load(p)
+        return None
 
     return InferenceBundle(
         meta=meta,
         report=report,
-        preprocessor=joblib.load(pre_path),
-        home_model=joblib.load(home_path),
+        preprocessor=_safe_load(pre_path),
+        home_model=joblib.load(home_path), 
         away_model=joblib.load(away_path),
-        hist_win_clf=joblib.load(hist_path) if hist_path and hist_path.exists() else None,
+        hist_win_clf=_safe_load(hist_path),
     )
 
 def _score_dataset_file(path: Path, expected_features: List[str]) -> Optional[tuple[int, int]]:

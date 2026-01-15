@@ -3,10 +3,10 @@ import json
 import os
 import sys
 import time
+import urllib.request
+import urllib.error
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Tuple
-
-import requests
 
 DEFAULT_VITE = os.getenv('VITE_API_BASE_URL', "http://127.0.0.1:8000")
 DEFAULT_TIMEOUT = float(os.getenv("HTTP_TIMEOUT", "30"))
@@ -58,11 +58,11 @@ def _require_type(
         errors.append(f"{path}: expected {exp}, got {type(value).__name__}")
 
 
-def _parse_json(response: requests.Response) -> Tuple[Optional[Any], Optional[str]]:
+def _parse_json(response_body: bytes) -> Tuple[Optional[Any], Optional[str]]:
     try:
-        return response.json(), None
-    except ValueError as exc:
-        return None, f"{type(exc).__name__}: {exc}"
+        return json.loads(response_body), None
+    except json.JSONDecodeError as exc:
+        return None, f"JSONDecodeError: {exc}"
 
 
 def _format_detail_errors(detail: Any) -> List[str]:
@@ -105,9 +105,10 @@ def _print_fail(
     elapsed_ms: Optional[int],
     message: str,
     payload: Optional[Dict[str, Any]] = None,
-    response: Optional[requests.Response] = None,
+    status_code: Optional[int] = None,
     response_json: Optional[Any] = None,
     json_error: Optional[str] = None,
+    response_text: Optional[str] = None,
     max_body_chars: int = DEFAULT_MAX_BODY,
 ) -> None:
     timing = f"{elapsed_ms}ms" if elapsed_ms is not None else "n/a"
@@ -115,11 +116,8 @@ def _print_fail(
     print(f"  error: {message}")
     if payload is not None:
         print(f"  request: {_format_json(payload, max_body_chars)}")
-    if response is not None:
-        print(f"  status: {response.status_code}")
-        content_type = response.headers.get("content-type", "")
-        if content_type:
-            print(f"  content-type: {content_type}")
+    if status_code is not None:
+        print(f"  status: {status_code}")
     if json_error:
         print(f"  json_error: {json_error}")
     if response_json is not None:
@@ -132,8 +130,8 @@ def _print_fail(
             for hint in _response_hints(detail_lines):
                 print(f"  hint: {hint}")
         print(f"  body: {_format_json(response_json, max_body_chars)}")
-    elif response is not None and response.text:
-        print(f"  body: {_truncate(response.text, max_body_chars)}")
+    elif response_text:
+        print(f"  body: {_truncate(response_text, max_body_chars)}")
 
 
 def _print_pass(
@@ -156,20 +154,33 @@ def _send_request(
     url: str,
     payload: Optional[Dict[str, Any]],
     timeout: float,
-) -> Tuple[Optional[requests.Response], int, Optional[str]]:
+) -> Tuple[Optional[bytes], int, int, Optional[str]]:
+    # Returns (response_body, status_code, elapsed_ms, error_msg)
     start = time.perf_counter()
+    data = None
+    headers = {}
+    if payload is not None:
+        data = json.dumps(payload).encode("utf-8")
+        headers["Content-Type"] = "application/json"
+
+    req = urllib.request.Request(url, data=data, headers=headers, method=method)
+    
     try:
-        if method == "GET":
-            response = requests.get(url, timeout=timeout)
-        elif method == "POST":
-            response = requests.post(url, json=payload, timeout=timeout)
-        else:
-            raise ValueError(f"Unsupported method: {method}")
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            body = resp.read()
+            elapsed_ms = int((time.perf_counter() - start) * 1000)
+            return body, resp.status, elapsed_ms, None
+    except urllib.error.HTTPError as e:
+        body = e.read()
         elapsed_ms = int((time.perf_counter() - start) * 1000)
-        return response, elapsed_ms, None
-    except requests.RequestException as exc:
+        return body, e.code, elapsed_ms, None # Allow handling of error responses
+    except urllib.error.URLError as e:
         elapsed_ms = int((time.perf_counter() - start) * 1000)
-        return None, elapsed_ms, f"{type(exc).__name__}: {exc}"
+        return None, 0, elapsed_ms, f"URLError: {e.reason}"
+    except Exception as exc:
+        elapsed_ms = int((time.perf_counter() - start) * 1000)
+        return None, 0, elapsed_ms, f"{type(exc).__name__}: {exc}"
+
 
 
 def _validate_health(ctx: TestContext, data: Any, payload: Optional[Dict[str, Any]]) -> ValidationResult:
@@ -390,7 +401,7 @@ def _run_tests(ctx: TestContext) -> int:
     for test in tests:
         payload = test.build_payload(ctx) if test.build_payload else None
         url = ctx.VITE.rstrip("/") + test.path
-        response, elapsed_ms, request_error = _send_request(
+        response_body, status_code, elapsed_ms, request_error = _send_request(
             test.method, url, payload, ctx.timeout
         )
         if request_error:
@@ -404,32 +415,25 @@ def _run_tests(ctx: TestContext) -> int:
                 max_body_chars=ctx.max_body_chars,
             )
             continue
-        if response is None:
+        
+        response_json, json_error = _parse_json(response_body) if response_body is not None else (None, "No valid response body")
+        
+        if status_code != 200:
             failures += 1
             _print_fail(
                 test,
                 url,
                 elapsed_ms,
-                "No response received",
+                f"Unexpected status {status_code}",
                 payload=payload,
-                max_body_chars=ctx.max_body_chars,
-            )
-            continue
-        response_json, json_error = _parse_json(response)
-        if response.status_code != 200:
-            failures += 1
-            _print_fail(
-                test,
-                url,
-                elapsed_ms,
-                f"Unexpected status {response.status_code}",
-                payload=payload,
-                response=response,
+                status_code=status_code,
                 response_json=response_json,
                 json_error=json_error,
+                response_text=response_body.decode('utf-8', errors='replace') if response_body else None,
                 max_body_chars=ctx.max_body_chars,
             )
             continue
+            
         if json_error:
             failures += 1
             _print_fail(
@@ -438,12 +442,13 @@ def _run_tests(ctx: TestContext) -> int:
                 elapsed_ms,
                 "Expected JSON response",
                 payload=payload,
-                response=response,
+                status_code=status_code,
                 response_json=None,
                 json_error=json_error,
                 max_body_chars=ctx.max_body_chars,
             )
             continue
+            
         if test.validate:
             errors, warnings, notes = test.validate(ctx, response_json, payload)
             if errors:
@@ -454,7 +459,7 @@ def _run_tests(ctx: TestContext) -> int:
                     elapsed_ms,
                     "; ".join(errors),
                     payload=payload,
-                    response=response,
+                    status_code=status_code,
                     response_json=response_json,
                     max_body_chars=ctx.max_body_chars,
                 )
@@ -474,7 +479,7 @@ def main() -> None:
     args = parser.parse_args()
 
     ctx = TestContext(
-        VITE=args.VITE,
+        VITE=args.base_url,
         timeout=args.timeout,
         max_body_chars=args.max_body_chars,
     )

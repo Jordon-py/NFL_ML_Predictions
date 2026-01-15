@@ -39,13 +39,13 @@
  * -----------------------------------------------------------------------------
  */
 
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { usePredictions } from '../PredictionContext.jsx';
-import TeamGrid from './TeamGrid.jsx';
-import PredictionResult from './PredictionResult.jsx';
+import AdminControls from './AdminControls.jsx';
 import HistoryChart from './HistoryChart.jsx';
 import NavBar from './NavBar/NavBar.jsx';
-import HamburgerMenu from './HamburgerMenu.jsx';
+import PredictionResult from './PredictionResult.jsx';
+import TeamGrid from './TeamGrid.jsx';
 
 // LocalStorage key aligns with provider for safe hydration fallback.
 const LS_KEY = 'prediction_history';
@@ -118,6 +118,8 @@ export default function DashBoard() {
         <section aria-live="polite">
           <PredictionResult entry={current} />
         </section>
+
+        <AdminControls />
       </main>
     </>
   );
