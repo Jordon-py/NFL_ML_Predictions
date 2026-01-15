@@ -815,6 +815,11 @@ app.add_middleware(
 
 
 
+@app.get("/api/teams/logos", response_model=TeamLogosResponse)
+async def get_team_logos() -> TeamLogosResponse:
+    """Fetch current team metadata dictionary."""
+    return TeamLogosResponse(teams=_get_team_meta_map())
+
 @app.get("/api/teams/{team_abbr}", response_model=TeamAsset)
 def teams_get(team_abbr: str) -> TeamAsset:
     """
@@ -827,6 +832,11 @@ def teams_get(team_abbr: str) -> TeamAsset:
     if response_model is None:
         raise HTTPException(status_code=404, detail=f"Team not found: {team_abbr}")
     return response_model
+
+def _extract_prediction_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Extract nested prediction payload if present, or return from root."""
+    if not isinstance(payload, dict): return {}
+    return payload.get("prediction") or payload
 
 
 
@@ -911,6 +921,9 @@ async def debug() -> Dict[str, Any]:
 @app.post("/api/predict", response_model=UnifiedPredictionResponse)
 async def predict(req: PredictionRequest):
     """Generate a prediction for a single NFL matchup."""
+    if not req.home_team.strip() or not req.away_team.strip():
+        raise HTTPException(status_code=400, detail="home_team and away_team must be non-empty")
+    
     service = _require_ready()
     try:
         res = service.predict(req)
@@ -1026,10 +1039,6 @@ async def get_next_week_schedule(season: int | None = None) -> ScheduleResponse:
         )
     return ScheduleResponse(games=games)
 
-@app.get("/api/teams/logos", response_model=TeamLogosResponse)
-async def get_team_logos() -> TeamLogosResponse:
-    """Fetch current team metadata dictionary."""
-    return TeamLogosResponse(teams=_get_team_meta_map())
 
 @app.get("/api/history", response_model=HistoryResponse)
 async def get_history(limit: int = 100):

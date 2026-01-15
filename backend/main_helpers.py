@@ -463,22 +463,36 @@ def get_team_meta(csv_path: Path) -> Dict[str, Dict[str, str]]:
 
     out: Dict[str, Dict[str, str]] = {}
     for _, r in df.iterrows():
-        abbr = str(r.get(abbr_col, "")).strip().upper()
-        logo = str(r.get(logo_col, "")).strip()
-        if not abbr or not logo:
-            continue
+        abbr_val = r.get(abbr_col)
+        if pd.isna(abbr_val): continue
+        abbr = str(abbr_val).strip().upper()
+        if not abbr or abbr == "NAN": continue
+        
+        logo_val = r.get(logo_col)
+        if pd.isna(logo_val): continue
+        logo = str(logo_val).strip()
+        if not logo or logo == "NAN": continue
+
         item: Dict[str, str] = {"logoUrl": logo}
         if name_col:
-            nm = str(r.get(name_col, "")).strip()
-            if nm: item["name"] = nm
+            nm_val = r.get(name_col)
+            if pd.notna(nm_val):
+                nm = str(nm_val).strip()
+                if nm and nm != "NAN": item["name"] = nm
         if primary_col:
-            primary = str(r.get(primary_col, "")).strip()
-            if primary: item["primaryColor"] = primary
+            p_val = r.get(primary_col)
+            if pd.notna(p_val):
+                p = str(p_val).strip()
+                if p and p != "NAN": item["primaryColor"] = p
         if secondary_col:
-            secondary = str(r.get(secondary_col, "")).strip()
-            if secondary: item["secondaryColor"] = secondary
+            s_val = r.get(secondary_col)
+            if pd.notna(s_val):
+                s = str(s_val).strip()
+                if s and s != "NAN": item["secondaryColor"] = s
         if wordmark_col:
-            wordmark = str(r.get(wordmark_col, "")).strip()
-            if wordmark: item["wordmark"] = wordmark
+            w_val = r.get(wordmark_col)
+            if pd.notna(w_val):
+                w = str(w_val).strip()
+                if w and w != "NAN": item["wordmark"] = w
         out[abbr] = item
     return out

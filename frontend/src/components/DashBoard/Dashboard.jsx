@@ -13,17 +13,17 @@
  * Straightforward container for predictions, schedule display, history, and LLM chat.
  */
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { getDebugInfo, predictGame } from "../../api/client.js";
-import TeamGrid from "../Card/TeamGrid";
-import PredictionResult from "../PredictionResult";
-import HistoryChart from "../HistoryChart";
-import NavBar from "../NavBar/NavBar";
-import ErrorDisplay from "../ErrorDisplay";
-import LLMChat from "../LLMChat/LLMChat";
 import { API_BASE } from "../../api/fetch";
 import { buildGameKey } from "../../utils/predictionContextUtils";
 import { toEntry } from "../../utils/predictionHelpers";
+import TeamGrid from "../Card/TeamGrid";
+import ErrorDisplay from "../ErrorDisplay";
+import HistoryChart from "../HistoryChart";
+import LLMChat from "../LLMChat/LLMChat";
+import NavBar from "../NavBar/NavBar";
+import PredictionResult from "../PredictionResult";
 
 export default function Dashboard({
   schedule,
@@ -47,7 +47,7 @@ export default function Dashboard({
       .then((data) => {
         if (active) setDebugInfo(data);
       })
-      .catch(() => {});
+      .catch(() => { });
     return () => {
       active = false;
     };
@@ -58,6 +58,15 @@ export default function Dashboard({
 
     const key = buildGameKey(game);
     if (!key) return;
+
+    const home = game.home_team || game.home_abbr;
+    const away = game.away_team || game.away_abbr;
+
+    if (!home || !away) {
+      console.warn("[Dashboard] Skipping predict: missing team data", game);
+      setError(key, "Incomplete matchup data");
+      return;
+    }
 
     setLoading(key, true);
     setError(key, null);
