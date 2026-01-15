@@ -315,6 +315,22 @@
 
 /* Responsive tweaks */
 
+/* Postseason Styles */
+
+.postseason-card {
+  border-color: var(--c-brand-1-soft);
+  background: radial-gradient(circle at top, lch(15% 60 280 / 0.6), transparent 40%),
+              linear-gradient(145deg, lch(18% 40 280 / 0.8), lch(5% 10 280 / 0.5));
+}
+
+/* Ensure logos are visible */
+.team-logo-small {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  margin-right: 8px;
+}
+
 @media (max-width: 600px) {
   .team-grid {
     padding-inline: 0.75rem;

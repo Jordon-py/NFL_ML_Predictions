@@ -29,6 +29,31 @@ const toNumberOrNull = (value) => {
   return Number.isFinite(n) ? n : null;
 };
 
+/**
+ * Robust CSV parser for schedule data.
+ */
+function parseCsv(text) {
+  const lines = text.split(/\r?\n/).filter((l) => l.trim());
+  if (lines.length < 2) return [];
+  const headers = lines[0].split(",");
+  return lines.slice(1).map((line) => {
+    const values = [];
+    let cur = "";
+    let inQuotes = false;
+    for (let char of line) {
+      if (char === '"') inQuotes = !inQuotes;
+      else if (char === "," && !inQuotes) {
+        values.push(cur.trim());
+        cur = "";
+      } else cur += char;
+    }
+    values.push(cur.trim());
+    const row = {};
+    headers.forEach((h, i) => (row[h.trim()] = values[i] || ""));
+    return row;
+  });
+}
+
 const normalizeTeamCode = (value) =>
   (value ?? "").toString().trim().toUpperCase();
 
@@ -99,16 +124,34 @@ const normalizePostseasonSchedule = (payload) => {
 
 const fetchPostseasonSchedule = async () => {
   try {
-    const response = await fetch(resolvePublicAssetUrl("Nfl_schedule_2025.csv"));
-    if (!response.ok){
-      console.log("Error fetching postseason schedule");
+    const url = resolvePublicAssetUrl("Nfl_schedule_2025.csv");
+    const response = await fetch(url);
+    if (!response.ok) {
+      console.warn("Failed to fetch schedule CSV:", url, response.status);
       return [];
     }
-    const payload = await response.json();  
-    console.log("Postseason schedule payload:", payload);
-    return normalizePostseasonSchedule(payload);
+    const text = await response.text();
+    const allRows = parseCsv(text);
+    console.log(`Parsed ${allRows.length} rows from CSV`);
+
+    // Filter for postseason games (or everything if REG fails)
+    // We prefer games with game_type !== 'REG' for postseason logic
+    const postRows = allRows.filter(r => r.game_type !== "REG");
+
+    return postRows.map(r => ({
+      game_id: r.game_id,
+      season: parseInt(r.season) || 2025,
+      week: parseInt(r.week) || 0,
+      game_type: r.game_type,
+      kickoff: r.gametime ? `${r.gameday} ${r.gametime}` : r.gameday,
+      home_team: r.home_team,
+      away_team: r.away_team,
+      home_abbr: r.home_team,
+      away_abbr: r.away_team,
+      stadium: r.stadium
+    }));
   } catch (error) {
-    console.log("Error fetching postseason schedule", error);
+    console.error("Error fetching/parsing postseason schedule CSV:", error);
     return [];
   }
 };

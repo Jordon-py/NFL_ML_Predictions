@@ -93,12 +93,12 @@ const getKickoffDisplayTime = (kickoff) => {
     // Attempt to handle "YYYY-MM-DD HH:MM" format if raw Date fails
     return kickoff;
   }
-  return d.toLocaleString([], { 
-    weekday: 'short', 
-    month: 'short', 
-    day: 'numeric', 
-    hour: '2-digit', 
-    minute: '2-digit' 
+  return d.toLocaleString([], {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
   });
 };
 
@@ -353,7 +353,11 @@ export default function Card({
       aria-busy={loading ? 'true' : undefined}
     >
       <header className="game-card__header">
-        <span className="game-card__week">Week {matchup.week ?? '-'}</span>
+        <span className="game-card__week">
+          {matchup.game_type && matchup.game_type !== 'REG'
+            ? `${matchup.game_type} Round`
+            : `Week ${matchup.week ?? '-'}`}
+        </span>
         <time className="game-card__kickoff" dateTime={kickoff?.toISOString?.()}>
           {kickoffDisplayTime}
         </time>

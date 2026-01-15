@@ -23,9 +23,12 @@ DEFAULT_ALLOWED_ORIGINS = [
     "http://127.0.0.1:3000",
     "http://localhost:4173",
     "http://127.0.0.1:4173",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
     "https://nfl-ml-predictions.vercel.app",
     "https://nfl-predict.vercel.app",
     "https://new-nfl-predict.vercel.app",
+    "https://nfl-ml-predictions-git-main-iprog.vercel.app",
 ]
 DEFAULT_ORIGIN_REGEX = r"https://.*\.vercel\.app$"
 
@@ -66,7 +69,8 @@ def resolve_cors():
     if restrict:
         origins = env_origins or DEFAULT_ALLOWED_ORIGINS
     else:
-        origins = list(dict.fromkeys([*DEFAULT_ALLOWED_ORIGINS, *env_origins]))
+        # Default to a more permissive set or "*" if env allows
+        origins = ["*"] if os.getenv("PERMISSIVE_CORS") in TRUTHY else list(dict.fromkeys([*DEFAULT_ALLOWED_ORIGINS, *env_origins]))
 
     origin_regex = (
         os.getenv("ALLOW_ORIGIN_REGEX")

@@ -8,11 +8,10 @@
  * and user interactions with optimized render cycles.
  */
 
-import React from 'react';
-import Card from './Card';
-import './TeamGrid.css';
-import cardStyles from './Card.module.css';
 import { buildGameKey } from '../../utils/predictionContextUtils';
+import Card from './Card';
+import cardStyles from './Card.module.css';
+import './TeamGrid.css';
 
 /**
  * TeamGrid Component
@@ -62,7 +61,8 @@ export default function TeamGrid({
         home_wordmark: game.home_wordmark,
         away_wordmark: game.away_wordmark,
         season: game.season,
-        week: game.week
+        week: game.week,
+        game_type: game.game_type
       },
       prediction: predictions[gkey],
       isLoading: !!loading[gkey],
@@ -82,10 +82,13 @@ export default function TeamGrid({
     );
   }
 
+  const isPostseason = games.some(g => g.game_type && g.game_type !== 'REG');
+  const gridTitle = isPostseason ? "Postseason Matchups" : `Week ${week} Matchups`;
+
   return (
-    <section className="team-grid" aria-label='NFL Week Matchups'>
+    <section className="team-grid" aria-label='NFL Matchups'>
       <header className="team-grid__header">
-        <h2 className="team-grid__title">Week {week} Matchups</h2>
+        <h2 className="team-grid__title">{gridTitle}</h2>
         {features.queueAware && (
           <div className="team-grid__status-bar">
             <span>{gameItems.filter(g => g.prediction).length} / {gameItems.length} Predictions Ready</span>
