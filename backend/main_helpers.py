@@ -148,15 +148,34 @@ def _pick_best_dataset(files: List[Path], expected_features: List[str]) -> Optio
 def load_dataset_df(data_dir: Path, expected_features: Optional[List[str]] = None) -> pd.DataFrame:
     dataset_path = os.getenv("DATASET_PATH")
     if dataset_path:
-        # Strip literal double quotes that might be passed from Heroku/Env
-        dataset_path = dataset_path.strip('"').strip("'")
+        # Aggressive strip: handle whitespace and mixed quotes
+        dataset_path = dataset_path.strip().strip('"').strip("'").strip()
         p = Path(dataset_path)
+        
+        # Try a few candidates for relative paths
         if not p.is_absolute():
-            cwd_candidate = p.resolve()
-            data_candidate = (data_dir / p).resolve()
-            p = cwd_candidate if cwd_candidate.exists() else data_candidate
+            # 1. As provided (relative to CWD)
+            candidate1 = p.resolve()
+            # 2. Relative to the specified data_dir
+            candidate2 = (data_dir / p).resolve()
+            # 3. If it starts with 'backend/', try stripping it and using data_dir
+            candidate3 = None
+            if dataset_path.startswith("backend/"):
+                sub_path = dataset_path.replace("backend/", "", 1).strip("/")
+                candidate3 = (data_dir / sub_path).resolve()
+            
+            if candidate1.exists():
+                p = candidate1
+            elif candidate2.exists():
+                p = candidate2
+            elif candidate3 and candidate3.exists():
+                p = candidate3
+            else:
+                # Fallback to candidate2 for the error message, but it still won't exist
+                p = candidate2
         else:
             p = p.resolve()
+
         if not p.exists():
             raise FileNotFoundError(f"DATASET_PATH not found: {p}")
         if expected_features:
