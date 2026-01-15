@@ -867,22 +867,7 @@ async def lifespan(app: FastAPI):
         
         # Expose state
         app.state.dataset = state["dataset"]
-<<<<<<< HEAD
         app.state.models = {"models_dir": str(CFG_MODELS_DIR)}
-=======
-        app.state.model_metadata = state.get("model_metadata") or {}
-        app.state.model_metadata_path = str(state.get("model_metadata_path") or "")
-        app.state.dataset_path = state.get("dataset_path") or ""
-        bundle = state["bundle"]
-        app.state.models = {
-            "preprocessor": getattr(bundle, "preprocessor", None),
-            "home_model": getattr(bundle, "home_model", None),
-            "away_model": getattr(bundle, "away_model", None),
-            "hist_win_clf": getattr(bundle, "hist_win_clf", None),
-            "models_dir": str(CFG_MODELS_DIR),
-        }
-        app.state.service = state["service"]  # Expose service for routes.py
->>>>>>> a4dce42c6168e47bee642f116b07001813afa39a
         app.state.team_logos = state.get("team_logos") or {}
         app.state.started_at = datetime.now(timezone.utc).isoformat()
         
@@ -977,14 +962,8 @@ async def get_next_week_schedule(season: int | None = None) -> ScheduleResponse:
 
     games: list[ScheduleEntry] = []
     for _, row in df_next.iterrows():
-<<<<<<< HEAD
         home = str(row.get(home_col, "") if home_col else row.get("home", "")).strip().upper()
         away = str(row.get(away_col, "") if away_col else row.get("away", "")).strip().upper()
-=======
-        # Identify Teams
-        home = _normalize_team_code(row.get(home_col, "") if home_col else row.get("home", ""))
-        away = _normalize_team_code(row.get(away_col, "") if away_col else row.get("away", ""))
->>>>>>> a4dce42c6168e47bee642f116b07001813afa39a
         if not home or not away:
             continue
 
