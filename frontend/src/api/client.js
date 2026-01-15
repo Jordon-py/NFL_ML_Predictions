@@ -99,11 +99,16 @@ const normalizePostseasonSchedule = (payload) => {
 
 const fetchPostseasonSchedule = async () => {
   try {
-    const response = await fetch(resolvePublicAssetUrl("post_schedule.json"));
-    if (!response.ok) return [];
-    const payload = await response.json();
+    const response = await fetch(resolvePublicAssetUrl("Nfl_schedule_2025.csv"));
+    if (!response.ok){
+      console.log("Error fetching postseason schedule");
+      return [];
+    }
+    const payload = await response.json();  
+    console.log("Postseason schedule payload:", payload);
     return normalizePostseasonSchedule(payload);
-  } catch {
+  } catch (error) {
+    console.log("Error fetching postseason schedule", error);
     return [];
   }
 };
