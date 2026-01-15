@@ -94,90 +94,61 @@ function applyTeamMeta(rows, teamMeta) {
 
     const next = { ...game };
 
-    if (!next.home_logo && homeMeta?.logoUrl) next.home_logo = homeMeta.logoUrl;
-    if (!next.away_logo && awayMeta?.logoUrl) next.away_logo = awayMeta.logoUrl;
+    const applyMeta = (side, meta, code) => {
+      if (!meta) return;
+      if (!next[`${side}_logo`] && meta.logoUrl) next[`${side}_logo`] = meta.logoUrl;
+      if (
+        meta.name &&
+        (!next[`${side}_name`] || next[`${side}_name`] === next[`${side}_team`] || next[`${side}_name`] === code)
+      ) {
+        next[`${side}_name`] = meta.name;
+      }
+      if (!next[`${side}_color`] && meta.primaryColor) next[`${side}_color`] = meta.primaryColor;
+      if (!next[`${side}_color2`] && meta.secondaryColor) next[`${side}_color2`] = meta.secondaryColor;
+      if (!next[`${side}_wordmark`] && meta.wordmark) next[`${side}_wordmark`] = meta.wordmark;
+    };
 
-    if (homeMeta?.name && (!next.home_name || next.home_name === next.home_team || next.home_name === homeCode)) {
-      next.home_name = homeMeta.name;
-    }
-    if (awayMeta?.name && (!next.away_name || next.away_name === next.away_team || next.away_name === awayCode)) {
-      next.away_name = awayMeta.name;
-    }
-
-    if (!next.home_color && homeMeta?.primaryColor) next.home_color = homeMeta.primaryColor;
-    if (!next.home_color2 && homeMeta?.secondaryColor) next.home_color2 = homeMeta.secondaryColor;
-    if (!next.away_color && awayMeta?.primaryColor) next.away_color = awayMeta.primaryColor;
-    if (!next.away_color2 && awayMeta?.secondaryColor) next.away_color2 = awayMeta.secondaryColor;
-
-    if (!next.home_wordmark && homeMeta?.wordmark) next.home_wordmark = homeMeta.wordmark;
-    if (!next.away_wordmark && awayMeta?.wordmark) next.away_wordmark = awayMeta.wordmark;
+    applyMeta("home", homeMeta, homeCode);
+    applyMeta("away", awayMeta, awayCode);
 
     return next;
   });
 }
 
 /**
- * Ensure history entries always include a timestamp field and a flat shape.
+ * Normalize history entries to a flat shape with all required fields.
+ * Handles multiple backend response formats gracefully.
  */
 function ensureHistoryEntry(entry) {
   if (!entry || typeof entry !== "object") return entry;
-  let base =
-    entry.prediction && typeof entry.prediction === "object"
-      ? { ...entry.prediction, ts: entry.ts || entry.prediction.ts }
-      : { ...entry };
-  const fallbackGame = entry.game || entry.request || {};
 
-  if (base.scores && (base.home_score == null || base.away_score == null)) {
-    base = {
-      ...base,
-      home_score: base.home_score ?? base.scores?.home_score,
-      away_score: base.away_score ?? base.scores?.away_score,
-    };
-  }
+  // Extract nested prediction if present
+  const pred = entry.prediction && typeof entry.prediction === "object" ? entry.prediction : entry;
+  const game = entry.game || entry.request || {};
 
-  if (base.metrics && (base.home_score == null || base.away_score == null)) {
-    base = {
-      ...base,
-      home_score: base.home_score ?? base.metrics?.home_score,
-      away_score: base.away_score ?? base.metrics?.away_score,
-      point_diff: base.point_diff ?? base.metrics?.point_diff,
-    };
-  }
+  // Helper to pick first defined value
+  const pick = (...vals) => vals.find((v) => v != null);
 
-  if (base.winner && (base.home_win_probability == null || base.away_win_probability == null)) {
-    base = {
-      ...base,
-      home_win_probability: base.home_win_probability ?? base.winner?.proba_home,
-      away_win_probability: base.away_win_probability ?? base.winner?.proba_away,
-    };
-  }
-
-  if (base.probs && (base.home_win_probability == null || base.away_win_probability == null)) {
-    base = {
-      ...base,
-      home_win_probability: base.home_win_probability ?? base.probs?.home ?? base.probs?.ensemble,
-      away_win_probability: base.away_win_probability ?? base.probs?.away,
-    };
-  }
-
-  // Backfill core game identity fields so downstream UI only reads the flat shape.
-  const season = toNumberOrNull(base.season ?? fallbackGame.season);
-  const week = toNumberOrNull(base.week ?? fallbackGame.week);
-  const home = normalizeTeamCode(base.home_team ?? fallbackGame.home_team ?? fallbackGame.home_abbr);
-  const away = normalizeTeamCode(base.away_team ?? fallbackGame.away_team ?? fallbackGame.away_abbr);
-  const canBuildKey = Boolean(home && away && season != null && week != null);
-  const gameId = base.game_id || (canBuildKey ? buildGameKey({ season, week, home_team: home, away_team: away }) : "");
-  base = {
-    ...base,
-    season: season ?? base.season,
-    week: week ?? base.week,
-    home_team: home || base.home_team,
-    away_team: away || base.away_team,
-    game_id: gameId || base.game_id,
+  // Core fields with fallback chain
+  const base = {
+    ...pred,
+    ts: pick(entry.ts, pred.ts, entry.timestamp) || new Date().toISOString(),
+    season: toNumberOrNull(pick(pred.season, game.season, entry.season)),
+    week: toNumberOrNull(pick(pred.week, game.week, entry.week)),
+    home_team: normalizeTeamCode(pick(pred.home_team, game.home_team, game.home_abbr)),
+    away_team: normalizeTeamCode(pick(pred.away_team, game.away_team, game.away_abbr)),
+    home_score: pick(pred.home_score, pred.scores?.home_score, pred.metrics?.home_score),
+    away_score: pick(pred.away_score, pred.scores?.away_score, pred.metrics?.away_score),
+    point_diff: pick(pred.point_diff, pred.metrics?.point_diff),
+    home_win_probability: pick(pred.home_win_probability, pred.winner?.proba_home, pred.probs?.home),
+    away_win_probability: pick(pred.away_win_probability, pred.winner?.proba_away, pred.probs?.away),
   };
 
-  if (base.ts || base.timestamp || base.time) return base;
-  return { ...base, ts: new Date().toISOString() };
+  // Build game_id if missing
+  const canBuildKey = base.home_team && base.away_team && base.season != null && base.week != null;
+  base.game_id = pred.game_id || (canBuildKey ? buildGameKey(base) : "");
+
+  return base;
 }
 
 export function usePredictionState() {
@@ -207,20 +178,15 @@ export function usePredictionState() {
 
       if (!active) return;
 
-      if (scheduleRes.status === "fulfilled") {
-        const normalized = normalizeSchedule(scheduleRes.value);
-        const teamMeta =
-          logosRes.status === "fulfilled" && logosRes.value && typeof logosRes.value === "object"
-            ? logosRes.value
-            : {};
-        const enriched = applyTeamMeta(normalized, teamMeta);
-        setSchedule(enriched);
-        const derivedWeek = toNumberOrNull(enriched?.[0]?.week);
-        setWeek(derivedWeek);
-      } else {
-        setSchedule([]);
-        setWeek(null);
-      }
+      const scheduleRows = scheduleRes.status === "fulfilled" ? scheduleRes.value : [];
+      const normalized = normalizeSchedule(scheduleRows);
+      const teamMeta =
+        logosRes.status === "fulfilled" && logosRes.value && typeof logosRes.value === "object"
+          ? logosRes.value
+          : {};
+      const enriched = applyTeamMeta(normalized, teamMeta);
+      setSchedule(enriched);
+      setWeek(toNumberOrNull(enriched?.[0]?.week));
 
       if (historyRes.status === "fulfilled") {
         const entries = Array.isArray(historyRes.value?.entries)
@@ -242,8 +208,9 @@ export function usePredictionState() {
       try {
         const h = await fetchHealth();
         setHealth(h);
-      } catch {
-        setHealth({ status: "error", reason: "fetch failed" });
+      } catch (err) {
+        const message = err?.message || "fetch failed";
+        setHealth({ status: "error", reason: message });
       }
     };
     poll();

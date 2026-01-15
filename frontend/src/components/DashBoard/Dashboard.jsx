@@ -21,6 +21,7 @@ import HistoryChart from "../HistoryChart";
 import NavBar from "../NavBar/NavBar";
 import ErrorDisplay from "../ErrorDisplay";
 import LLMChat from "../LLMChat/LLMChat";
+import { API_BASE } from "../../api/fetch";
 import { buildGameKey } from "../../utils/predictionContextUtils";
 import { toEntry } from "../../utils/predictionHelpers";
 
@@ -62,16 +63,16 @@ export default function Dashboard({
     setError(key, null);
 
     try {
-      const payload = {
-        home_team: game.home_team || game.home_abbr,
-        away_team: game.away_team || game.away_abbr,
-        season: game.season,
-        week: game.week,
-      };
+      const home = game.home_team || game.home_abbr;
+      const away = game.away_team || game.away_abbr;
+      const season = game.season;
+      const week = game.week;
 
-      const rawPrediction = await predictGame(payload);
+      const rawPrediction = await predictGame(home, away, season, week);
       const entry = toEntry({ prediction: rawPrediction, game, source: "teamgrid" });
+      console.log(entry);
       const predictionKey = buildGameKey(entry) || key;
+      console.log(predictionKey);
       const normalizedEntry = {
         ...entry,
         game_id: predictionKey || entry.game_id,
@@ -96,13 +97,19 @@ export default function Dashboard({
     setLoading(key, false);
   };
 
-  if (health?.status === "unhealthy" && (!schedule || schedule.length === 0)) {
+  const healthStatus = health?.status;
+  const backendHealthy = healthStatus === "healthy";
+  const scheduleEmpty = !schedule || schedule.length === 0;
+  const shouldShowBackendError =
+    scheduleEmpty && Boolean(healthStatus) && healthStatus !== "loading" && !backendHealthy;
+
+  if (shouldShowBackendError) {
+    const reason = health?.reason || health?.mode || `Backend status: ${healthStatus}`;
+    const message = API_BASE ? `${reason} (API: ${API_BASE})` : reason;
     return (
       <ErrorDisplay
-        error={new Error(health?.reason || "Backend is unhealthy")}
-        recoveryOptions={[
-          { label: "Reload", action: () => window.location.reload() },
-        ]}
+        error={new Error(message)}
+        onRetry={() => window.location.reload()}
       />
     );
   }

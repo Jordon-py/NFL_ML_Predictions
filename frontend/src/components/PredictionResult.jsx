@@ -75,9 +75,14 @@ export default function PredictionResult({ entry }) {
         season: seasonLabel,
         week: weekLabel,
       });
+      if (!result?.used_llm) {
+        setExplanation(null);
+        setError(result?.error || "LLM is unavailable.");
+        return;
+      }
       setExplanation(result);
     } catch (err) {
-      setError("Failed to generate explanation.");
+      setError(err?.message || "Failed to generate explanation.");
     } finally {
       setExplaining(false);
     }

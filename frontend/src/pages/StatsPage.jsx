@@ -33,7 +33,7 @@
 //   - client.js normalizes getPredictionHistory() into { entries, total, limit }
 //     and getStatusOverview() into a safe shape.
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import NavBar from "../components/NavBar/NavBar.jsx";
 import HistoryChart from "../components/HistoryChart.jsx";
 import {
@@ -117,44 +117,39 @@ export default function StatsPage() {
 
       if (!active) return;
 
-      // Schedule
-      if (scheduleRes.status === "fulfilled") {
-        setSchedule(Array.isArray(scheduleRes.value) ? scheduleRes.value : []);
-      } else {
-        // Keep schedule empty, but don’t hard-fail the whole page.
+      const scheduleData =
+        scheduleRes.status === "fulfilled" && Array.isArray(scheduleRes.value)
+          ? scheduleRes.value
+          : [];
+      if (scheduleRes.status === "rejected") {
         console.warn("[StatsPage] schedule fetch failed", scheduleRes.reason);
-        setSchedule([]);
       }
+      setSchedule(scheduleData);
 
-      // History (client.js already returns a safe shape, even on failure)
-      if (historyRes.status === "fulfilled") {
-        setHistoryPayload(historyRes.value || { entries: [], total: 0 });
-      } else {
+      const historyData =
+        historyRes.status === "fulfilled"
+          ? historyRes.value || { entries: [], total: 0, limit: 0 }
+          : { entries: [], total: 0, limit: 0 };
+      if (historyRes.status === "rejected") {
         console.warn("[StatsPage] history fetch failed", historyRes.reason);
-        setHistoryPayload({ entries: [], total: 0, limit: 0 });
       }
+      setHistoryPayload(historyData);
 
-      // Overview (client.js returns a safe default object on failure)
-      if (overviewRes.status === "fulfilled") {
-        setOverview(overviewRes.value || null);
-      } else {
+      const overviewData = overviewRes.status === "fulfilled" ? overviewRes.value || null : null;
+      if (overviewRes.status === "rejected") {
         console.warn("[StatsPage] overview fetch failed", overviewRes.reason);
-        setOverview(null);
       }
-      // If EVERYTHING failed, show a single friendly error with a tiny hint.
-      const failures = [];
-      if (scheduleRes.status === "rejected") failures.push("schedule");
-      if (historyRes.status === "rejected") failures.push("history");
-      if (overviewRes.status === "rejected") failures.push("overview");
+      setOverview(overviewData);
 
-      const allFailed = failures.length === 3;
+      const failures = [
+        scheduleRes.status === "rejected" ? "schedule" : null,
+        historyRes.status === "rejected" ? "history" : null,
+        overviewRes.status === "rejected" ? "overview" : null,
+      ].filter(Boolean);
 
-      if (allFailed) {
-        setPageError(
-          `Failed to load status data (schedule, history, overview). Backend may be offline.`
-        );
+      if (failures.length === 3) {
+        setPageError("Failed to load status data (schedule, history, overview). Backend may be offline.");
       } else if (failures.length > 0) {
-        // Partial failure: keep the page usable, but make the missing piece obvious.
         setPageError(`Some data failed to load: ${failures.join(", ")}.`);
       }
       setIsLoading(false);
@@ -168,8 +163,12 @@ export default function StatsPage() {
   }, []);
 
   // Normalize backend shapes into predictable view-model values.
-  const history = Array.isArray(historyPayload?.entries) ? historyPayload.entries : [];
-  const safeOverview = overview && typeof overview === "object" ? overview : {};
+  // client.js guarantees arrays/objects, so we can trust them more here.
+  const history = useMemo(
+    () => (Array.isArray(historyPayload?.entries) ? historyPayload.entries : []),
+    [historyPayload]
+  );
+  const safeOverview = overview || {};
 
   const health = safeOverview.health || { status: "unknown" };
   const dataset = safeOverview.dataset || {};
@@ -185,30 +184,36 @@ export default function StatsPage() {
       ? `${Math.round(historyMetrics.win_rate * 100)}%`
       : "n/a";
 
-  // Match schedule rows to predictions by either canonical id or composite key.
-  const historyMap = new Map();
-  for (const entry of history) {
-    if (!entry) continue;
+  const historyMap = useMemo(() => {
+    const map = new Map();
+    for (const entry of history) {
+      if (!entry) continue;
+      if (entry.game_id) map.set(entry.game_id, entry);
+      const key = toGameKey(entry);
+      if (key) map.set(key, entry);
+    }
+    return map;
+  }, [history]);
 
-    if (entry.game_id) historyMap.set(entry.game_id, entry);
+  const scheduleRows = useMemo(() => (Array.isArray(schedule) ? schedule : []), [schedule]);
+  const currentWeek = useMemo(() => {
+    const weekValue = scheduleRows[0]?.week;
+    return Number.isFinite(Number(weekValue)) ? Number(weekValue) : null;
+  }, [scheduleRows]);
 
-    const key = toGameKey(entry);
-    if (key) historyMap.set(key, entry);
-  }
-
-  const scheduleRows = Array.isArray(schedule) ? schedule : [];
-  const currentWeek =
-    Number.isFinite(Number(scheduleRows?.[0]?.week)) ? Number(scheduleRows[0].week) : null;
-
-  // Give NavBar what it likely expects (same shape as Dashboard’s navState).
-  const navState = {
-    title: "Prediction Status",
-    heroSubtitle: "Live backend health, dataset stats, and recorded predictions.",
-    subtitle: `${totalPredictions} historical predictions stored`,
-    weekLabel: currentWeek ? `Week ${currentWeek}` : "Week ?",
-    healthLabel:
-      health?.status === "healthy" ? "Backend: Healthy" : `Backend: ${health?.status ?? "unknown"}`,
-  };
+  const navState = useMemo(
+    () => ({
+      title: "Prediction Status",
+      heroSubtitle: "Live backend health, dataset stats, and recorded predictions.",
+      subtitle: `${totalPredictions} historical predictions stored`,
+      weekLabel: currentWeek ? `Week ${currentWeek}` : "Week ?",
+      healthLabel:
+        health?.status === "healthy"
+          ? "Backend: Healthy"
+          : `Backend: ${health?.status ?? "unknown"}`,
+    }),
+    [currentWeek, health?.status, totalPredictions]
+  );
 
   function renderSchedule() {
     if (isLoading) return <LoadingSpinner label="Loading status" />;
@@ -221,34 +226,53 @@ export default function StatsPage() {
     return (
       <ul className="stats-schedule__list">
         {scheduleRows.map((game, idx) => {
-          const idKey = game?.game_id ?? game?.id ?? null;
+          const idKey = game?.game_id ?? game?.id;
           const compositeKey = toGameKey(game);
-
           const prediction =
             (idKey && historyMap.get(idKey)) || (compositeKey && historyMap.get(compositeKey));
 
           const kickoffDate = game?.kickoff ? new Date(game.kickoff) : null;
           const kickoffLabel = kickoffDate ? kickoffDate.toLocaleString() : "TBD";
-
+          const awayCode = (game?.away_abbr || game?.away_team || "").toString().trim();
+          const homeCode = (game?.home_abbr || game?.home_team || "").toString().trim();
+          const awayLogo = game?.away_logo;
+          const homeLogo = game?.home_logo;
           const rowKey = idKey || compositeKey || `${idx}`;
 
           return (
             <li key={rowKey} className="stats-schedule__item">
               <div className="stats-schedule__game">
-                <span className="stats-schedule__matchup">
-                  {(game?.away_abbr || game?.away_team) ?? "AWAY"} @{" "}
-                  {(game?.home_abbr || game?.home_team) ?? "HOME"}
-                </span>
+                <div className="stats-schedule__teams">
+                  <span className="stats-schedule__team">
+                    {awayLogo ? (
+                      <img className="stats-schedule__logo" src={awayLogo} alt={`${awayCode} logo`} />
+                    ) : null}
+                    <span className="stats-schedule__abbr">{awayCode || "AWAY"}</span>
+                  </span>
+                  <span className="stats-schedule__at">@</span>
+                  <span className="stats-schedule__team">
+                    {homeLogo ? (
+                      <img className="stats-schedule__logo" src={homeLogo} alt={`${homeCode} logo`} />
+                    ) : null}
+                    <span className="stats-schedule__abbr">{homeCode || "HOME"}</span>
+                  </span>
+                </div>
                 <span className="stats-schedule__kickoff">{kickoffLabel}</span>
               </div>
 
               {prediction ? (
                 <div className="stats-schedule__prediction">
-                  <p>Home win: {toPercentLabel(prediction.home_win_probability)}</p>
-                  <p>Away win: {toPercentLabel(prediction.away_win_probability)}</p>
+                  <p>
+                    <span>Home win:</span>
+                    <strong>{toPercentLabel(prediction.home_win_probability)}</strong>
+                  </p>
+                  <p>
+                    <span>Away win:</span>
+                    <strong>{toPercentLabel(prediction.away_win_probability)}</strong>
+                  </p>
                   <p className="stats-schedule__diff">
-                    Diff:{" "}
-                    {prediction.point_diff?.toFixed?.(1) ?? prediction.point_diff ?? "n/a"} pts
+                    <span>Diff:</span>
+                    <span>{prediction.point_diff?.toFixed?.(1) ?? prediction.point_diff ?? "n/a"} pts</span>
                   </p>
                 </div>
               ) : (
@@ -263,7 +287,6 @@ export default function StatsPage() {
 
   return (
     <>
-      {/* Keep NavBar informed about health without relying on context */}
       <NavBar state={navState} />
 
       <div className="stats-page">
@@ -291,10 +314,10 @@ export default function StatsPage() {
             <SummaryCard
               title="Dataset rows"
               value={dataset?.rows ?? "-"}
-              subtext={dataset?.path ?? "path unknown"}
+              subtext={dataset?.path ? "Path loaded" : "Path unknown"}
             />
             <SummaryCard
-              title="Predictions recorded"
+              title="Predictions"
               value={totalPredictions}
               subtext={`Win rate: ${winRateLabel}`}
             />
@@ -308,7 +331,6 @@ export default function StatsPage() {
 
         <section className="stats-section">
           <h2 className="stats-section__title">Historical Predictions</h2>
-          {/* We no longer have a context "state"; pass a tiny object if the chart expects a prop. */}
           <HistoryChart history={history} state={{ health }} />
         </section>
       </div>

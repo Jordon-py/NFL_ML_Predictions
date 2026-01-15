@@ -94,6 +94,21 @@ ABBR_FIX: Dict[str, str] = {
     "WSH": "WAS",
 }
 
+# Schedule/game-type normalization
+PLAYOFF_GAME_TYPES = {"WC", "DIV", "CON", "SB", "POST"}
+VALID_GAME_TYPES = {"REG", *PLAYOFF_GAME_TYPES}
+POSTSEASON_ROUND_TO_WEEK = {
+    "Wild Card": 19,
+    "Divisional": 20,
+    "Conference Championship": 21,
+    "Super Bowl": 22,
+}
+POSTSEASON_ROUND_TO_TYPE = {
+    "Wild Card": "WC",
+    "Divisional": "DIV",
+    "Conference Championship": "CON",
+    "Super Bowl": "SB",
+}
 # Name of the output CSV file for the generated dataset.
 # Includes current date in YYYYMMDD format for traceability/versioning.
 OUTPUT_DATASET_NAME = f"game_features_{datetime.now().strftime('%Y%m%d')}.csv"
@@ -112,11 +127,12 @@ TIME_COLS_IN_ORDER: Optional[Sequence[str]] = None  # auto-detect if None
 # ---------------------------------------------------------------------
 
 
-def setup_logger(out_dir: Path) -> None:
+def setup_logger(out_dir: Path = Path("./data/datasets/")) -> None:
     """Initialize both file and console logging so CLI users get progress feedback."""
     out_dir.mkdir(parents=True, exist_ok=True)
     log_file = out_dir / "build_csv_datasets.log"
     logging.basicConfig(
+        force=True,
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(message)s",
         handlers=[logging.FileHandler(log_file, mode="w"), logging.StreamHandler()],
@@ -208,7 +224,7 @@ def _normalize_codes(df: pd.DataFrame, cols: List[str]) -> pd.DataFrame:
     out = df.copy()
     for c in cols:
         if c in out.columns:
-            out[c] = out[c].replace(ABBR_FIX)
+            out[c] = out[c].apply(_normalize_team_code)
     return out
 
 
@@ -229,6 +245,140 @@ def _moneyline_to_prob(ml: pd.Series) -> pd.Series:
         ml_numeric.loc[positive & ml_numeric.notna()] + 100
     )
     return probs
+
+
+def _normalize_team_code(value: Any) -> str:
+    """Normalize a team abbreviation and handle placeholder values."""
+    if value is None:
+        return ""
+    code = str(value).strip().upper()
+    if code in {"TBD", "TBA", "NA", "N/A", ""}:
+        return ""
+    return ABBR_FIX.get(code, code)
+
+
+def _build_schedule_game_id(season: Any, week: Any, away_team: str, home_team: str) -> str:
+    """Match nflreadpy/nfl_data_py game_id style: YYYY_WW_AWAY_HOME."""
+    try:
+        season_int = int(season)
+        week_int = int(week)
+    except (TypeError, ValueError):
+        return ""
+    if not away_team or not home_team:
+        return ""
+    return f"{season_int}_{week_int:02d}_{away_team}_{home_team}"
+
+
+def _kickoff_to_gameday(kickoff: Any) -> pd.Timestamp:
+    if not kickoff:
+        return pd.NaT
+    ts = pd.to_datetime(kickoff, errors="coerce")
+    if pd.isna(ts):
+        return pd.NaT
+    # Normalize to date-like midnight to match schedule gameday usage.
+    try:
+        return ts.tz_convert(None).normalize()
+    except (TypeError, ValueError):
+        return ts.normalize() if hasattr(ts, "normalize") else ts
+
+
+def _load_postseason_fallback(seasons: Sequence[int]) -> pd.DataFrame:
+    """Load user-provided postseason JSON for future games when backend schedules omit them."""
+    fallback_path = Path(__file__).resolve().parent / "post_schedule.json"
+    if not fallback_path.exists():
+        return pd.DataFrame()
+    try:
+        payload = json.loads(fallback_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        logging.warning("Failed to read postseason fallback at %s (%s)", fallback_path, exc)
+        return pd.DataFrame()
+
+    season = payload.get("season")
+    if season is None or int(season) not in {int(s) for s in seasons}:
+        return pd.DataFrame()
+
+    rounds = payload.get("postseason", {}).get("rounds", [])
+    if not isinstance(rounds, list):
+        return pd.DataFrame()
+
+    rows: List[Dict[str, Any]] = []
+    for idx, round_info in enumerate(rounds):
+        round_name = str(round_info.get("name") or "").strip()
+        week = POSTSEASON_ROUND_TO_WEEK.get(round_name, 19 + idx)
+        game_type = POSTSEASON_ROUND_TO_TYPE.get(round_name, "POST")
+        games = round_info.get("games") if isinstance(round_info, dict) else None
+        if not isinstance(games, list):
+            continue
+
+        for game in games:
+            if not isinstance(game, dict):
+                continue
+            home = game.get("home") or {}
+            away = game.get("away") or {}
+            home_abbr = _normalize_team_code(
+                home.get("abbr") if isinstance(home, dict) else home
+            )
+            away_abbr = _normalize_team_code(
+                away.get("abbr") if isinstance(away, dict) else away
+            )
+            if not home_abbr or not away_abbr:
+                continue
+
+            kickoff = game.get("kickoff_local") or game.get("kickoff")
+            rows.append(
+                {
+                    "season": int(season),
+                    "week": int(week),
+                    "game_id": _build_schedule_game_id(season, week, away_abbr, home_abbr),
+                    "gameday": _kickoff_to_gameday(kickoff),
+                    "home_team": home_abbr,
+                    "away_team": away_abbr,
+                    "game_type": game_type,
+                    "kickoff": kickoff,
+                }
+            )
+
+    if not rows:
+        return pd.DataFrame()
+
+    logging.info("Loaded %d postseason fallback games from %s", len(rows), fallback_path)
+    return pd.DataFrame(rows)
+
+
+def _dedupe_on_keys(df: pd.DataFrame, keys: Sequence[str], label: str) -> pd.DataFrame:
+    if df is None or df.empty:
+        return df
+    dup_mask = df.duplicated(keys)
+    if dup_mask.any():
+        logging.warning(
+            "Dropping %d duplicate rows from %s on keys %s",
+            int(dup_mask.sum()),
+            label,
+            list(keys),
+        )
+        return df.drop_duplicates(keys).reset_index(drop=True)
+    return df
+
+
+def _pick_first_col(df: pd.DataFrame, candidates: Sequence[str]) -> Optional[str]:
+    for c in candidates:
+        if c in df.columns:
+            return c
+    return None
+
+
+def _haversine_km(lat1: pd.Series, lon1: pd.Series, lat2: pd.Series, lon2: pd.Series) -> pd.Series:
+    """Vectorized haversine distance (km)."""
+    lat1_rad = np.radians(pd.to_numeric(lat1, errors="coerce"))
+    lon1_rad = np.radians(pd.to_numeric(lon1, errors="coerce"))
+    lat2_rad = np.radians(pd.to_numeric(lat2, errors="coerce"))
+    lon2_rad = np.radians(pd.to_numeric(lon2, errors="coerce"))
+
+    dlat = lat2_rad - lat1_rad
+    dlon = lon2_rad - lon1_rad
+    a = np.sin(dlat / 2) ** 2 + np.cos(lat1_rad) * np.cos(lat2_rad) * np.sin(dlon / 2) ** 2
+    c = 2 * np.arcsin(np.sqrt(a))
+    return 6371.0 * c
 
 
 # ---------------------------------------------------------------------
@@ -290,7 +440,7 @@ def load_team_game_metrics(pbp_path: Path, seasons: List[int]) -> pd.DataFrame:
 
     from utils.feature_engine import calculate_team_metrics
     metrics = calculate_team_metrics(pbp)
-
+    metrics = _dedupe_on_keys(metrics, ["season", "week", "game_id", "team"], "team_game_metrics")
 
     return metrics.reset_index(drop=True)
 
@@ -420,6 +570,7 @@ def load_player_game_stats(seasons: List[int]) -> pd.DataFrame:
         else:
             out = pd.DataFrame(columns=["season", "week", "team"])
 
+        out = _dedupe_on_keys(out, ["season", "week", "team"], "player_stats")
         return out
 
     except Exception as exc:
@@ -470,7 +621,9 @@ def load_team_weekly_stats(seasons: List[int]) -> pd.DataFrame:
             "turnovers_forced",
         ]
         available = [c for c in feature_cols if c in team_stats.columns]
-        return team_stats[available].fillna(0).reset_index(drop=True)
+        out = team_stats[available].fillna(0).reset_index(drop=True)
+        out = _dedupe_on_keys(out, ["season", "week", "team"], "team_weekly_stats")
+        return out
 
     except Exception as exc:
         logging.warning("Team stats load failed (%s); team features disabled", exc)
@@ -503,6 +656,14 @@ def load_schedules(seasons: List[int], include_future: bool = False) -> pd.DataF
     if sch is None or sch.empty:
         raise RuntimeError("Could not load schedules from any backend")
 
+    # Optional postseason fallback (user-provided JSON) for upcoming games.
+    sch["_source_rank"] = 0
+    if include_future:
+        fallback = _load_postseason_fallback(seasons)
+        if not fallback.empty:
+            fallback["_source_rank"] = 1
+            sch = pd.concat([sch, fallback], ignore_index=True, sort=False)
+
     # ---- core required columns (builder cannot function without these) ----
     required = {"season", "week", "game_id", "gameday", "home_team", "away_team", "game_type"}
     missing = sorted(required - set(sch.columns))
@@ -525,6 +686,14 @@ def load_schedules(seasons: List[int], include_future: bool = False) -> pd.DataF
         "temp",
         "wind",
         "kickoff",
+        "home_latitude",
+        "home_longitude",
+        "away_latitude",
+        "away_longitude",
+        "home_lat",
+        "home_lon",
+        "away_lat",
+        "away_lon",
     ]
     for c in optional:
         if c not in sch.columns:
@@ -533,10 +702,44 @@ def load_schedules(seasons: List[int], include_future: bool = False) -> pd.DataF
     sch = _normalize_codes(sch, ["home_team", "away_team"])
     sch = sch.rename(columns={"gameday": "game_date"})
     sch["game_date"] = pd.to_datetime(sch["game_date"], errors="coerce")
+    sch["season"] = pd.to_numeric(sch["season"], errors="coerce").astype("Int64")
     sch["week"] = pd.to_numeric(sch["week"], errors="coerce").astype("Int64")
+    sch["game_type"] = sch["game_type"].astype(str).str.strip().str.upper()
+
+    # Exclude preseason/unknown game types to keep the dataset focused.
+    sch = sch[sch["game_type"].isin(VALID_GAME_TYPES)].copy()
+
+    # Fill missing game_ids using canonical season/week/away/home format.
+    missing_gid = sch["game_id"].isna() | (sch["game_id"].astype(str).str.strip() == "")
+    if missing_gid.any():
+        sch.loc[missing_gid, "game_id"] = sch.loc[missing_gid].apply(
+            lambda row: _build_schedule_game_id(
+                row.get("season"), row.get("week"), row.get("away_team"), row.get("home_team")
+            ),
+            axis=1,
+        )
 
     cols = ["season", "week", "game_id", "game_date", "home_team", "away_team"] + optional + ["game_type"]
-    sch = sch.reindex(columns=cols).copy()
+    sch = sch.reindex(columns=cols + ["_source_rank"]).copy()
+
+    # Drop any rows missing core identifiers after normalization.
+    sch = sch.replace({"": pd.NA})
+    sch = sch.dropna(subset=["season", "week", "game_id", "home_team", "away_team"])
+
+    # De-duplicate by game_id (prefer completed games, then primary backend source).
+    sch["_has_scores"] = sch["home_score"].notna() & sch["away_score"].notna()
+    sort_cols = ["_has_scores", "_source_rank"]
+    ascending = [False, True]
+    if "game_date" in sch.columns:
+        sort_cols.append("game_date")
+        ascending.append(True)
+    sch = sch.sort_values(sort_cols, ascending=ascending, na_position="last")
+    before = len(sch)
+    sch = sch.drop_duplicates(subset=["game_id"], keep="first").reset_index(drop=True)
+    dropped = before - len(sch)
+    if dropped:
+        logging.warning("Dropped %d duplicate schedule rows by game_id", dropped)
+    sch = sch.drop(columns=["_has_scores", "_source_rank"], errors="ignore")
 
     # Convert completed/future split
     if include_future:
@@ -544,7 +747,6 @@ def load_schedules(seasons: List[int], include_future: bool = False) -> pd.DataF
         future = sch[sch["home_score"].isna() | sch["away_score"].isna()].copy()
         future["home_score"] = pd.NA
         future["away_score"] = pd.NA
-        future = future[future["game_type"] == "REG"].reset_index(drop=True)
 
         logging.info("Loaded %d completed games + %d future games", len(completed), len(future))
         return pd.concat([completed, future], ignore_index=True)
@@ -665,7 +867,6 @@ def add_features(
 
     # Use shared engine for rolling features
     from utils.feature_engine import calculate_rolling_features
-    from utils.feature_engine import calculate_rolling_features
     long = calculate_rolling_features(long, windows)
 
     # Convert any merged same-game advanced metrics into leak-safe priors (shift(1) rolling),
@@ -756,6 +957,7 @@ def add_features(
 
 
     extra_cols = [
+        "game_type",
         "home_moneyline",
         "away_moneyline",
         "spread_line",
@@ -768,9 +970,29 @@ def add_features(
         "temp",
         "wind",
         "kickoff",
+        "home_latitude",
+        "home_longitude",
+        "away_latitude",
+        "away_longitude",
+        "home_lat",
+        "home_lon",
+        "away_lat",
+        "away_lon",
     ]
     schedule_extras = sch.drop_duplicates("game_id").reindex(columns=["game_id"] + extra_cols)
     wide = wide.merge(schedule_extras, on="game_id", how="left")
+
+    # Optional travel distance (requires lat/lon columns from the schedule source).
+    home_lat_col = _pick_first_col(wide, ["home_latitude", "home_lat"])
+    home_lon_col = _pick_first_col(wide, ["home_longitude", "home_lon"])
+    away_lat_col = _pick_first_col(wide, ["away_latitude", "away_lat"])
+    away_lon_col = _pick_first_col(wide, ["away_longitude", "away_lon"])
+    if home_lat_col and home_lon_col and away_lat_col and away_lon_col:
+        wide["travel_distance_km"] = _haversine_km(
+            wide[away_lat_col], wide[away_lon_col], wide[home_lat_col], wide[home_lon_col]
+        )
+    else:
+        wide["travel_distance_km"] = pd.NA
 
     # Derived, pre-game time context (helps models; also useful for debugging/inference parity)
     try:
@@ -799,6 +1021,7 @@ def add_features(
 
     final_cols.extend(
         [
+            "game_type",
             "home_moneyline_prob",
             "away_moneyline_prob",
             "moneyline_prob_diff",
@@ -817,6 +1040,7 @@ def add_features(
             "wind",
             "kickoff",
             "kickoff_hour_utc",
+            "travel_distance_km",
         ]
     )
 
@@ -835,6 +1059,9 @@ def _merge_team_week_stats(
     if team_week_stats is None or team_week_stats.empty:
         return game_df
 
+    team_week_stats = _dedupe_on_keys(
+        team_week_stats, ["season", "week", "team"], f"{prefix}_stats"
+    )
     stat_cols = [c for c in team_week_stats.columns if c not in {"season", "week", "team"}]
 
     home_stats = team_week_stats.copy()
@@ -1135,6 +1362,7 @@ def build_game_feature_metadata(
     meta["rows_total"] = int(df.shape[0])
     meta["n_features_total"] = int(df.shape[1])
     meta["include_future_games"] = bool(include_future)
+    meta["lookup_key_columns"] = ["season", "week", "home_team", "away_team"]
 
     if "season" in df.columns:
         meta["season_min"] = int(df["season"].min())
@@ -1296,6 +1524,83 @@ def dataset_quality_report(df: pd.DataFrame, include_future: bool) -> Dict[str, 
 
 
 # ---------------------------------------------------------------------
+# Dataset hygiene & schema checks
+# ---------------------------------------------------------------------
+
+
+def _coerce_numeric_like(df: pd.DataFrame, *, exclude: Optional[Sequence[str]] = None) -> pd.DataFrame:
+    """Coerce object columns to numeric when their non-null values are mostly numeric."""
+    out = df.copy()
+    exclude_set = set(exclude or [])
+    for col in out.columns:
+        if col in exclude_set:
+            continue
+        if not (pd.api.types.is_object_dtype(out[col]) or pd.api.types.is_string_dtype(out[col])):
+            continue
+        non_null = out[col].notna().sum()
+        if non_null == 0:
+            continue
+        coerced = pd.to_numeric(out[col], errors="coerce")
+        numeric_ratio = coerced.notna().sum() / non_null
+        if numeric_ratio >= 0.9:
+            out[col] = coerced
+    return out
+
+
+def _clean_dataset_for_export(df: pd.DataFrame) -> pd.DataFrame:
+    """Drop blank rows, enforce unique game_ids, and normalize core identifiers."""
+    if df is None or df.empty:
+        return df
+
+    required = ["season", "week", "game_id", "home_team", "away_team"]
+    missing = [c for c in required if c not in df.columns]
+    if missing:
+        raise ValueError(f"Dataset missing required columns: {missing}")
+
+    out = df.copy()
+    out["home_team"] = out["home_team"].apply(_normalize_team_code)
+    out["away_team"] = out["away_team"].apply(_normalize_team_code)
+    out["game_id"] = out["game_id"].astype("string").str.strip()
+    out = out.replace({"": pd.NA})
+    before_required = len(out)
+    out = out.dropna(subset=required)
+    if before_required != len(out):
+        logging.warning(
+            "Dropped %d rows missing required identifiers", before_required - len(out)
+        )
+
+    # Remove fully empty rows (if any survived the required filter).
+    blank_mask = out.isna().all(axis=1)
+    if blank_mask.any():
+        out = out.loc[~blank_mask].copy()
+        logging.warning("Dropped %d fully blank rows", int(blank_mask.sum()))
+
+    # Enforce unique game_id (prefer rows with scores).
+    if out["game_id"].duplicated().any():
+        if {"home_points_for", "away_points_for"}.issubset(out.columns):
+            out["_has_scores"] = out["home_points_for"].notna() & out["away_points_for"].notna()
+        else:
+            out["_has_scores"] = False
+        out = out.sort_values(["_has_scores", "game_id"], ascending=[False, True])
+        before = len(out)
+        out = out.drop_duplicates(subset=["game_id"], keep="first")
+        logging.warning("Dropped %d duplicate rows in final dataset", before - len(out))
+        out = out.drop(columns=["_has_scores"], errors="ignore")
+
+    out = _coerce_numeric_like(
+        out,
+        exclude=[
+            "game_id",
+            "home_team",
+            "away_team",
+            "winner",
+            "game_type",
+        ],
+    )
+
+    return out.reset_index(drop=True)
+
+# ---------------------------------------------------------------------
 # Additional feature engineering helpers
 # ---------------------------------------------------------------------
 
@@ -1363,79 +1668,16 @@ def create_elo_features(df: pd.DataFrame) -> pd.DataFrame:
     logging.info("Created ELO pre-game features for %d teams", len(elo))
     return out
 
-    elo_ratings: Dict[str, float] = {}
-    K_FACTOR = 32.0
-
-    def get_elo(team: str, default: float = 1500.0) -> float:
-        return float(elo_ratings.get(team, default))
-
-    def expected_score(elo_a: float, elo_b: float) -> float:
-        return 1.0 / (1.0 + 10 ** ((elo_b - elo_a) / 400.0))
-
-    def update_elo(team: str, actual: float, expected: float) -> float:
-        current = get_elo(team)
-        new_elo = current + K_FACTOR * (actual - expected)
-        elo_ratings[team] = new_elo
-        return new_elo
-
-    for col in [
-        "home_elo_pre",
-        "away_elo_pre",
-        "elo_diff_pre",
-        "home_elo_post",
-        "away_elo_post",
-    ]:
-        out[col] = np.nan
-
-    if "time_key" not in out.columns:
-        out["time_key"] = make_time_key(out)
-
-    out = out.sort_values(["time_key", "game_id"]).reset_index(drop=True)
-
-    for idx, row in out.iterrows():
-        home_team = row["home_team"]
-        away_team = row["away_team"]
-
-        home_elo_pre = get_elo(home_team)
-        away_elo_pre = get_elo(away_team)
-
-        out.at[idx, "home_elo_pre"] = home_elo_pre
-        out.at[idx, "away_elo_pre"] = away_elo_pre
-        out.at[idx, "elo_diff_pre"] = home_elo_pre - away_elo_pre
-
-        home_score = row.get("home_points_for")
-        away_score = row.get("away_points_for")
-
-        if pd.notna(home_score) and pd.notna(away_score):
-            if home_score > away_score:
-                home_actual, away_actual = 1.0, 0.0
-            elif home_score < away_score:
-                home_actual, away_actual = 0.0, 1.0
-            else:
-                home_actual, away_actual = 0.5, 0.5
-
-            home_expected = expected_score(home_elo_pre, away_elo_pre)
-            away_expected = 1.0 - home_expected
-
-            home_elo_post = update_elo(home_team, home_actual, home_expected)
-            away_elo_post = update_elo(away_team, away_actual, away_expected)
-
-            out.at[idx, "home_elo_post"] = home_elo_post
-            out.at[idx, "away_elo_post"] = away_elo_post
-        else:
-            out.at[idx, "home_elo_post"] = home_elo_pre
-            out.at[idx, "away_elo_post"] = away_elo_pre
-
-    logging.info("Created ELO features for %d teams", len(elo_ratings))
-    return out
-
 
 def create_game_features(df: pd.DataFrame) -> pd.DataFrame:
     """Create basic game-level features from schedule data."""
     out = df.copy()
 
-    if "game_date" in out.columns:
-        out["game_date_parsed"] = pd.to_datetime(out["game_date"], errors="coerce")
+    date_col = "game_date" if "game_date" in out.columns else (
+        "home_game_date" if "home_game_date" in out.columns else None
+    )
+    if date_col:
+        out["game_date_parsed"] = pd.to_datetime(out[date_col], errors="coerce")
         out["game_day_of_week"] = out["game_date_parsed"].dt.dayofweek
         out["is_weekend"] = out["game_day_of_week"].isin([5, 6])
 
@@ -1454,7 +1696,7 @@ def create_game_features(df: pd.DataFrame) -> pd.DataFrame:
 
     if "game_type" in out.columns:
         out["is_regular_season"] = out["game_type"] == "REG"
-        out["is_playoff"] = out["game_type"].isin(["WC", "DIV", "CON", "SB"])
+        out["is_playoff"] = out["game_type"].isin(PLAYOFF_GAME_TYPES)
 
     logging.info("Created basic game features")
     return out
@@ -1752,6 +1994,8 @@ def  build_dataset(
             msg="Dropping 'away_win' column from dataset before export to avoid label leakage."
         )
         df = df.drop(columns=["away_win"])
+
+    df = _clean_dataset_for_export(df)
 
 
     # Write metadata

@@ -7,43 +7,30 @@
 // Notes: Centralizes timeouts and error handling.
 // ==========================================
 
-// fetch.js
 /**
- * Custom fetch function with timeout and error handling
- * Environment-based API configuration
- * Safely parse JSON, return null for empty/invalid responses
- * fetch function with educational comments
+ * Core fetch wrapper with timeout, error handling, and environment-aware URL resolution.
  */
 
-// Environment-based API configuration
-// fetch.js (minimal-but-strong)
-const isLocalhost =
-  window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
-   ;
-const DEV_BASE =
-  (import.meta.env.VITE_API_DEV || import.meta.env.VITE_API_BASE_URL)
-    ||
-  import.meta.env.VITE_DEV_ENV ||
-  import.meta.env.VITE_API_BASE_DEV;
-const PROD_BASE = import.meta.env.VITE_API_BASE_URL;
-const RAW_BASE = isLocalhost ? (DEV_BASE || PROD_BASE) : PROD_BASE;
-
-console.log("API_BASE RAW_BASE:", RAW_BASE);
-
-// ✅ Fail fast if missing OR empty
-if (!RAW_BASE || String(RAW_BASE).trim() === "") {
-  throw new Error(
-    "[fetch.js] Missing VITE_API_BASE_URL (prod) or VITE_API_DEV/VITE_DEV_ENV (dev). " +
-    "On Vercel, set VITE_API_BASE_URL in Project > Settings > Environment Variables."
-  );
+function resolveApiBase() {
+  // Prefer build-mode, not hostname: dev builds can be served from LAN IPs.
+  if (import.meta.env.DEV) {
+    return (
+      import.meta.env.VITE_API_DEV ||
+      import.meta.env.VITE_API_BASE_DEV ||
+      import.meta.env.VITE_DEV_ENV || // legacy
+      import.meta.env.VITE_API_BASE_URL ||
+      ""
+    );
+  }
+  return import.meta.env.VITE_API_BASE_URL || "";
 }
 
-// ✅ Normalize: trim + remove ONLY trailing slashes (keeps https:// intact)
-export const API_BASE = String(RAW_BASE).trim().replace(/\/+$/, "");
-
-console.log("API_BASE API_BASE:", API_BASE);
+// Normalize: trim and remove trailing slashes
+export const API_BASE = resolveApiBase().trim().replace(/\/+$/, "");
+export const API_BASE_CONFIGURED = Boolean(API_BASE);
 
 const DEFAULT_TIMEOUT = 25000;
+
 
 
 export class HttpError extends Error {
@@ -78,6 +65,12 @@ async function readBody(response) {
 }
 
 export async function fetchJson(path, options = {}) {
+  if (!API_BASE_CONFIGURED) {
+    throw new HttpError(
+      "Missing API base URL. Set VITE_API_BASE_URL (prod) and VITE_API_DEV (dev) in `frontend/.env` or Vercel env vars.",
+      { status: 0, url: path }
+    );
+  }
   const url = `${API_BASE}${path.startsWith("/") ? path : `/${path}`}`;
 
   const controller = new AbortController();
@@ -109,8 +102,18 @@ export async function fetchJson(path, options = {}) {
     });
 
     const { data, rawText } = await readBody(response);
+    const contentType = response.headers.get("content-type") || "";
     // Optional: dev-only debug
     if (import.meta.env.DEV) console.log("[fetchJson]", { url, status: response.status, data });
+
+    // If we got routed to a static site (HTML) or some proxy, fail loudly so the UI can show a clear error.
+    if (response.ok && !contentType.includes("application/json")) {
+      throw new HttpError(`Expected JSON but got ${contentType || "unknown content-type"}`, {
+        status: response.status,
+        url,
+        body: data ?? rawText,
+      });
+    }
 
     // ✅ If backend sent JSON error {detail: ...}, keep it. If HTML, show preview.
     if (!response.ok) {

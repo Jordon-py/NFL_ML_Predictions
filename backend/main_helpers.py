@@ -20,13 +20,15 @@ KEY FUNCTIONS/CLASSES:
 import logging
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from dataclasses import dataclass
 from typing import Dict, Any, List, Optional
 from threading import Lock
 from datetime import datetime, timezone
 import joblib
 import pandas as pd
+import numpy as np
+from backend.config import TRUTHY, load_schedule_data_safe
 
 log = logging.getLogger(__name__)
 
@@ -63,7 +65,20 @@ def load_inference_bundle(models_dir: Path) -> InferenceBundle:
     report = json.loads(report_path.read_text(encoding="utf-8")) if report_path.exists() else {}
 
     artifacts = meta.get("artifacts", meta)
-    
+
+    def _normalize_path_value(value: Any) -> str:
+        val_str = str(value).strip()
+        if len(val_str) >= 2 and val_str[0] == val_str[-1] and val_str[0] in ("'", '"'):
+            val_str = val_str[1:-1].strip()
+        return val_str
+
+    def _looks_like_windows_abs(value: str) -> bool:
+        try:
+            win_path = PureWindowsPath(value)
+        except Exception:
+            return False
+        return bool(win_path.drive) and win_path.is_absolute()
+
     def _resolve_path(key: str, default: Optional[str] = None) -> Optional[Path]:
         val = artifacts.get(key) or meta.get(key) or default
         if not val: return None
@@ -218,3 +233,231 @@ def _append_prediction_history_to_disk(request_payload: Dict[str, Any], predicti
             PREDICTION_HISTORY_PATH.write_text(json.dumps(prediction_history_entries, indent=2), encoding="utf-8")
         except Exception as e:
             log.warning(f"History persist failed: {e}")
+
+# ----------------------------------------------------
+# Shared Schedule & Team Helpers (Referenced by main.py and routes.py)
+# ----------------------------------------------------
+
+_SEASON_COLS = ["season", "season_year", "year"]
+_WEEK_COLS = ["week", "week_num", "week_number"]
+_HOME_COLS = ["home_team", "home", "home_abbr", "home_code"]
+_AWAY_COLS = ["away_team", "away", "away_abbr", "away_code"]
+_GAME_ID_COLS = ["game_id", "gameid", "game_key", "gameId"]
+_STADIUM_COLS = ["stadium", "venue", "stadium_name"]
+
+def _pick_col(df: pd.DataFrame, candidates: List[str]) -> Optional[str]:
+    for c in candidates:
+        if c in df.columns:
+            return c
+    lower_map = {c.lower(): c for c in df.columns}
+    for c in candidates:
+        hit = lower_map.get(c.lower())
+        if hit:
+            return hit
+    return None
+
+def _current_season_week() -> tuple[int, int]:
+    try:
+        import nflreadpy as nfl  # optional dependency
+        return int(nfl.get_current_season()), int(nfl.get_current_week())
+    except Exception:
+        now = datetime.now(timezone.utc)
+        return int(now.year), 1
+
+def _resolve_schedule_candidates(path_str: str, backend_dir: Path, repo_root: Path) -> List[Path]:
+    p = Path(path_str)
+    if p.is_absolute():
+        return [p]
+    return [backend_dir / p, repo_root / p]
+
+def _load_schedule_csv(csv_path: Path) -> Optional[pd.DataFrame]:
+    try:
+        df = pd.read_csv(csv_path)
+        df.columns = [c.strip() for c in df.columns]
+        return df
+    except Exception as exc:
+        log.warning("Failed to read schedule CSV %s: %s", csv_path, exc)
+        return None
+
+def get_schedule(season: Optional[int] = None) -> pd.DataFrame:
+    """
+    Load an NFL schedule DataFrame with reasonable fallbacks.
+    """
+    use_season = season or _current_season_week()[0]
+    offline = os.getenv("OFFLINE_MODE", "false").strip().lower() in TRUTHY
+
+    if not offline:
+        df = load_schedule_data_safe(use_season)
+        if isinstance(df, pd.DataFrame) and not df.empty:
+            df = df.copy()
+            df.columns = [c.strip() for c in df.columns]
+            return df
+
+    backend_dir = Path(__file__).resolve().parent
+    repo_root = backend_dir.parent
+    candidates: List[Path] = []
+
+    csv_path = os.getenv("SCHEDULE_PATH")
+    if csv_path:
+        candidates.extend(_resolve_schedule_candidates(csv_path, backend_dir, repo_root))
+
+    candidates.extend(
+        [
+            backend_dir / "data" / f"Nfl_schedule_{use_season}.csv",
+            backend_dir / f"Nfl_schedule_{use_season}.csv",
+            repo_root / "data" / f"Nfl_schedule_{use_season}.csv",
+            repo_root / f"Nfl_schedule_{use_season}.csv",
+            backend_dir / "data" / "NFL_Schedule.csv",
+            backend_dir / "NFL_Schedule.csv",
+            repo_root / "data" / "NFL_Schedule.csv",
+            repo_root / "NFL_Schedule.csv",
+        ]
+    )
+
+    for c in candidates:
+        if c.exists():
+            df = _load_schedule_csv(c)
+            if isinstance(df, pd.DataFrame):
+                return df
+
+    return pd.DataFrame()
+
+def parse_kickoff(row: pd.Series) -> Optional[datetime]:
+    try:
+        gameday = row.get("gameday")
+        gametime = row.get("gametime")
+        if pd.notna(gameday) and pd.notna(gametime):
+            dt = pd.to_datetime(f"{gameday} {gametime}", errors="coerce")
+            return None if pd.isna(dt) else dt.to_pydatetime()
+        if pd.notna(gameday):
+            dt = pd.to_datetime(gameday, errors="coerce")
+            return None if pd.isna(dt) else dt.to_pydatetime()
+        for col in ("kickoff", "game_datetime", "game_date", "date"):
+            if col in row and pd.notna(row.get(col)):
+                dt = pd.to_datetime(row.get(col), errors="coerce")
+                return None if pd.isna(dt) else dt.to_pydatetime()
+    except Exception:
+        return None
+    return None
+
+def _infer_next_week(schedule_df: pd.DataFrame) -> tuple[int, int]:
+    """Determine the next week of games from a schedule DataFrame."""
+    season_default, week_default = _current_season_week()
+    if schedule_df is None or schedule_df.empty:
+        return (season_default, week_default)
+
+    season_col = _pick_col(schedule_df, _SEASON_COLS)
+    week_col = _pick_col(schedule_df, _WEEK_COLS)
+
+    # Determine season
+    season = season_default
+    df_use = schedule_df
+    if season_col:
+        seasons = pd.to_numeric(schedule_df[season_col], errors="coerce").dropna().astype(int)
+        if not seasons.empty:
+            season = season_default if season_default in seasons.values else int(seasons.max())
+        df_use = schedule_df[pd.to_numeric(schedule_df[season_col], errors="coerce") == season]
+
+    if not week_col:
+        return (season, week_default)
+
+    weeks = pd.to_numeric(df_use[week_col], errors="coerce").dropna().astype(int)
+    if weeks.empty:
+        return (season, week_default)
+
+    # Try to find the first week with future games
+    kickoff_series = df_use.apply(parse_kickoff, axis=1)
+    if kickoff_series.notna().any():
+        try:
+            ts_series = pd.to_datetime(kickoff_series, utc=True)
+            ts_now = pd.Timestamp.now(timezone.utc)
+            future_mask = ts_series >= ts_now
+            if future_mask.any():
+                future_weeks = pd.to_numeric(df_use.loc[future_mask, week_col], errors="coerce").dropna().astype(int)
+                if not future_weeks.empty:
+                    return (season, int(future_weeks.min()))
+        except Exception:
+            pass
+
+    # Fallback: first week >= current week, or max week
+    candidate_weeks = weeks[weeks >= week_default]
+    if not candidate_weeks.empty:
+        return (season, int(candidate_weeks.min()))
+
+    return (season, int(weeks.max()))
+
+
+def select_next_week_rows(schedule_df: pd.DataFrame) -> tuple[pd.DataFrame, int, int]:
+    season, week = _infer_next_week(schedule_df)
+    df_use = schedule_df.copy() if isinstance(schedule_df, pd.DataFrame) else pd.DataFrame()
+
+    season_col = _pick_col(df_use, _SEASON_COLS)
+    week_col = _pick_col(df_use, _WEEK_COLS)
+
+    if season_col:
+        df_use = df_use[pd.to_numeric(df_use[season_col], errors="coerce") == season]
+    if week_col:
+        df_use = df_use[pd.to_numeric(df_use[week_col], errors="coerce") == week]
+
+    return df_use, season, week
+
+def get_team_meta(csv_path: Path) -> Dict[str, Dict[str, str]]:
+    try:
+        df = pd.read_csv(csv_path)
+    except Exception as exc:
+        log.warning("Failed to read team logos CSV %s: %s", csv_path, exc)
+        return {}
+    if df is None or df.empty:
+        return {}
+
+    df.columns = [c.strip() for c in df.columns]
+
+    abbr_candidates = ["team_abbr", "abbr", "team", "team_code", "team_id"]
+    logo_candidates = ["team_logo_squared", "team_logo_espn", "logoUrl", "logo_url", "logo", "team_logo", "url"]
+    name_candidates = ["team_name", "name", "team", "home_team"]
+    primary_color_candidates = ["team_color", "primary_color", "color", "color1"]
+    secondary_color_candidates = ["team_color2", "secondary_color", "color2"]
+    wordmark_candidates = ["team_wordmark", "wordmark"]
+
+    def pick(colnames: List[str]) -> Optional[str]:
+        for c in colnames:
+            if c in df.columns:
+                return c
+        lower_map = {c.lower(): c for c in df.columns}
+        for c in colnames:
+            hit = lower_map.get(c.lower())
+            if hit:
+                return hit
+        return None
+
+    abbr_col = pick(abbr_candidates)
+    logo_col = pick(logo_candidates)
+    name_col = pick(name_candidates)
+    primary_col = pick(primary_color_candidates)
+    secondary_col = pick(secondary_color_candidates)
+    wordmark_col = pick(wordmark_candidates)
+
+    if not abbr_col or not logo_col:
+        return {}
+
+    out: Dict[str, Dict[str, str]] = {}
+    for _, r in df.iterrows():
+        abbr = str(r.get(abbr_col, "")).strip().upper()
+        logo = str(r.get(logo_col, "")).strip()
+        if not abbr or not logo:
+            continue
+        item: Dict[str, str] = {"logoUrl": logo}
+        if name_col:
+            nm = str(r.get(name_col, "")).strip()
+            if nm: item["name"] = nm
+        if primary_col:
+            primary = str(r.get(primary_col, "")).strip()
+            if primary: item["primaryColor"] = primary
+        if secondary_col:
+            secondary = str(r.get(secondary_col, "")).strip()
+            if secondary: item["secondaryColor"] = secondary
+        if wordmark_col:
+            wordmark = str(r.get(wordmark_col, "")).strip()
+            if wordmark: item["wordmark"] = wordmark
+        out[abbr] = item
+    return out

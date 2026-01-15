@@ -81,13 +81,21 @@ share/python-wheels/
 MANIFEST
 
 ## Data & models (allow curated assets)
-data/
+/data/
 *.csv
 *.json
 !backend/data/*.csv
 !backend/data/*.json
 !backend/data/datasets/*.csv
 !backend/data/datasets/**/*.csv
+
+# Local-only backend artifacts (keep production datasets under backend/data/datasets)
+backend/data/legacy_data/
+backend/data/prod-models/
+backend/data/data.ipynb
+backend/data/learning_memory.json
+backend/data/team_logo_squared_by_abbr.json
+frontend/public/data/
 
 .bundle
 
