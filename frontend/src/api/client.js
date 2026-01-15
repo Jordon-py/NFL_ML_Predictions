@@ -161,7 +161,7 @@ const fetchPostseasonSchedule = async () => {
  * @returns {Promise<import('./types').HealthResponse>}
  */
 export async function getHealthStatus() {
-  return fetchJson("api/health");
+  return fetchJson("/api/health");
 }
 
 /**
@@ -169,7 +169,7 @@ export async function getHealthStatus() {
  * @returns {Promise<Object>} Debug info object.
  */
 export async function getDebugInfo() {
-  return fetchJson("api/debug");
+  return fetchJson("/api/debug");
 }
 
 /**
@@ -181,7 +181,7 @@ export async function getDebugInfo() {
 export async function getNextWeekSchedule(season = null) {
   let scheduleRows = [];
   try {
-    const url = season ? `api/schedule/next-week?season=${season}` : "api/schedule/next-week";
+    const url = season ? `/api/schedule/next-week?season=${season}` : "/api/schedule/next-week";
     const data = await fetchJson(url);
     scheduleRows = extractScheduleRows(data);
   } catch {
@@ -208,7 +208,7 @@ export async function getNextWeekSchedule(season = null) {
  * @returns {Promise<Object>} Dictionary of team metadata keyed by abbreviation.
  */
 export async function getTeamLogos() {
-  const data = await fetchJson("api/teams/logos");
+  const data = await fetchJson("/api/teams/logos");
   if (data && typeof data === "object" && data.teams && typeof data.teams === "object") {
     return data.teams;
   }
@@ -231,7 +231,7 @@ export async function predictGame(home, away, season, week) {
     season: parseInt(season, 10),
     week: parseInt(week, 10)
   };
-  return fetchJson("api/predict", {
+  return fetchJson("/api/predict", {
     method: "POST",
     body: JSON.stringify(payload),
   });
@@ -243,7 +243,7 @@ export async function predictGame(home, away, season, week) {
  * @returns {Promise<Object>} LLM response.
  */
 export async function chatLLM(payload) {
-  return fetchJson("api/llm/chat", {
+  return fetchJson("/api/llm/chat", {
     method: "POST",
     body: JSON.stringify(payload),
   });
@@ -255,7 +255,7 @@ export async function chatLLM(payload) {
  * @returns {Promise<Object>} Explanation result.
  */
 export async function explainPrediction(payload) {
-  return fetchJson("api/predict/explain", {
+  return fetchJson("/api/predict/explain", {
     method: "POST",
     body: JSON.stringify(payload),
   });
@@ -267,7 +267,7 @@ export async function explainPrediction(payload) {
  * @returns {Promise<{entries: Array, total: number}>} History data.
  */
 export async function getPredictionHistory(limit = 100) {
-  const data = await fetchJson(`api/history?limit=${limit}`, {
+  const data = await fetchJson(`/api/history?limit=${limit}`, {
     method: "GET",
     headers: {
       "Content-Type": "application/json",
@@ -287,7 +287,7 @@ export async function getPredictionHistory(limit = 100) {
  * @returns {Promise<import('./types').StatusOverviewResponse>} Status overview.
  */
 export async function getStatusOverview() {
-  const data = await fetchJson("api/status/overview", {
+  const data = await fetchJson("/api/status/overview", {
     method: "GET",
     headers: {
       "Content-Type": "application/json",
@@ -304,17 +304,17 @@ export async function getStatusOverview() {
 }
 
 export async function getModelsStatus() {
-  return fetchJson("api/status/models");
+  return fetchJson("/api/status/models");
 }
 
 export async function reloadSystem() {
-  return fetchJson("api/admin/reload", {
+  return fetchJson("/api/admin/reload", {
     method: "POST",
   });
 }
 
 export async function retrainModel(config = {}) {
-  return fetchJson("api/admin/retrain", {
+  return fetchJson("/api/admin/retrain", {
     method: "POST",
     body: JSON.stringify(config),
   });

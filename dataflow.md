@@ -36,14 +36,14 @@ This document maps the flow of data across the NFL Prediction App, from frontend
 ### C. Health + Status Flow
 
 1. **Trigger**: `usePredictionState` polling loop.
-2. **Frontend Call**: `/health` every 15s; `StatsPage.jsx` calls `/status/overview` and `/history`.
+2. **Frontend Call**: `/api/health` every 15s; `StatsPage.jsx` calls `/api/status/overview` and `/api/history`.
 3. **Backend Logic (`main.py`)**: Returns model status, dataset stats, and history counts.
 4. **Response**: Health/status payloads used for UI banners and metrics.
 
 ### D. Explain + Chat Flow
 
 1. **Trigger**: User clicks "Explain This Prediction" or sends a chat message.
-2. **Frontend Call**: `/predict/explain` or `/llm/chat` with optional prediction context.
+2. **Frontend Call**: `/api/predict/explain` or `/api/llm/chat` with optional prediction context.
 3. **Backend Logic**: Uses Ollama integration to generate explanation/chat response.
 
 ### E. Legacy Router Flow

@@ -148,6 +148,8 @@ def _pick_best_dataset(files: List[Path], expected_features: List[str]) -> Optio
 def load_dataset_df(data_dir: Path, expected_features: Optional[List[str]] = None) -> pd.DataFrame:
     dataset_path = os.getenv("DATASET_PATH")
     if dataset_path:
+        # Strip literal double quotes that might be passed from Heroku/Env
+        dataset_path = dataset_path.strip('"').strip("'")
         p = Path(dataset_path)
         if not p.is_absolute():
             cwd_candidate = p.resolve()
