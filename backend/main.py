@@ -900,7 +900,7 @@ app.add_middleware(
 
 
 
-@app.get("/teams/{team_abbr}", response_model=TeamCard)
+@app.get("/api/teams/{team_abbr}", response_model=TeamCard)
 def teams_get(team_abbr: str) -> TeamCard:
     """
     Get a team’s branding assets (preferred non-square logo included).
@@ -924,7 +924,7 @@ def _require_ready() -> PredictionService:
         raise HTTPException(status_code=503, detail="Prediction engine not initialized.")
     return state["service"]
 
-@app.get("/health", response_model=HealthResponse)
+@app.get("/api/health", response_model=HealthResponse)
 async def health():
     ready = state.get("service") is not None
     status = "healthy" if ready else "unhealthy"
@@ -934,7 +934,7 @@ async def health():
 
 
 
-@app.get("/schedule/next-week", response_model=ScheduleResponse)
+@app.get("/api/schedule/next-week", response_model=ScheduleResponse)
 async def get_next_week_schedule(season: int | None = None) -> ScheduleResponse:
     df = get_schedule(season=season)
     
