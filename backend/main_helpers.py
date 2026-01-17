@@ -20,14 +20,13 @@ KEY FUNCTIONS/CLASSES:
 import logging
 import json
 import os
-from pathlib import Path, PureWindowsPath
+from pathlib import Path
 from dataclasses import dataclass
 from typing import Dict, Any, List, Optional
 from threading import Lock
 from datetime import datetime, timezone
 import joblib
 import pandas as pd
-import numpy as np
 from backend.config import TRUTHY, load_schedule_data_safe
 
 log = logging.getLogger(__name__)
@@ -66,19 +65,6 @@ def load_inference_bundle(models_dir: Path) -> InferenceBundle:
 
     artifacts = meta.get("artifacts", meta)
 
-    def _normalize_path_value(value: Any) -> str:
-        val_str = str(value).strip()
-        if len(val_str) >= 2 and val_str[0] == val_str[-1] and val_str[0] in ("'", '"'):
-            val_str = val_str[1:-1].strip()
-        return val_str
-
-    def _looks_like_windows_abs(value: str) -> bool:
-        try:
-            win_path = PureWindowsPath(value)
-        except Exception:
-            return False
-        return bool(win_path.drive) and win_path.is_absolute()
-
     def _resolve_path(key: str, default: Optional[str] = None) -> Optional[Path]:
         val = artifacts.get(key) or meta.get(key) or default
         if not val: return None
@@ -86,8 +72,7 @@ def load_inference_bundle(models_dir: Path) -> InferenceBundle:
         # Normalize slashes and convert to string
         val_str = str(val).replace("\\", "/")
         
-        # If it looks like a Windows absolute path (e.g. C:/...) or any absolute path that doesn't exist
-        # we try to just use the filename in the current models_dir.
+        # If it looks like an absolute path (e.g. C:/ or /), try the filename in models_dir.
         if ":" in val_str or val_str.startswith("/"):
             p_name = val_str.split("/")[-1]
             fallback = models_dir / p_name
@@ -256,7 +241,7 @@ def _append_prediction_history_to_disk(request_payload: Dict[str, Any], predicti
             log.warning(f"History persist failed: {e}")
 
 # ----------------------------------------------------
-# Shared Schedule & Team Helpers (Referenced by main.py and routes.py)
+# Shared Schedule & Team Helpers (Referenced by main.py)
 # ----------------------------------------------------
 
 _SEASON_COLS = ["season", "season_year", "year"]
@@ -439,24 +424,17 @@ def get_team_meta(csv_path: Path) -> Dict[str, Dict[str, str]]:
     primary_color_candidates = ["team_color", "primary_color", "color", "color1"]
     secondary_color_candidates = ["team_color2", "secondary_color", "color2"]
     wordmark_candidates = ["team_wordmark", "wordmark"]
+    conference_candidates = ["team_conf", "conference", "conf", "team_conference"]
+    division_candidates = ["team_division", "division", "team_div", "div"]
 
-    def pick(colnames: List[str]) -> Optional[str]:
-        for c in colnames:
-            if c in df.columns:
-                return c
-        lower_map = {c.lower(): c for c in df.columns}
-        for c in colnames:
-            hit = lower_map.get(c.lower())
-            if hit:
-                return hit
-        return None
-
-    abbr_col = pick(abbr_candidates)
-    logo_col = pick(logo_candidates)
-    name_col = pick(name_candidates)
-    primary_col = pick(primary_color_candidates)
-    secondary_col = pick(secondary_color_candidates)
-    wordmark_col = pick(wordmark_candidates)
+    abbr_col = _pick_col(df, abbr_candidates)
+    logo_col = _pick_col(df, logo_candidates)
+    name_col = _pick_col(df, name_candidates)
+    primary_col = _pick_col(df, primary_color_candidates)
+    secondary_col = _pick_col(df, secondary_color_candidates)
+    wordmark_col = _pick_col(df, wordmark_candidates)
+    conference_col = _pick_col(df, conference_candidates)
+    division_col = _pick_col(df, division_candidates)
 
     if not abbr_col or not logo_col:
         return {}
@@ -494,5 +472,17 @@ def get_team_meta(csv_path: Path) -> Dict[str, Dict[str, str]]:
             if pd.notna(w_val):
                 w = str(w_val).strip()
                 if w and w != "NAN": item["wordmark"] = w
+        if conference_col:
+            c_val = r.get(conference_col)
+            if pd.notna(c_val):
+                conf = str(c_val).strip().upper()
+                if conf and conf != "NAN":
+                    item["conference"] = conf
+        if division_col:
+            d_val = r.get(division_col)
+            if pd.notna(d_val):
+                div = str(d_val).strip()
+                if div and div != "NAN":
+                    item["division"] = div
         out[abbr] = item
     return out

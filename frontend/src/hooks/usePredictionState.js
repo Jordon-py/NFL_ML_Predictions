@@ -25,6 +25,7 @@ import {
   getHealthStatus as fetchHealth,
   getPredictionHistory,
   getTeamLogos,
+  predictGame,
 } from "../api/client.js";
 import {
   buildGameKey,
@@ -44,13 +45,34 @@ const toNumberOrNull = (value) => {
 const normalizeTeamCode = (value) =>
   (value ?? "").toString().trim().toUpperCase();
 
+const normalizeConference = (value) => {
+  const conf = (value ?? "").toString().trim().toUpperCase();
+  return conf === "AFC" || conf === "NFC" ? conf : null;
+};
+
+const isPlaceholderTeam = (value) => {
+  const token = normalizeTeamCode(value);
+  return !token || token === "TBD" || token === "AFC" || token === "NFC";
+};
+
+const pickWinnerFromPrediction = (prediction) => {
+  const homeProb = prediction?.home_win_probability;
+  const awayProb = prediction?.away_win_probability;
+  const home = normalizeTeamCode(prediction?.home_team);
+  const away = normalizeTeamCode(prediction?.away_team);
+
+  if (!home || !away) return null;
+  if (typeof homeProb !== "number" || typeof awayProb !== "number") return null;
+  return homeProb >= awayProb ? home : away;
+};
+
 /**
  * Normalize schedule rows to a consistent shape so downstream components
  * can avoid defensive checks on every render.
  */
 function normalizeSchedule(rows) {
   if (!Array.isArray(rows)) return [];
-  return rows.map((game) => {
+  const normalized = rows.map((game) => {
     const home = normalizeTeamCode(game?.home_abbr || game?.home_team);
     const away = normalizeTeamCode(game?.away_abbr || game?.away_team);
     const season = toNumberOrNull(game?.season);
@@ -75,6 +97,17 @@ function normalizeSchedule(rows) {
       away_name: game?.away_name || game?.away_team || away,
       game_id: gameId,
     };
+  });
+
+  // Guard: schedule CSVs sometimes contain duplicate placeholder rows (e.g. TBD vs TBD).
+  const seen = new Map();
+  return normalized.map((game) => {
+    const baseKey = buildGameKey(game);
+    if (!baseKey) return game;
+    const nextCount = (seen.get(baseKey) || 0) + 1;
+    seen.set(baseKey, nextCount);
+    if (nextCount === 1) return game;
+    return { ...game, game_id: `${baseKey}#${nextCount}` };
   });
 }
 
@@ -113,6 +146,153 @@ function applyTeamMeta(rows, teamMeta) {
 
     return next;
   });
+}
+
+function sortScheduleChronologically(rows) {
+  if (!Array.isArray(rows)) return [];
+  const kickoffTs = (game) => {
+    if (!game?.kickoff) return Number.POSITIVE_INFINITY;
+    const ts = new Date(game.kickoff).getTime();
+    return Number.isFinite(ts) ? ts : Number.POSITIVE_INFINITY;
+  };
+
+  return [...rows].sort((a, b) => {
+    const weekA = toNumberOrNull(a?.week) ?? Number.POSITIVE_INFINITY;
+    const weekB = toNumberOrNull(b?.week) ?? Number.POSITIVE_INFINITY;
+    if (weekA !== weekB) return weekA - weekB;
+    return kickoffTs(a) - kickoffTs(b);
+  });
+}
+
+async function projectPostseasonSchedule(rows, teamMeta) {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return { schedule: [], predictions: {} };
+  }
+
+  const hasPostseason = rows.some((g) => g?.game_type && g.game_type !== "REG");
+  if (!hasPostseason) return { schedule: rows, predictions: {} };
+
+  const divisionalGames = rows.filter((g) => g?.game_type === "DIV");
+  if (divisionalGames.length === 0) return { schedule: rows, predictions: {} };
+
+  const predictionsByKey = {};
+
+  // 1) Predict divisional winners.
+  const divisionalResults = await Promise.allSettled(
+    divisionalGames.map(async (game) => {
+      const season = toNumberOrNull(game?.season);
+      const week = toNumberOrNull(game?.week);
+      const home = normalizeTeamCode(game?.home_abbr || game?.home_team);
+      const away = normalizeTeamCode(game?.away_abbr || game?.away_team);
+      if (season == null || week == null || !home || !away) return null;
+      if (isPlaceholderTeam(home) || isPlaceholderTeam(away)) return null;
+
+      const pred = await predictGame(home, away, season, week, { record: false });
+      const key = buildGameKey(game);
+      if (key) predictionsByKey[key] = pred;
+      return { game, prediction: pred };
+    })
+  );
+
+  const winners = [];
+  divisionalResults.forEach((result) => {
+    if (result.status !== "fulfilled" || !result.value) return;
+    const winner = pickWinnerFromPrediction(result.value.prediction);
+    if (!winner) return;
+    const conf = normalizeConference(teamMeta?.[winner]?.conference);
+    if (!conf) return;
+    winners.push({ team: winner, conference: conf });
+  });
+
+  const afcWinners = winners.filter((w) => w.conference === "AFC").map((w) => w.team);
+  const nfcWinners = winners.filter((w) => w.conference === "NFC").map((w) => w.team);
+
+  if (afcWinners.length !== 2 || nfcWinners.length !== 2) {
+    // Not enough data to safely project the bracket.
+    return { schedule: rows, predictions: predictionsByKey };
+  }
+
+  const confTemplates = rows.filter((g) => g?.game_type === "CON");
+  const sbTemplate = rows.find((g) => g?.game_type === "SB") || null;
+
+  const season = toNumberOrNull(divisionalGames[0]?.season) ?? toNumberOrNull(sbTemplate?.season);
+  const confWeek = toNumberOrNull(confTemplates[0]?.week) ?? (toNumberOrNull(divisionalGames[0]?.week) ?? 20) + 1;
+  const sbWeek = toNumberOrNull(sbTemplate?.week) ?? confWeek + 1;
+
+  const makeProjectedGame = ({ template, week, home, away, gameType }) => {
+    const base = template && typeof template === "object" ? template : {};
+    const kickoff = base.kickoff || null;
+    const next = {
+      ...base,
+      season,
+      week,
+      game_type: gameType,
+      kickoff,
+      home_team: home,
+      away_team: away,
+      home_abbr: home,
+      away_abbr: away,
+      game_id: `${season}-${week}-${home}-${away}`,
+    };
+    return next;
+  };
+
+  // 2) Build conference championship matchups from predicted winners.
+  const sortedAfc = [...afcWinners].sort();
+  const sortedNfc = [...nfcWinners].sort();
+
+  const afcGame = makeProjectedGame({
+    template: confTemplates[0] || sbTemplate,
+    week: confWeek,
+    home: sortedAfc[1],
+    away: sortedAfc[0],
+    gameType: "CON",
+  });
+  const nfcGame = makeProjectedGame({
+    template: confTemplates[1] || confTemplates[0] || sbTemplate,
+    week: confWeek,
+    home: sortedNfc[1],
+    away: sortedNfc[0],
+    gameType: "CON",
+  });
+
+  // 3) Predict conference winners, then plug into Super Bowl.
+  const confPredResults = await Promise.allSettled(
+    [afcGame, nfcGame].map(async (game) => {
+      const pred = await predictGame(game.home_team, game.away_team, season, confWeek, { record: false });
+      const key = buildGameKey(game);
+      if (key) predictionsByKey[key] = pred;
+      return { game, prediction: pred };
+    })
+  );
+
+  const confWinners = confPredResults
+    .filter((r) => r.status === "fulfilled" && r.value)
+    .map((r) => pickWinnerFromPrediction(r.value.prediction))
+    .filter(Boolean);
+
+  const afcWinner = confWinners.find((team) => normalizeConference(teamMeta?.[team]?.conference) === "AFC") || sortedAfc[1];
+  const nfcWinner = confWinners.find((team) => normalizeConference(teamMeta?.[team]?.conference) === "NFC") || sortedNfc[1];
+
+  const superBowlGame = makeProjectedGame({
+    template: sbTemplate || confTemplates[0] || rows[0],
+    week: sbWeek,
+    home: nfcWinner,
+    away: afcWinner,
+    gameType: "SB",
+  });
+
+  try {
+    const sbPred = await predictGame(superBowlGame.home_team, superBowlGame.away_team, season, sbWeek, { record: false });
+    const key = buildGameKey(superBowlGame);
+    if (key) predictionsByKey[key] = sbPred;
+  } catch {
+    // best-effort
+  }
+
+  const stripped = rows.filter((g) => g?.game_type !== "CON" && g?.game_type !== "SB");
+  const merged = sortScheduleChronologically([...stripped, afcGame, nfcGame, superBowlGame]);
+  return { schedule: merged, predictions: predictionsByKey };
 }
 
 /**
@@ -184,9 +364,22 @@ export function usePredictionState() {
         logosRes.status === "fulfilled" && logosRes.value && typeof logosRes.value === "object"
           ? logosRes.value
           : {};
-      const enriched = applyTeamMeta(normalized, teamMeta);
+
+      let enriched = applyTeamMeta(normalized, teamMeta);
+      let prefilled = {};
+      try {
+        const projected = await projectPostseasonSchedule(enriched, teamMeta);
+        enriched = applyTeamMeta(projected.schedule, teamMeta);
+        prefilled = projected.predictions || {};
+      } catch (err) {
+        console.warn("Postseason projection skipped:", err);
+      }
+
       setSchedule(enriched);
       setWeek(toNumberOrNull(enriched?.[0]?.week));
+      if (prefilled && Object.keys(prefilled).length) {
+        setPredictions(prefilled);
+      }
 
       if (historyRes.status === "fulfilled") {
         const entries = Array.isArray(historyRes.value?.entries)

@@ -172,7 +172,7 @@ export default function StatsPage() {
 
   const health = safeOverview.health || { status: "unknown" };
   const dataset = safeOverview.dataset || {};
-  const historyMetrics = safeOverview.history?.metrics || {};
+  const historyMetrics = safeOverview.history?.metrics || safeOverview.history || {};
 
   const totalPredictions =
     Number.isFinite(Number(historyMetrics.total_predictions))

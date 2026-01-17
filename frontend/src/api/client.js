@@ -14,7 +14,6 @@
  * Retrieve system health and model readiness.
  */
 // client.js (minimal edits)
-
 import { fetchJson } from "./fetch";
 
 const POSTSEASON_WEEK_BY_ROUND = {
@@ -224,17 +223,34 @@ export async function getTeamLogos() {
  * @param {number} week - Week number
  * @returns {Promise<import('./types').UnifiedPredictionResponse>} The prediction result.
  */
-export async function predictGame(home, away, season, week) {
+export async function predictGame(home, away, season, week, options = {}) {
   const payload = {
     home_team: home,
     away_team: away,
     season: parseInt(season, 10),
     week: parseInt(week, 10)
   };
-  return fetchJson("/api/predict", {
+  const record = options.record !== false;
+  const useLlm = options.useLlm === true && import.meta.env.VITE_ENABLE_LLM === "true";
+
+  // Raw model-only fallback (preserves legacy behavior).
+  const url = record ? "/api/predict" : "/api/predict?record=0";
+  const prediction = await fetchJson(url, {
     method: "POST",
     body: JSON.stringify(payload),
   });
+  if (!useLlm) return prediction;
+
+  try {
+    const explain = await fetchJson("/api/predict/explain", {
+      method: "POST",
+      body: JSON.stringify({ prediction, ...payload }),
+    });
+    return { ...prediction, llm_explanation: explain };
+  } catch (error) {
+    const message = error?.message || "LLM explanation failed";
+    return { ...prediction, llm_explanation_error: message };
+  }
 }
 
 /**
@@ -243,10 +259,11 @@ export async function predictGame(home, away, season, week) {
  * @returns {Promise<Object>} LLM response.
  */
 export async function chatLLM(payload) {
-  return fetchJson("/api/llm/chat", {
+  const response = await fetchJson("/api/llm/chat", {
     method: "POST",
     body: JSON.stringify(payload),
   });
+  return response;
 }
 
 /**

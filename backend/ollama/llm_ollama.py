@@ -29,7 +29,26 @@ def _strip_code_fences(text: str) -> str:
 
 
 def _normalize_host(host: str) -> str:
-    return str(host or "").strip().rstrip("/")
+    cleaned = str(host or "").strip().rstrip("/")
+    if cleaned.lower().endswith("/api"):
+        cleaned = cleaned[:-4]
+    return cleaned
+
+
+def _resolve_host(host: Optional[str]) -> str:
+    if host:
+        return _normalize_host(host)
+    env_host = os.getenv("OLLAMA_HOST") or os.getenv("OLLAMA_BASE_URL")
+    if env_host:
+        return _normalize_host(env_host)
+    return "http://127.0.0.1:11434"
+
+
+def _ollama_headers() -> Dict[str, str]:
+    api_key = os.getenv("OLLAMA_API_KEY", "").strip()
+    if not api_key:
+        return {}
+    return {"Authorization": f"Bearer {api_key}"}
 
 
 async def _ollama_list_model_names(*, host: str, timeout_s: float) -> list[str]:
@@ -38,8 +57,9 @@ async def _ollama_list_model_names(*, host: str, timeout_s: float) -> list[str]:
         return []
     url = f"{host}/api/tags"
     timeout = httpx.Timeout(timeout_s)
+    headers = _ollama_headers()
     try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
+        async with httpx.AsyncClient(timeout=timeout, headers=headers) as client:
             resp = await client.get(url)
         resp.raise_for_status()
         data = resp.json()
@@ -123,9 +143,10 @@ async def _ollama_chat(
     }
 
     timeout = httpx.Timeout(timeout_s)
+    headers = _ollama_headers()
 
     try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
+        async with httpx.AsyncClient(timeout=timeout, headers=headers) as client:
             resp = await client.post(url, json=payload)
     except Exception as e:
         return {"ok": False, "error": f"ollama request failed: {e}", "model": model, "host": host}
@@ -177,7 +198,7 @@ async def explain_prediction(
     timeout_s: Optional[float] = None,
 ) -> Dict[str, Any]:
     """Generate a JSON explanation payload using Ollama (best-effort)."""
-    host = host or os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
+    host = _resolve_host(host)
     model = model or os.getenv("OLLAMA_MODEL", "qwen3-coder:480b-cloud")
     timeout_s = float(timeout_s) if timeout_s is not None else float(os.getenv("OLLAMA_TIMEOUT_S", "6"))
 
@@ -264,7 +285,7 @@ async def chat_messages(
     timeout_s: Optional[float] = None,
 ) -> Dict[str, Any]:
     """Chat with Ollama using a list of role/content messages."""
-    host = host or os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
+    host = _resolve_host(host)
     model = model or os.getenv("OLLAMA_MODEL", "mistral:latest")
     timeout_s = float(timeout_s) if timeout_s is not None else float(os.getenv("OLLAMA_TIMEOUT_S", "6"))
 

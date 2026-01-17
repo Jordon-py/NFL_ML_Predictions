@@ -8,7 +8,6 @@
 # ==========================================
 
 # backend/services/prediction_service.py
-import logging
 import numpy as np
 import pandas as pd
 from typing import Any, Optional
@@ -17,12 +16,9 @@ from backend.schemas import (
     PredictionResponse,
     ScorePrediction,
     WinnerPrediction,
-    SimulationMetrics,
 )
 from backend.services.inference_row import build_model_input_row, build_team_history_cache
 from backend.config import load_schedule_data_safe
-
-logger = logging.getLogger(__name__)
 
 def _pipeline_has_transform_step(model: Any) -> bool:
     """Best-effort check for sklearn Pipeline-like objects that transform raw features."""
@@ -108,13 +104,13 @@ class PredictionService:
         self._team_history_cache = build_team_history_cache(dataset)
 
     def _get_schedule_df(self, season: int) -> Optional[pd.DataFrame]:
-
         if season in self._schedule_cache:
             return self._schedule_cache[season]
         df = load_schedule_data_safe(season)
         if isinstance(df, pd.DataFrame):
             self._schedule_cache[season] = df
-        return df
+            return df
+        return None
 
     def predict(self, req: PredictionRequest) -> PredictionResponse:
         """
@@ -134,7 +130,6 @@ class PredictionService:
 
         schedule_df = self._get_schedule_df(req.season)
 
-        # Helper returns (row_df, source) when debug=False
         row_df, source = build_model_input_row(
             dataset_df=self.dataset,
             preprocessor=self.preprocessor,
@@ -159,37 +154,28 @@ class PredictionService:
             return X_transformed
 
         def _predict_regressor(model: Any) -> float:
-            errors: list[Exception] = []
-
             if _accepts_raw_dataframe(model):
                 try:
                     return float(model.predict(row_df)[0])
-                except Exception as e:
-                    errors.append(e)
-
-            if self.preprocessor is not None:
-                try:
-                    return float(model.predict(_get_transformed())[0])
-                except Exception as e:
-                    errors.append(e)
-
-            if errors:
-                raise errors[-1]
-            return float(model.predict(row_df)[0])
+                except Exception:
+                    pass
+            if self.preprocessor is None:
+                return float(model.predict(row_df)[0])
+            return float(model.predict(_get_transformed())[0])
 
         def _predict_proba_home(model: Any) -> tuple[Optional[float], bool]:
             if model is None or not hasattr(model, "predict_proba"):
                 return None, False
 
-            probs = None
-            if _accepts_raw_dataframe(model):
+            def _predict_proba(data: Any) -> Optional[np.ndarray]:
                 try:
-                    probs = np.asarray(model.predict_proba(row_df)[0], dtype=float)
+                    return np.asarray(model.predict_proba(data)[0], dtype=float)
                 except Exception:
-                    probs = None
+                    return None
 
+            probs = _predict_proba(row_df) if _accepts_raw_dataframe(model) else None
             if probs is None and self.preprocessor is not None:
-                probs = np.asarray(model.predict_proba(_get_transformed())[0], dtype=float)
+                probs = _predict_proba(_get_transformed())
 
             mapped = _extract_home_proba(model, probs) if probs is not None else None
             if mapped is None or not np.isfinite(mapped):
@@ -214,17 +200,16 @@ class PredictionService:
         # Winner label should be TEAM ABBR for your API payload
         home_code = str(req.home_team).strip().upper()
         away_code = str(req.away_team).strip().upper()
-        winner_team = home_code if proba_home >= 0.5 else away_code
+        winner = home_code if proba_home >= 0.5 else away_code
 
         return PredictionResponse(
             scores=ScorePrediction(home_score=p_home, away_score=p_away),
             winner=WinnerPrediction(
-                winner=winner_team,
+                winner=winner,
                 proba_home=proba_home,
                 proba_away=proba_away,
-                proba_draw=None,
             ),
-            # Optional: keep it None to stay “prediction-only”
+            # Optional: keep it None to stay "prediction-only"
             simulation_metrics=None,  # SimulationMetrics(...) if you ever re-add MC
             prediction_source=source,
             win_classifier_used=win_classifier_used,

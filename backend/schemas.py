@@ -12,10 +12,11 @@ FILE: backend/schemas.py
 PURPOSE: Canonical Pydantic models for NFL Prediction API contracts.
 """
 from __future__ import annotations
+
 import datetime
-import fastapi
 from typing import Optional, Any, Dict, List
 from pydantic import BaseModel, Field
+
 
 class PredictionRequest(BaseModel):
     home_team: str
@@ -23,15 +24,22 @@ class PredictionRequest(BaseModel):
     season: int
     week: int
 
+
+class PredictionHistory(BaseModel):
+    entry: List[Dict[str, Any]]
+
+
 class ScorePrediction(BaseModel):
     home_score: float
     away_score: float
+
 
 class WinnerPrediction(BaseModel):
     winner: str
     proba_home: float = Field(..., ge=0.0, le=1.0)
     proba_away: float = Field(..., ge=0.0, le=1.0)
     proba_draw: Optional[float] = None
+
 
 class SimulationMetrics(BaseModel):
     sim_home_score: float
@@ -40,12 +48,14 @@ class SimulationMetrics(BaseModel):
     sim_away_sd: float
     sim_n: int
 
+
 class PredictionResponse(BaseModel):
     scores: ScorePrediction
     winner: WinnerPrediction
     simulation_metrics: Optional[SimulationMetrics] = None
     prediction_source: str
     win_classifier_used: bool = False
+
 
 class UnifiedPredictionResponse(BaseModel):
     home_score: float
@@ -64,31 +74,38 @@ class UnifiedPredictionResponse(BaseModel):
     home_name: Optional[str] = None
     away_name: Optional[str] = None
 
+
 class HealthResponse(BaseModel):
     status: str
     mode: str
     reason: str
 
+
 class HistoryEntry(UnifiedPredictionResponse):
     ts: str
+
 
 class HistoryResponse(BaseModel):
     entries: List[HistoryEntry]
     total: int
 
+
 class DatasetInfo(BaseModel):
     rows: int
     features: int
+
 
 class HistoryMetrics(BaseModel):
     total_predictions: int
     win_rate: Optional[float] = None
     note: Optional[str] = None
 
+
 class StatusOverviewResponse(BaseModel):
     health: HealthResponse
     dataset: DatasetInfo
     history: HistoryMetrics
+
 
 class ScheduleEntry(BaseModel):
     home_team: str
@@ -105,8 +122,24 @@ class ScheduleEntry(BaseModel):
     away_name: Optional[str] = None
     stadium: Optional[str] = None
 
+
 class ScheduleResponse(BaseModel):
     games: List[ScheduleEntry]
+
+
+class TeamMeta(BaseModel):
+    logoUrl: str
+    name: Optional[str] = None
+    primaryColor: Optional[str] = None
+    secondaryColor: Optional[str] = None
+    wordmark: Optional[str] = None
+    conference: Optional[str] = None
+    division: Optional[str] = None
+
+
+class TeamLogosResponse(BaseModel):
+    teams: Dict[str, TeamMeta]
+
 
 __all__ = [
     "PredictionRequest",
@@ -123,4 +156,6 @@ __all__ = [
     "StatusOverviewResponse",
     "ScheduleEntry",
     "ScheduleResponse",
+    "TeamMeta",
+    "TeamLogosResponse",
 ]

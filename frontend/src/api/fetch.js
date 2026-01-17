@@ -12,23 +12,22 @@
  */
 
 function resolveApiBase() {
-  // Prefer build-mode, not hostname: dev builds can be served from LAN IPs.
-  if (import.meta.env.DEV) {
-    console.log(`Using local API base URL: ${import.meta.env.DEV}`);
-    return (
-      import.meta.env.VITE_API_DEV ||
-      import.meta.env.VITE_API_BASE_DEV ||
-      import.meta.env.VITE_DEV_ENV || // legacy
-      import.meta.env.VITE_API_BASE_URL ||
-      ""
-    );
-  }
-  console.log(`Using API base URL: ${import.meta.env.VITE_API_BASE_URL}`);
-  return import.meta.env.VITE_API_BASE_URL ? import.meta.env.VITE_API_BASE_URL : "https://nfl-ml-pipe-pr-78.herokuapp.com/";
+  const devBase = import.meta.env.VITE_API_BASE_DEV ? import.meta.env.VITE_API_BASE_DEV : "http://127.0.0.1:8000/";
+  const prodBase = import.meta.env.VITE_API_BASE_URL ? import.meta.env.VITE_API_BASE_URL : "https://nfl-predict-ecf5a5bd34fe.herokuapp.com/";
+  return import.meta.env.DEV ? devBase : prodBase;
 }
 
-// Normalize: trim and remove trailing slashes
-export const API_BASE = resolveApiBase().trim().replace(/\/+$/, "");
+function normalizeApiBase(rawBase) {
+  const base = (rawBase || "").trim().replace(/\/+$/, "");
+  if (!base) return "";
+  if (base.startsWith("/")) return base;
+  if (/^https?:\/\//i.test(base)) return base;
+  // Support values like "127.0.0.1:8000" (missing protocol)
+  return `http://${base}`;
+}
+
+// Normalize: trim, remove trailing slashes, and ensure protocol when needed.
+export const API_BASE = normalizeApiBase(resolveApiBase());
 export const API_BASE_CONFIGURED = Boolean(API_BASE);
 
 const DEFAULT_TIMEOUT = 25000;
@@ -67,9 +66,9 @@ async function readBody(response) {
 }
 
 export async function fetchJson(path, options = {}) {
-  if (!API_BASE_CONFIGURED) {
+  if (!API_BASE_CONFIGURED && !import.meta.env.DEV) {
     throw new HttpError(
-      "Missing API base URL. Set VITE_API_BASE_URL (prod) and VITE_API_DEV (dev) in `frontend/.env` or Vercel env vars.",
+      "Missing API base URL. Set VITE_API_BASE_URL (prod) and optionally VITE_API_BASE_DEV (dev) in `frontend/.env` (or Vercel env vars).",
       { status: 0, url: path }
     );
   }

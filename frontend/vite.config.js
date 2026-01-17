@@ -16,6 +16,16 @@ import { defineConfig } from 'vite';
 // output clean while still surfacing real issues.
 export default defineConfig({
   plugins: [react()],
+  server: {
+    proxy: {
+      // Local dev: avoid CORS by proxying API calls to FastAPI.
+      "/api": {
+        target: "http://127.0.0.1:8000",
+        changeOrigin: true,
+        secure: false,
+      },
+    },
+  },
   build: {
     rollupOptions: {
       onwarn(warning, warn) {

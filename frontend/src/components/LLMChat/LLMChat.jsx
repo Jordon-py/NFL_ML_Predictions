@@ -25,7 +25,9 @@ const MAX_MESSAGES = 12;
 function compactObject(value) {
   if (!value || typeof value !== "object") return null;
   const entries = Object.entries(value).filter(
-    ([, item]) => item !== undefined && item !== null && item !== ""
+    ([key, value]) => {
+      return value !== undefined && value !== null && value !== "";
+    }
   );
   return entries.length ? Object.fromEntries(entries) : null;
 }

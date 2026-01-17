@@ -387,14 +387,14 @@ def _validate_status(ctx: TestContext, data: Any, payload: Optional[Dict[str, An
 
 def _run_tests(ctx: TestContext) -> int:
     tests: List[EndpointTest] = [
-        EndpointTest("Health", "GET", "/health", validate=_validate_health),
-        EndpointTest("Debug", "GET", "/debug", validate=_validate_debug),
-        EndpointTest("Schedule", "GET", "/schedule/next-week", validate=_validate_schedule),
-        EndpointTest("Predict", "POST", "/predict", build_payload=_build_predict_payload, validate=_validate_predict),
-        EndpointTest("Predict Explain", "POST", "/predict/explain", build_payload=_build_explain_payload, validate=_validate_explain),
-        EndpointTest("LLM Chat", "POST", "/llm/chat", build_payload=_build_chat_payload, validate=_validate_chat),
-        EndpointTest("History", "GET", "/history?limit=5", validate=_validate_history),
-        EndpointTest("Status Overview", "GET", "/status/overview", validate=_validate_status),
+        EndpointTest("Health", "GET", "/api/health", validate=_validate_health),
+        EndpointTest("Debug", "GET", "/api/debug", validate=_validate_debug),
+        EndpointTest("Schedule", "GET", "/api/schedule/next-week", validate=_validate_schedule),
+        EndpointTest("Predict", "POST", "/api/predict", build_payload=_build_predict_payload, validate=_validate_predict),
+        EndpointTest("Predict Explain", "POST", "/api/predict/explain", build_payload=_build_explain_payload, validate=_validate_explain),
+        EndpointTest("LLM Chat", "POST", "/api/llm/chat", build_payload=_build_chat_payload, validate=_validate_chat),
+        EndpointTest("History", "GET", "/api/history?limit=5", validate=_validate_history),
+        EndpointTest("Status Overview", "GET", "/api/status/overview", validate=_validate_status),
     ]
 
     failures = 0

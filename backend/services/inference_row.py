@@ -19,9 +19,6 @@ from __future__ import annotations
 from typing import Any, Dict, Optional, List, Tuple
 import numpy as np
 import pandas as pd
-import logging
-
-log = logging.getLogger(__name__)
 
 # Team Abbreviation Normalization Map
 # Ensures consistent team codes across different data sources (ESPN vs NFL vs betting).
@@ -261,39 +258,29 @@ def _roll_forward_stats(
     
     updates = {}
 
-    # Helper to map columns
-    # If the team was HOME in their last game, we take 'home_rolling_xxx'.
-    # If they were AWAY, we take 'away_rolling_xxx'.
-    def _map_stats(last_game_row: pd.Series, team: str, team_prefix: str):
+    home_cols = [c for c in dataset_cols if c.startswith("home_")]
+    away_cols = [c for c in dataset_cols if c.startswith("away_")]
+
+    def _map_stats(last_game_row: pd.Series, team: str, team_prefix: str, target_cols: List[str]) -> None:
         if last_game_row is None: 
             return
             
         was_home = _normalize_team(last_game_row["home_team"]) == team
         source_prefix = "home_" if was_home else "away_"
         
-        # We want to fill columns in the NEW row that start with `team_prefix` (e.g., "home_")
-        # Example: we want to fill "home_rolling_offensive_epa"
-        # We look for "home_rolling_offensive_epa" or "away_rolling_offensive_epa" in the OLD row
-        
-        target_candidates = [c for c in dataset_cols if c.startswith(team_prefix)]
-        
-        for tgt_col in target_candidates:
-            # Remove the "home_" or "away_" prefix to get the core stat name
-            # e.g. "home_rolling_epa" -> "rolling_epa"
+        for tgt_col in target_cols:
             core_stat = tgt_col[len(team_prefix):]
             
-            # Reconstruct the source column name in the last game row
-            # e.g. "away_rolling_epa" if they were away last time
             src_col = f"{source_prefix}{core_stat}"
             
             if src_col in last_game_row:
                 updates[tgt_col] = last_game_row[src_col]
 
     # Map for Home Team (fills 'home_rolling...', 'home_prior...', etc)
-    _map_stats(home_last, home, "home_")
+    _map_stats(home_last, home, "home_", home_cols)
     
     # Map for Away Team (fills 'away_rolling...', 'away_prior...', etc)
-    _map_stats(away_last, away, "away_")
+    _map_stats(away_last, away, "away_", away_cols)
     
     # Apply updates
     if updates:
