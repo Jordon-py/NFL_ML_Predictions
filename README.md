@@ -13,7 +13,7 @@ graph TD
 
 ```
 
-![Project Screenshot](https://github.com/user-attachments/assets/826bfed3-ad7e-4c32-bfc7-e3b12cde826f)
+![Project Screenshot](docs/screenshots/app.png)
 
 ## Features
 
@@ -31,8 +31,8 @@ This NFL Prediction System offers the following key features:
 
 ### Prerequisites
 
-- Python 3.8+
-- Node.js 14+
+- Python 3.12+ (Recommended)
+- Node.js 18+
 - pip (Python package manager)
 - npm (Node package manager)
 
@@ -41,7 +41,7 @@ This NFL Prediction System offers the following key features:
 1. Clone the repository:
 
 ```bash
-git clone https://github.com/cjordon/NFL_ML_Predictions.git
+git clone https://github.com/Jordon-py/NFL_ML_Predictions.git
 cd NFL_ML_Predictions
 ```
 
