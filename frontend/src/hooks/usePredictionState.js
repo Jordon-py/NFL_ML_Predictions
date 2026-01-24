@@ -19,10 +19,10 @@
  * DEPENDENCIES: React, client.js
  */
 
-import { useEffect, useState, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
-  getNextWeekSchedule,
   getHealthStatus as fetchHealth,
+  getNextWeekSchedule,
   getPredictionHistory,
   getTeamLogos,
   predictGame,
@@ -72,32 +72,34 @@ const pickWinnerFromPrediction = (prediction) => {
  */
 function normalizeSchedule(rows) {
   if (!Array.isArray(rows)) return [];
-  const normalized = rows.map((game) => {
-    const home = normalizeTeamCode(game?.home_abbr || game?.home_team);
-    const away = normalizeTeamCode(game?.away_abbr || game?.away_team);
-    const season = toNumberOrNull(game?.season);
-    const week = toNumberOrNull(game?.week);
-    const gameId = buildGameKey({
-      ...game,
-      season,
-      week,
-      home_abbr: home,
-      away_abbr: away,
-    });
+  const normalized = rows
+    .filter(g => g && (g.home_team || g.home_abbr) && (g.away_team || g.away_abbr))
+    .map((game) => {
+      const home = normalizeTeamCode(game?.home_abbr || game?.home_team);
+      const away = normalizeTeamCode(game?.away_abbr || game?.away_team);
+      const season = toNumberOrNull(game?.season);
+      const week = toNumberOrNull(game?.week);
+      const gameId = buildGameKey({
+        ...game,
+        season,
+        week,
+        home_abbr: home,
+        away_abbr: away,
+      });
 
-    return {
-      ...game,
-      season: season ?? game?.season,
-      week: week ?? game?.week,
-      home_abbr: home || game?.home_abbr,
-      away_abbr: away || game?.away_abbr,
-      home_team: game?.home_team || home,
-      away_team: game?.away_team || away,
-      home_name: game?.home_name || game?.home_team || home,
-      away_name: game?.away_name || game?.away_team || away,
-      game_id: gameId,
-    };
-  });
+      return {
+        ...game,
+        season: season ?? game?.season,
+        week: week ?? game?.week,
+        home_abbr: home || game?.home_abbr,
+        away_abbr: away || game?.away_abbr,
+        home_team: game?.home_team || home,
+        away_team: game?.away_team || away,
+        home_name: game?.home_name || game?.home_team || home,
+        away_name: game?.away_name || game?.away_team || away,
+        game_id: gameId,
+      };
+    });
 
   // Guard: schedule CSVs sometimes contain duplicate placeholder rows (e.g. TBD vs TBD).
   const seen = new Map();

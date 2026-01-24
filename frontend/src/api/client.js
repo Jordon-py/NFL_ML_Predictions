@@ -135,7 +135,11 @@ const fetchPostseasonSchedule = async () => {
 
     // Filter for postseason games (or everything if REG fails)
     // We prefer games with game_type !== 'REG' for postseason logic
-    const postRows = allRows.filter(r => r.game_type !== "REG");
+    const postRows = allRows.filter(r =>
+      r.game_type !== "REG" &&
+      r.home_team && r.home_team.trim() &&
+      r.away_team && r.away_team.trim()
+    );
 
     return postRows.map(r => ({
       game_id: r.game_id,
