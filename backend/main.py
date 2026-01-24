@@ -81,15 +81,28 @@ import logging
 import sys
 import os
 import json
+import uuid
+import time
 from pathlib import Path
 from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 from typing import Dict, Any, List, Optional
 import pandas as pd
 import numpy as np
-from fastapi import FastAPI, HTTPException, Body
+from fastapi import FastAPI, HTTPException, Body, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 from dotenv import load_dotenv
+try:
+    from pythonjsonlogger import jsonlogger
+    HAS_JSON_LOGGER = True
+except ImportError:
+    HAS_JSON_LOGGER = False
+try:
+    from prometheus_fastapi_instrumentator import Instrumentator
+    HAS_PROMETHEUS = True
+except ImportError:
+    HAS_PROMETHEUS = False
 from .schemas import (
     PredictionRequest,
     PredictionResponse,
@@ -126,6 +139,16 @@ from .team_assets import (
     load_team_assets_map,
     TeamAsset
 )
+try:
+    from .routes.auth import router as auth_router
+except ImportError:
+    auth_router = None
+
+try:
+    from .routes.upload import router as upload_router
+except ImportError:
+    upload_router = None
+
 if __name__ == "__main__" and __package__ is None:
     # Allow running as a script by ensuring repo root is on sys.path.
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -137,13 +160,19 @@ if __name__ == "__main__" and __package__ is None:
 # Load environment variables
 load_dotenv(dotenv_path="./backend/.env", override=True, verbose=True)
 
-# Setup logging
+# Setup logging with JSON format for production observability
 def setup_logging():
     handler = logging.StreamHandler(sys.stdout)
-    formatter = logging.Formatter(
-        fmt="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S"
-    )
+    if HAS_JSON_LOGGER and os.getenv("LOG_FORMAT", "text").lower() == "json":
+        formatter = jsonlogger.JsonFormatter(
+            fmt="%(asctime)s %(levelname)s %(name)s %(message)s",
+            datefmt="%Y-%m-%dT%H:%M:%S"
+        )
+    else:
+        formatter = logging.Formatter(
+            fmt="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S"
+        )
     handler.setFormatter(formatter)
     logging.getLogger().handlers = [handler]
     logging.getLogger().setLevel(logging.INFO)
@@ -165,6 +194,9 @@ state: Dict[str, Any] = {
 
 ADMIN_ENABLED = os.getenv("ENABLE_ADMIN", "false").strip().lower() in TRUTHY
 
+# -------------------------------------
+# Helper Functions
+# -------------------------------------
 
 def _build_game_id(season: int, week: int, home_team: str, away_team: str) -> str:
     parts = [season, week, home_team, away_team]
@@ -276,6 +308,8 @@ def _find_latest_metadata_json(models_dir: Path) -> Path | None:
     if not candidates:
         return None
     return max(candidates, key=lambda p: p.stat().st_mtime)
+
+
 
 
 # ---------------------------
@@ -433,6 +467,11 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="NFL ML Predictions API", lifespan=lifespan)
 
+# Optional auth and file upload routes.
+if auth_router is not None:
+    app.include_router(auth_router, prefix="/auth")
+if upload_router is not None:
+    app.include_router(upload_router, prefix="/upload")
 # CORS Middleware
 cors_origins, cors_origin_regex = resolve_cors()
 app.add_middleware(
@@ -442,15 +481,45 @@ app.add_middleware(
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["*"],
+    expose_headers=["*", "X-Request-ID"],
 )
+
+# Request-ID and timing middleware for observability
+class RequestContextMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+        start_time = time.perf_counter()
+        
+        # Attach to request state for use in handlers
+        request.state.request_id = request_id
+        
+        response = await call_next(request)
+        
+        duration_ms = (time.perf_counter() - start_time) * 1000
+        response.headers["X-Request-ID"] = request_id
+        
+        # Structured log entry
+        log.info(
+            "request_complete",
+            extra={
+                "request_id": request_id,
+                "method": request.method,
+                "path": str(request.url.path),
+                "status_code": response.status_code,
+                "duration_ms": round(duration_ms, 2),
+            }
+        )
+        return response
+
+app.add_middleware(RequestContextMiddleware)
+
+# Prometheus metrics instrumentation
+if HAS_PROMETHEUS:
+    Instrumentator().instrument(app).expose(app, endpoint="/api/metrics")
 
 # ---------------------------
 # Routes
 # ---------------------------
-
-
-
 
 @app.get("/api/teams/logos", response_model=TeamLogosResponse)
 async def get_team_logos() -> TeamLogosResponse:
@@ -460,7 +529,7 @@ async def get_team_logos() -> TeamLogosResponse:
 @app.get("/api/teams/{team_abbr}", response_model=TeamAsset)
 def teams_get(team_abbr: str) -> TeamAsset:
     """
-    Get a team’s branding assets (preferred non-square logo included).
+    Get a team's branding assets (preferred non-square logo included).
 
     Example:
       GET /teams/LAR
@@ -481,12 +550,75 @@ def _require_ready() -> PredictionService:
 
 @app.get("/api/health", response_model=HealthResponse)
 async def health():
-    """System health check."""
+    """System health check (fast)."""
     ready = state.get("service") is not None
     status = "healthy" if ready else "unhealthy"
     mode = "ml-inference" if ready else "initializing"
     reason = "models_loaded" if ready else "prediction engine not initialized"
     return HealthResponse(status=status, mode=mode, reason=reason)
+
+@app.get("/api/health/deep")
+async def health_deep() -> Dict[str, Any]:
+    """Deep health check: verifies models, dataset, and dependencies."""
+    checks = {}
+    overall_healthy = True
+    
+    # Check model bundle
+    bundle = state.get("bundle")
+    if bundle is not None:
+        checks["model_bundle"] = {"status": "ok", "loaded": True}
+    else:
+        checks["model_bundle"] = {"status": "error", "loaded": False}
+        overall_healthy = False
+    
+    # Check dataset
+    dataset = state.get("dataset")
+    if dataset is not None and len(dataset) > 0:
+        checks["dataset"] = {"status": "ok", "rows": len(dataset)}
+    else:
+        checks["dataset"] = {"status": "error", "rows": 0}
+        overall_healthy = False
+    
+    # Check prediction service
+    service = state.get("service")
+    if service is not None:
+        checks["prediction_service"] = {"status": "ok", "initialized": True}
+    else:
+        checks["prediction_service"] = {"status": "error", "initialized": False}
+        overall_healthy = False
+    
+    # Check metadata
+    metadata = state.get("model_metadata")
+    checks["metadata"] = {
+        "status": "ok" if metadata else "warning",
+        "loaded": metadata is not None,
+    }
+    
+    return {
+        "status": "healthy" if overall_healthy else "unhealthy",
+        "checks": checks,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+@app.post("/api/client-errors", status_code=204)
+async def receive_client_error(request: Request):
+    """Receive and log frontend error reports."""
+    try:
+        body = await request.body()
+        error_data = json.loads(body.decode("utf-8")) if body else {}
+        log.warning(
+            "client_error_reported",
+            extra={
+                "client_error": error_data.get("message"),
+                "url": error_data.get("url"),
+                "user_agent": error_data.get("userAgent"),
+                "timestamp": error_data.get("ts"),
+                "stack": error_data.get("stack", "")[:500],  # Truncate stack
+            }
+        )
+    except Exception as e:
+        log.warning(f"Failed to parse client error: {e}")
+    return Response(status_code=204)
 
 @app.get("/api/status/overview", response_model=StatusOverviewResponse)
 async def get_status_overview():
@@ -503,6 +635,7 @@ async def get_status_overview():
             "note": "win_rate requires actual outcomes",
         }
     return StatusOverviewResponse(health=h, dataset=dataset_info, history=history_metrics)
+
 
 @app.get("/api/status/models")
 async def get_status_models() -> Dict[str, Any]:

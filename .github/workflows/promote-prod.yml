@@ -1,0 +1,137 @@
+name: Promote to Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "promote" to confirm production deployment'
+        required: true
+        default: ''
+
+jobs:
+  validate-input:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate confirmation
+        run: |
+          if [ "${{ github.event.inputs.confirm }}" != "promote" ]; then
+            echo "::error::You must type 'promote' to confirm production deployment"
+            exit 1
+          fi
+
+  promote-backend:
+    runs-on: ubuntu-latest
+    needs: validate-input
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Heroku CLI
+        run: curl https://cli-assets.heroku.com/install.sh | sh
+
+      - name: Promote to Production via Pipeline
+        env:
+          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+          HEROKU_PIPELINE: ${{ secrets.HEROKU_PIPELINE }}
+          HEROKU_APP_STAGING: ${{ secrets.HEROKU_APP_STAGING }}
+        run: |
+          if [ -z "$HEROKU_PIPELINE" ]; then
+            echo "::warning::HEROKU_PIPELINE not set. Attempting direct deploy."
+            HEROKU_APP="${{ secrets.HEROKU_APP_PROD }}"
+            git push https://heroku:${HEROKU_API_KEY}@git.heroku.com/${HEROKU_APP}.git HEAD:main --force
+          else
+            heroku pipelines:promote -a "$HEROKU_APP_STAGING" --to production
+          fi
+
+  promote-frontend:
+    runs-on: ubuntu-latest
+    needs: validate-input
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+
+      - name: Deploy to Production
+        id: vercel-prod
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          cd frontend
+          npm ci
+          npm run build
+          vercel pull --yes --environment=production --token=$VERCEL_TOKEN
+          vercel build --prod --token=$VERCEL_TOKEN
+          PROD_URL=$(vercel deploy --prebuilt --prod --token=$VERCEL_TOKEN)
+          echo "prod_url=$PROD_URL" >> $GITHUB_OUTPUT
+
+  health-check-production:
+    runs-on: ubuntu-latest
+    needs: [promote-backend, promote-frontend]
+    outputs:
+      health_status: ${{ steps.healthcheck.outputs.status }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Wait for deployment to stabilize
+        run: sleep 45
+
+      - name: Run production health checks
+        id: healthcheck
+        env:
+          BACKEND_URL: https://${{ secrets.HEROKU_APP_PROD }}.herokuapp.com
+        run: |
+          chmod +x scripts/healthcheck.sh
+          if ./scripts/healthcheck.sh "${BACKEND_URL:-https://nfl-predict-ecf5a5bd34fe.herokuapp.com}" 5 15; then
+            echo "status=success" >> $GITHUB_OUTPUT
+          else
+            echo "status=failed" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+  rollback-on-failure:
+    runs-on: ubuntu-latest
+    needs: health-check-production
+    if: failure()
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Heroku CLI
+        run: curl https://cli-assets.heroku.com/install.sh | sh
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+
+      - name: Rollback Backend
+        env:
+          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+          HEROKU_APP: ${{ secrets.HEROKU_APP_PROD }}
+        run: |
+          echo "::warning::Production health check failed. Rolling back backend..."
+          heroku releases:rollback -a "$HEROKU_APP"
+          echo "Backend rolled back at $(date -u)" >> rollback.log
+
+      - name: Rollback Frontend
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          echo "::warning::Rolling back frontend..."
+          cd frontend
+          vercel rollback --token=$VERCEL_TOKEN --yes || echo "Frontend rollback attempted"
+          echo "Frontend rollback attempted at $(date -u)" >> rollback.log
+
+      - name: Record rollback event
+        run: |
+          echo "=== ROLLBACK EVENT ===" >> rollback.log
+          echo "Time: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> rollback.log
+          echo "Commit: ${{ github.sha }}" >> rollback.log
+          echo "Triggered by: ${{ github.actor }}" >> rollback.log
+          cat rollback.log

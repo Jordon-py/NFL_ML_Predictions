@@ -27,6 +27,21 @@ This NFL Prediction System offers the following key features:
 - **Frontend Interface**: React-based web interface for user interactions
 - **Real-time Predictions**: Get predictions for upcoming NFL games
 
+## Deployment Health Dashboard
+
+![CI Status](https://github.com/Jordon-py/NFL_ML_Predictions/actions/workflows/ci.yml/badge.svg)
+![Staging Deploy](https://github.com/Jordon-py/NFL_ML_Predictions/actions/workflows/deploy-staging.yml/badge.svg)
+![Prod Deploy](https://github.com/Jordon-py/NFL_ML_Predictions/actions/workflows/promote-prod.yml/badge.svg)
+
+| Component | Production | Staging | Observability |
+|-----------|------------|---------|---------------|
+| **Frontend** | [Production URL](https://nfl-ml-predictions.vercel.app/) | [Staging URL](https://nfl-ml-predictions-git-main.vercel.app/) | - |
+| **Backend** | [Heroku Prod](https://nfl-predict-ecf5a5bd34fe.herokuapp.com/) | [Heroku Staging](https://dashboard.heroku.com/apps) | [Metrics](https://nfl-predict-ecf5a5bd34fe.herokuapp.com/api/metrics) |
+| **Health** | [Status Overview](https://nfl-predict-ecf5a5bd34fe.herokuapp.com/api/status/overview) | [Deep Check](https://nfl-predict-ecf5a5bd34fe.herokuapp.com/api/health/deep) | [Logs](https://dashboard.heroku.com/apps/nfl-predict-ecf5a5bd34fe/logs) |
+
+> [!NOTE]
+> **Rollback Behavior**: If a production deployment fails health checks, the system automatically rolls back to the previous stable release. Check [GitHub Actions](https://github.com/Jordon-py/NFL_ML_Predictions/actions) for rollback logs.
+
 ## Quick Start
 
 ### Prerequisites
