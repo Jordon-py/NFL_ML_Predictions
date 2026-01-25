@@ -34,7 +34,7 @@ import {
 } from "../utils/predictionContextUtils.js";
 
 const INITIAL_HEALTH = { status: "loading", mode: "none" };
-const HEALTH_POLL_MS = 15000;
+const HEALTH_POLL_MS = 25000; // Poll every 25 seconds - balanced load reduction
 
 const toNumberOrNull = (value) => {
   const n = Number(value);

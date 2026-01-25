@@ -108,6 +108,16 @@ class ScheduleEntry(BaseModel):
 class ScheduleResponse(BaseModel):
     games: List[ScheduleEntry]
 
+class TeamMeta(BaseModel):
+    logoUrl: str
+    name: Optional[str] = None
+    primaryColor: Optional[str] = None
+    secondaryColor: Optional[str] = None
+    wordmark: Optional[str] = None
+
+class TeamLogosResponse(BaseModel):
+    teams: Dict[str, TeamMeta]
+
 __all__ = [
     "PredictionRequest",
     "ScorePrediction",
@@ -123,4 +133,6 @@ __all__ = [
     "StatusOverviewResponse",
     "ScheduleEntry",
     "ScheduleResponse",
+    "TeamMeta",
+    "TeamLogosResponse",
 ]

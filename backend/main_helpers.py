@@ -35,7 +35,8 @@ log = logging.getLogger(__name__)
 prediction_history_entries: List[Dict[str, Any]] = []
 _prediction_history_lock = Lock()
 PREDICTION_HISTORY_MAX = 1000
-PREDICTION_HISTORY_PATH = Path("backend/Predictions/prediction_history.json")
+BACKEND_DIR = Path(__file__).resolve().parent
+PREDICTION_HISTORY_PATH = BACKEND_DIR / "Predictions" / "prediction_history.json"
 
 @dataclass(frozen=True)
 class InferenceBundle:
@@ -191,8 +192,8 @@ def load_dataset_df(data_dir: Path, expected_features: Optional[List[str]] = Non
                             missing,
                             best[0],
                         )
-                        return pd.read_csv(best[0])
-        return pd.read_csv(p)
+                        return pd.read_csv(best[0], low_memory=False)
+        return pd.read_csv(p, low_memory=False)
 
     if data_dir.is_file():
         return pd.read_csv(data_dir)
@@ -209,12 +210,12 @@ def load_dataset_df(data_dir: Path, expected_features: Optional[List[str]] = Non
                     best[1],
                     best[0],
                 )
-            return pd.read_csv(best[0])
+            return pd.read_csv(best[0], low_memory=False)
     if len(files) != 1:
         raise FileNotFoundError(
             f"Expected exactly one game_features_*.csv in {data_dir}; set DATASET_PATH explicitly."
         )
-    return pd.read_csv(files[0])
+    return pd.read_csv(files[0], low_memory=False)
 
 def _build_game_id_from_request(request_payload: Dict[str, Any]) -> Optional[str]:
     """Best-effort game_id builder to keep history entries consistent."""
@@ -255,8 +256,24 @@ def _append_prediction_history_to_disk(request_payload: Dict[str, Any], predicti
         except Exception as e:
             log.warning(f"History persist failed: {e}")
 
+def load_prediction_history() -> None:
+    """Hydrate in-memory history from disk, if present."""
+    global prediction_history_entries
+    if not PREDICTION_HISTORY_PATH.exists():
+        return
+    try:
+        raw = json.loads(PREDICTION_HISTORY_PATH.read_text(encoding="utf-8"))
+    except Exception as e:
+        log.warning("History read failed: %s", e)
+        return
+    if not isinstance(raw, list):
+        return
+    cleaned = [item for item in raw if isinstance(item, dict)]
+    with _prediction_history_lock:
+        prediction_history_entries = cleaned[:PREDICTION_HISTORY_MAX]
+
 # ----------------------------------------------------
-# Shared Schedule & Team Helpers (Referenced by main.py and routes.py)
+# Shared Schedule & Team Helpers (Referenced by main.py)
 # ----------------------------------------------------
 
 _SEASON_COLS = ["season", "season_year", "year"]
@@ -265,6 +282,12 @@ _HOME_COLS = ["home_team", "home", "home_abbr", "home_code"]
 _AWAY_COLS = ["away_team", "away", "away_abbr", "away_code"]
 _GAME_ID_COLS = ["game_id", "gameid", "game_key", "gameId"]
 _STADIUM_COLS = ["stadium", "venue", "stadium_name"]
+POSTSEASON_WEEK_BY_ROUND = {
+    "Wild Card": 19,
+    "Divisional": 20,
+    "Conference Championship": 21,
+    "Super Bowl": 22,
+}
 
 def _pick_col(df: pd.DataFrame, candidates: List[str]) -> Optional[str]:
     for c in candidates:
@@ -276,6 +299,94 @@ def _pick_col(df: pd.DataFrame, candidates: List[str]) -> Optional[str]:
         if hit:
             return hit
     return None
+
+def _normalize_team_abbr(value: Any) -> str:
+    return str(value or "").strip().upper()
+
+def _extract_team_abbr(team: Any) -> str:
+    if isinstance(team, dict):
+        return _normalize_team_abbr(team.get("abbr") or team.get("team") or team.get("code"))
+    return _normalize_team_abbr(team)
+
+def _extract_team_name(team: Any) -> Optional[str]:
+    if isinstance(team, dict):
+        name = team.get("name") or team.get("team")
+        return str(name).strip() if name else None
+    return None
+
+def _resolve_postseason_schedule_path() -> Path:
+    env_path = os.getenv("POSTSEASON_SCHEDULE_PATH") or os.getenv("POST_SCHEDULE_PATH")
+    if env_path:
+        return Path(env_path)
+    return Path(__file__).resolve().parent / "post_schedule.json"
+
+def load_postseason_schedule_df(season: Optional[int] = None) -> pd.DataFrame:
+    path = _resolve_postseason_schedule_path()
+    if not path.exists():
+        return pd.DataFrame()
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        log.warning("Failed to read postseason schedule JSON %s: %s", path, exc)
+        return pd.DataFrame()
+    if not isinstance(payload, dict):
+        return pd.DataFrame()
+
+    payload_season = payload.get("season")
+    if season is not None and payload_season is not None:
+        try:
+            if int(payload_season) != int(season):
+                return pd.DataFrame()
+        except Exception:
+            pass
+
+    direct_games = payload.get("games")
+    if isinstance(direct_games, list) and direct_games:
+        return pd.DataFrame(direct_games)
+
+    postseason = payload.get("postseason") if isinstance(payload.get("postseason"), dict) else {}
+    rounds = postseason.get("rounds") if isinstance(postseason.get("rounds"), list) else []
+    if not rounds:
+        return pd.DataFrame()
+
+    use_season = season
+    if use_season is None and payload_season is not None:
+        try:
+            use_season = int(payload_season)
+        except Exception:
+            use_season = None
+
+    rows: List[Dict[str, Any]] = []
+    for idx, round_info in enumerate(rounds):
+        if not isinstance(round_info, dict):
+            continue
+        round_name = round_info.get("name") or ""
+        week = POSTSEASON_WEEK_BY_ROUND.get(round_name, 19 + idx)
+        games = round_info.get("games") if isinstance(round_info.get("games"), list) else []
+        for game in games:
+            if not isinstance(game, dict):
+                continue
+            home = game.get("home")
+            away = game.get("away")
+            home_abbr = _extract_team_abbr(home)
+            away_abbr = _extract_team_abbr(away)
+            if not home_abbr or not away_abbr:
+                continue
+
+            rows.append(
+                {
+                    "season": use_season,
+                    "week": week,
+                    "kickoff": game.get("kickoff_local") or game.get("kickoff"),
+                    "home_team": home_abbr,
+                    "away_team": away_abbr,
+                    "game_id": game.get("id"),
+                    "home_team_name": _extract_team_name(home),
+                    "away_team_name": _extract_team_name(away),
+                }
+            )
+
+    return pd.DataFrame(rows)
 
 def _current_season_week() -> tuple[int, int]:
     try:

@@ -60,7 +60,7 @@ async def _ollama_list_model_names(*, host: str, timeout_s: float) -> list[str]:
 def _pick_fallback_model(models: list[str]) -> Optional[str]:
     if not models:
         return None
-    preferred = ("mistral:latest",)
+    preferred = (["qwen3-coder:480b-cloud","deepseek-v3.2:cloud"])
     for m in preferred:
         if m in models:
             return m
@@ -119,7 +119,7 @@ async def _ollama_chat(
     payload: Dict[str, Any] = {
         "model": model,
         "messages": messages,
-        "stream": False,
+        "stream": True,
     }
 
     timeout = httpx.Timeout(timeout_s)
@@ -179,7 +179,7 @@ async def explain_prediction(
     """Generate a JSON explanation payload using Ollama (best-effort)."""
     host = host or os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
     model = model or os.getenv("OLLAMA_MODEL", "qwen3-coder:480b-cloud")
-    timeout_s = float(timeout_s) if timeout_s is not None else float(os.getenv("OLLAMA_TIMEOUT_S", "6"))
+    timeout_s = float(timeout_s) if timeout_s is not None else float(os.getenv("OLLAMA_TIMEOUT_S", "15"))
 
     prompt = _build_prompt(pred)
     try:
@@ -265,7 +265,7 @@ async def chat_messages(
 ) -> Dict[str, Any]:
     """Chat with Ollama using a list of role/content messages."""
     host = host or os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
-    model = model or os.getenv("OLLAMA_MODEL", "mistral:latest")
+    model = model or os.getenv("OLLAMA_MODEL", "deepseek-v3.2:cloud")
     timeout_s = float(timeout_s) if timeout_s is not None else float(os.getenv("OLLAMA_TIMEOUT_S", "6"))
 
     chat_payload: List[Dict[str, str]] = []

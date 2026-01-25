@@ -18,7 +18,6 @@ function resolveApiBase() {
     return (
       import.meta.env.VITE_API_DEV ||
       import.meta.env.VITE_API_BASE_DEV ||
-      import.meta.env.VITE_DEV_ENV || // legacy
       import.meta.env.VITE_API_BASE_URL ||
       ""
     );
@@ -45,25 +44,37 @@ export class HttpError extends Error {
   }
 }
 
-// Read body ONCE, then decide what it is.
 async function readBody(response) {
-  const text = await response.text(); // ✅ single read
-  if (!text) return { data: null, rawText: "" };
+  let rawText = "";
+  try {
+    rawText = await response.text();
+  } catch {
+    return { data: null, rawText: "" };
+  }
+
+  if (!rawText) {
+    return { data: null, rawText: "" };
+  }
 
   const contentType = response.headers.get("content-type") || "";
-  const isJson = contentType.includes("application/json");
-
-  if (isJson) {
+  if (contentType.includes("application/json")) {
     try {
-      return { data: JSON.parse(text), rawText: text };
+      return { data: JSON.parse(rawText), rawText };
     } catch {
-      // JSON header lied or backend returned HTML with json content-type
-      return { data: null, rawText: text };
+      return { data: rawText, rawText };
     }
   }
 
-  // Non-JSON (often HTML error page / Vercel index.html)
-  return { data: text, rawText: text };
+  const trimmed = rawText.trim();
+  if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+    try {
+      return { data: JSON.parse(trimmed), rawText };
+    } catch {
+      return { data: rawText, rawText };
+    }
+  }
+
+  return { data: rawText, rawText };
 }
 
 export async function fetchJson(path, options = {}) {

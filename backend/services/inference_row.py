@@ -249,6 +249,9 @@ def _roll_forward_stats(
     
     We take "rolling_*" and "elo_*" and "qb_*" columns from the last game 
     and copy them into this new row.
+    
+    Performance: Accumulates all updates in a dict then applies in one operation
+    to avoid DataFrame fragmentation warnings.
     """
     season = row_df.at[0, "season"]
     week = row_df.at[0, "week"]
@@ -259,45 +262,49 @@ def _roll_forward_stats(
     home_last = _get_latest_prior_game(home, season, week, history_cache)
     away_last = _get_latest_prior_game(away, season, week, history_cache)
     
-    updates = {}
+    # 2. Accumulate all column updates in a single dict (prevents fragmentation)
+    all_updates = {}
 
-    # Helper to map columns
-    # If the team was HOME in their last game, we take 'home_rolling_xxx'.
-    # If they were AWAY, we take 'away_rolling_xxx'.
-    def _map_stats(last_game_row: pd.Series, team: str, team_prefix: str):
-        if last_game_row is None: 
-            return
-            
-        was_home = _normalize_team(last_game_row["home_team"]) == team
+    # 3. Process Home Team stats
+    if home_last is not None:
+        was_home = _normalize_team(home_last["home_team"]) == home
         source_prefix = "home_" if was_home else "away_"
         
-        # We want to fill columns in the NEW row that start with `team_prefix` (e.g., "home_")
-        # Example: we want to fill "home_rolling_offensive_epa"
-        # We look for "home_rolling_offensive_epa" or "away_rolling_offensive_epa" in the OLD row
-        
-        target_candidates = [c for c in dataset_cols if c.startswith(team_prefix)]
-        
-        for tgt_col in target_candidates:
-            # Remove the "home_" or "away_" prefix to get the core stat name
-            # e.g. "home_rolling_epa" -> "rolling_epa"
-            core_stat = tgt_col[len(team_prefix):]
+        # Find all columns we need to populate for the home team
+        for tgt_col in dataset_cols:
+            if not tgt_col.startswith("home_"):
+                continue
             
-            # Reconstruct the source column name in the last game row
-            # e.g. "away_rolling_epa" if they were away last time
+            # Extract the core stat name (e.g., "rolling_offensive_epa")
+            core_stat = tgt_col[5:]  # len("home_") == 5
             src_col = f"{source_prefix}{core_stat}"
             
-            if src_col in last_game_row:
-                updates[tgt_col] = last_game_row[src_col]
-
-    # Map for Home Team (fills 'home_rolling...', 'home_prior...', etc)
-    _map_stats(home_last, home, "home_")
+            if src_col in home_last.index and pd.notna(home_last[src_col]):
+                all_updates[tgt_col] = home_last[src_col]
     
-    # Map for Away Team (fills 'away_rolling...', 'away_prior...', etc)
-    _map_stats(away_last, away, "away_")
+    # 4. Process Away Team stats
+    if away_last is not None:
+        was_home = _normalize_team(away_last["home_team"]) == away
+        source_prefix = "home_" if was_home else "away_"
+        
+        for tgt_col in dataset_cols:
+            if not tgt_col.startswith("away_"):
+                continue
+            
+            core_stat = tgt_col[5:]  # len("away_") == 5
+            src_col = f"{source_prefix}{core_stat}"
+            
+            if src_col in away_last.index and pd.notna(away_last[src_col]):
+                all_updates[tgt_col] = away_last[src_col]
     
-    # Apply updates
-    if updates:
-        row_df = row_df.assign(**updates)
+    # 5. Apply ALL updates in a single operation (no fragmentation)
+    if all_updates:
+        # Create new columns DataFrame and concat with original
+        # This is more efficient than repeated .assign() calls
+        new_cols_df = pd.DataFrame([all_updates], index=row_df.index)
+        row_df = pd.concat([row_df, new_cols_df], axis=1)
+        # Remove duplicates, keeping the rightmost (newest) columns
+        row_df = row_df.loc[:, ~row_df.columns.duplicated(keep='last')]
         
     return row_df
 
@@ -331,6 +338,8 @@ def _impute_remaining_missing(row_df: pd.DataFrame, dataset_df: pd.DataFrame, ex
     If we still have missing values for required columns (e.g. maybe it's Week 1 and there's no history),
     fill them with the Median value from the entire dataset.
     This prevents the model from crashing on NaNs.
+    
+    Performance: Only computes medians for columns that are actually missing.
     """
     # 1. Ensure all expected columns exist (fill with NaN if missing)
     row_df = row_df.reindex(columns=expected_cols)
@@ -339,19 +348,25 @@ def _impute_remaining_missing(row_df: pd.DataFrame, dataset_df: pd.DataFrame, ex
     missing_cols = row_df.columns[row_df.isna().any()].tolist()
     if not missing_cols:
         return row_df
+    
+    # Edge case: Empty dataset
+    if dataset_df is None or dataset_df.empty:
+        return row_df.fillna(0)
         
-    # 3. Calculate medians only for the missing columns to save time
-    # We drop target columns from the dataset first to avoid data leakage (though unlikely to overlap)
+    # 3. Calculate medians ONLY for the missing columns to save time
+    # Drop target columns from the dataset first to avoid data leakage
     safe_ds = dataset_df.drop(columns=[c for c in DROP_COLS if c in dataset_df.columns], errors='ignore')
     
     # Only compute medians for numeric columns that are explicitly missing
-    # We restrict to the intersection of Missing & Numeric
     numeric_ds = safe_ds.select_dtypes(include=[np.number])
     target_fills = [c for c in missing_cols if c in numeric_ds.columns]
     
     if target_fills:
         medians = numeric_ds[target_fills].median()
         row_df = row_df.fillna(medians)
+    
+    # Fill any remaining non-numeric missing values with 0 or empty string
+    row_df = row_df.fillna(0)
         
     return row_df
 
