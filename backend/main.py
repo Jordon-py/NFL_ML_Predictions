@@ -105,6 +105,7 @@ from .schemas import (
 from .services.prediction_service import PredictionService
 from .services.inference_row import build_model_input_row
 from .config import DATA_DIR as CFG_DATA_DIR, MODELS_DIR as CFG_MODELS_DIR, resolve_cors, TRUTHY
+from .utils.artifact_loader import ensure_artifacts
 from .main_helpers import (
     InferenceBundle,
     load_inference_bundle,
@@ -755,6 +756,7 @@ async def lifespan(app: FastAPI):
     # Startup: Load models and dataset
     try:
         log.info(f"Starting up: Loading model bundle from {CFG_MODELS_DIR}...")
+        ensure_artifacts()
         
         # 1. Load Bundle (Models)
         state["bundle"] = load_inference_bundle(CFG_MODELS_DIR)

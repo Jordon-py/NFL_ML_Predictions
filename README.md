@@ -34,6 +34,12 @@ Backend:
 - `MODELS_DIR`: Override models directory (must contain `metadata.json` + artifacts).
 - `DATA_DIR`: Override dataset directory (default resolves to `backend/data/datasets`).
 - `DATASET_PATH`: Force a specific dataset CSV path.
+- `MODEL_BUNDLE_URL`: URL to a zip/tar with model artifacts (extracted into `MODELS_DIR`).
+- `DATA_BUNDLE_URL`: URL to a zip/tar with datasets (extracted into `DATA_DIR`).
+- `ARTIFACT_BUNDLE_URL`: URL to a zip/tar bundle (extracted into `ARTIFACT_DIR`, default `backend/`).
+- `ARTIFACT_DIR`: Extraction root for `ARTIFACT_BUNDLE_URL`.
+- `ARTIFACT_SKIP_IF_PRESENT`: `true` to skip download when target dir is populated (default `true`).
+- `ARTIFACT_FORCE`: `true` to force re-download even if files exist.
 - `ALLOWED_ORIGINS`: Comma-separated CORS allowlist.
 - `ALLOW_ORIGIN_REGEX`: Regex for dynamic origins (defaults to Vercel previews).
 - `RESTRICT_CORS`: `true` to restrict to allowlist only.
@@ -79,6 +85,8 @@ Note: Legacy `/legacy/*` routes have been removed; use the root endpoints above.
 - Models are loaded from `MODELS_DIR` (default `backend/models`).
 - Dataset defaults to the newest `game_features_*.csv` under `DATA_DIR`
   (default `backend/data/datasets`). Set `DATASET_PATH` for an explicit file.
+- If artifact URLs are provided, the backend will download/extract models and/or datasets
+  at startup using `MODEL_BUNDLE_URL`, `DATA_BUNDLE_URL`, or `ARTIFACT_BUNDLE_URL`.
 - Prediction history is persisted in `backend/Predictions/prediction_history.json`.
 - `backend/build_csv_datasets_v3.py` writes datasets to `backend/data/datasets` by default.
 - `backend/post_schedule.json` is used when regular-season schedules are exhausted.
