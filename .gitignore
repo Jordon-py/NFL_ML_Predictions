@@ -5,6 +5,7 @@ __pycache__/
 *.exe
 ## Virtual environments
 .venv/
+.venv*/
 venv/
 env/
 ENV/
@@ -84,10 +85,13 @@ MANIFEST
 /data/
 *.csv
 *.json
-!backend/data/*.csv
 !backend/data/*.json
-!backend/data/datasets/*.csv
-!backend/data/datasets/**/*.csv
+!backend/data/datasets/*.json
+!backend/data/team_logos.csv
+!backend/data/team_logo.csv
+!backend/Nfl_schedule_2025.csv
+!backend/data/Nfl_schedule_2025.csv
+backend/data/datasets_local/
 
 # Local-only backend artifacts (keep production datasets under backend/data/datasets)
 backend/data/legacy_data/
@@ -104,13 +108,12 @@ frontend/public/data/
 
 *.pkl
 *.model
+*.joblib
+backend/models/
+backend/data/models/
+backend/*/models/
 !requirements.txt
 !README.md
-!backend/data/prod-models/models/*.joblib
-!backend/data/prod-models/*.csv
-!backend/models/
-!backend/models/*.joblib
-# CHANGED: Allow production model artifacts for Heroku deployment
 
 
 
