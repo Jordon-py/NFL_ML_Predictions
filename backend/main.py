@@ -557,6 +557,11 @@ async def health():
     reason = "models_loaded" if ready else "prediction engine not initialized"
     return HealthResponse(status=status, mode=mode, reason=reason)
 
+@app.get("/health", response_model=HealthResponse)
+async def health_legacy():
+    """Legacy system health check alias for compatibility."""
+    return await health()
+
 @app.get("/api/health/deep")
 async def health_deep() -> Dict[str, Any]:
     """Deep health check: verifies models, dataset, and dependencies."""
