@@ -87,7 +87,7 @@ ABBR_FIX: Dict[str, str] = {
 
 
 # Name of the output CSV file for the generated dataset.
-OUTPUT_DATASET_NAME = f"data/game_features_{datetime.now().strftime('%Y%m%d')}.csv"
+OUTPUT_DATASET_NAME = f"game_features_{datetime.now().strftime('%Y%m%d')}.csv"
 
 # Pairwise dominance helpers
 HAS_winner_BOOL = True  # if you only have scores, set False
@@ -131,6 +131,33 @@ def current_season_week():
     season = nfl.get_current_season()
     week = nfl.get_current_week()
     return season, week
+
+
+def to_pandas_safe(obj: Any) -> pd.DataFrame:
+    """Convert pandas/polars-like tables to pandas DataFrame safely."""
+    if obj is None:
+        return pd.DataFrame()
+    if isinstance(obj, pd.DataFrame):
+        return obj
+    if hasattr(obj, "collect"):
+        try:
+            obj = obj.collect()
+        except Exception:
+            pass
+    if hasattr(obj, "to_pandas"):
+        try:
+            return obj.to_pandas(use_pyarrow_extension_array=False)
+        except TypeError:
+            return obj.to_pandas()
+    if hasattr(obj, "to_dicts"):
+        try:
+            return pd.DataFrame(obj.to_dicts())
+        except Exception:
+            pass
+    try:
+        return pd.DataFrame(obj)
+    except Exception:
+        return pd.DataFrame()
 
 
 def _normalize_codes(df: pd.DataFrame, cols: List[str]) -> pd.DataFrame:
