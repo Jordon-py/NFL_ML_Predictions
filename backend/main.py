@@ -53,27 +53,44 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from backend.app.core.settings import get_settings
-from backend.utils.functions_for_main import (
-    _add_kickoff_utc_datetime,
-    _coerce_season_week,
-    _normalize_team_columns,
-    _get_game_row_with_source,
-    TEAM_ABBR_MAP,
-    _prepare_inputs,
-    _is_pipeline,
-    _align_numeric_df_for_model,
-    _normalize_team_code,
-    _predict_score,
-    _clamp_score,
-    _smooth_win_probability,
-    _roll_forward_missing_player_stats
-)
+from backend.utils import functions_for_main as fn_main
 from backend.utils.ops_reporting import (
     collect_dataset_versions,
     collect_performance_drift,
     resolve_latest_dataset,
     file_sha256,
 )
+
+_add_kickoff_utc_datetime = fn_main._add_kickoff_utc_datetime
+_coerce_season_week = fn_main._coerce_season_week
+_normalize_team_columns = fn_main._normalize_team_columns
+_prepare_inputs = fn_main._prepare_inputs
+_is_pipeline = fn_main._is_pipeline
+_align_numeric_df_for_model = fn_main._align_numeric_df_for_model
+_normalize_team_code = fn_main._normalize_team_code
+_predict_score = fn_main._predict_score
+_clamp_score = fn_main._clamp_score
+_smooth_win_probability = fn_main._smooth_win_probability
+TEAM_ABBR_MAP = getattr(fn_main, "TEAM_ABBR_MAP", {})
+_roll_forward_missing_player_stats = getattr(
+    fn_main,
+    "_roll_forward_missing_player_stats",
+    lambda df, row_df, home_team, away_team, season, week: row_df,
+)
+
+if hasattr(fn_main, "_get_game_row_with_source"):
+    _get_game_row_with_source = fn_main._get_game_row_with_source
+else:
+    # Backward-compatibility for environments where functions_for_main still exports only `_get_game_row`.
+    def _get_game_row_with_source(
+        df: pd.DataFrame,
+        season: int,
+        week: int,
+        home_team: str,
+        away_team: str,
+    ) -> Tuple[pd.DataFrame, Literal["dataset_exact", "dataset_fuzzy"]]:
+        row = fn_main._get_game_row(df, season, week, home_team, away_team)
+        return row, "dataset_exact"
 
 # -------------------------------------------------------------------
 # Logging
