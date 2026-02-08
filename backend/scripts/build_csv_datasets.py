@@ -48,11 +48,22 @@ REQUIRED_COLUMNS: List[str] = [
 
 
 def parse_args() -> argparse.Namespace:
+    current_year = datetime.now(timezone.utc).year
     parser = argparse.ArgumentParser(
         description="Build NFL game_features dataset with production-grade validation and reporting."
     )
-    parser.add_argument("--start", type=int, default=2018, help="Start season (inclusive).")
-    parser.add_argument("--end", type=int, default=2026, help="End season (inclusive).")
+    parser.add_argument(
+        "--start",
+        type=int,
+        default=max(1999, current_year - 8),
+        help="Start season (inclusive).",
+    )
+    parser.add_argument(
+        "--end",
+        type=int,
+        default=current_year + 1,
+        help="End season (inclusive).",
+    )
     parser.add_argument(
         "--out-dir",
         type=str,

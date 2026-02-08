@@ -29,26 +29,35 @@ Notes:
 import json
 import logging
 import os
-import re
+import hashlib
+import time
+import sys
+import threading
+import shutil
+import subprocess
+import csv
+import uuid
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from contextlib import asynccontextmanager
 from typing import List, Dict, Any, Optional, Tuple, Literal
-from urllib.parse import urlparse
 import nflreadpy as nfl
 from dotenv import load_dotenv
 import numpy as np
 import uvicorn
 import joblib
 import pandas as pd
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+from backend.app.core.settings import get_settings
 from backend.utils.functions_for_main import (
     _add_kickoff_utc_datetime,
     _coerce_season_week,
     _normalize_team_columns,
-    _get_game_row,
+    _get_game_row_with_source,
     TEAM_ABBR_MAP,
     _prepare_inputs,
     _is_pipeline,
@@ -58,6 +67,12 @@ from backend.utils.functions_for_main import (
     _clamp_score,
     _smooth_win_probability,
     _roll_forward_missing_player_stats
+)
+from backend.utils.ops_reporting import (
+    collect_dataset_versions,
+    collect_performance_drift,
+    resolve_latest_dataset,
+    file_sha256,
 )
 
 # -------------------------------------------------------------------
@@ -75,26 +90,41 @@ logging.basicConfig(
 # -------------------------------------------------------------------
 
 BASE_DIR = Path(__file__).parent.resolve()
+REPO_ROOT = BASE_DIR.parent
 
-# Load backend/.env no matter where uvicorn is launched from (project root vs backend/)
-load_dotenv(BASE_DIR / ".env")
+# Load local backend/.env only outside Heroku dynos.
+if not os.getenv("DYNO"):
+    load_dotenv(BASE_DIR / ".env")
+
+SETTINGS = get_settings()
+logging.getLogger().setLevel(getattr(logging, str(SETTINGS.log_level).upper(), logging.INFO))
 
 DATA_DIR = BASE_DIR / "data"
+REPORTS_DIR = BASE_DIR / "reports"
+JOBS_DIR = DATA_DIR / "jobs"
+STAGING_MODELS_DIR = DATA_DIR / "models" / "staging"
+CURRENT_MODELS_DIR = DATA_DIR / "models" / "current"
+METRICS_HISTORY_PATH = REPORTS_DIR / "drift" / "metrics_history.csv"
 
 
 
 # Allow overriding the schedule CSV via env; default to backend/data
-schedule_env = os.environ.get("SCHEDULE_PATH")
-SCHEDULE_PATH = Path(schedule_env) if schedule_env else (DATA_DIR / "Nfl_schedule_2025.csv")
+schedule_env_path = SETTINGS.resolved_schedule_path
+SCHEDULE_PATH = schedule_env_path if schedule_env_path else (DATA_DIR / "Nfl_schedule_2025.csv")
 
 # Required model keys for /predict to be "ready"
 REQUIRED_MODELS: Tuple[str, ...] = ("home", "away", "win")
+PREDICT_CACHE_TTL_SEC = max(0, int(SETTINGS.predict_cache_ttl_sec))
+PREDICT_CACHE_MAX_ITEMS = max(50, int(SETTINGS.predict_cache_max_items))
 # Models directory is resolved at runtime by _find_models_dir().
 # Override in production with: MODELS_DIR=/absolute/or/repo-relative/path
 
 
 # Ensure expected folders exist (safe on repeated calls)
 DATA_DIR.mkdir(parents=True, exist_ok=True)
+REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+JOBS_DIR.mkdir(parents=True, exist_ok=True)
+STAGING_MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
 # NOTE: MODELS_DIR is resolved via _find_models_dir() (defined below)
 PREDICTION_STORAGE = BASE_DIR / "Predictions"
@@ -106,6 +136,37 @@ PREDICTION_STORAGE.mkdir(parents=True, exist_ok=True)
 
 
 
+
+
+def _to_pandas_schedule_safe(table: Any) -> pd.DataFrame:
+    """Convert schedule table objects (pandas/polars-like) to pandas safely."""
+    if table is None:
+        return pd.DataFrame()
+    if isinstance(table, pd.DataFrame):
+        return table
+
+    if hasattr(table, "to_pandas"):
+        try:
+            return table.to_pandas(use_pyarrow_extension_array=False)
+        except TypeError:
+            try:
+                return table.to_pandas()
+            except Exception:
+                pass
+        except Exception:
+            pass
+
+    if hasattr(table, "to_dicts"):
+        try:
+            return pd.DataFrame(table.to_dicts())
+        except Exception:
+            pass
+
+    try:
+        return pd.DataFrame(table)
+    except Exception:
+        logging.exception("[Schedule] Failed to coerce schedule table to pandas.")
+        return pd.DataFrame()
 
 
 def _find_schedule_path() -> Optional[Path]:
@@ -169,13 +230,17 @@ def _find_models_dir() -> Path:
     Tip:
       - On Heroku, always set MODELS_DIR to a path that exists *in the slug*.
     """
-    env = (
-        os.environ.get("MODELS_DIR")
-        or os.environ.get("MODELS_PATH")
-        or os.environ.get("MODEL_DIR")
-    )
-    if env:
-        p = Path(env).expanduser()
+    env_path = SETTINGS.resolved_models_dir
+    if env_path is None:
+        env = (
+            os.environ.get("MODELS_DIR")
+            or os.environ.get("MODELS_PATH")
+            or os.environ.get("MODEL_DIR")
+        )
+        env_path = Path(env).expanduser() if env else None
+
+    if env_path is not None:
+        p = env_path
         if _models_dir_has_required_artifacts(p):
             return p
         if p.exists():
@@ -243,12 +308,17 @@ def _load_team_logo_map() -> Dict[str, str]:
     if env:
         candidates.append(Path(env).expanduser())
 
-    # Prefer the nflverse CSV under backend/data/
+    # Prefer explicit data dir, then local backend/frontend fallbacks used in this repo.
     candidates.extend(
         [
             DATA_DIR / "team_logos.csv",
             DATA_DIR / "team_logo.csv",
             DATA_DIR / "team_logo_abbr.json",
+            BASE_DIR / "team_logos.csv",
+            BASE_DIR / "team_logo.csv",
+            BASE_DIR.parent / "team_logos.csv",
+            BASE_DIR.parent / "backend" / "team_logos.csv",
+            BASE_DIR.parent / "frontend" / "public" / "team_logos.csv",
         ]
     )
 
@@ -384,6 +454,58 @@ def _calculate_win_probability(
     return win_prob, False
 
 
+def _patch_imputer_compat(obj: Any) -> int:
+    """
+    Patch sklearn 1.7->1.8 SimpleImputer compatibility (`_fill_dtype`).
+    """
+    try:
+        from sklearn.impute import SimpleImputer
+    except Exception:
+        return 0
+
+    seen: set[int] = set()
+    patched = 0
+
+    def walk(node: Any) -> None:
+        nonlocal patched
+        if node is None:
+            return
+        node_id = id(node)
+        if node_id in seen:
+            return
+        seen.add(node_id)
+
+        if isinstance(node, SimpleImputer):
+            if (not hasattr(node, "_fill_dtype")) and hasattr(node, "_fit_dtype"):
+                try:
+                    node._fill_dtype = node._fit_dtype  # type: ignore[attr-defined]
+                    patched += 1
+                except Exception:
+                    pass
+
+        # Common sklearn container attributes
+        for attr in ("steps", "transformers_", "transformer_list", "named_steps"):
+            if hasattr(node, attr):
+                val = getattr(node, attr)
+                if isinstance(val, dict):
+                    for item in val.values():
+                        walk(item)
+                elif isinstance(val, list):
+                    for item in val:
+                        if isinstance(item, tuple):
+                            if len(item) >= 2:
+                                walk(item[1])
+                        else:
+                            walk(item)
+
+        for attr in ("estimator", "base_estimator", "preprocessor"):
+            if hasattr(node, attr):
+                walk(getattr(node, attr))
+
+    walk(obj)
+    return patched
+
+
 # -------------------------------------------------------------------
 # App State
 # -------------------------------------------------------------------
@@ -398,11 +520,23 @@ class AppState:
     """
 
     def __init__(self) -> None:
+        self.started_at: datetime = datetime.now(timezone.utc)
+        self.last_prediction_at: Optional[datetime] = None
         self.dataset: Optional[pd.DataFrame] = None
+        self.dataset_path: Optional[Path] = None
+        self.dataset_hash: Optional[str] = None
+        self.dataset_mtime: Optional[float] = None
         self.models: Dict[str, Any] = {}
+        self.models_metadata: Dict[str, Any] = {}
+        self.feature_manifest: List[str] = []
         # Optional shared preprocessor artifact (may be saved separately from models)
         self.preprocessor: Optional[Any] = None
         self.history: List[Dict[str, Any]] = []
+        self.predict_cache: Dict[str, Dict[str, Any]] = {}
+        self.predict_cache_hits: int = 0
+        self.predict_cache_misses: int = 0
+        self.retrain_jobs: Dict[str, Dict[str, Any]] = {}
+        self.retrain_lock = threading.Lock()
 
         # Cached numeric medians from the loaded dataset (used for stable imputation).
         # Set during _load_dataset().
@@ -414,22 +548,98 @@ class AppState:
     # -------------------------
     def load(self) -> None:
         """Load dataset + models at startup with defensive logging."""
+        self.started_at = datetime.now(timezone.utc)
         self._load_dataset()
         self._load_models()
 
-    def _load_dataset(self) -> None:
-        """Load the most recent game_features*.csv into memory."""
+    def refresh_dataset_if_changed(self) -> bool:
+        """
+        Reload dataset when the selected file has changed on disk.
+        Returns True when a reload occurred.
+        """
         try:
-            candidates = sorted(
-                DATA_DIR.glob("game_features*.csv"),
-                key=lambda p: p.stat().st_mtime,
-                reverse=True,
+            explicit = SETTINGS.dataset_path
+            target_path = resolve_latest_dataset(DATA_DIR, explicit_path=explicit)
+        except Exception:
+            return False
+
+        if not target_path.exists():
+            return False
+        target_mtime = float(target_path.stat().st_mtime)
+
+        if self.dataset_path is None:
+            self._load_dataset()
+            return True
+        if self.dataset_path.resolve() != target_path.resolve():
+            self._load_dataset()
+            return True
+        if self.dataset_mtime is None or target_mtime > float(self.dataset_mtime):
+            self._load_dataset()
+            return True
+        return False
+
+    def _prediction_cache_key(self, *, season: int, week: int, home_team: str, away_team: str) -> str:
+        return f"{season}:{week}:{home_team}:{away_team}"
+
+    def get_cached_prediction(self, key: str) -> Optional[Dict[str, Any]]:
+        if PREDICT_CACHE_TTL_SEC <= 0:
+            return None
+
+        entry = self.predict_cache.get(key)
+        if not entry:
+            self.predict_cache_misses += 1
+            return None
+
+        ts = float(entry.get("stored_ts", 0.0))
+        age = time.time() - ts
+        if age > PREDICT_CACHE_TTL_SEC:
+            self.predict_cache.pop(key, None)
+            self.predict_cache_misses += 1
+            return None
+
+        self.predict_cache_hits += 1
+        payload = entry.get("payload")
+        if isinstance(payload, dict):
+            return payload.copy()
+        return None
+
+    def store_cached_prediction(self, key: str, payload: Dict[str, Any]) -> None:
+        if PREDICT_CACHE_TTL_SEC <= 0:
+            return
+
+        if len(self.predict_cache) >= PREDICT_CACHE_MAX_ITEMS:
+            # Remove oldest entry first.
+            oldest_key = min(
+                self.predict_cache.keys(),
+                key=lambda k: float(self.predict_cache[k].get("stored_ts", 0.0)),
             )
-            path = candidates[0] if candidates else (DATA_DIR / "game_features.csv")
+            self.predict_cache.pop(oldest_key, None)
+
+        self.predict_cache[key] = {
+            "stored_ts": time.time(),
+            "payload": payload.copy(),
+        }
+
+    def _load_dataset(self) -> None:
+        """Load DATASET_PATH or the most recent game_features*.csv into memory."""
+        try:
+            explicit = SETTINGS.dataset_path
+            try:
+                path = resolve_latest_dataset(DATA_DIR, explicit_path=explicit)
+            except FileNotFoundError:
+                if explicit:
+                    logging.warning(
+                        "[Dataset] DATASET_PATH not found (%s). Falling back to latest game_features*.csv.",
+                        explicit,
+                    )
+                path = resolve_latest_dataset(DATA_DIR, explicit_path=None)
 
             if not path.exists():
                 logging.warning("[Dataset] No dataset found at: %s", path)
                 self.dataset = None
+                self.dataset_path = None
+                self.dataset_hash = None
+                self.dataset_mtime = None
                 return
 
             logging.info("[Dataset] Loading dataset from: %s", path)
@@ -437,9 +647,15 @@ class AppState:
 
             # Normalize key columns for consistent lookups
             df = _coerce_season_week(df)
-            df = _normalize_team_columns(df, cols=["home_team", "away_team"])
+            df = _normalize_team_columns(df, cols=["home_team", "away_team", "home_abbr", "away_abbr"])
 
             self.dataset = df
+            self.dataset_path = path
+            try:
+                self.dataset_hash = file_sha256(path)
+            except Exception:
+                self.dataset_hash = hashlib.sha256(path.read_bytes()).hexdigest()
+            self.dataset_mtime = float(path.stat().st_mtime)
 
 
             # Cache numeric medians once so prediction-time imputations are stable
@@ -459,14 +675,23 @@ class AppState:
 
                 self.numeric_medians = None
 
-            logging.info("[Dataset] Loaded %d rows", len(df))
+            logging.info(
+                "[Dataset] Loaded %d rows from %s (sha256=%s)",
+                len(df),
+                path.name,
+                self.dataset_hash,
+            )
         except Exception as e:  # pragma: no cover - defensive
             logging.exception("[Dataset] Error while loading dataset: %s", e)
             self.dataset = None
+            self.dataset_path = None
+            self.dataset_hash = None
+            self.dataset_mtime = None
 
     def _load_models(self) -> None:
         """Load each required model independently."""
         self.models = {}
+        self.models_metadata = {}
         logging.info("[Model] Using models directory: %s", MODELS_DIR)
         # Default model filenames (non-pipeline artifacts)
         model_files: Dict[str, str] = {
@@ -481,13 +706,16 @@ class AppState:
             pipe_path = MODELS_DIR / pipe_filename
             model_path = MODELS_DIR / filename
 
-            # Choose the path to load
-            if pipe_path.exists():
+            prefer_pipeline = _env_flag("PREFER_PIPELINE_MODELS", "false")
+            if prefer_pipeline and pipe_path.exists():
                 path = pipe_path
-                logging.info("[Model] Found pipeline artifact for '%s' at %s; preferring it", name, path)
-            else:
+                logging.info("[Model] Using pipeline artifact for '%s': %s", name, path)
+            elif model_path.exists():
                 path = model_path
-                logging.info("[Model] Loading model '%s' from: %s", name, path)
+                logging.info("[Model] Using estimator artifact for '%s': %s", name, path)
+            else:
+                path = pipe_path
+                logging.info("[Model] Estimator missing for '%s'; falling back to pipeline path: %s", name, path)
 
             if not path.exists():
                 logging.warning("[Model] Missing model file for '%s': %s", name, path)
@@ -495,6 +723,9 @@ class AppState:
 
             try:
                 loaded = joblib.load(path)
+                patched = _patch_imputer_compat(loaded)
+                if patched:
+                    logging.info("[Model] Applied %d sklearn-imputer compatibility patches for '%s'", patched, name)
                 self.models[name] = loaded
                 logging.info("[Model] Loaded '%s' successfully from %s", name, path)
                 # If this happens to be a sklearn Pipeline, log its steps for visibility
@@ -511,6 +742,16 @@ class AppState:
                 logging.exception("[Model] Error loading '%s' from %s: %s", name, path, e)
 
         logging.info("[Model] Loaded model keys: %s", list(self.models.keys()))
+        metadata_path = MODELS_DIR / "metadata.json"
+        if metadata_path.exists():
+            try:
+                self.models_metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+            except Exception as e:
+                logging.warning("[Model] Failed to parse metadata.json at %s: %s", metadata_path, e)
+                self.models_metadata = {}
+        else:
+            self.models_metadata = {}
+
         # Attempt to load a standalone preprocessor artifact if present. Some
         # training runs save the fitted ColumnTransformer / preprocessor as
         # `preprocessor.joblib` under the same models directory. If available,
@@ -520,6 +761,9 @@ class AppState:
         if prep_path.exists():
             try:
                 self.preprocessor = joblib.load(prep_path)
+                patched = _patch_imputer_compat(self.preprocessor)
+                if patched:
+                    logging.info("[Model] Applied %d sklearn-imputer compatibility patches for preprocessor", patched)
                 logging.info("[Model] Loaded standalone preprocessor from %s", prep_path)
             except Exception as e:  # pragma: no cover - defensive
                 logging.exception("[Model] Failed to load preprocessor %s: %s", prep_path, e)
@@ -579,6 +823,11 @@ class AppState:
                         # Be defensive: do not fail model loading due to pipeline patching
                         logging.exception("[Model] Error while attempting to inspect/patch model %s", mname)
 
+        try:
+            self.feature_manifest = _feature_manifest()
+        except Exception:
+            self.feature_manifest = []
+
 
 state = AppState()
 
@@ -603,39 +852,6 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-def _normalize_origin(raw: str) -> Optional[str]:
-    origin = (raw or "").strip().strip('"').strip("'")
-    if not origin:
-        return None
-
-    # Browsers send Origin without a trailing slash; normalize to match.
-    origin = origin.rstrip("/")
-
-    # If given a hostname without scheme, assume https.
-    if "://" not in origin and "." in origin:
-        origin = f"https://{origin}"
-
-    try:
-        parsed = urlparse(origin)
-        if parsed.scheme not in ("http", "https") or not parsed.netloc:
-            return None
-    except Exception:
-        return None
-
-    return origin
-
-
-def _parse_origins(env_value: Optional[str]) -> List[str]:
-    if not env_value:
-        return []
-    parts = [p for p in (env_value or "").split(",") if p.strip()]
-    out: List[str] = []
-    for p in parts:
-        o = _normalize_origin(p)
-        if o and o not in out:
-            out.append(o)
-    return out
-
 
 # CORS configuration
 # ------------------
@@ -652,74 +868,15 @@ def _parse_origins(env_value: Optional[str]) -> List[str]:
 #                         Example (recommended):
 #                           ^https://.*\.vercel\.app$
 #
-# Important:
-#   - FastAPI's allow_origin_regex expects a REAL regex (not a glob).
-#     If you accidentally set "*.vercel.app", we convert it to a safe regex.
-
 def _env_flag(name: str, default: str = "true") -> bool:
     """Parse boolean-ish env vars safely."""
     return str(os.getenv(name, default)).strip().lower() in ("1", "true", "yes", "y", "on")
 
+ALLOWED_ORIGINS: List[str] = SETTINGS.allowed_origins
+ALLOW_ORIGIN_REGEX = SETTINGS.effective_allow_origin_regex
 
-def _maybe_glob_to_regex(raw: Optional[str]) -> Optional[str]:
-    """Convert common glob patterns (like *.vercel.app) to a regex FastAPI understands.
-
-    FastAPI / Starlette want a regex that matches the *full origin string*, including scheme.
-    """
-    if not raw:
-        return None
-
-    p = str(raw).strip().strip('"').strip("'").rstrip("/")
-    if not p:
-        return None
-
-    # If it already looks like a regex, assume the user knows what they're doing.
-    if p.startswith("^") or p.endswith("$"):
-        return p
-
-    # Common Heroku mistake: ALLOW_ORIGIN_REGEX="*.vercel.app"
-    if "vercel.app" in p and "*" in p:
-        return r"^https://.*\.vercel\.app$"
-
-    # If it contains a wildcard but isn't a regex, treat it as a glob and convert.
-    if "*" in p:
-        escaped = re.escape(p).replace(r"\*", ".*")
-        if "://" in p:
-            return rf"^{escaped}$"
-        return rf"^https?://{escaped}$"
-
-    # Hostname only (no scheme): match http/https for that exact host.
-    if "://" not in p and "." in p:
-        return rf"^https?://{re.escape(p)}$"
-
-    return p
-
-
-# Read origins from env (Heroku), then fall back to a small safe default list.
-_allowed_raw = (
-    os.environ.get("ALLOWED_ORIGINS")
-    or os.environ.get("CORS_ORIGINS")
-    or os.environ.get("CORS_DEPLOYED")  # legacy/diagnostic var some deploy scripts used
-)
-
-ALLOWED_ORIGINS: List[str] = _parse_origins(_allowed_raw) or [
-    # Production (your chosen canonical frontend)
-    "https://nfl-ml-predictions.vercel.app",
-    # Local dev (Vite)
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-]
-
-# Regex origins: Vercel previews change per deploy, so a regex is the cleanest solution.
-_allow_regex_raw = os.environ.get("ALLOW_ORIGIN_REGEX") or os.environ.get("CORS_ORIGINS_REGEX")
-ALLOW_ORIGIN_REGEX = _maybe_glob_to_regex(_allow_regex_raw)
-
-# Optional convenience switch: allow previews even if regex isn't explicitly configured.
-if not ALLOW_ORIGIN_REGEX and _env_flag("ALLOW_VERCEL_PREVIEWS", "true"):
-    ALLOW_ORIGIN_REGEX = r"^https://.*\.vercel\.app$"
-
-# If RESTRICT_CORS is false, we intentionally open it up (useful for quick debugging).
-if not _env_flag("RESTRICT_CORS", "true"):
+# If RESTRICT_CORS is false, intentionally open CORS for debugging.
+if not SETTINGS.restrict_cors:
     ALLOWED_ORIGINS = ["*"]
     ALLOW_ORIGIN_REGEX = None
 
@@ -735,6 +892,43 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(HTTPException)
+async def _http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+    detail = exc.detail
+    if isinstance(detail, (dict, list)):
+        message = "Request failed."
+    else:
+        message = str(detail) if detail is not None else "Request failed."
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": {
+                "status_code": int(exc.status_code),
+                "message": message,
+            },
+            "detail": detail,
+            "path": str(request.url.path),
+        },
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def _validation_exception_handler(
+    request: Request, exc: RequestValidationError
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": {
+                "status_code": 422,
+                "message": "Request validation failed.",
+            },
+            "detail": exc.errors(),
+            "path": str(request.url.path),
+        },
+    )
 
 # -------------------------------------------------------------------
 # Pydantic Models
@@ -803,11 +997,691 @@ class PredictionResponse(BaseModel):
     home_win_probability: float
     away_win_probability: float
     point_diff: float
+    predicted_home_points: Optional[float] = None
+    predicted_away_points: Optional[float] = None
+    predicted_total: Optional[float] = None
+    home_win_prob: Optional[float] = None
+    explanation_fields: Dict[str, Any] = Field(default_factory=dict)
     generated_at: datetime
     mode: str = Field(..., description="Mode of prediction, e.g., 'production'")
     win_classifier_used: bool = Field(
         ..., description="Whether the win probability classifier was used"
     )
+
+
+class DebugPredictInputResponse(BaseModel):
+    selected_row_source: Literal["dataset_exact", "dataset_fuzzy", "synthetic"]
+    constructed_row: Dict[str, Any] = Field(default_factory=dict)
+    missing_before_impute: List[str] = Field(default_factory=list)
+    missing_after_impute: List[str] = Field(default_factory=list)
+    missing_prior_count: int = 0
+    row_quality_score: float
+    row_quality_rules: Dict[str, Any] = Field(default_factory=dict)
+    model_feature_manifest: List[str] = Field(default_factory=list)
+    expected_raw_columns: List[str] = Field(default_factory=list)
+    dataset_hash: Optional[str] = None
+    dataset_path: Optional[str] = None
+
+
+class DatasetPreviewResponse(BaseModel):
+    dataset_path: Optional[str] = None
+    dataset_hash: Optional[str] = None
+    total_rows: int
+    filtered_rows: int
+    returned_rows: int
+    offset: int
+    limit: int
+    columns: List[str] = Field(default_factory=list)
+    rows: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class RetrainRequest(BaseModel):
+    dataset_path: Optional[str] = None
+    splits: int = Field(default=5, ge=2, le=12)
+    embargo: int = Field(default=1, ge=0, le=8)
+    skip_train: bool = False
+    train_extra: List[str] = Field(default_factory=list)
+
+
+class RetrainResponse(BaseModel):
+    job_id: str
+    status: str
+    created_at: datetime
+
+
+class RetrainJobStatus(BaseModel):
+    job_id: str
+    status: str
+    created_at: datetime
+    updated_at: datetime
+    logs: List[str] = Field(default_factory=list)
+    metrics: Dict[str, Any] = Field(default_factory=dict)
+    artifacts: Dict[str, Any] = Field(default_factory=dict)
+    gate: Dict[str, Any] = Field(default_factory=dict)
+
+
+class PromoteResponse(BaseModel):
+    job_id: str
+    promoted_to: str
+    promoted_at: datetime
+    status: str
+
+
+class DatasetStatsResponse(BaseModel):
+    rows: int
+    path: str
+    hash: Optional[str] = None
+
+
+class HistoryMetricsResponse(BaseModel):
+    total_predictions: int
+    win_rate: float = 0.0
+
+
+class HistoryStatsResponse(BaseModel):
+    metrics: HistoryMetricsResponse
+
+
+class StatusOverviewResponse(BaseModel):
+    health: HealthResponse
+    dataset: DatasetStatsResponse
+    history: HistoryStatsResponse
+
+
+class PredictCacheStatusResponse(BaseModel):
+    enabled: bool
+    ttl_seconds: int
+    max_items: int
+    items: int
+    hits: int
+    misses: int
+    hit_rate: Optional[float] = None
+
+
+class RuntimeStatusResponse(BaseModel):
+    generated_at: str
+    started_at: str
+    uptime_seconds: int
+    dataset_path: Optional[str] = None
+    dataset_hash: Optional[str] = None
+    dataset_modified_at: Optional[str] = None
+    dataset_age_seconds: Optional[int] = None
+    last_prediction_at: Optional[str] = None
+    history_size: int
+    predict_cache: PredictCacheStatusResponse
+
+
+class PerformanceDriftPointResponse(BaseModel):
+    run_id: str
+    trained_at: str
+    brier: Optional[float] = None
+    mae: Optional[float] = None
+    home_mae: Optional[float] = None
+    away_mae: Optional[float] = None
+    source_csv: Optional[str] = None
+
+
+class PerformanceDriftResponse(BaseModel):
+    generated_at: str
+    count: int
+    points: List[PerformanceDriftPointResponse] = Field(default_factory=list)
+
+
+class OffseasonStatusResponse(BaseModel):
+    generated_at: str
+    offseason_mode: bool
+    current_season: Optional[int] = None
+    current_week: Optional[int] = None
+    next_known_schedule_date: Optional[str] = None
+    days_until_next_game: Optional[int] = None
+    data_freshness_seconds: Optional[int] = None
+    dataset_hash: Optional[str] = None
+    last_trained_at: Optional[str] = None
+
+
+class StatusResponse(BaseModel):
+    status: Literal["healthy", "unhealthy"]
+    environment: str
+    version: str
+    uptime_seconds: int
+    dataset_hash: Optional[str] = None
+    dataset_path: Optional[str] = None
+    model_keys: List[str] = Field(default_factory=list)
+
+
+class ScheduleGameResponse(BaseModel):
+    game_id: str
+    season: int
+    week: int
+    home_team: str
+    away_team: str
+    home_abbr: Optional[str] = None
+    away_abbr: Optional[str] = None
+    home_logo: Optional[str] = None
+    away_logo: Optional[str] = None
+    kickoff: Optional[str] = None
+
+
+def _json_safe_value(v: Any) -> Any:
+    if isinstance(v, (np.bool_, bool)):
+        return bool(v)
+    if isinstance(v, (np.floating, float)):
+        return None if pd.isna(v) else float(v)
+    if isinstance(v, (np.integer, int)):
+        return int(v)
+    if isinstance(v, (pd.Timestamp, datetime)):
+        return v.isoformat()
+    try:
+        return None if pd.isna(v) else v
+    except Exception:
+        return v
+
+
+def _json_safe_row(row_df: pd.DataFrame) -> Dict[str, Any]:
+    """Serialize the first row of a DataFrame into JSON-safe primitives."""
+    if row_df is None or row_df.empty:
+        return {}
+    row = row_df.iloc[0].to_dict()
+    return {k: _json_safe_value(v) for k, v in row.items()}
+
+
+def _json_safe_records(df: pd.DataFrame) -> List[Dict[str, Any]]:
+    if df is None or df.empty:
+        return []
+    records = df.to_dict(orient="records")
+    safe_rows: List[Dict[str, Any]] = []
+    for row in records:
+        safe_rows.append({k: _json_safe_value(v) for k, v in row.items()})
+    return safe_rows
+
+
+def _row_quality_details(
+    *,
+    selected_row_source: str,
+    missing_after_count: int,
+    missing_prior_count: int,
+    total_cols: int,
+) -> Dict[str, Any]:
+    """
+    Score row quality on a 0-100 scale with explicit penalties.
+    """
+    score = 100.0
+    source_penalty = 0.0
+    if selected_row_source == "synthetic":
+        source_penalty = 30.0
+    elif selected_row_source == "dataset_fuzzy":
+        source_penalty = 10.0
+    score -= source_penalty
+
+    completeness_penalty = float(min(40.0, max(0, missing_after_count) * 2.0))
+    score -= completeness_penalty
+
+    prior_penalty = float(min(40.0, max(0, missing_prior_count) * 5.0))
+    score -= prior_penalty
+
+    missing_ratio = (float(missing_after_count) / float(max(1, total_cols))) * 100.0
+    ratio_penalty = float(min(20.0, missing_ratio * 0.2))
+    score -= ratio_penalty
+
+    score = float(np.clip(score, 0.0, 100.0))
+    return {
+        "row_quality_score": score,
+        "row_quality_rules": {
+            "base_score": 100.0,
+            "source_penalty": source_penalty,
+            "completeness_penalty": completeness_penalty,
+            "missing_prior_penalty": prior_penalty,
+            "missing_ratio_penalty": ratio_penalty,
+        },
+    }
+
+
+def _is_local_request(request: Request) -> bool:
+    host = (request.client.host if request.client else "") or ""
+    host = host.lower().strip()
+    return host in {"127.0.0.1", "::1", "localhost"}
+
+
+def _require_admin_access(request: Request) -> None:
+    if not bool(SETTINGS.enable_admin):
+        raise HTTPException(status_code=403, detail="Admin endpoints are disabled.")
+
+    expected_token = (SETTINGS.admin_token or "").strip()
+    provided_token = (
+        request.headers.get("x-admin-token")
+        or request.headers.get("x_admin_token")
+        or ""
+    ).strip()
+
+    auth_header = (request.headers.get("authorization") or "").strip()
+    if auth_header.lower().startswith("bearer "):
+        provided_token = auth_header[7:].strip()
+
+    if expected_token:
+        if provided_token != expected_token:
+            raise HTTPException(status_code=403, detail="Invalid admin token.")
+        return
+
+    if not _is_local_request(request):
+        raise HTTPException(
+            status_code=403,
+            detail="Admin endpoints require localhost unless ADMIN_TOKEN is configured.",
+        )
+
+
+def _safe_mean_col(df: pd.DataFrame, col: str) -> Optional[float]:
+    if col not in df.columns:
+        return None
+    vals = pd.to_numeric(df[col], errors="coerce").dropna()
+    if vals.empty:
+        return None
+    return float(vals.mean())
+
+
+def _parse_ts_to_iso(raw: Any) -> Optional[str]:
+    if raw is None:
+        return None
+    try:
+        dt = pd.to_datetime(str(raw), utc=True, errors="coerce")
+        if pd.isna(dt):
+            return None
+        return dt.to_pydatetime().isoformat()
+    except Exception:
+        return None
+
+
+def _load_json(path: Path) -> Dict[str, Any]:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def _extract_run_metrics(run_models_dir: Path) -> Dict[str, Any]:
+    csv_path = run_models_dir / "cv_fold_metrics.csv"
+    summary_path = run_models_dir / "training_summary.json"
+    metadata_path = run_models_dir / "metadata.json"
+
+    brier: Optional[float] = None
+    mae: Optional[float] = None
+    home_mae: Optional[float] = None
+    away_mae: Optional[float] = None
+
+    if csv_path.exists():
+        try:
+            fold_df = pd.read_csv(csv_path)
+            home_mae = _safe_mean_col(fold_df, "home_mae_val")
+            away_mae = _safe_mean_col(fold_df, "away_mae_val")
+            brier = _safe_mean_col(fold_df, "win_brier_val")
+            vals = [x for x in (home_mae, away_mae) if x is not None]
+            if vals:
+                mae = float(sum(vals) / len(vals))
+        except Exception:
+            pass
+
+    summary = _load_json(summary_path) if summary_path.exists() else {}
+    if brier is None:
+        try:
+            brier = float(summary.get("win", {}).get("Brier_mean_val"))
+        except Exception:
+            brier = None
+    if mae is None:
+        try:
+            h = float(summary.get("home", {}).get("MAE_mean_val"))
+            a = float(summary.get("away", {}).get("MAE_mean_val"))
+            mae = float((h + a) / 2.0)
+        except Exception:
+            mae = None
+
+    metadata = _load_json(metadata_path) if metadata_path.exists() else {}
+    trained_at = (
+        _parse_ts_to_iso(metadata.get("timestamp"))
+        or _parse_ts_to_iso(metadata.get("training_timestamp_utc"))
+        or _parse_ts_to_iso(summary.get("training_timestamp_utc"))
+        or datetime.now(timezone.utc).isoformat()
+    )
+    run_id = run_models_dir.parent.name
+
+    return {
+        "run_id": run_id,
+        "trained_at": trained_at,
+        "brier": brier,
+        "mae": mae,
+        "home_mae": home_mae,
+        "away_mae": away_mae,
+        "cv_metrics_csv": str(csv_path) if csv_path.exists() else None,
+    }
+
+
+def _latest_baseline_metrics() -> Dict[str, Any]:
+    if METRICS_HISTORY_PATH.exists():
+        try:
+            hist = pd.read_csv(METRICS_HISTORY_PATH)
+            if not hist.empty:
+                last = hist.iloc[-1].to_dict()
+                return {
+                    "source": str(METRICS_HISTORY_PATH),
+                    "brier": float(last["brier"]) if pd.notna(last.get("brier")) else None,
+                    "mae": float(last["mae"]) if pd.notna(last.get("mae")) else None,
+                    "run_id": last.get("run_id"),
+                    "trained_at": last.get("trained_at"),
+                }
+        except Exception:
+            pass
+
+    points = collect_performance_drift(BASE_DIR, limit=1)
+    if points:
+        p = points[-1]
+        return {
+            "source": "collect_performance_drift",
+            "brier": p.get("brier"),
+            "mae": p.get("mae"),
+            "run_id": p.get("run_id"),
+            "trained_at": p.get("trained_at"),
+        }
+    return {"source": "none", "brier": None, "mae": None, "run_id": None, "trained_at": None}
+
+
+def _append_metrics_history(row: Dict[str, Any]) -> None:
+    METRICS_HISTORY_PATH.parent.mkdir(parents=True, exist_ok=True)
+    fieldnames = [
+        "timestamp",
+        "job_id",
+        "run_id",
+        "trained_at",
+        "brier",
+        "mae",
+        "home_mae",
+        "away_mae",
+        "brier_delta",
+        "mae_delta",
+        "gate_status",
+        "dataset_path",
+        "dataset_hash",
+        "staging_dir",
+    ]
+    file_exists = METRICS_HISTORY_PATH.exists()
+    with METRICS_HISTORY_PATH.open("a", encoding="utf-8", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=fieldnames)
+        if not file_exists:
+            writer.writeheader()
+        writer.writerow({k: row.get(k) for k in fieldnames})
+
+
+def _scan_latest_run_models_dir(started_at: datetime) -> Optional[Path]:
+    candidates = sorted(
+        BASE_DIR.glob("20*/models"),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+    threshold = started_at.timestamp() - 5.0
+    for p in candidates:
+        if p.stat().st_mtime >= threshold:
+            return p
+    return candidates[0] if candidates else None
+
+
+def _update_job(job_id: str, **kwargs: Any) -> None:
+    with state.retrain_lock:
+        job = state.retrain_jobs.get(job_id)
+        if not job:
+            return
+        job.update(kwargs)
+        job["updated_at"] = datetime.now(timezone.utc).isoformat()
+
+
+def _append_job_log(job_id: str, message: str) -> None:
+    with state.retrain_lock:
+        job = state.retrain_jobs.get(job_id)
+        if not job:
+            return
+        logs = job.setdefault("logs", [])
+        logs.append(f"{datetime.now(timezone.utc).isoformat()} {message}")
+        job["updated_at"] = datetime.now(timezone.utc).isoformat()
+
+
+def _run_retrain_job(job_id: str, payload: RetrainRequest) -> None:
+    started_at = datetime.now(timezone.utc)
+    job_dir = JOBS_DIR / job_id
+    job_dir.mkdir(parents=True, exist_ok=True)
+    _update_job(job_id, status="RUNNING")
+    _append_job_log(job_id, "Started retrain job.")
+
+    weekly_script = BASE_DIR / "scripts" / "weekly_retrain.py"
+    if not weekly_script.exists():
+        _update_job(job_id, status="FAILED")
+        _append_job_log(job_id, f"Missing script: {weekly_script}")
+        return
+
+    cmd = [
+        sys.executable,
+        str(weekly_script),
+        "--data-dir",
+        str(DATA_DIR),
+        "--reports-dir",
+        str(REPORTS_DIR),
+        "--splits",
+        str(payload.splits),
+        "--embargo",
+        str(payload.embargo),
+    ]
+    if payload.dataset_path:
+        cmd.extend(["--dataset-path", payload.dataset_path])
+    if payload.skip_train:
+        cmd.append("--skip-train")
+    for item in payload.train_extra:
+        cmd.extend(["--train-extra", str(item)])
+
+    try:
+        proc = subprocess.run(
+            cmd,
+            cwd=str(REPO_ROOT),
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+    except Exception as e:
+        _update_job(job_id, status="FAILED")
+        _append_job_log(job_id, f"Failed to execute retrain command: {e}")
+        return
+
+    (job_dir / "train.stdout.log").write_text(proc.stdout or "", encoding="utf-8")
+    (job_dir / "train.stderr.log").write_text(proc.stderr or "", encoding="utf-8")
+    (job_dir / "train.command.txt").write_text(" ".join(cmd), encoding="utf-8")
+
+    _append_job_log(job_id, f"Command finished with return code {proc.returncode}.")
+    if int(proc.returncode) != 0:
+        _update_job(
+            job_id,
+            status="FAILED",
+            artifacts={
+                "job_dir": str(job_dir),
+                "stdout_log": str(job_dir / "train.stdout.log"),
+                "stderr_log": str(job_dir / "train.stderr.log"),
+            },
+        )
+        return
+
+    if payload.skip_train:
+        _update_job(
+            job_id,
+            status="COMPLETED_NO_TRAIN",
+            artifacts={
+                "job_dir": str(job_dir),
+                "automation_summary": str(REPORTS_DIR / "automation" / "weekly_retrain_latest.json"),
+            },
+        )
+        return
+
+    run_models_dir = _scan_latest_run_models_dir(started_at)
+    if run_models_dir is None or not run_models_dir.exists():
+        _update_job(job_id, status="FAILED")
+        _append_job_log(job_id, "Could not locate model run directory after retrain.")
+        return
+
+    staging_dir = STAGING_MODELS_DIR / job_id
+    if staging_dir.exists():
+        shutil.rmtree(staging_dir)
+    shutil.copytree(run_models_dir, staging_dir)
+    _append_job_log(job_id, f"Copied run artifacts to staging: {staging_dir}")
+
+    metrics = _extract_run_metrics(staging_dir)
+    baseline = _latest_baseline_metrics()
+
+    metric_brier_raw = metrics.get("brier")
+    baseline_brier_raw = baseline.get("brier")
+    metric_mae_raw = metrics.get("mae")
+    baseline_mae_raw = baseline.get("mae")
+
+    numeric_types = (int, float, np.integer, np.floating)
+    metric_brier = float(metric_brier_raw) if isinstance(metric_brier_raw, numeric_types) else None
+    baseline_brier = float(baseline_brier_raw) if isinstance(baseline_brier_raw, numeric_types) else None
+    metric_mae = float(metric_mae_raw) if isinstance(metric_mae_raw, numeric_types) else None
+    baseline_mae = float(baseline_mae_raw) if isinstance(baseline_mae_raw, numeric_types) else None
+
+    brier_delta = (
+        (metric_brier - baseline_brier)
+        if metric_brier is not None and baseline_brier is not None
+        else None
+    )
+    mae_delta = (
+        (metric_mae - baseline_mae)
+        if metric_mae is not None and baseline_mae is not None
+        else None
+    )
+
+    gate_pass = True
+    if brier_delta is not None and brier_delta > 0.01:
+        gate_pass = False
+    if mae_delta is not None and mae_delta > 0.5:
+        gate_pass = False
+
+    gate_status = "PASSED" if gate_pass else "FAILED_GATE"
+    dataset_path = payload.dataset_path or (str(state.dataset_path) if state.dataset_path else None)
+    dataset_hash = None
+    if dataset_path:
+        try:
+            dataset_hash = file_sha256(Path(dataset_path))
+        except Exception:
+            dataset_hash = state.dataset_hash
+    if dataset_hash is None:
+        dataset_hash = state.dataset_hash
+
+    staging_meta_path = staging_dir / "metadata.json"
+    staging_meta = _load_json(staging_meta_path)
+    staging_meta.update(
+        {
+            "bundle_version": staging_meta.get("bundle_version") or f"staging-{job_id}",
+            "dataset_hash": dataset_hash,
+            "trained_at": metrics.get("trained_at"),
+            "training_script": "backend/train_models.py",
+            "feature_manifest": state.feature_manifest,
+            "staging_job_id": job_id,
+            "selection_metrics": {
+                "brier": metrics.get("brier"),
+                "mae": metrics.get("mae"),
+                "home_mae": metrics.get("home_mae"),
+                "away_mae": metrics.get("away_mae"),
+            },
+        }
+    )
+    staging_meta_path.write_text(json.dumps(staging_meta, indent=2), encoding="utf-8")
+
+    _append_metrics_history(
+        {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "job_id": job_id,
+            "run_id": metrics.get("run_id"),
+            "trained_at": metrics.get("trained_at"),
+            "brier": metrics.get("brier"),
+            "mae": metrics.get("mae"),
+            "home_mae": metrics.get("home_mae"),
+            "away_mae": metrics.get("away_mae"),
+            "brier_delta": brier_delta,
+            "mae_delta": mae_delta,
+            "gate_status": gate_status,
+            "dataset_path": dataset_path,
+            "dataset_hash": dataset_hash,
+            "staging_dir": str(staging_dir),
+        }
+    )
+
+    final_status = "READY_FOR_PROMOTION" if gate_pass else "FAILED_GATE"
+    _update_job(
+        job_id,
+        status=final_status,
+        metrics=metrics,
+        gate={
+            "status": gate_status,
+            "baseline": baseline,
+            "brier_delta": brier_delta,
+            "mae_delta": mae_delta,
+            "thresholds": {"max_brier_regression": 0.01, "max_mae_regression": 0.5},
+        },
+        artifacts={
+            "job_dir": str(job_dir),
+            "run_models_dir": str(run_models_dir),
+            "staging_dir": str(staging_dir),
+            "stdout_log": str(job_dir / "train.stdout.log"),
+            "stderr_log": str(job_dir / "train.stderr.log"),
+        },
+    )
+    _append_job_log(job_id, f"Job completed with gate status: {gate_status}")
+
+
+def _promote_staged_bundle(job_id: str) -> Path:
+    staging_dir = STAGING_MODELS_DIR / job_id
+    if not staging_dir.exists():
+        raise HTTPException(status_code=404, detail=f"Staging bundle not found for job_id={job_id}")
+
+    CURRENT_MODELS_DIR.parent.mkdir(parents=True, exist_ok=True)
+    tmp_target = CURRENT_MODELS_DIR.parent / f"current_tmp_{job_id}"
+    if tmp_target.exists():
+        shutil.rmtree(tmp_target)
+    shutil.copytree(staging_dir, tmp_target)
+
+    backup_dir: Optional[Path] = None
+    if CURRENT_MODELS_DIR.exists():
+        backup_dir = CURRENT_MODELS_DIR.parent / (
+            f"current_backup_{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}"
+        )
+        shutil.move(str(CURRENT_MODELS_DIR), str(backup_dir))
+
+    shutil.move(str(tmp_target), str(CURRENT_MODELS_DIR))
+
+    global MODELS_DIR
+    MODELS_DIR = CURRENT_MODELS_DIR
+    state._load_models()
+    _append_job_log(job_id, f"Promoted staged bundle to {CURRENT_MODELS_DIR}.")
+    if backup_dir:
+        _append_job_log(job_id, f"Previous bundle backup: {backup_dir}")
+    return CURRENT_MODELS_DIR
+
+
+def _feature_manifest() -> List[str]:
+    """Derive expected raw feature columns from metadata/preprocessor."""
+    if getattr(state, "feature_manifest", None):
+        return [str(x) for x in state.feature_manifest]
+
+    meta = state.models_metadata if isinstance(state.models_metadata, dict) else {}
+
+    # Preferred metadata shape in existing bundles.
+    if isinstance(meta.get("feature_names"), list):
+        return [str(x) for x in meta["feature_names"]]
+    raw_cols = meta.get("raw_feature_columns")
+    if isinstance(raw_cols, dict):
+        num = raw_cols.get("numeric") or []
+        cat = raw_cols.get("categorical") or []
+        return [str(x) for x in (list(num) + list(cat))]
+
+    # Fallback to fitted preprocessor if present.
+    if state.preprocessor is not None and hasattr(state.preprocessor, "feature_names_in_"):
+        manifest = [str(x) for x in list(getattr(state.preprocessor, "feature_names_in_", []))]
+        state.feature_manifest = manifest
+        return manifest
+
+    state.feature_manifest = []
+    return []
 
 
 # -------------------------------------------------------------------
@@ -848,8 +1722,218 @@ def health() -> HealthResponse:
     )
 
 
-@app.get("/status/overview")
-def status_overview() -> Dict[str, Any]:
+@app.get("/status", response_model=StatusResponse)
+def status() -> StatusResponse:
+    now = datetime.now(timezone.utc)
+    health_payload = health()
+    uptime_seconds = max(0, int((now - state.started_at).total_seconds()))
+    return StatusResponse(
+        status=health_payload.status,
+        environment=str(SETTINGS.app_env),
+        version=os.getenv("APP_VERSION", "dev"),
+        uptime_seconds=uptime_seconds,
+        dataset_hash=state.dataset_hash,
+        dataset_path=str(state.dataset_path) if state.dataset_path else None,
+        model_keys=sorted(state.models.keys()),
+    )
+
+
+@app.get("/debug")
+def debug() -> Dict[str, Any]:
+    """Quick diagnostics used by tests and deployment debugging."""
+    return {
+        "dataset_loaded": state.dataset is not None,
+        "dataset_path": str(state.dataset_path) if state.dataset_path else None,
+        "dataset_hash": state.dataset_hash,
+        "dataset_rows": int(len(state.dataset)) if state.dataset is not None else 0,
+        "models_dir": str(MODELS_DIR),
+        "loaded_models": sorted(state.models.keys()),
+        "cors_origins": ALLOWED_ORIGINS,
+        "allow_origin_regex": ALLOW_ORIGIN_REGEX,
+        "restrict_cors": SETTINGS.restrict_cors,
+        "environment": SETTINGS.app_env,
+    }
+
+
+@app.post("/api/debug/predict-input", response_model=DebugPredictInputResponse)
+@app.post("/debug/predict-input", response_model=DebugPredictInputResponse)
+def debug_predict_input(request: PredictRequest) -> DebugPredictInputResponse:
+    """
+    Show the constructed inference row and feature completeness diagnostics.
+    """
+    state.refresh_dataset_if_changed()
+    if state.dataset is None:
+        raise HTTPException(status_code=503, detail="Dataset is not loaded.")
+
+    season = int(request.season)
+    week = int(request.week)
+    home_team = _normalize_team_code(request.home_team)
+    away_team = _normalize_team_code(request.away_team)
+
+    selected_row_source: Literal["dataset_exact", "dataset_fuzzy", "synthetic"] = "dataset_exact"
+    try:
+        row_df, selected_row_source = _get_game_row_with_source(
+            state.dataset, season, week, home_team, away_team
+        )
+    except HTTPException:
+        selected_row_source = "synthetic"
+        row_df = pd.DataFrame(
+            [
+                {
+                    "season": season,
+                    "week": week,
+                    "home_team": home_team,
+                    "away_team": away_team,
+                    "time_key": (season * 100) + week,
+                }
+            ]
+        )
+
+    row_df = _roll_forward_missing_player_stats(
+        df=state.dataset,
+        row_df=row_df,
+        home_team=home_team,
+        away_team=away_team,
+        season=season,
+        week=week,
+    )
+
+    full_df, _ = _prepare_inputs(row_df)
+    feature_cols = _feature_manifest()
+
+    if feature_cols:
+        view = full_df.reindex(columns=feature_cols)
+    else:
+        view = full_df.copy()
+
+    missing_before = [
+        c for c in view.columns
+        if c not in full_df.columns or pd.isna(view.iloc[0][c])
+    ]
+
+    # Median-impute numeric columns for diagnostics only.
+    imputed = view.copy()
+    medians = getattr(state, "numeric_medians", None)
+    if medians is not None and not imputed.empty:
+        row_label = imputed.index[0]
+        for col in imputed.columns:
+            if col in medians.index and pd.isna(imputed.iloc[0][col]):
+                imputed.at[row_label, col] = medians[col]
+
+    missing_after = [c for c in imputed.columns if pd.isna(imputed.iloc[0][c])]
+    prior_cols = [c for c in imputed.columns if ("prior_" in c or "rolling_" in c)]
+    missing_prior_count = sum(1 for c in prior_cols if c in missing_after)
+
+    total_cols = max(1, len(imputed.columns))
+    quality = _row_quality_details(
+        selected_row_source=selected_row_source,
+        missing_after_count=len(missing_after),
+        missing_prior_count=int(missing_prior_count),
+        total_cols=total_cols,
+    )
+
+    return DebugPredictInputResponse(
+        selected_row_source=selected_row_source,
+        constructed_row=_json_safe_row(imputed),
+        missing_before_impute=missing_before,
+        missing_after_impute=missing_after,
+        missing_prior_count=int(missing_prior_count),
+        row_quality_score=quality["row_quality_score"],
+        row_quality_rules=quality["row_quality_rules"],
+        model_feature_manifest=feature_cols,
+        expected_raw_columns=feature_cols,
+        dataset_hash=state.dataset_hash,
+        dataset_path=str(state.dataset_path) if state.dataset_path else None,
+    )
+
+
+@app.get("/api/debug/dataset", response_model=DatasetPreviewResponse)
+@app.get("/debug/dataset", response_model=DatasetPreviewResponse)
+def debug_dataset_view(
+    limit: int = Query(25, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    season: Optional[int] = Query(None),
+    week: Optional[int] = Query(None),
+    team: Optional[str] = Query(None),
+    columns: Optional[str] = Query(None),
+) -> DatasetPreviewResponse:
+    """
+    Preview rows from the active dataset with lightweight filtering.
+    """
+    state.refresh_dataset_if_changed()
+    if state.dataset is None:
+        raise HTTPException(status_code=503, detail="Dataset is not loaded.")
+
+    base_df = state.dataset
+    filtered = base_df
+
+    if season is not None:
+        for col in ("season", "season_num"):
+            if col in filtered.columns:
+                col_vals = pd.to_numeric(filtered[col], errors="coerce").astype("Int64")
+                filtered = filtered[col_vals == int(season)]
+                break
+
+    if week is not None:
+        for col in ("week", "week_num"):
+            if col in filtered.columns:
+                col_vals = pd.to_numeric(filtered[col], errors="coerce").astype("Int64")
+                filtered = filtered[col_vals == int(week)]
+                break
+
+    if team:
+        team_code = _normalize_team_code(team)
+        team_cols = [c for c in ("home_team", "away_team", "home_abbr", "away_abbr") if c in filtered.columns]
+        if team_cols:
+            mask = pd.Series(False, index=filtered.index)
+            for col in team_cols:
+                mask = mask | (filtered[col].astype(str).str.upper() == team_code)
+            filtered = filtered[mask]
+
+    available_columns = list(filtered.columns)
+    if columns:
+        requested = [c.strip() for c in columns.split(",") if c.strip()]
+        selected_columns = [c for c in requested if c in filtered.columns]
+    else:
+        selected_columns = []
+
+    if not selected_columns:
+        preferred = [
+            "season",
+            "week",
+            "game_id",
+            "home_team",
+            "away_team",
+            "home_abbr",
+            "away_abbr",
+            "time_key",
+            "home_points",
+            "away_points",
+            "home_win",
+        ]
+        selected_columns = [c for c in preferred if c in filtered.columns]
+
+    if not selected_columns:
+        selected_columns = available_columns[: min(30, len(available_columns))]
+
+    paged = filtered.iloc[offset: offset + limit].reindex(columns=selected_columns)
+    rows = _json_safe_records(paged)
+
+    return DatasetPreviewResponse(
+        dataset_path=str(state.dataset_path) if state.dataset_path else None,
+        dataset_hash=state.dataset_hash,
+        total_rows=int(len(base_df)),
+        filtered_rows=int(len(filtered)),
+        returned_rows=int(len(rows)),
+        offset=int(offset),
+        limit=int(limit),
+        columns=selected_columns,
+        rows=rows,
+    )
+
+
+@app.get("/status/overview", response_model=StatusOverviewResponse)
+def status_overview() -> StatusOverviewResponse:
     """
     Summary endpoint used by StatsPage.jsx.
 
@@ -861,10 +1945,11 @@ def status_overview() -> Dict[str, Any]:
     if state.dataset is not None:
         dataset_stats = {
             "rows": len(state.dataset),
-            "path": "game_features.csv",  # Label only; not exact filename
+            "path": str(state.dataset_path) if state.dataset_path else "unknown",
+            "hash": state.dataset_hash,
         }
     else:
-        dataset_stats = {"rows": 0, "path": "none"}
+        dataset_stats = {"rows": 0, "path": "none", "hash": None}
 
     return {
         "health": health(),  # reuse typed health response
@@ -878,13 +1963,280 @@ def status_overview() -> Dict[str, Any]:
     }
 
 
+@app.get("/status/models")
+def status_models() -> Dict[str, Any]:
+    """
+    Return model bundle readiness + provenance details for observability.
+    """
+    metadata = state.models_metadata if isinstance(state.models_metadata, dict) else {}
+    loaded_models = sorted(state.models.keys())
+    missing_required = [m for m in REQUIRED_MODELS if m not in state.models]
+
+    artifacts = {
+        "home_pipe": (MODELS_DIR / "home_pipe.joblib").exists(),
+        "away_pipe": (MODELS_DIR / "away_pipe.joblib").exists(),
+        "win_pipe": (MODELS_DIR / "win_pipe.joblib").exists(),
+        "home_model": (MODELS_DIR / "home_model.joblib").exists(),
+        "away_model": (MODELS_DIR / "away_model.joblib").exists(),
+        "win_model": (MODELS_DIR / "win_clf_calibrated.joblib").exists(),
+        "preprocessor": (MODELS_DIR / "preprocessor.joblib").exists(),
+        "metadata": (MODELS_DIR / "metadata.json").exists(),
+    }
+
+    dataset_hash = metadata.get("dataset_hash") or state.dataset_hash
+    if (not dataset_hash) and state.dataset_path and state.dataset_path.exists():
+        try:
+            dataset_hash = hashlib.sha256(state.dataset_path.read_bytes()).hexdigest()
+        except Exception:
+            dataset_hash = None
+
+    return {
+        "ready": len(missing_required) == 0,
+        "models_dir": str(MODELS_DIR),
+        "current_models_dir": str(CURRENT_MODELS_DIR) if CURRENT_MODELS_DIR.exists() else None,
+        "loaded_models": loaded_models,
+        "missing_required": missing_required,
+        "feature_manifest_size": len(state.feature_manifest),
+        "artifacts": artifacts,
+        "provenance": {
+            "trained_at": metadata.get("timestamp") or metadata.get("training_timestamp_utc"),
+            "dataset_hash": dataset_hash,
+            "bundle_version": metadata.get("bundle_version"),
+            "training_script": metadata.get("training_script"),
+            "metadata_path": str(MODELS_DIR / "metadata.json"),
+        },
+        "dataset_path": str(state.dataset_path) if state.dataset_path else None,
+    }
+
+
+@app.get("/status/runtime", response_model=RuntimeStatusResponse)
+def status_runtime() -> RuntimeStatusResponse:
+    now = datetime.now(timezone.utc)
+    uptime_seconds = max(0, int((now - state.started_at).total_seconds()))
+
+    dataset_modified_at: Optional[str] = None
+    dataset_age_seconds: Optional[int] = None
+    if state.dataset_path and state.dataset_path.exists():
+        try:
+            mtime = datetime.fromtimestamp(state.dataset_path.stat().st_mtime, tz=timezone.utc)
+            dataset_modified_at = mtime.isoformat()
+            dataset_age_seconds = max(0, int((now - mtime).total_seconds()))
+        except Exception:
+            dataset_modified_at = None
+            dataset_age_seconds = None
+
+    cache_total = state.predict_cache_hits + state.predict_cache_misses
+    cache_hit_rate = (state.predict_cache_hits / cache_total) if cache_total > 0 else None
+
+    return {
+        "generated_at": now.isoformat(),
+        "started_at": state.started_at.isoformat(),
+        "uptime_seconds": uptime_seconds,
+        "dataset_path": str(state.dataset_path) if state.dataset_path else None,
+        "dataset_hash": state.dataset_hash,
+        "dataset_modified_at": dataset_modified_at,
+        "dataset_age_seconds": dataset_age_seconds,
+        "last_prediction_at": state.last_prediction_at.isoformat() if state.last_prediction_at else None,
+        "history_size": len(state.history),
+        "predict_cache": {
+            "enabled": PREDICT_CACHE_TTL_SEC > 0,
+            "ttl_seconds": PREDICT_CACHE_TTL_SEC,
+            "max_items": PREDICT_CACHE_MAX_ITEMS,
+            "items": len(state.predict_cache),
+            "hits": state.predict_cache_hits,
+            "misses": state.predict_cache_misses,
+            "hit_rate": cache_hit_rate,
+        },
+    }
+
+
+@app.get("/status/dataset-versioning")
+def status_dataset_versioning(
+    limit: int = Query(12, ge=1, le=100)
+) -> Dict[str, Any]:
+    versions = collect_dataset_versions(DATA_DIR, limit=limit)
+    latest = versions[-1] if versions else None
+    previous = versions[-2] if len(versions) > 1 else None
+
+    row_delta = None
+    col_delta = None
+    changed = None
+    if latest and previous:
+        row_delta = int(latest["rows"] - previous["rows"])
+        col_delta = int(latest["columns"] - previous["columns"])
+        changed = bool(latest["sha256"] != previous["sha256"])
+
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "latest": latest,
+        "previous": previous,
+        "row_delta_vs_previous": row_delta,
+        "column_delta_vs_previous": col_delta,
+        "content_changed_vs_previous": changed,
+        "versions": versions,
+    }
+
+
+@app.get("/status/performance-drift", response_model=PerformanceDriftResponse)
+def status_performance_drift(
+    limit: int = Query(52, ge=1, le=520)
+) -> PerformanceDriftResponse:
+    points = collect_performance_drift(BASE_DIR, limit=limit)
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "count": len(points),
+        "points": points,
+    }
+
+
+@app.get("/api/offseason/status", response_model=OffseasonStatusResponse)
+@app.get("/offseason/status", response_model=OffseasonStatusResponse)
+def offseason_status() -> OffseasonStatusResponse:
+    now = datetime.now(timezone.utc)
+    state.refresh_dataset_if_changed()
+
+    next_games = get_schedule()
+    next_kickoff: Optional[datetime] = None
+    next_season: Optional[int] = None
+    next_week: Optional[int] = None
+    if next_games:
+        first = next_games[0]
+        next_season = int(first.get("season")) if first.get("season") is not None else None
+        next_week = int(first.get("week")) if first.get("week") is not None else None
+        kickoff_raw = first.get("kickoff")
+        if kickoff_raw:
+            try:
+                parsed = pd.to_datetime(kickoff_raw, utc=True, errors="coerce")
+                if parsed is not None and not pd.isna(parsed):
+                    next_kickoff = parsed.to_pydatetime()
+            except Exception:
+                next_kickoff = None
+
+    days_until_next = None
+    if next_kickoff is not None:
+        days_until_next = int((next_kickoff - now).total_seconds() // 86400)
+
+    offseason_mode = bool(
+        (not next_games)
+        or (next_kickoff is None)
+        or (days_until_next is not None and days_until_next > 45)
+    )
+
+    last_trained = (
+        state.models_metadata.get("timestamp")
+        or state.models_metadata.get("training_timestamp_utc")
+    )
+
+    dataset_age_seconds = None
+    if state.dataset_path and state.dataset_path.exists():
+        try:
+            mtime = datetime.fromtimestamp(state.dataset_path.stat().st_mtime, tz=timezone.utc)
+            dataset_age_seconds = int((now - mtime).total_seconds())
+        except Exception:
+            dataset_age_seconds = None
+
+    return {
+        "generated_at": now.isoformat(),
+        "offseason_mode": offseason_mode,
+        "current_season": next_season,
+        "current_week": next_week,
+        "next_known_schedule_date": next_kickoff.isoformat() if next_kickoff else None,
+        "days_until_next_game": days_until_next,
+        "data_freshness_seconds": dataset_age_seconds,
+        "dataset_hash": state.dataset_hash,
+        "last_trained_at": last_trained,
+    }
+
+
+# -------------------------------------------------------------------
+# Admin Retrain + Promotion
+# -------------------------------------------------------------------
+
+
+@app.post("/admin/retrain", response_model=RetrainResponse)
+def admin_retrain(payload: RetrainRequest, request: Request) -> RetrainResponse:
+    _require_admin_access(request)
+
+    now = datetime.now(timezone.utc)
+    job_id = f"{now.strftime('%Y%m%dT%H%M%SZ')}_{uuid.uuid4().hex[:8]}"
+
+    with state.retrain_lock:
+        payload_dict = payload.model_dump() if hasattr(payload, "model_dump") else payload.dict()
+        state.retrain_jobs[job_id] = {
+            "job_id": job_id,
+            "status": "QUEUED",
+            "created_at": now.isoformat(),
+            "updated_at": now.isoformat(),
+            "payload": payload_dict,
+            "logs": [],
+            "metrics": {},
+            "artifacts": {},
+            "gate": {},
+        }
+
+    thread = threading.Thread(
+        target=_run_retrain_job,
+        args=(job_id, payload),
+        daemon=True,
+        name=f"retrain-{job_id}",
+    )
+    thread.start()
+
+    return RetrainResponse(job_id=job_id, status="QUEUED", created_at=now)
+
+
+@app.get("/admin/retrain/{job_id}", response_model=RetrainJobStatus)
+def admin_retrain_status(job_id: str, request: Request) -> RetrainJobStatus:
+    _require_admin_access(request)
+
+    job = state.retrain_jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+
+    return RetrainJobStatus(
+        job_id=job_id,
+        status=str(job.get("status", "UNKNOWN")),
+        created_at=pd.to_datetime(job.get("created_at"), utc=True).to_pydatetime(),
+        updated_at=pd.to_datetime(job.get("updated_at"), utc=True).to_pydatetime(),
+        logs=list(job.get("logs", [])),
+        metrics=dict(job.get("metrics", {})),
+        artifacts=dict(job.get("artifacts", {})),
+        gate=dict(job.get("gate", {})),
+    )
+
+
+@app.post("/admin/promote/{job_id}", response_model=PromoteResponse)
+def admin_promote(job_id: str, request: Request) -> PromoteResponse:
+    _require_admin_access(request)
+
+    job = state.retrain_jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    if str(job.get("status")) != "READY_FOR_PROMOTION":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Job {job_id} is not promotable (status={job.get('status')}).",
+        )
+
+    promoted_path = _promote_staged_bundle(job_id)
+    promoted_at = datetime.now(timezone.utc)
+    _update_job(job_id, status="PROMOTED", promoted_at=promoted_at.isoformat(), promoted_to=str(promoted_path))
+
+    return PromoteResponse(
+        job_id=job_id,
+        promoted_to=str(promoted_path),
+        promoted_at=promoted_at,
+        status="PROMOTED",
+    )
+
+
 # -------------------------------------------------------------------
 # Schedule: Next Week
 # -------------------------------------------------------------------
 
 
-@app.get("/schedule/next-week")
-def get_schedule() -> List[Dict[str, Any]]:
+@app.get("/schedule/next-week", response_model=List[ScheduleGameResponse])
+def get_schedule() -> List[ScheduleGameResponse]:
     """
     Return the schedule for the "next" NFL week based on the schedule CSV.
 
@@ -895,9 +2247,22 @@ def get_schedule() -> List[Dict[str, Any]]:
       - Determine the next slate using the earliest future game; fall back
         to the latest season/week in the file if all games are in the past.
     """
-    df = nfl.load_schedules(seasons=2025)
-    df = df.to_pandas()
-    print(f'List of columns from get schedule in main.py  : {df.columns.tolist()}')
+    df = pd.DataFrame()
+    try:
+        schedule_table = nfl.load_schedules(seasons=2025)
+        df = _to_pandas_schedule_safe(schedule_table)
+    except Exception as e:
+        logging.warning("[Schedule] nfl.load_schedules failed: %s", e)
+
+    if df is None or df.empty:
+        fallback = _find_schedule_path()
+        if fallback and fallback.exists():
+            try:
+                df = pd.read_csv(fallback)
+                logging.info("[Schedule] Loaded fallback schedule CSV: %s", fallback)
+            except Exception as e:
+                logging.warning("[Schedule] Failed fallback schedule CSV load: %s", e)
+
     if df is None or df.empty:
         logging.warning("[Schedule] No schedule data available; returning empty list.")
         return []
@@ -905,7 +2270,7 @@ def get_schedule() -> List[Dict[str, Any]]:
     df = _coerce_season_week(df)
     df = df.infer_objects()
     df = _normalize_team_columns(
-        df, cols=("home_abbr", "away_abbr", "home_team", "away_team")
+        df, cols=["home_abbr", "away_abbr", "home_team", "away_team"]
     )
     # Attach logos if we have a mapping file. This is optional; missing logo
     logo_map = _load_team_logo_map()
@@ -933,8 +2298,8 @@ def get_schedule() -> List[Dict[str, Any]]:
 
     results: List[Dict[str, Any]] = []
     for _, row in week_df.iterrows():
-        home_team = logo_map.get("team_name") if "team_name" == row.get("home_team") else row.get("home_team")
-        away_team = logo_map.get("team_name") if "team_name" == row.get("away_team") else row.get("away_team")
+        home_team = row.get("home_team")
+        away_team = row.get("away_team")
         home_abbr = row.get("home_abbr", home_team)
         away_abbr = row.get("away_abbr", away_team)
 
@@ -1005,6 +2370,7 @@ def get_prediction_history(
 # -------------------------------------------------------------------
 # /predict (final enhanced)
 # -------------------------------------------------------------------
+@app.post("/api/predict", response_model=PredictionResponse)
 @app.post("/predict", response_model=PredictionResponse)
 async def predict(request: PredictRequest) -> Dict[str, Any]:
     """
@@ -1018,6 +2384,7 @@ async def predict(request: PredictRequest) -> Dict[str, Any]:
       - Output smoothing for probability + sanity clamping for scores
     """
     # ----- Readiness -----
+    state.refresh_dataset_if_changed()
     models_ok = all(m in state.models for m in REQUIRED_MODELS)
     if state.dataset is None or not models_ok:
         missing = [m for m in REQUIRED_MODELS if m not in state.models]
@@ -1039,11 +2406,57 @@ async def predict(request: PredictRequest) -> Dict[str, Any]:
     if home_team == away_team:
         raise HTTPException(status_code=400, detail="home_team and away_team must be different.")
 
+    cache_key = state._prediction_cache_key(
+        season=season,
+        week=week,
+        home_team=home_team,
+        away_team=away_team,
+    )
+    cached = state.get_cached_prediction(cache_key)
+    if cached is not None:
+        state.last_prediction_at = datetime.now(timezone.utc)
+        state.history.append(cached)
+        state.history = state.history[-500:]
+        logging.info(
+            "[Predict] Cache hit for %s vs %s (season=%s week=%s)",
+            home_team,
+            away_team,
+            season,
+            week,
+        )
+        return cached
+
     df = state.dataset
     assert df is not None  # guarded above
 
     # ----- Find feature row -----
-    row = _get_game_row(df, season, week, home_team, away_team)
+    selected_row_source: Literal["dataset_exact", "dataset_fuzzy", "synthetic"] = "dataset_exact"
+    try:
+        row, selected_row_source = _get_game_row_with_source(
+            df, season, week, home_team, away_team
+        )
+    except HTTPException as e:
+        if e.status_code != 404:
+            raise
+        logging.info(
+            "[Predict] No exact dataset row for %s vs %s (season=%s week=%s); using synthetic fallback.",
+            home_team,
+            away_team,
+            season,
+            week,
+        )
+        row = pd.DataFrame(
+            [
+                {
+                    "season": season,
+                    "week": week,
+                    "home_team": home_team,
+                    "away_team": away_team,
+                    "time_key": (season * 100) + week,
+                }
+            ]
+        )
+        selected_row_source = "synthetic"
 
     # ----- Fill missing player stats (safe) -----
     row = _roll_forward_missing_player_stats(
@@ -1057,6 +2470,27 @@ async def predict(request: PredictRequest) -> Dict[str, Any]:
 
     # ----- Prepare model inputs -----
     full_df, numeric_df = _prepare_inputs(row)
+    feature_cols = _feature_manifest()
+
+    view_for_quality = full_df.reindex(columns=feature_cols) if feature_cols else full_df.copy()
+    quality_imputed = view_for_quality.copy()
+    medians = getattr(state, "numeric_medians", None)
+    if medians is not None and not quality_imputed.empty:
+        row_label = quality_imputed.index[0]
+        for col in quality_imputed.columns:
+            if col in medians.index and pd.isna(quality_imputed.iloc[0][col]):
+                quality_imputed.at[row_label, col] = medians[col]
+    missing_after_quality = [
+        c for c in quality_imputed.columns if pd.isna(quality_imputed.iloc[0][c])
+    ]
+    prior_cols = [c for c in quality_imputed.columns if ("prior_" in c or "rolling_" in c)]
+    missing_prior_count = sum(1 for c in prior_cols if c in missing_after_quality)
+    quality = _row_quality_details(
+        selected_row_source=selected_row_source,
+        missing_after_count=len(missing_after_quality),
+        missing_prior_count=int(missing_prior_count),
+        total_cols=max(1, len(quality_imputed.columns)),
+    )
 
     # ----- Predict scores -----
     home_model = state.models["home"]
@@ -1110,6 +2544,7 @@ async def predict(request: PredictRequest) -> Dict[str, Any]:
 
     # ----- Build response -----
     game_id = f"{season}_{week}_{home_team}_{away_team}"
+    predicted_total = float(h_score + a_score)
     generated_at = datetime.now(timezone.utc)
 
     result: Dict[str, Any] = {
@@ -1123,18 +2558,45 @@ async def predict(request: PredictRequest) -> Dict[str, Any]:
         "home_win_probability": float(win_prob),
         "away_win_probability": float(1.0 - win_prob),
         "point_diff": float(point_diff),
+        "predicted_home_points": float(h_score),
+        "predicted_away_points": float(a_score),
+        "predicted_total": predicted_total,
+        "home_win_prob": float(win_prob),
+        "explanation_fields": {
+            "selected_row_source": selected_row_source,
+            "row_quality_score": quality["row_quality_score"],
+            "row_quality_rules": quality["row_quality_rules"],
+            "dataset_hash": state.dataset_hash,
+            "dataset_path": str(state.dataset_path) if state.dataset_path else None,
+            "missing_prior_count": int(missing_prior_count),
+            "missing_after_impute_count": len(missing_after_quality),
+        },
         "generated_at": generated_at,
         "mode": "production",
         "win_classifier_used": bool(clf_used),
     }
+
+    state.last_prediction_at = generated_at
+    state.store_cached_prediction(cache_key, result)
 
     # ----- History (bounded) -----
     state.history.append(result)
     state.history = state.history[-500:]
 
     logging.info(
-        "[Predict] %s vs %s (season=%s week=%s) -> home=%.1f away=%.1f win_p=%.3f (clf_used=%s)",
-        home_team, away_team, season, week, h_score, a_score, win_prob, clf_used
+        "[Predict] %s vs %s (season=%s week=%s source=%s quality=%.1f hash=%s) -> home=%.1f away=%.1f total=%.1f win_p=%.3f (clf_used=%s)",
+        home_team,
+        away_team,
+        season,
+        week,
+        selected_row_source,
+        quality["row_quality_score"],
+        state.dataset_hash,
+        h_score,
+        a_score,
+        predicted_total,
+        win_prob,
+        clf_used,
     )
 
     return result
