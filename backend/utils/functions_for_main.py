@@ -3,7 +3,7 @@ import logging
 import nflreadpy as nfl
 import numpy as np
 from fastapi import HTTPException
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Sequence, Literal
 import os
 import json
 from pathlib import Path
@@ -116,7 +116,7 @@ def _coerce_season_week(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def _normalize_team_columns(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
+def _normalize_team_columns(df: pd.DataFrame, cols: Sequence[str]) -> pd.DataFrame:
     """
     Normalize team abbreviation/name columns to uppercase strings.
 
@@ -159,14 +159,85 @@ def _get_game_row(
     home_team: str,
     away_team: str,
 ) -> pd.DataFrame:
+    row, _ = _get_game_row_with_source(
+        df=df,
+        season=season,
+        week=week,
+        home_team=home_team,
+        away_team=away_team,
+    )
+    return row
+
+
+def _merge_duplicate_rows(rows: pd.DataFrame) -> pd.DataFrame:
+    """
+    Merge duplicate candidate rows by preserving the first row as canonical and
+    filling only missing cells from subsequent rows.
+    """
+    if rows is None or rows.empty:
+        return rows
+
+    merged = rows.iloc[[0]].copy()
+    if len(rows) == 1:
+        return merged
+
+    out_idx = merged.index[0]
+    for i in range(1, len(rows)):
+        src = rows.iloc[i]
+        for col in merged.columns:
+            try:
+                current = merged.at[out_idx, col]
+                if pd.isna(current):
+                    candidate = src.get(col, np.nan)
+                    if not pd.isna(candidate):
+                        merged.at[out_idx, col] = candidate
+            except Exception:
+                continue
+    return merged
+
+
+def _candidate_game_ids(season: int, week: int, home_team: str, away_team: str) -> List[str]:
+    """
+    Build canonical game_id candidates across legacy formatting variants.
+    """
+    candidates = [
+        f"{season}_{week}_{away_team}_{home_team}",
+        f"{season}_{week}_{home_team}_{away_team}",
+        f"{season}-{week}-{away_team}-{home_team}",
+        f"{season}-{week}-{home_team}-{away_team}",
+    ]
+    return [str(x).upper() for x in candidates]
+
+
+def _normalized_game_id_series(df: pd.DataFrame) -> Optional[pd.Series]:
+    if "game_id" not in df.columns:
+        return None
+    return (
+        df["game_id"]
+        .astype(str)
+        .str.upper()
+        .str.strip()
+        .str.replace(r"\s+", "", regex=True)
+    )
+
+
+def _get_game_row_with_source(
+    df: pd.DataFrame,
+    season: int,
+    week: int,
+    home_team: str,
+    away_team: str,
+) -> Tuple[pd.DataFrame, Literal["dataset_exact", "dataset_fuzzy"]]:
     """
     Find the single best matching dataset row for a game.
 
     Matching strategies (in order):
-      A) (home_team, away_team) columns if present
-      B) (home_abbr, away_abbr) columns if present
+      A) Exact {season, week, home_team, away_team} with canonical aliases
+      B) Exact {season, week, home_abbr, away_abbr} with canonical aliases
+      C) Canonical game_id fallback using legacy-compatible format variants
 
-    If multiple rows match, we take the first (deterministic) and log a warning.
+    If multiple rows match, we merge safely by taking the first row as canonical
+    and filling only missing values from duplicates.
     """
     required = {"season", "week"}
     if df is None or df.empty or not required.issubset(df.columns):
@@ -175,41 +246,88 @@ def _get_game_row(
             detail="Dataset is not loaded or missing required season/week columns.",
         )
 
-    base_mask = (df["season"] == season) & (df["week"] == week)
+    home_norm = _normalize_team_code(home_team)
+    away_norm = _normalize_team_code(away_team)
+
+    base_mask = (df["season"] == int(season)) & (df["week"] == int(week))
 
     team_masks: List[pd.Series] = []
 
     if {"home_team", "away_team"}.issubset(df.columns):
-        team_masks.append((df["home_team"] == home_team) & (df["away_team"] == away_team))
+        home_team_series = (
+            df["home_team"]
+            .astype(str)
+            .str.upper()
+            .map(lambda x: TEAM_ABBR_MAP.get(x, x))
+        )
+        away_team_series = (
+            df["away_team"]
+            .astype(str)
+            .str.upper()
+            .map(lambda x: TEAM_ABBR_MAP.get(x, x))
+        )
+        team_masks.append((home_team_series == home_norm) & (away_team_series == away_norm))
 
     if {"home_abbr", "away_abbr"}.issubset(df.columns):
-        team_masks.append((df["home_abbr"] == home_team) & (df["away_abbr"] == away_team))
-
-    if not team_masks:
-        raise HTTPException(
-            status_code=500,
-            detail="Dataset is missing home/away team identifier columns.",
+        home_abbr_series = (
+            df["home_abbr"]
+            .astype(str)
+            .str.upper()
+            .map(lambda x: TEAM_ABBR_MAP.get(x, x))
         )
-
-    team_mask = team_masks[0]
-    for m in team_masks[1:]:
-        team_mask = team_mask | m
-
-    row = df.loc[base_mask & team_mask]
-    if row.empty:
-        raise HTTPException(
-            status_code=404,
-            detail="Game data not found for given season/week/teams.",
+        away_abbr_series = (
+            df["away_abbr"]
+            .astype(str)
+            .str.upper()
+            .map(lambda x: TEAM_ABBR_MAP.get(x, x))
         )
+        team_masks.append((home_abbr_series == home_norm) & (away_abbr_series == away_norm))
 
-    if len(row) > 1:
-        logging.warning(
-            "[Predict] Duplicate rows matched (%d). Using the first row. season=%s week=%s %s vs %s",
-            len(row), season, week, home_team, away_team
+    # A/B) exact dataset match by season/week + team pair.
+    if team_masks:
+        exact_mask = base_mask & team_masks[0]
+        for m in team_masks[1:]:
+            exact_mask = exact_mask | (base_mask & m)
+        exact_rows = df.loc[exact_mask]
+        if not exact_rows.empty:
+            if len(exact_rows) > 1:
+                logging.warning(
+                    "[Predict] Duplicate exact rows matched (%d). Merging rows. season=%s week=%s %s vs %s",
+                    len(exact_rows),
+                    season,
+                    week,
+                    home_norm,
+                    away_norm,
+                )
+            return _merge_duplicate_rows(exact_rows), "dataset_exact"
+
+    # C) fallback by canonical game_id.
+    game_id_series = _normalized_game_id_series(df)
+    if game_id_series is not None:
+        candidates = _candidate_game_ids(
+            season=int(season),
+            week=int(week),
+            home_team=home_norm,
+            away_team=away_norm,
         )
-        row = row.iloc[[0]]
+        fuzzy_mask = base_mask & game_id_series.isin(candidates)
+        fuzzy_rows = df.loc[fuzzy_mask]
+        if not fuzzy_rows.empty:
+            if len(fuzzy_rows) > 1:
+                logging.warning(
+                    "[Predict] Duplicate fuzzy rows matched (%d). Merging rows. season=%s week=%s %s vs %s",
+                    len(fuzzy_rows),
+                    season,
+                    week,
+                    home_norm,
+                    away_norm,
+                )
+            return _merge_duplicate_rows(fuzzy_rows), "dataset_fuzzy"
 
-    return row.copy()  # avoid SettingWithCopy surprises
+    raise HTTPException(
+        status_code=404,
+        detail="Game data not found for given season/week/teams.",
+    )
 
 
 def _prepare_inputs(row_df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
@@ -263,8 +381,90 @@ def _align_numeric_df_for_model(
         fill = numeric_medians.reindex(aligned.columns)
         aligned = aligned.fillna(fill)
 
-    # Last resort: still fill remaining NaNs (only if medians were missing or columns unknown).
-    aligned = aligned.fillna(0.0)
+    # For prior/rolling features, avoid zero-default fallback. Use row-wise prior
+    # context first, then a global numeric fallback if necessary.
+    aligned = _fill_prior_feature_nans(aligned, numeric_medians=numeric_medians)
+
+    # Last resort for non-prior features only.
+    for col in aligned.columns:
+        if _is_prior_like_feature(col):
+            continue
+        aligned[col] = aligned[col].fillna(0.0)
+    return aligned
+
+
+def _is_prior_like_feature(col: str) -> bool:
+    c = str(col).lower()
+    return ("prior_" in c) or ("rolling_" in c)
+
+
+def _fill_prior_feature_nans(
+    aligned: pd.DataFrame,
+    *,
+    numeric_medians: Optional[pd.Series],
+) -> pd.DataFrame:
+    if aligned is None or aligned.empty:
+        return aligned
+    row_idx = aligned.index[0]
+
+    # Global fallback: prefer median of known prior columns, then overall median.
+    global_prior_fallback: Optional[float] = None
+    if numeric_medians is not None and not numeric_medians.empty:
+        prior_med = numeric_medians[[c for c in numeric_medians.index if _is_prior_like_feature(c)]]
+        if not prior_med.empty:
+            try:
+                global_prior_fallback = float(prior_med.median())
+            except Exception:
+                global_prior_fallback = None
+        if global_prior_fallback is None:
+            try:
+                global_prior_fallback = float(numeric_medians.median())
+            except Exception:
+                global_prior_fallback = None
+    if global_prior_fallback is None:
+        global_prior_fallback = 0.5
+
+    for col in aligned.columns:
+        if not _is_prior_like_feature(col):
+            continue
+        if not pd.isna(aligned.at[row_idx, col]):
+            continue
+
+        side_prefix = None
+        if str(col).startswith("home_"):
+            side_prefix = "home_"
+        elif str(col).startswith("away_"):
+            side_prefix = "away_"
+
+        side_vals: List[float] = []
+        if side_prefix:
+            for peer_col in aligned.columns:
+                if not str(peer_col).startswith(side_prefix):
+                    continue
+                if not _is_prior_like_feature(peer_col):
+                    continue
+                val = aligned.at[row_idx, peer_col]
+                try:
+                    if not pd.isna(val):
+                        side_vals.append(float(val))
+                except Exception:
+                    continue
+
+        if side_vals:
+            fill_val = float(np.mean(side_vals))
+        elif numeric_medians is not None and col in numeric_medians.index:
+            try:
+                fill_val = float(numeric_medians[col])
+            except Exception:
+                fill_val = global_prior_fallback
+        else:
+            fill_val = global_prior_fallback
+
+        # Ensure we never "default" priors to zero.
+        if fill_val == 0.0:
+            fill_val = global_prior_fallback if global_prior_fallback != 0.0 else 0.5
+        aligned.at[row_idx, col] = fill_val
+
     return aligned
 
 
@@ -287,7 +487,46 @@ def _predict_score(
     """
     try:
         if _is_pipeline(model):
-            return float(model.predict(full_df)[0])
+            pipeline_df = full_df.copy()
+            expected_cols = (
+                list(getattr(model, "feature_names_in_", []))
+                if hasattr(model, "feature_names_in_")
+                else []
+            )
+
+            if expected_cols:
+                pipeline_df = pipeline_df.reindex(columns=expected_cols)
+
+                # Use dataset medians for numeric expected columns when available.
+                if numeric_medians is not None and not numeric_medians.empty:
+                    for col in expected_cols:
+                        if col in numeric_medians.index:
+                            pipeline_df[col] = pd.to_numeric(
+                                pipeline_df[col], errors="coerce"
+                            ).fillna(float(numeric_medians[col]))
+
+            return float(model.predict(pipeline_df)[0])
+
+        # Preferred path for estimator-only artifacts: transform raw features
+        # with the standalone preprocessor, then predict on the transformed array.
+        if preprocessor is not None:
+            pre_df = full_df.copy()
+            expected_raw = (
+                list(getattr(preprocessor, "feature_names_in_", []))
+                if hasattr(preprocessor, "feature_names_in_")
+                else []
+            )
+            if expected_raw:
+                pre_df = pre_df.reindex(columns=expected_raw)
+                if numeric_medians is not None and not numeric_medians.empty:
+                    for col in expected_raw:
+                        if col in numeric_medians.index:
+                            pre_df[col] = pd.to_numeric(
+                                pre_df[col], errors="coerce"
+                            ).fillna(float(numeric_medians[col]))
+
+            X_proc = preprocessor.transform(pre_df)
+            return float(model.predict(X_proc)[0])
 
         aligned = _align_numeric_df_for_model(numeric_df, model, numeric_medians)
 
@@ -416,6 +655,190 @@ def _last_team_game_row(
     return sub.iloc[-1]
 
 
+def _team_history_rows(
+    df: pd.DataFrame,
+    team: str,
+    season: int,
+    week: int,
+) -> pd.DataFrame:
+    """
+    Return all prior rows for a team before (season, week), sorted in time order.
+    """
+    if df is None or df.empty:
+        return pd.DataFrame()
+    if "season" not in df.columns or "week" not in df.columns:
+        return pd.DataFrame()
+
+    t = _normalize_team_code(team)
+    prior_mask = (df["season"] < int(season)) | ((df["season"] == int(season)) & (df["week"] < int(week)))
+
+    masks: List[pd.Series] = []
+    if {"home_team", "away_team"}.issubset(df.columns):
+        home_series = (
+            df["home_team"]
+            .astype(str)
+            .str.upper()
+            .map(lambda x: TEAM_ABBR_MAP.get(x, x))
+        )
+        away_series = (
+            df["away_team"]
+            .astype(str)
+            .str.upper()
+            .map(lambda x: TEAM_ABBR_MAP.get(x, x))
+        )
+        masks.append((home_series == t) | (away_series == t))
+    if {"home_abbr", "away_abbr"}.issubset(df.columns):
+        home_series = (
+            df["home_abbr"]
+            .astype(str)
+            .str.upper()
+            .map(lambda x: TEAM_ABBR_MAP.get(x, x))
+        )
+        away_series = (
+            df["away_abbr"]
+            .astype(str)
+            .str.upper()
+            .map(lambda x: TEAM_ABBR_MAP.get(x, x))
+        )
+        masks.append((home_series == t) | (away_series == t))
+
+    if not masks:
+        return pd.DataFrame()
+
+    team_mask = masks[0]
+    for m in masks[1:]:
+        team_mask = team_mask | m
+
+    out = df.loc[prior_mask & team_mask].sort_values(["season", "week"])
+    return out
+
+
+def _extract_side_for_team(row: pd.Series, team: str) -> Optional[str]:
+    t = _normalize_team_code(team)
+    for home_col in ("home_team", "home_abbr"):
+        if home_col in row.index and _normalize_team_code(str(row.get(home_col, ""))) == t:
+            return "home"
+    for away_col in ("away_team", "away_abbr"):
+        if away_col in row.index and _normalize_team_code(str(row.get(away_col, ""))) == t:
+            return "away"
+    return None
+
+
+def _historical_prior_value(
+    df: pd.DataFrame,
+    *,
+    team: str,
+    season: int,
+    week: int,
+    target_col: str,
+) -> Optional[float]:
+    """
+    Leak-safe prior fill:
+      - use only history rows before the target week
+      - read same prior metric from team's side in each prior row
+      - prefer latest value, fallback to rolling mean over recent history
+    """
+    history = _team_history_rows(df, team=team, season=season, week=week)
+    if history.empty:
+        return None
+
+    if not (target_col.startswith("home_") or target_col.startswith("away_")):
+        return None
+
+    base = target_col.split("_", 1)[1]
+    vals: List[float] = []
+    for _, hist_row in history.iterrows():
+        side = _extract_side_for_team(hist_row, team=team)
+        if side is None:
+            continue
+        src_col = f"{side}_{base}"
+        if src_col not in hist_row.index:
+            continue
+        raw = hist_row.get(src_col)
+        try:
+            if not _is_missing_value(raw):
+                vals.append(float(raw))
+        except Exception:
+            continue
+
+    if not vals:
+        return None
+
+    last_val = vals[-1]
+    if not np.isnan(last_val):
+        return float(last_val)
+
+    window = vals[-5:]
+    return float(np.mean(window)) if window else None
+
+
+def _fill_missing_team_priors(
+    df: pd.DataFrame,
+    row_df: pd.DataFrame,
+    *,
+    home_team: str,
+    away_team: str,
+    season: int,
+    week: int,
+) -> int:
+    if row_df is None or row_df.empty:
+        return 0
+    idx = row_df.index[0]
+    filled = 0
+
+    for col in row_df.columns:
+        if not (str(col).startswith("home_prior_") or str(col).startswith("away_prior_")):
+            continue
+        if not _is_missing_value(row_df.at[idx, col]):
+            continue
+
+        team = home_team if str(col).startswith("home_") else away_team
+        val = _historical_prior_value(
+            df,
+            team=team,
+            season=int(season),
+            week=int(week),
+            target_col=str(col),
+        )
+        if val is None:
+            continue
+        row_df.at[idx, col] = val
+        filled += 1
+
+    return filled
+
+
+def _derive_home_away_diff_features(row_df: pd.DataFrame) -> int:
+    """
+    Build missing home_minus_away_* features from available home_*/away_* values.
+    """
+    if row_df is None or row_df.empty:
+        return 0
+    idx = row_df.index[0]
+    filled = 0
+    for col in row_df.columns:
+        c = str(col)
+        if not c.startswith("home_minus_away_"):
+            continue
+        if not _is_missing_value(row_df.at[idx, c]):
+            continue
+        suffix = c[len("home_minus_away_"):]
+        home_col = f"home_{suffix}"
+        away_col = f"away_{suffix}"
+        if home_col not in row_df.columns or away_col not in row_df.columns:
+            continue
+        hv = row_df.at[idx, home_col]
+        av = row_df.at[idx, away_col]
+        if _is_missing_value(hv) or _is_missing_value(av):
+            continue
+        try:
+            row_df.at[idx, c] = float(hv) - float(av)
+            filled += 1
+        except Exception:
+            continue
+    return filled
+
+
 def _roll_forward_missing_player_stats(
     df: pd.DataFrame,
     row_df: pd.DataFrame,
@@ -476,10 +899,38 @@ def _roll_forward_missing_player_stats(
                 row_df.at[idx, col] = last_away.get(src_col)
                 filled += 1
 
+    prior_filled = _fill_missing_team_priors(
+        df=df,
+        row_df=row_df,
+        home_team=home_team,
+        away_team=away_team,
+        season=season,
+        week=week,
+    )
+    diff_filled = _derive_home_away_diff_features(row_df)
+
     if filled:
         logging.info(
             "[Predict] Rolled forward %d player-stat features for %s vs %s (season=%s week=%s)",
             filled, home_team.upper(), away_team.upper(), season, week
+        )
+    if prior_filled:
+        logging.info(
+            "[Predict] Filled %d prior features from leak-safe history for %s vs %s (season=%s week=%s)",
+            prior_filled,
+            home_team.upper(),
+            away_team.upper(),
+            season,
+            week,
+        )
+    if diff_filled:
+        logging.info(
+            "[Predict] Derived %d home_minus_away features for %s vs %s (season=%s week=%s)",
+            diff_filled,
+            home_team.upper(),
+            away_team.upper(),
+            season,
+            week,
         )
 
     return row_df
