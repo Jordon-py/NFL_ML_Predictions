@@ -101,6 +101,7 @@ from .schemas import (
     HistoryResponse,
     ScheduleResponse,
     ScheduleEntry,
+    TeamLogosResponse,
 )
 from .services.prediction_service import PredictionService
 from .services.inference_row import build_model_input_row
@@ -122,17 +123,15 @@ from .main_helpers import (
     _AWAY_COLS,
     _GAME_ID_COLS,
     _STADIUM_COLS,
+    load_prediction_history,
 )
 from .ollama.llm_ollama import explain_prediction as llm_explain_prediction, chat_messages as llm_chat_messages
-from .routes import (
-    TeamLogosResponse,
-    router as legacy_router,
-)
-from .team_assets import (
-    normalize_abbr,
-    load_team_assets_map,
-    TeamAsset
-)
+
+def _build_game_id(season, week, home, away):
+    """Normalized game ID builder."""
+    return f"{season}-{week}-{str(home).strip().upper()}-{str(away).strip().upper()}"
+
+
 if __name__ == "__main__" and __package__ is None:
     # Allow running as a script by ensuring repo root is on sys.path.
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -172,9 +171,11 @@ state: Dict[str, Any] = {
 ADMIN_ENABLED = os.getenv("ENABLE_ADMIN", "false").strip().lower() in TRUTHY
 
 
-def _build_game_id(season: int, week: int, home_team: str, away_team: str) -> str:
-    parts = [season, week, home_team, away_team]
-    return "-".join(str(p) for p in parts if p is not None and str(p).strip())
+def get_logos(home_team, away_team):
+    team_logos = _get_team_meta_map()
+    home_logo = team_logos.get(home_team)
+    away_logo = team_logos.get(away_team)
+    return home_logo, away_logo
 
 def _normalize_team_code(value: str) -> str:
     """Normalize team abbreviation to uppercase."""
@@ -269,6 +270,24 @@ def _flatten_raw_feature_columns(raw: Any) -> list[str]:
         return [str(c) for c in raw if c is not None]
     return []
 
+def _filter_expected_features(features: list[str]) -> list[str]:
+    """Drop empty/duplicate names and pandas index placeholders (e.g., 'Unnamed: 0')."""
+    if not features:
+        return []
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for name in features:
+        s = str(name).strip()
+        if not s:
+            continue
+        if s.lower().startswith("unnamed:"):
+            continue
+        if s in seen:
+            continue
+        seen.add(s)
+        cleaned.append(s)
+    return cleaned
+
 def _find_latest_metadata_json(models_dir: Path) -> Path | None:
     """Find the most recently modified metadata.json under a models directory."""
     try:
@@ -300,34 +319,7 @@ def _pick_positive_class_index(clf: Any) -> int:
     return 1 if len(cls) > 1 else 0
 
 
-def _predict_home_win_prob(bundle: InferenceBundle, X_raw: pd.DataFrame, point_diff: float) -> Tuple[float, bool]:
-    """
-    Returns (probability, used_fallback).
-    Fallback is a logistic curve on point_diff.
-    """
-    clf = bundle.win_pipe
 
-    if hasattr(clf, "predict_proba"):
-        # raw
-        try:
-            proba = clf.predict_proba(X_raw)
-            idx = _pick_positive_class_index(clf)
-            return float(np.clip(float(proba[0][idx]), 0.0, 1.0)), False
-        except Exception as e:
-            log.warning("[Predict] hist_win_clf predict_proba(raw) failed: %s", e)
-
-        # transformed
-        try:
-            X_tx = bundle.preprocessor.transform(_safe_fill(X_raw))
-            proba = clf.predict_proba(X_tx)
-            idx = _pick_positive_class_index(clf)
-            return float(np.clip(float(proba[0][idx]), 0.0, 1.0)), False
-        except Exception as e:
-            log.warning("[Predict] hist_win_clf predict_proba(preprocessed) failed: %s", e)
-
-    # logistic fallback
-    p = 1.0 / (1.0 + math.exp(-0.25 * float(point_diff)))
-    return float(np.clip(p, 0.0, 1.0)), True
 
 
 def _get_feature_columns(bundle: InferenceBundle) -> Tuple[List[str], List[str], List[str]]:
@@ -494,46 +486,7 @@ def _build_future_row(
 # History persistence
 # ---------------------------
 
-def _load_prediction_history_from_disk() -> None:
-    global prediction_history_entries
 
-    if not PREDICTION_HISTORY_PATH.exists():
-        prediction_history_entries = []
-        return
-
-    try:
-        obj = json.loads(PREDICTION_HISTORY_PATH.read_text(encoding="utf-8"))
-        if isinstance(obj, list):
-            entries = [e for e in obj if isinstance(e, dict)]
-            prediction_history_entries = entries[:PREDICTION_HISTORY_MAX]
-        else:
-            prediction_history_entries = []
-    except Exception as e:
-        log.warning("Failed to load prediction history from %s: %s", PREDICTION_HISTORY_PATH, e)
-        prediction_history_entries = []
-
-
-def _append_prediction_history_to_disk(request_payload: Dict[str, Any], prediction_payload: Dict[str, Any]) -> None:
-    global prediction_history_entries
-
-    entry = {
-        "ts": datetime.now(timezone.utc).isoformat(),
-        "request": request_payload,
-        "prediction": prediction_payload,
-    }
-
-    with _prediction_history_lock:
-        prediction_history_entries = [entry] + (prediction_history_entries or [])
-        prediction_history_entries = prediction_history_entries[:PREDICTION_HISTORY_MAX]
-
-        try:
-            PREDICTION_HISTORY_PATH.parent.mkdir(parents=True, exist_ok=True)
-            PREDICTION_HISTORY_PATH.write_text(
-                json.dumps(prediction_history_entries, indent=2),
-                encoding="utf-8",
-            )
-        except Exception as e:
-            log.warning("Failed to persist prediction history to %s: %s", PREDICTION_HISTORY_PATH, e)
 
 # ---------------------------
 # API models
@@ -629,50 +582,11 @@ def _find_latest_dataset_csv(data_dir: Path=os.getenv("DATA_DIR", Path("./data/d
     return max(candidates, key=lambda p: p.stat().st_mtime)
 
 
-def _normalize_chat_messages(messages: List[ChatMessage]) -> List[Dict[str, str]]:
-    normalized: List[Dict[str, str]] = []
-    for msg in messages:
-        content = str(msg.content or "").strip()
-        if not content:
-            continue
-        role = msg.role if msg.role in {"user", "assistant", "system"} else "user"
-        normalized.append({"role": role, "content": content})
-    return normalized
-
-
-async def _try_ollama_explain(pred: Dict[str, Any]) -> Dict[str, Any]:
-    try:
-        from backend.ollama.llm_ollama import explain_prediction
-    except Exception as e:
-        return {"used_llm": False, "error": f"ollama helper not available: {e}"}
-    return await explain_prediction(pred)
-
-
-async def _try_ollama_chat(messages: List[Dict[str, str]], context_prompt: Optional[str]) -> Dict[str, Any]:
-    try:
-        from backend.ollama.llm_ollama import chat_messages
-    except Exception as e:
-        return {"used_llm": False, "error": f"ollama helper not available: {e}"}
-    return await chat_messages(messages, system_prompt=context_prompt)
 
 
 
-def get_team_asset(team_abbr: str) -> TeamAsset:
-    """
-    Core lookup logic (kept separate so it’s testable).
-    """
-    team = normalize_abbr(team_abbr)
-    assets = load_team_assets_map()
 
-    asset = assets.get(team)
-    if not asset:
-        raise HTTPException(status_code=404, detail=f"Team not found: {team}")
 
-    if not asset.preferred_logo:
-        # Clear error: client asked for team but we have no usable logo fields
-        raise HTTPException(status_code=404, detail=f"No logo available for team: {team}")
-
-    return asset
 
 
 
@@ -691,7 +605,7 @@ def _resolve_expected_features(bundle: Any, metadata: Dict[str, Any] | None = No
     pre = getattr(bundle, "preprocessor", None)
     features_in = getattr(pre, "feature_names_in_", None)
     if features_in is not None:
-        expected = [str(x) for x in list(features_in)]
+        expected = _filter_expected_features([str(x) for x in list(features_in)])
         if expected:
             return expected
 
@@ -701,13 +615,15 @@ def _resolve_expected_features(bundle: Any, metadata: Dict[str, Any] | None = No
         getattr(bundle, "feature_names", None),
     ):
         if isinstance(cand, (list, tuple)) and len(cand) > 0:
-            return [str(x) for x in cand if x is not None]
+            expected = _filter_expected_features([str(x) for x in cand if x is not None])
+            if expected:
+                return expected
 
     # Fall back to 'raw_feature_columns' (either list or {"numeric","categorical"})
     raw = getattr(bundle, "raw_feature_columns", None)
     if metadata and "raw_feature_columns" in metadata:
         raw = metadata.get("raw_feature_columns")
-    return _flatten_raw_feature_columns(raw)
+    return _filter_expected_features(_flatten_raw_feature_columns(raw))
 
 def _validate_feature_schema(bundle: Any, dataset: pd.DataFrame, metadata: Dict[str, Any] | None = None) -> None:
     expected = _resolve_expected_features(bundle, metadata=metadata)
@@ -757,6 +673,7 @@ async def lifespan(app: FastAPI):
     try:
         log.info(f"Starting up: Loading model bundle from {CFG_MODELS_DIR}...")
         ensure_artifacts()
+        load_prediction_history()
         
         # 1. Load Bundle (Models)
         state["bundle"] = load_inference_bundle(CFG_MODELS_DIR)
@@ -817,24 +734,7 @@ app.add_middleware(
 
 
 
-@app.get("/api/teams/{team_abbr}", response_model=TeamAsset)
-def teams_get(team_abbr: str) -> TeamAsset:
-    """
-    Get a team’s branding assets (preferred non-square logo included).
 
-    Example:
-      GET /teams/LAR
-    """
-    response_model = get_team_asset(team_abbr)
-    if response_model is None:
-        raise HTTPException(status_code=404, detail=f"Team not found: {team_abbr}")
-    return response_model
-
-
-
-
-# Mount legacy router with a safe prefix to avoid clobbering unified endpoints.
-app.include_router(legacy_router, prefix="/legacy")
 
 def _require_ready() -> PredictionService:
     if state["service"] is None:

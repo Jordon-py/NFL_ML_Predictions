@@ -62,3 +62,10 @@ export function toEntry({
 
   return entry;
 }
+
+/** Convert a probability in [0..1] to an integer percentage, or null if invalid. */
+export function toWholePercent(prob) {
+  const n = Number(prob);
+  if (!Number.isFinite(n)) return null;
+  return Math.round(n * 100);
+}

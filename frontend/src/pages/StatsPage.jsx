@@ -41,28 +41,12 @@ import {
   getPredictionHistory,
   getStatusOverview,
 } from "../api/client";
+import { buildGameKey } from "../utils/predictionContextUtils";
+import { toWholePercent } from "../utils/predictionHelpers";
 import "./StatsPage.css";
 
 // Keep this small so the page stays fast, but large enough for trend charts.
 const HISTORY_LIMIT = 500;
-
-/** Build a stable composite key that works for BOTH schedule rows and history entries. */
-function toGameKey(game) {
-  const season = game?.season ?? "";
-  const week = game?.week ?? "";
-  const home = (game?.home_abbr || game?.home_team || "").toString().trim().toUpperCase();
-  const away = (game?.away_abbr || game?.away_team || "").toString().trim().toUpperCase();
-
-  // Example: "2025-15-KC-BUF"
-  return [season, week, home, away].filter(Boolean).join("-");
-}
-
-/** Safe percent label for probabilities in [0, 1]. */
-function toPercentLabel(prob) {
-  const n = Number(prob);
-  if (!Number.isFinite(n)) return "n/a";
-  return `${Math.round(n * 100)}%`;
-}
 
 function LoadingSpinner({ label = "Loading" }) {
   return (
@@ -180,8 +164,8 @@ export default function StatsPage() {
       : history.length;
 
   const winRateLabel =
-    typeof historyMetrics.win_rate === "number"
-      ? `${Math.round(historyMetrics.win_rate * 100)}%`
+    toWholePercent(historyMetrics.win_rate) != null
+      ? `${toWholePercent(historyMetrics.win_rate)}%`
       : "n/a";
 
   const historyMap = useMemo(() => {
@@ -189,7 +173,7 @@ export default function StatsPage() {
     for (const entry of history) {
       if (!entry) continue;
       if (entry.game_id) map.set(entry.game_id, entry);
-      const key = toGameKey(entry);
+      const key = buildGameKey(entry);
       if (key) map.set(key, entry);
     }
     return map;
@@ -227,7 +211,7 @@ export default function StatsPage() {
       <ul className="stats-schedule__list">
         {scheduleRows.map((game, idx) => {
           const idKey = game?.game_id ?? game?.id;
-          const compositeKey = toGameKey(game);
+          const compositeKey = buildGameKey(game);
           const prediction =
             (idKey && historyMap.get(idKey)) || (compositeKey && historyMap.get(compositeKey));
 
@@ -264,11 +248,11 @@ export default function StatsPage() {
                 <div className="stats-schedule__prediction">
                   <p>
                     <span>Home win:</span>
-                    <strong>{toPercentLabel(prediction.home_win_probability)}</strong>
+                    <strong>{toWholePercent(prediction.home_win_probability) != null ? `${toWholePercent(prediction.home_win_probability)}%` : "n/a"}</strong>
                   </p>
                   <p>
                     <span>Away win:</span>
-                    <strong>{toPercentLabel(prediction.away_win_probability)}</strong>
+                    <strong>{toWholePercent(prediction.away_win_probability) != null ? `${toWholePercent(prediction.away_win_probability)}%` : "n/a"}</strong>
                   </p>
                   <p className="stats-schedule__diff">
                     <span>Diff:</span>

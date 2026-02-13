@@ -47,7 +47,7 @@ export default function Dashboard({
       .then((data) => {
         if (active) setDebugInfo(data);
       })
-      .catch(() => {});
+      .catch(() => { });
     return () => {
       active = false;
     };
@@ -70,9 +70,8 @@ export default function Dashboard({
 
       const rawPrediction = await predictGame(home, away, season, week);
       const entry = toEntry({ prediction: rawPrediction, game, source: "teamgrid" });
-      console.log(entry);
-      const predictionKey = buildGameKey(entry) || key;
-      console.log(predictionKey);
+
+
       const normalizedEntry = {
         ...entry,
         game_id: predictionKey || entry.game_id,

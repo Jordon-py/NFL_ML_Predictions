@@ -47,12 +47,13 @@
  */
 import React from "react";
 
+import { toWholePercent } from "../utils/predictionHelpers";
+
 /* ---------- tiny utilities ---------- */
 
-/** Convert a probability in [0..1] to an integer percentage, or null if invalid. */
-const toWholePercent = (prob) =>
-  typeof prob === "number" ? Math.round(prob * 100) : null;
 /** Safely coerce many timestamp shapes to a Date, or null if not present. */
+
+
 const toDateOrNull = (value) => {
   if (value == null) return null;
   const d = value instanceof Date ? value : new Date(value);
@@ -115,8 +116,8 @@ export default function HistoryChart({ history: historyOverride = [] }) {
 
   const averageHomeWinPercent = percentValues.length
     ? Math.round(
-        percentValues.reduce((a, b) => a + b, 0) / percentValues.length
-      )
+      percentValues.reduce((a, b) => a + b, 0) / percentValues.length
+    )
     : null;
 
   const mostRecentDate = historyItems[0]
@@ -150,14 +151,8 @@ export default function HistoryChart({ history: historyOverride = [] }) {
         <h2>Prediction History</h2>
 
         <small>
-          {statsSummary.totalCount} item(s)
-          {statsSummary.mostRecentDate && (
-            <> - last: {statsSummary.mostRecentDate.toLocaleString()}</>
-          )}
-          {statsSummary.averageHomeWinPercent != null && (
-            <> - avg home win: {statsSummary.averageHomeWinPercent}%</>
-          )}
-          {statsSummary.totalCount} item(s)
+
+
           {statsSummary.mostRecentDate && (
             <>
               {" "}
@@ -170,20 +165,8 @@ export default function HistoryChart({ history: historyOverride = [] }) {
         </small>
       </header>
 
-      <ol className="history-points a-text-fade-slide">
-        {chartPoints.slice(0, 16).map((row) => (
-          <li key={row.index} title={row.label}>
-            <code>
-              {row.timestamp ? row.timestamp.toLocaleString() : "-"}
-            </code>
-            {" - "}
-            <strong>
-              {row.homeWinPercent != null ? `${row.homeWinPercent}%` : "n/a"}
-            </strong>{" "}
-            <em>({row.label})</em>
-          </li>
-        ))}
-      </ol>
+
+
       <ol className="history-points a-text-fade-slide">
         {chartPoints.slice(0, 16).map((row) => (
           <li key={row.index} title={row.label}>
