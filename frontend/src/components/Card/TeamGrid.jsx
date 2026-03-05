@@ -73,9 +73,9 @@ export default function TeamGrid({
   // Empty State Handling
   if (!games || games.length === 0) {
     return (
-      <div className="team-grid--empty">
-        <div className="empty-message">
-          <h3>No games found for Week {week}</h3>
+      <div className="team-grid__empty">
+        <div className="team-grid__empty-text">
+          <h3>No games found for {week ? `Week ${week}` : "the selected window"}</h3>
           <p>The schedule might not be loaded or the week is invalid.</p>
         </div>
       </div>

@@ -47,18 +47,18 @@
  */
 import React from "react";
 
+import { toWholePercent } from "../utils/predictionHelpers";
+
 /* ---------- tiny utilities ---------- */
 
-/** Convert a probability in [0..1] to an integer percentage, or null if invalid. */
-const toWholePercent = (prob) =>
-  typeof prob === "number" ? Math.round(prob * 100) : null;
-
 /** Safely coerce many timestamp shapes to a Date, or null if not present. */
+
+
 const toDateOrNull = (value) => {
   if (value == null) return null;
   const d = value instanceof Date ? value : new Date(value);
   return isNaN(d.getTime()) ? null : d;
-};
+}
 
 function extractHomeWinProbability(event) {
   if (!event) return null;
@@ -74,6 +74,7 @@ function buildGameLabel(event, index) {
   const home = event.home_team || "home";
   return `${season} ${week} ${away}@${home}`.trim();
 }
+
 
 /** Safely extract a Date object from various event shapes. */
 function extractTimestamp(event) {
@@ -115,8 +116,8 @@ export default function HistoryChart({ history: historyOverride = [] }) {
 
   const averageHomeWinPercent = percentValues.length
     ? Math.round(
-        percentValues.reduce((a, b) => a + b, 0) / percentValues.length
-      )
+      percentValues.reduce((a, b) => a + b, 0) / percentValues.length
+    )
     : null;
 
   const mostRecentDate = historyItems[0]
@@ -147,22 +148,31 @@ export default function HistoryChart({ history: historyOverride = [] }) {
     <section className="history-chart" aria-live="polite">
       <header>
         <h2>Prediction History</h2>
+
         <small>
-          {statsSummary.totalCount} item(s)
+
+
           {statsSummary.mostRecentDate && (
-            <> - last: {statsSummary.mostRecentDate.toLocaleString()}</>
+            <>
+              {" "}
+              • last: {statsSummary.mostRecentDate.toLocaleString()}
+            </>
           )}
           {statsSummary.averageHomeWinPercent != null && (
-            <> - avg home win: {statsSummary.averageHomeWinPercent}%</>
+            <> • avg home win: {statsSummary.averageHomeWinPercent}%</>
           )}
         </small>
       </header>
 
+
+
       <ol className="history-points a-text-fade-slide">
         {chartPoints.slice(0, 16).map((row) => (
           <li key={row.index} title={row.label}>
-            <code>{row.timestamp ? row.timestamp.toLocaleString() : "-"}</code>
-            {" - "}
+            <code>
+              {row.timestamp ? row.timestamp.toLocaleString() : "—"}
+            </code>
+            {" — "}
             <strong>
               {row.homeWinPercent != null ? `${row.homeWinPercent}%` : "n/a"}
             </strong>{" "}
