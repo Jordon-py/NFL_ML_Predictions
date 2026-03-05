@@ -28,6 +28,17 @@ const toNumberOrNull = (value) => {
   return Number.isFinite(n) ? n : null;
 };
 
+const DEFAULT_SEASON_CONTEXT = {
+  phase: "offseason",
+  label: "Offseason",
+  message: "No live weekly slate is available right now.",
+  current_season: new Date().getFullYear(),
+  display_week: null,
+  games_in_next_window: 0,
+  next_kickoff: null,
+  generated_at: new Date().toISOString(),
+};
+
 /**
  * Robust CSV parser for schedule data.
  */
@@ -165,6 +176,26 @@ const fetchPostseasonSchedule = async () => {
  */
 export async function getHealthStatus() {
   return fetchJson("/api/health");
+}
+
+/**
+ * Fetch schedule-aware season context (in-season/postseason/offseason).
+ * @returns {Promise<Object>} Normalized season context.
+ */
+export async function getSeasonContext() {
+  try {
+    const data = await fetchJson("/api/season/context");
+    if (!data || typeof data !== "object") return DEFAULT_SEASON_CONTEXT;
+    return {
+      ...DEFAULT_SEASON_CONTEXT,
+      ...data,
+      current_season: toNumberOrNull(data.current_season) ?? DEFAULT_SEASON_CONTEXT.current_season,
+      display_week: toNumberOrNull(data.display_week),
+      games_in_next_window: toNumberOrNull(data.games_in_next_window) ?? 0,
+    };
+  } catch {
+    return DEFAULT_SEASON_CONTEXT;
+  }
 }
 
 /**

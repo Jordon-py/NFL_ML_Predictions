@@ -719,3 +719,116 @@ img.team-logo:hover {
     animation: none;
   }
 }
+
+/* --- Dashboard shell + Offseason Mode ----------------------------------- */
+.dashboard-main {
+  max-width: 1500px;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+.dashboard-header {
+  margin-bottom: 1rem;
+}
+
+.dashboard-header-content {
+  border: 1px solid color-mix(in oklab, var(--c-brand-1) 36%, transparent);
+  border-radius: 14px;
+  padding: 1rem 1.1rem;
+  backdrop-filter: blur(6px);
+  background:
+    radial-gradient(circle at 10% 10%, oklch(58% 0.22 215 / 0.22), transparent 42%),
+    linear-gradient(140deg, oklch(21% 0.07 250 / 0.86), oklch(15% 0.05 255 / 0.78));
+}
+
+.season-context-ribbon {
+  margin-top: 0.9rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  align-items: center;
+}
+
+.season-context-pill {
+  border: 1px solid color-mix(in oklab, var(--c-accent) 58%, transparent);
+  border-radius: 999px;
+  padding: 0.2rem 0.65rem;
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.season-context-message,
+.season-context-kickoff {
+  font-size: 0.9rem;
+  color: var(--c-text-muted-on-dark);
+}
+
+.phase-offseason .season-context-pill {
+  background: linear-gradient(90deg, oklch(63% 0.16 150 / 0.28), oklch(66% 0.12 225 / 0.28));
+}
+
+.phase-in_season .season-context-pill {
+  background: linear-gradient(90deg, oklch(58% 0.2 145 / 0.28), oklch(66% 0.11 230 / 0.28));
+}
+
+.phase-postseason .season-context-pill {
+  background: linear-gradient(90deg, oklch(68% 0.13 70 / 0.34), oklch(70% 0.14 40 / 0.30));
+}
+
+.content-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2.2fr) minmax(320px, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.offseason-mode-panel {
+  border: 1px solid color-mix(in oklab, var(--c-brand-1) 42%, transparent);
+  border-radius: 16px;
+  padding: 1rem;
+  background:
+    radial-gradient(circle at 12% 0%, oklch(57% 0.21 188 / 0.17), transparent 38%),
+    linear-gradient(165deg, oklch(17% 0.06 255 / 0.88), oklch(12% 0.05 250 / 0.9));
+  box-shadow: 0 15px 32px oklch(0% 0 0 / 0.45);
+}
+
+.offseason-mode-panel h2 {
+  margin: 0 0 0.5rem 0;
+}
+
+.offseason-mode-actions {
+  margin: 0.85rem 0;
+}
+
+.offseason-mode-button {
+  border: 1px solid color-mix(in oklab, var(--c-accent) 60%, transparent);
+  background: linear-gradient(90deg, oklch(57% 0.22 200 / 0.28), oklch(66% 0.14 235 / 0.3));
+  color: #f6fbff;
+  border-radius: 999px;
+  padding: 0.5rem 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 220ms ease, filter 220ms ease;
+}
+
+.offseason-mode-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(1.08);
+}
+
+.offseason-mode-button:disabled {
+  opacity: 0.7;
+  cursor: progress;
+}
+
+.offseason-mode-error {
+  color: oklch(75% 0.16 25);
+  font-size: 0.9rem;
+}
+
+@media (max-width: 1024px) {
+  .content-grid {
+    grid-template-columns: 1fr;
+  }
+}
