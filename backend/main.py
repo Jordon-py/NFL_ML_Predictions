@@ -91,6 +91,9 @@ import pandas as pd
 import numpy as np
 from fastapi import FastAPI, HTTPException, Request, Body
 from fastapi.middleware.cors import CORSMiddleware
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+import subprocess
+import asyncio
 from dotenv import load_dotenv
 from .schemas import (
     PredictionRequest,
@@ -102,6 +105,7 @@ from .schemas import (
     ScheduleResponse,
     ScheduleEntry,
     TeamLogosResponse,
+    SeasonContextResponse,
 )
 from .services.prediction_service import PredictionService
 from .services.inference_row import build_model_input_row
@@ -214,6 +218,41 @@ def _clean_s(val: Any) -> Optional[str]:
     if val is None or (isinstance(val, float) and np.isnan(val)) or str(val).strip() == "":
         return None
     return str(val).strip()
+
+
+def _derive_season_phase(df_next: pd.DataFrame) -> tuple[str, str]:
+    """
+    Infer broad NFL season phase from next-slate rows.
+    Returns (phase, human_label) where phase is one of:
+    - in_season
+    - postseason
+    - offseason
+    """
+    if isinstance(df_next, pd.DataFrame) and not df_next.empty:
+        game_type_col = _pick_col(df_next, ["game_type", "season_type", "type"])
+        if game_type_col:
+            game_types = (
+                df_next[game_type_col]
+                .dropna()
+                .astype(str)
+                .str.upper()
+                .str.strip()
+                .unique()
+                .tolist()
+            )
+            has_post = any(gt not in {"REG", "R"} for gt in game_types)
+            if has_post:
+                return ("postseason", "Postseason")
+        return ("in_season", "Regular Season")
+
+    month = datetime.now(timezone.utc).month
+    # Typical NFL offseason window: Feb-Jul (inclusive)
+    if 2 <= month <= 7:
+        return ("offseason", "Offseason")
+    # Aug with no schedule is effectively preseason prep for users.
+    if month == 8:
+        return ("offseason", "Preseason Build-Up")
+    return ("offseason", "Offseason")
 
 
 # -------------------------------------
@@ -666,6 +705,67 @@ def _predict_home_win_prob(bundle: InferenceBundle, X_raw: pd.DataFrame, point_d
     p = 1.0 / (1.0 + math.exp(-0.25 * float(point_diff)))
     return float(np.clip(p, 0.0, 1.0)), True
 
+async def build_and_reload_dataset():
+    """
+    Scheduled task:
+      1. Run build_csv_datasets_v3.py as a subprocess to fetch new data.
+      2. If successful, reload the dataset into memory.
+    """
+    log.info("Starting scheduled dataset build...")
+    try:
+        # Run the build script as a module from the project root
+        # We need to add 'backend' to PYTHONPATH so 'utils' can be imported directly
+        # because build_csv_datasets_v3.py uses 'from utils import ...'
+        repo_root = Path(__file__).resolve().parent.parent
+        backend_dir = repo_root / "backend"
+        process = await asyncio.create_subprocess_exec(
+            sys.executable, "-m", "backend.build_csv_datasets_v3",
+            "--out-dir", str(CFG_DATA_DIR),
+            "--legacy-root-copy",
+            cwd=str(repo_root),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env={**os.environ, "PYTHONPATH": str(backend_dir)} 
+        )
+        
+        stdout, stderr = await process.communicate()
+        
+        if stdout:
+            log.info(f"Build Subprocess STDOUT:\n{stdout.decode().strip()}")
+        if stderr:
+            log.error(f"Build Subprocess STDERR:\n{stderr.decode().strip()}")
+            
+        if process.returncode == 0:
+            log.info("Dataset build successful.")
+            log.info("Reloading dataset...")
+            new_csv = _find_latest_dataset_csv(CFG_DATA_DIR)
+            if new_csv:
+                expected_features = _resolve_expected_features(state["bundle"], metadata=state.get("model_metadata"))
+                state["dataset"] = load_dataset_df(CFG_DATA_DIR, expected_features=expected_features)
+                state["dataset_path"] = str(new_csv)
+                
+                # Update app state
+                app.state.dataset = state["dataset"]
+                
+                # Re-initialize service with new dataset
+                state["service"] = PredictionService(state["bundle"], state["dataset"])
+                
+                # Update status overview metrics in real-time? 
+                # (metrics are pulled from state["dataset"] so they should auto-update)
+                
+                log.info(f"Dataset reloaded from {new_csv}")
+            else:
+                log.warning("Build finished but no CSV found to reload.")
+        else:
+            log.error(f"Dataset build failed with return code {process.returncode}")
+            if stderr:
+                log.error(f"Build Error: {stderr.decode()}")
+            if stdout:
+                log.info(f"Build Output: {stdout.decode()}")
+                
+    except Exception as e:
+        log.error(f"Error during scheduled dataset build: {e}", exc_info=True)
+
 # Startup / Lifespan
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -704,6 +804,15 @@ async def lifespan(app: FastAPI):
         app.state.models = {"models_dir": str(CFG_MODELS_DIR)}
         app.state.team_logos = state.get("team_logos") or {}
         app.state.started_at = datetime.now(timezone.utc).isoformat()
+        
+        app.state.started_at = datetime.now(timezone.utc).isoformat()
+        
+        # 4. Start Scheduler
+        scheduler = AsyncIOScheduler()
+        # Schedule to run every day at 3:00 AM (server time/UTC depending on env)
+        scheduler.add_job(build_and_reload_dataset, 'cron', hour=3, minute=0)
+        scheduler.start()
+        log.info("Scheduler started: Auto-build set for 03:00 daily.")
         
         log.info("Startup complete: Models and dataset ready.")
     except Exception as e:
@@ -786,6 +895,59 @@ async def get_status_models() -> Dict[str, Any]:
         "metadata": md,
     }
 
+@app.get("/api/season/context", response_model=SeasonContextResponse)
+async def get_season_context(season: int | None = None) -> SeasonContextResponse:
+    """
+    Return schedule-aware season context so clients can render
+    in-season/postseason/offseason UX without guessing.
+    """
+    df = get_schedule(season=season)
+    df_next, use_season, use_week = select_next_week_rows(df)
+    phase, label = _derive_season_phase(df_next)
+
+    next_kickoff: Optional[datetime] = None
+    if isinstance(df_next, pd.DataFrame) and not df_next.empty:
+        kickoff_candidates = [parse_kickoff(row) for _, row in df_next.iterrows()]
+        kickoff_candidates = [dt for dt in kickoff_candidates if isinstance(dt, datetime)]
+        if kickoff_candidates:
+            next_kickoff = min(kickoff_candidates)
+
+    now_utc = datetime.now(timezone.utc)
+    if phase != "offseason":
+        kickoff_utc = None
+        if isinstance(next_kickoff, datetime):
+            kickoff_utc = (
+                next_kickoff.astimezone(timezone.utc)
+                if next_kickoff.tzinfo is not None
+                else next_kickoff.replace(tzinfo=timezone.utc)
+            )
+        # If no future kickoff is available during typical offseason months,
+        # force offseason mode to keep client UX stable.
+        if (kickoff_utc is None or kickoff_utc < now_utc) and 2 <= now_utc.month <= 8:
+            phase, label = "offseason", "Offseason"
+
+    games_count = int(len(df_next)) if isinstance(df_next, pd.DataFrame) else 0
+    if phase == "offseason":
+        message = (
+            "No live weekly slate is available right now. "
+            "Use Offseason Mode to explore projected matchups and model health."
+        )
+    elif phase == "postseason":
+        message = "Postseason slate is active."
+    else:
+        message = "Regular season slate is active."
+
+    return SeasonContextResponse(
+        phase=phase,
+        label=label,
+        message=message,
+        current_season=int(use_season),
+        display_week=int(use_week) if use_week is not None else None,
+        games_in_next_window=games_count,
+        next_kickoff=next_kickoff,
+        generated_at=datetime.now(timezone.utc),
+    )
+
 @app.get("/api/debug")
 async def debug() -> Dict[str, Any]:
     """In-depth debugging information."""
@@ -801,18 +963,42 @@ async def debug() -> Dict[str, Any]:
             "offline_mode": os.getenv("OFFLINE_MODE", "false"),
         },
         "dataset_info": {
-            "rows": rows,
-            "cols": cols,
-            "shape": [rows, cols],
-            "sample_cols": list(dataset.columns[:25]) if dataset is not None else [],
-        },
+             "rows": rows,
+             "cols": cols,
+             "path": state.get("dataset_path"),
+        }
     }
+
+@app.post("/api/debug/trigger-build")
+async def trigger_build_manually():
+    """Manually trigger the day's dataset build (async)."""
+    if not ADMIN_ENABLED:
+         # Optional: secure this endpoint
+         pass
+         
+    asyncio.create_task(build_and_reload_dataset())
+    return {"status": "Build triggered in background. Check server logs."}
+
 
 # --- Core Prediction Routes ---
 
 @app.post("/api/predict", response_model=UnifiedPredictionResponse)
 async def predict(req: PredictionRequest):
     """Generate a prediction for a single NFL matchup."""
+    home_norm = norm_team(req.home_team)
+    away_norm = norm_team(req.away_team)
+    if not home_norm or not away_norm or home_norm == away_norm:
+        raise HTTPException(status_code=422, detail="home_team and away_team must be different valid teams")
+    if req.week < 1 or req.week > 22:
+        raise HTTPException(status_code=422, detail="week must be between 1 and 22")
+
+    req = PredictionRequest(
+        home_team=home_norm,
+        away_team=away_norm,
+        season=req.season,
+        week=req.week,
+    )
+
     service = _require_ready()
     try:
         res = service.predict(req)

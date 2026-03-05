@@ -145,7 +145,6 @@ export default function HistoryChart({ history: historyOverride = [] }) {
   }
 
   return (
-
     <section className="history-chart" aria-live="polite">
       <header>
         <h2>Prediction History</h2>

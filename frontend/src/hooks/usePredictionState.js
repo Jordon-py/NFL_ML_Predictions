@@ -25,6 +25,7 @@ import {
   getHealthStatus as fetchHealth,
   getPredictionHistory,
   getTeamLogos,
+  getSeasonContext,
 } from "../api/client.js";
 import {
   buildGameKey,
@@ -35,6 +36,16 @@ import {
 
 const INITIAL_HEALTH = { status: "loading", mode: "none" };
 const HEALTH_POLL_MS = 25000; // Poll every 25 seconds - balanced load reduction
+const INITIAL_SEASON_CONTEXT = {
+  phase: "offseason",
+  label: "Offseason",
+  message: "No live weekly slate is available right now.",
+  current_season: new Date().getFullYear(),
+  display_week: null,
+  games_in_next_window: 0,
+  next_kickoff: null,
+  generated_at: new Date().toISOString(),
+};
 
 const toNumberOrNull = (value) => {
   const n = Number(value);
@@ -162,6 +173,7 @@ export function usePredictionState() {
   const [current, setCurrent] = useState(null);
   const [currentKey, setCurrentKey] = useState("");
   const [health, setHealth] = useState(INITIAL_HEALTH);
+  const [seasonContext, setSeasonContext] = useState(INITIAL_SEASON_CONTEXT);
   const [loadingByKey, setLoadingByKey] = useState({});
   const [errorsByKey, setErrorsByKey] = useState({});
 
@@ -170,10 +182,11 @@ export function usePredictionState() {
     let active = true;
 
     const init = async () => {
-      const [scheduleRes, historyRes, logosRes] = await Promise.allSettled([
+      const [scheduleRes, historyRes, logosRes, seasonContextRes] = await Promise.allSettled([
         getNextWeekSchedule(),
         getPredictionHistory(MAX_HISTORY_ENTRIES),
         getTeamLogos(),
+        getSeasonContext(),
       ]);
 
       if (!active) return;
@@ -186,7 +199,12 @@ export function usePredictionState() {
           : {};
       const enriched = applyTeamMeta(normalized, teamMeta);
       setSchedule(enriched);
-      setWeek(toNumberOrNull(enriched?.[0]?.week));
+      const nextSeasonContext =
+        seasonContextRes.status === "fulfilled" && seasonContextRes.value
+          ? seasonContextRes.value
+          : INITIAL_SEASON_CONTEXT;
+      setSeasonContext(nextSeasonContext);
+      setWeek(toNumberOrNull(enriched?.[0]?.week) ?? toNumberOrNull(nextSeasonContext?.display_week));
 
       if (historyRes.status === "fulfilled") {
         const entries = Array.isArray(historyRes.value?.entries)
@@ -293,6 +311,7 @@ export function usePredictionState() {
     current,
     history,
     health,
+    seasonContext,
     setPrediction,
     setLoading,
     setError,

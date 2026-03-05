@@ -118,6 +118,16 @@ class TeamMeta(BaseModel):
 class TeamLogosResponse(BaseModel):
     teams: Dict[str, TeamMeta]
 
+class SeasonContextResponse(BaseModel):
+    phase: str
+    label: str
+    message: str
+    current_season: int
+    display_week: Optional[int] = None
+    games_in_next_window: int
+    next_kickoff: Optional[datetime.datetime] = None
+    generated_at: datetime.datetime
+
 __all__ = [
     "PredictionRequest",
     "ScorePrediction",
@@ -135,4 +145,5 @@ __all__ = [
     "ScheduleResponse",
     "TeamMeta",
     "TeamLogosResponse",
+    "SeasonContextResponse",
 ]
