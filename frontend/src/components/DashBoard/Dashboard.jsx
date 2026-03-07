@@ -20,7 +20,6 @@ import PredictionResult from "../PredictionResult";
 import HistoryChart from "../HistoryChart";
 import NavBar from "../NavBar/NavBar";
 import ErrorDisplay from "../ErrorDisplay";
-import LLMChat from "../LLMChat/LLMChat";
 import { API_BASE } from "../../api/fetch";
 import { buildGameKey } from "../../utils/predictionContextUtils";
 import { toEntry } from "../../utils/predictionHelpers";
@@ -183,6 +182,9 @@ export default function Dashboard({
   const modelLabel = modelDir
     ? modelDir.split(/[\\/]/).slice(-2).join("/")
     : null;
+  const totalGames = Array.isArray(schedule) ? schedule.length : 0;
+  const readyPredictions = Object.values(predictions || {}).filter(Boolean).length;
+  const backendStatusLabel = backendHealthy ? "Healthy" : (healthStatus || "Unknown");
 
   return (
     <div className="dashboard-layout advanced">
@@ -199,6 +201,20 @@ export default function Dashboard({
               <strong className="season-context-pill">{seasonLabel}</strong>
               <span className="season-context-message">{seasonMessage}</span>
               <span className="season-context-kickoff">Next kickoff: {nextKickoffLabel}</span>
+            </div>
+            <div className="dashboard-kpi-row" role="status" aria-live="polite">
+              <article className="dashboard-kpi-card">
+                <span className="kpi-label">Backend</span>
+                <strong className={`kpi-value ${backendHealthy ? "ok" : "warn"}`}>{backendStatusLabel}</strong>
+              </article>
+              <article className="dashboard-kpi-card">
+                <span className="kpi-label">Current Slate</span>
+                <strong className="kpi-value">{totalGames} games</strong>
+              </article>
+              <article className="dashboard-kpi-card">
+                <span className="kpi-label">Session Predictions</span>
+                <strong className="kpi-value">{readyPredictions}</strong>
+              </article>
             </div>
           </div>
         </header>
@@ -251,9 +267,6 @@ export default function Dashboard({
           </section>
         )}
 
-        <section className="llm-chat-section">
-          <LLMChat prediction={current} />
-        </section>
       </main>
     </div>
   );

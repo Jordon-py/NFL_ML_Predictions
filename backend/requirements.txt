@@ -26,7 +26,6 @@ python-dotenv
 nflreadpy
 # pyarrow is required for polars->pandas conversion (nflreadpy uses polars internally)
 pyarrow
-ollama
 # Explicit CORS middleware (Starlette provides CORSMiddleware used by FastAPI)
 # FastAPI already depends on Starlette, but pinning here makes CORS explicit
 # and helps Heroku/Pipfiles resolve compatible versions during deployments.

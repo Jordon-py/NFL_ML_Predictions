@@ -11,7 +11,6 @@ Endpoints implemented in THIS file:
   GET  /schedule/next-week
   POST /predict
   POST /predict/explain
-  POST /llm/chat
   GET  /history
   GET  /status/overview
 
@@ -29,7 +28,7 @@ Key environment variables:
 Design principles:
 - Prefer clarity over cleverness.
 - One “readiness” gate for all endpoints.
-- Never crash because of missing optional components (Ollama is best-effort).
+- Keep optional analysis features deterministic and dependency-light.
 
 Run locally:
 
@@ -50,11 +49,6 @@ $body = @{ home_team="KC"; away_team="BUF"; season=2025; week=15 } | ConvertTo-J
 curl -X POST http://127.0.0.1:8000/predict/explain \\
   -H "Content-Type: application/json" \\
   -d "{\\"home_team\\":\\"KC\\",\\"away_team\\}":{\\"BUF\\",\\"season\\":2025,\\"week\\":1}"
-
-
-curl -X POST http://127.0.0.1:8000/llm/chat \\
-  -H "Content-Type: application/json" \\
-  -d "{\\"messages\\": [{\\"role\\": \\"user\\", \\"content\\": \\"What is the best team in the NFL?\\"}]}
 
 
 FILE: /main.py
@@ -95,41 +89,76 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import subprocess
 import asyncio
 from dotenv import load_dotenv
-from .schemas import (
-    PredictionRequest,
-    PredictionResponse,
-    UnifiedPredictionResponse,
-    HealthResponse,
-    StatusOverviewResponse,
-    HistoryResponse,
-    ScheduleResponse,
-    ScheduleEntry,
-    TeamLogosResponse,
-    SeasonContextResponse,
-)
-from .services.prediction_service import PredictionService
-from .services.inference_row import build_model_input_row
-from .config import DATA_DIR as CFG_DATA_DIR, MODELS_DIR as CFG_MODELS_DIR, resolve_cors, TRUTHY
-from .utils.artifact_loader import ensure_artifacts
-from .main_helpers import (
-    InferenceBundle,
-    load_inference_bundle,
-    load_dataset_df,
-    _append_prediction_history_to_disk,
-    prediction_history_entries,
-    _prediction_history_lock,
-    get_schedule,
-    select_next_week_rows,
-    get_team_meta,
-    parse_kickoff,
-    _pick_col,
-    _HOME_COLS,
-    _AWAY_COLS,
-    _GAME_ID_COLS,
-    _STADIUM_COLS,
-    load_prediction_history,
-)
-from .ollama.llm_ollama import explain_prediction as llm_explain_prediction, chat_messages as llm_chat_messages
+try:
+    from backend.schemas import (
+        PredictionRequest,
+        PredictionResponse,
+        UnifiedPredictionResponse,
+        HealthResponse,
+        StatusOverviewResponse,
+        HistoryResponse,
+        ScheduleResponse,
+        ScheduleEntry,
+        TeamLogosResponse,
+        SeasonContextResponse,
+    )
+    from backend.services.prediction_service import PredictionService
+    from backend.services.inference_row import build_model_input_row
+    from backend.config import DATA_DIR as CFG_DATA_DIR, MODELS_DIR as CFG_MODELS_DIR, resolve_cors, TRUTHY
+    from backend.utils.artifact_loader import ensure_artifacts
+    from backend.main_helpers import (
+        InferenceBundle,
+        load_inference_bundle,
+        load_dataset_df,
+        _append_prediction_history_to_disk,
+        prediction_history_entries,
+        _prediction_history_lock,
+        get_schedule,
+        select_next_week_rows,
+        get_team_meta,
+        parse_kickoff,
+        _pick_col,
+        _HOME_COLS,
+        _AWAY_COLS,
+        _GAME_ID_COLS,
+        _STADIUM_COLS,
+        load_prediction_history,
+    )
+except ImportError:
+    from schemas import (
+        PredictionRequest,
+        PredictionResponse,
+        UnifiedPredictionResponse,
+        HealthResponse,
+        StatusOverviewResponse,
+        HistoryResponse,
+        ScheduleResponse,
+        ScheduleEntry,
+        TeamLogosResponse,
+        SeasonContextResponse,
+    )
+    from services.prediction_service import PredictionService
+    from services.inference_row import build_model_input_row
+    from config import DATA_DIR as CFG_DATA_DIR, MODELS_DIR as CFG_MODELS_DIR, resolve_cors, TRUTHY
+    from utils.artifact_loader import ensure_artifacts
+    from main_helpers import (
+        InferenceBundle,
+        load_inference_bundle,
+        load_dataset_df,
+        _append_prediction_history_to_disk,
+        prediction_history_entries,
+        _prediction_history_lock,
+        get_schedule,
+        select_next_week_rows,
+        get_team_meta,
+        parse_kickoff,
+        _pick_col,
+        _HOME_COLS,
+        _AWAY_COLS,
+        _GAME_ID_COLS,
+        _STADIUM_COLS,
+        load_prediction_history,
+    )
 
 def _build_game_id(season, week, home, away):
     """Normalized game ID builder."""
@@ -452,23 +481,23 @@ def _find_inference_rows(df: pd.DataFrame, home: str, away: str, season: int, we
     """Find specific rows in the dataframe matching the matchup."""
     if df is None or df.empty:
         return pd.DataFrame()
-    
+
     # Pre-normalization
     h_norm = norm_team(home)
     a_norm = norm_team(away)
-    
+
     # Safe casting
     season_col = pd.to_numeric(df["season"], errors="coerce").fillna(0).astype(int)
     week_col = pd.to_numeric(df["week"], errors="coerce").fillna(0).astype(int)
-    
+
     # Masking
     mask = (season_col == int(season)) & (week_col == int(week))
-    
+
     # Match team names (handling potential raw discrepancies if needed, but norm_team usually enough)
     # We apply norm logic to the DF columns on the fly if needed, but for speed assume standard abbrs usually match.
     # If standard retrieval fails, we can try more aggressive matching.
     mask &= (df["home_team"] == h_norm) & (df["away_team"] == a_norm)
-    
+
     return df.loc[mask]
 
 def _build_future_row(
@@ -505,7 +534,7 @@ def _build_future_row(
     features["home_team"] = home
     features["away_team"] = away
     features["has_home_team"] = True
-    
+
     # Dynamic categorical columns (e.g. home_team_ARI)
     for col in categorical_cols:
         if col.startswith("home_team_"):
@@ -564,29 +593,6 @@ def _fallback_explain(pred: Dict[str, Any]) -> Dict[str, Any]:
     explanation = f"{home} vs {away}: model leans {favored} based on learned pre-game feature patterns."
     return {"explanation": explanation, "bullets": bullets, "caveats": caveats}
 
-
-def _build_chat_context(pred: Optional[Dict[str, Any]]) -> Optional[str]:
-    if not pred:
-        return None
-    home = str(pred.get("home_team", "")).upper()
-    away = str(pred.get("away_team", "")).upper()
-
-    lines = [
-        "You are an NFL predictions assistant.",
-        "Use this prediction context when answering if relevant:",
-    ]
-    if home or away:
-        lines.append(f"matchup: {home} vs {away}")
-    if pred.get("season") or pred.get("week"):
-        lines.append(f"season_week: {pred.get('season')} / {pred.get('week')}")
-    if isinstance(pred.get("home_score"), (int, float)) and isinstance(pred.get("away_score"), (int, float)):
-        lines.append(f"predicted_score: {home} {pred.get('home_score')} - {away} {pred.get('away_score')}")
-    if isinstance(pred.get("home_win_probability"), (int, float)):
-        lines.append(f"home_win_probability: {pred.get('home_win_probability')}")
-    if pred.get("prediction_source"):
-        lines.append(f"prediction_source: {pred.get('prediction_source')}")
-
-    return "\n".join(lines)
 
 def _load_model_metadata(models_dir: Path) -> tuple[Path | None, Dict[str, Any] | None]:
     md_path = _find_latest_metadata_json(models_dir)
@@ -688,7 +694,7 @@ def _predict_home_win_prob(bundle: InferenceBundle, X_raw: pd.DataFrame, point_d
     Since we use full pipelines (preprocessor included), we pass raw data directly.
     """
     clf = bundle.win_pipe or bundle.hist_win_clf  # prefer win_pipe (pipeline) logic
-    
+
     if hasattr(clf, "predict_proba"):
         try:
             # Direct prediction using the pipeline
@@ -725,16 +731,16 @@ async def build_and_reload_dataset():
             cwd=str(repo_root),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
-            env={**os.environ, "PYTHONPATH": str(backend_dir)} 
+            env={**os.environ, "PYTHONPATH": str(backend_dir)}
         )
-        
+
         stdout, stderr = await process.communicate()
-        
+
         if stdout:
             log.info(f"Build Subprocess STDOUT:\n{stdout.decode().strip()}")
         if stderr:
             log.error(f"Build Subprocess STDERR:\n{stderr.decode().strip()}")
-            
+
         if process.returncode == 0:
             log.info("Dataset build successful.")
             log.info("Reloading dataset...")
@@ -743,16 +749,16 @@ async def build_and_reload_dataset():
                 expected_features = _resolve_expected_features(state["bundle"], metadata=state.get("model_metadata"))
                 state["dataset"] = load_dataset_df(CFG_DATA_DIR, expected_features=expected_features)
                 state["dataset_path"] = str(new_csv)
-                
+
                 # Update app state
                 app.state.dataset = state["dataset"]
-                
+
                 # Re-initialize service with new dataset
                 state["service"] = PredictionService(state["bundle"], state["dataset"])
-                
-                # Update status overview metrics in real-time? 
+
+                # Update status overview metrics in real-time?
                 # (metrics are pulled from state["dataset"] so they should auto-update)
-                
+
                 log.info(f"Dataset reloaded from {new_csv}")
             else:
                 log.warning("Build finished but no CSV found to reload.")
@@ -762,7 +768,7 @@ async def build_and_reload_dataset():
                 log.error(f"Build Error: {stderr.decode()}")
             if stdout:
                 log.info(f"Build Output: {stdout.decode()}")
-                
+
     except Exception as e:
         log.error(f"Error during scheduled dataset build: {e}", exc_info=True)
 
@@ -774,52 +780,52 @@ async def lifespan(app: FastAPI):
         log.info(f"Starting up: Loading model bundle from {CFG_MODELS_DIR}...")
         ensure_artifacts()
         load_prediction_history()
-        
+
         # 1. Load Bundle (Models)
         state["bundle"] = load_inference_bundle(CFG_MODELS_DIR)
-        
+
         # 2. Load Metadata (if separate)
         # Assuming metadata.json is always in MODELS_DIR as enforced by config
         meta_path = CFG_MODELS_DIR / "metadata.json"
         if meta_path.exists():
             state["model_metadata"] = json.loads(meta_path.read_text(encoding="utf-8"))
             state["model_metadata_path"] = str(meta_path)
-        
+
         expected_features = _resolve_expected_features(state["bundle"], metadata=state.get("model_metadata"))
-        
+
         # 3. Load Dataset
         # Config enforces DATASET_PATH if specific file is needed.
         log.info(f"Loading dataset from {CFG_DATA_DIR}...")
         state["dataset"] = load_dataset_df(CFG_DATA_DIR, expected_features=expected_features)
-        
+
         # Validate
         _validate_feature_schema(state["bundle"], state["dataset"], metadata=state.get("model_metadata"))
-        
+
         # Init Service
         state["service"] = PredictionService(state["bundle"], state["dataset"])
         _get_team_meta_map()
-        
+
         # Expose state
         app.state.dataset = state["dataset"]
         app.state.models = {"models_dir": str(CFG_MODELS_DIR)}
         app.state.team_logos = state.get("team_logos") or {}
         app.state.started_at = datetime.now(timezone.utc).isoformat()
-        
+
         app.state.started_at = datetime.now(timezone.utc).isoformat()
-        
+
         # 4. Start Scheduler
         scheduler = AsyncIOScheduler()
         # Schedule to run every day at 3:00 AM (server time/UTC depending on env)
         scheduler.add_job(build_and_reload_dataset, 'cron', hour=3, minute=0)
         scheduler.start()
         log.info("Scheduler started: Auto-build set for 03:00 daily.")
-        
+
         log.info("Startup complete: Models and dataset ready.")
     except Exception as e:
         log.error(f"Startup failed: {e}", exc_info=True)
         # We raise here because the user wants to fix the traceback, meaning we should fail if invalid.
         raise
-    
+
     yield
 
 app = FastAPI(title="NFL ML Predictions API", lifespan=lifespan)
@@ -975,7 +981,7 @@ async def trigger_build_manually():
     if not ADMIN_ENABLED:
          # Optional: secure this endpoint
          pass
-         
+
     asyncio.create_task(build_and_reload_dataset())
     return {"status": "Build triggered in background. Check server logs."}
 
@@ -1011,7 +1017,7 @@ async def predict(req: PredictionRequest):
 
 @app.post("/api/predict/explain")
 async def explain(payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
-    """Generate a natural language explanation for a prediction."""
+    """Generate a deterministic natural language explanation for a prediction."""
     pred = _extract_prediction_payload(payload)
     home_team = payload.get("home_team") or pred.get("home_team")
     away_team = payload.get("away_team") or pred.get("away_team")
@@ -1046,15 +1052,15 @@ async def explain(payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
     if not game_id and season is not None and week is not None and home_team and away_team:
         game_id = _build_game_id(season, week, home_team, away_team)
 
-    llm_result = await llm_explain_prediction(pred)
+    explanation_payload = _fallback_explain(pred)
     return {
         "game_id": game_id,
-        "used_llm": bool(llm_result.get("used_llm")),
-        "llm_model": llm_result.get("model"),
-        "explanation": llm_result.get("explanation", ""),
-        "bullets": llm_result.get("bullets", []) or [],
-        "caveats": llm_result.get("caveats", []) or [],
-        "error": llm_result.get("error"),
+        "used_llm": False,
+        "llm_model": None,
+        "explanation": explanation_payload.get("explanation", ""),
+        "bullets": explanation_payload.get("bullets", []) or [],
+        "caveats": explanation_payload.get("caveats", []) or [],
+        "error": None,
     }
 
 @app.get("/api/schedule/next-week", response_model=ScheduleResponse)
@@ -1073,7 +1079,7 @@ async def get_next_week_schedule(season: int | None = None) -> ScheduleResponse:
                 log.warning("Schedule fallback failed: %s", exc)
         if not isinstance(df, pd.DataFrame):
             df = pd.DataFrame()
-            
+
     df_next, use_season, use_week = select_next_week_rows(df)
     team_meta = _get_team_meta_map()
 
@@ -1126,35 +1132,6 @@ async def get_history(limit: int = 100):
         data = prediction_history_entries[:limit]
         return HistoryResponse(entries=data, total=len(prediction_history_entries))
 
-@app.post("/api/llm/chat")
-async def llm_chat(payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
-    """Context-aware LLM chat interface."""
-    messages = payload.get("messages")
-    prediction = payload.get("prediction")
-    system_prompt = None
-
-    if isinstance(prediction, dict) and prediction:
-        home = prediction.get("home_team") or prediction.get("home_abbr")
-        away = prediction.get("away_team") or prediction.get("away_abbr")
-        season = prediction.get("season")
-        week = prediction.get("week")
-        system_prompt = (
-            "You are an NFL prediction assistant. "
-            f"Context: {home} vs {away}, season {season}, week {week}. "
-            f"Prediction snapshot: {prediction}."
-        )
-
-    result = await llm_chat_messages(messages if isinstance(messages, list) else [], system_prompt=system_prompt)
-    reply = result.get("reply") or ""
-    if not reply and result.get("error"):
-        reply = f"Error: {result.get('error')}"
-    return {
-        "reply": reply,
-        "used_llm": bool(result.get("used_llm")),
-        "llm_model": result.get("model"),
-        "error": result.get("error"),
-    }
-
 # --- Admin & Debug Routes ---
 
 @app.post("/api/admin/reload")
@@ -1186,7 +1163,10 @@ async def admin_retrain(payload: Dict[str, Any] = Body(default={})) -> Dict[str,
     if not dataset_path or not Path(dataset_path).exists():
         raise HTTPException(status_code=400, detail="dataset path not found")
 
-    from .train_models import main as train_main
+    try:
+        from backend.train_models import main as train_main
+    except ImportError:
+        from train_models import main as train_main
     train_main(data_path=str(dataset_path), out_dir=str(CFG_MODELS_DIR))
     await admin_reload()
     return {"trained": True}

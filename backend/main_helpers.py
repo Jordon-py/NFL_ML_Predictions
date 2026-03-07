@@ -27,7 +27,7 @@ from threading import Lock
 from datetime import datetime, timezone
 import joblib
 import pandas as pd
-from backend.config import TRUTHY, load_schedule_data_safe
+from config import TRUTHY, load_schedule_data_safe
 
 log = logging.getLogger(__name__)
 
@@ -59,7 +59,7 @@ def load_inference_bundle(models_dir: Path) -> InferenceBundle:
     if not meta_path.exists():
         raise FileNotFoundError(f"metadata.json not found at: {meta_path}")
     meta = json.loads(meta_path.read_text(encoding="utf-8"))
-    
+
     report_path = models_dir / "training_report.json"
     report = json.loads(report_path.read_text(encoding="utf-8")) if report_path.exists() else {}
 
@@ -68,17 +68,17 @@ def load_inference_bundle(models_dir: Path) -> InferenceBundle:
     def _resolve_path(key: str, default: Optional[str] = None) -> Optional[Path]:
         val = artifacts.get(key) or meta.get(key) or default
         if not val: return None
-        
+
         # Normalize slashes and convert to string
         val_str = str(val).replace("\\", "/")
-        
+
         # If it looks like an absolute path (e.g. C:/ or /), try the filename in models_dir.
         if ":" in val_str or val_str.startswith("/"):
             p_name = val_str.split("/")[-1]
             fallback = models_dir / p_name
             if fallback.exists():
                 return fallback
-        
+
         # Fallback to standard Path logic
         p = Path(val_str)
         if p.is_absolute():
@@ -102,7 +102,7 @@ def load_inference_bundle(models_dir: Path) -> InferenceBundle:
         meta=meta,
         report=report,
         preprocessor=_safe_load(pre_path),
-        home_model=joblib.load(home_path), 
+        home_model=joblib.load(home_path),
         away_model=joblib.load(away_path),
         hist_win_clf=_safe_load(hist_path),
     )
@@ -136,7 +136,7 @@ def load_dataset_df(data_dir: Path, expected_features: Optional[List[str]] = Non
         # Aggressive strip: handle whitespace and mixed quotes
         dataset_path = dataset_path.strip().strip('"').strip("'").strip()
         p = Path(dataset_path)
-        
+
         # Try a few candidates for relative paths
         if not p.is_absolute():
             # 1. As provided (relative to CWD)
@@ -148,7 +148,7 @@ def load_dataset_df(data_dir: Path, expected_features: Optional[List[str]] = Non
             if dataset_path.startswith("backend/"):
                 sub_path = dataset_path.replace("backend/", "", 1).strip("/")
                 candidate3 = (data_dir / sub_path).resolve()
-            
+
             if candidate1.exists():
                 p = candidate1
             elif candidate2.exists():
@@ -239,6 +239,23 @@ def _append_prediction_history_to_disk(request_payload: Dict[str, Any], predicti
             PREDICTION_HISTORY_PATH.write_text(json.dumps(prediction_history_entries, indent=2), encoding="utf-8")
         except Exception as e:
             log.warning(f"History persist failed: {e}")
+
+def load_prediction_history() -> None:
+    """Load persisted prediction history into memory if the file exists."""
+    global prediction_history_entries
+    with _prediction_history_lock:
+        if not PREDICTION_HISTORY_PATH.exists():
+            prediction_history_entries = []
+            return
+        try:
+            raw = json.loads(PREDICTION_HISTORY_PATH.read_text(encoding="utf-8"))
+            if isinstance(raw, list):
+                prediction_history_entries = raw[:PREDICTION_HISTORY_MAX]
+            else:
+                prediction_history_entries = []
+        except Exception as e:
+            log.warning("Failed to load prediction history: %s", e)
+            prediction_history_entries = []
 
 # ----------------------------------------------------
 # Shared Schedule & Team Helpers (Referenced by main.py)
@@ -445,7 +462,7 @@ def get_team_meta(csv_path: Path) -> Dict[str, Dict[str, str]]:
         if pd.isna(abbr_val): continue
         abbr = str(abbr_val).strip().upper()
         if not abbr or abbr == "NAN": continue
-        
+
         logo_val = r.get(logo_col)
         if pd.isna(logo_val): continue
         logo = str(logo_val).strip()

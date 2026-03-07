@@ -266,39 +266,12 @@ export async function predictGame(home, away, season, week, options = {}) {
     week: parseInt(week, 10)
   };
   const record = options.record !== false;
-  const useLlm = options.useLlm === true && import.meta.env.VITE_ENABLE_LLM === "true";
 
-  // Raw model-only fallback (preserves legacy behavior).
   const url = record ? "/api/predict" : "/api/predict?record=0";
-  const prediction = await fetchJson(url, {
+  return fetchJson(url, {
     method: "POST",
     body: JSON.stringify(payload),
   });
-  if (!useLlm) return prediction;
-
-  try {
-    const explain = await fetchJson("/api/predict/explain", {
-      method: "POST",
-      body: JSON.stringify({ prediction, ...payload }),
-    });
-    return { ...prediction, llm_explanation: explain };
-  } catch (error) {
-    const message = error?.message || "LLM explanation failed";
-    return { ...prediction, llm_explanation_error: message };
-  }
-}
-
-/**
- * simple chat interface for context-aware LLM interactions.
- * @param {Object} payload - { messages: Array, prediction: Object }
- * @returns {Promise<Object>} LLM response.
- */
-export async function chatLLM(payload) {
-  const response = await fetchJson("/api/llm/chat", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-  return response;
 }
 
 /**

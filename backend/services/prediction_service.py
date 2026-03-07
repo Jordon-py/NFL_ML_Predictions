@@ -11,14 +11,24 @@
 import numpy as np
 import pandas as pd
 from typing import Any, Optional
-from backend.schemas import (
-    PredictionRequest,
-    PredictionResponse,
-    ScorePrediction,
-    WinnerPrediction,
-)
-from backend.services.inference_row import build_model_input_row, build_team_history_cache
-from backend.config import load_schedule_data_safe
+try:
+    from backend.schemas import (
+        PredictionRequest,
+        PredictionResponse,
+        ScorePrediction,
+        WinnerPrediction,
+    )
+    from backend.services.inference_row import build_model_input_row, build_team_history_cache
+    from backend.config import load_schedule_data_safe
+except ImportError:
+    from schemas import (
+        PredictionRequest,
+        PredictionResponse,
+        ScorePrediction,
+        WinnerPrediction,
+    )
+    from services.inference_row import build_model_input_row, build_team_history_cache
+    from config import load_schedule_data_safe
 
 def _pipeline_has_transform_step(model: Any) -> bool:
     """Best-effort check for sklearn Pipeline-like objects that transform raw features."""
@@ -115,7 +125,7 @@ class PredictionService:
     def predict(self, req: PredictionRequest) -> PredictionResponse:
         """
         Execute the full inference pipeline for a single game.
-        
+
         Steps:
         1. Resolve Schedule Context (Vegas lines, etc.) if available.
         2. Build Feature Row (Enrich with history, roll-forward stats, impute).

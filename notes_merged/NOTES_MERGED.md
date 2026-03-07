@@ -44,7 +44,6 @@ Activity Log
 - backend/main_helpers.py
 - frontend/src/api/client.js
 
-
 ---
 
 ## artifacts\artifacts_README.md
@@ -58,7 +57,6 @@ Activity Log
 - [Next 5 Tasks](next_5_tasks.md)
 - [Important Information](important_info.md)
 
-
 ---
 
 ## artifacts\important_info.md
@@ -68,6 +66,7 @@ Activity Log
 _Last Updated:_ 2026-01-02 08:27:54
 
 ## Current Focus
+
 - Unified prediction response: frontend expects flat `UnifiedPredictionResponse` fields (home_score, home_win_probability, etc.).
 - Schedule enrichment: backend supplies team names/logos per game and now reads `team_logos.csv` from repo root.
 - CORS config: backend uses `ALLOWED_ORIGINS` and `ALLOW_ORIGIN_REGEX` to allow localhost and Vercel previews.
@@ -94,7 +93,6 @@ _Last Updated:_ 2026-01-02 08:27:54
 - [Next 5 Tasks](next_5_tasks.md)
 - [Dataflow Map](../dataflow.md)
 
-
 ---
 
 ## artifacts\last_5_tasks.md
@@ -106,7 +104,6 @@ _Last Updated:_ 2026-01-02 08:27:54
 3. **Prediction endpoint map doc** - Added a focused /predict mapping doc with diagram, dataflow, and code references.
 4. **Prediction endpoint image** - Added a simple SVG image for the /predict endpoint flow.
 5. **Batch roll-forward updates** - `_fill_team_priors` and `_apply_onehots` now use batched assignments to avoid DataFrame fragmentation warnings.
-
 
 ---
 
@@ -120,7 +117,6 @@ _Last Updated:_ 2026-01-02 08:27:54
 4. [ ] **Refactor Backend Tests** - Add robust unit tests for `inference_row.py` and `prediction_service.py`.
 5. [ ] **Frontend Predictions** - Verify frontend is consuming the unified prediction response correctly.
 
-
 ---
 
 ## backend\# NFL Player Statistics Data Dictionary.md
@@ -128,129 +124,131 @@ _Last Updated:_ 2026-01-02 08:27:54
 # NFL Player Statistics Data Dictionary
 
 ## Purpose
+
 This document provides a comprehensive description of each column in the NFL player statistics dataset. It serves as a reference for data analysts, machine learning engineers, and developers working on NFL prediction systems. The dataset aggregates player performance metrics from games, enabling feature engineering for predictive models.
 
 ## Key Structure
+
 - **Columns**: Each entry lists a column name followed by its description.
 - **Usage**: Use `player_id` for joining with other data sources like `load_players()`.
 - **Dependencies**: Relies on NFL play-by-play data from APIs such as playstats; integrates with machine learning pipelines for fantasy points and EPA calculations.
 
 ## Columns
 
-player_id	                                              	    Player's gsis_id. Use this to join to other sources, e.g. load_players().
-player_name	                                              	    Abbreviated name of player as provided by playstats api
-player_display_name	                                            Name of player as provided by `load_players()`
-position	                                                    Position of player as listed by NFL
-position_group	                                              	Position group of player as listed by NFL
-headshot_url	                                              	Player's nfl.com headshot URL
-season	                                                    	Official NFL season
-week	                                  	                    Game week number
-season_type	                                              	    `REG` for regular season, `POST` for postseason
-team	                                              	        Abbreviation of player's team
-opponent_team	                                              	Abbreviation of opponent's team
-completions	                                  	                The number of completed passes.
-attempts	                                  	                The number of pass attempts as defined by the NFL.
-passing_yards	                                  	            Yards gained on pass plays.
-passing_tds	                                  	                The number of passing touchdowns.
-passing_interceptions	                                  	    Number of passing interceptions
-sacks_suffered	                                  	            Number of sacks taken as a QB
-sack_yards_lost	                                  	            Yards lost from sacks suffered by this player
-sack_fumbles	                                  	            The number of sacks suffered with a fumble.
-        sack_fumbles_lost	                                    The number of sacks suffered with a lost fumble.
-        passing_air_yards	                                  	Passing air yards (includes incomplete passes).
-passing_yards_after_catch	                                  	Yards after the catch gained on plays in which player was the passer
-passing_first_downs	                                  	First downs on pass attempts.
-passing_epa	                                  	Total expected points added on pass attempts and sacks.
-passing_cpoe	                                  	Completion percentage over expected for this player.
-passing_2pt_conversions	                                  	Two-point conversion passes.
-pacr	                                  	Passing (yards) Air (yards) Conversion Ratio - the number of passing yards per air yards thrown per game
-carries	                                  	The number of official rush attempts (incl. scrambles and kneel downs). Rushes after a lateral reception don't count as carry.
-rushing_yards	                                  	Yards gained when rushing with the ball (incl. scrambles and kneel downs). Also includes yards gained after obtaining a lateral on a play that started with a rushing attempt.
-rushing_tds	                                  	The number of rushing touchdowns (incl. scrambles). Also includes touchdowns after obtaining a lateral on a play that started with a rushing attempt.
-rushing_fumbles	                                  	The number of rushes with a fumble.
-rushing_fumbles_lost	                                  	The number of rushes with a lost fumble.
-rushing_first_downs	                                  	First downs on rush attempts (incl. scrambles).
-rushing_epa	                                  	Expected points added on rush attempts (incl. scrambles and kneel downs).
-rushing_2pt_conversions	                                  	Two-point conversion rushes
-receptions	                                  	The number of pass receptions. Lateral receptions officially don't count as reception.
-targets	                                  	The number of pass plays where the player was the targeted receiver.
-receiving_yards	                                  	Yards gained after a pass reception. Includes yards gained after receiving a lateral on a play that started as a pass play.
-receiving_tds	                                  	The number of touchdowns following a pass reception. Also includes touchdowns after receiving a lateral on a play that started as a pass play.
-receiving_fumbles	                                  	The number of fumbles after a pass reception.
-receiving_fumbles_lost	                                  	The number of fumbles lost after a pass reception.
-receiving_air_yards	                                  	Receiving air yards (incl. incomplete passes).
-receiving_yards_after_catch	                                  	Yards after the catch gained on plays in which player was receiver 
-receiving_first_downs	                                  	Total number of first downs gained on receptions
-receiving_epa	                                  	Total EPA on plays where this receiver was targeted
-receiving_2pt_conversions	                                  	Two-point conversion receptions
-racr	                                  	Receiving (yards) Air (yards) Conversion Ratio - the number of receiving yards per air yards targeted per game
-target_share	                                  	Player's share of team receiving targets in this game
-air_yards_share	                                  	Player's share of the team's air yards in this game
-wopr	                                  	Weighted OPportunity Rating - 1.5 x target_share + 0.7 x air_yards_share - a weighted average that contextualizes total fantasy usage.
-special_teams_tds	                                  	Total number of kick/punt return touchdowns
-def_tackles_solo	                                  	Total number of solo tackles for this player
-def_tackles_with_assist	                                  	Number of tackles this player had with an assisted tackle
-def_tackle_assists	                                  	Number of assisted tackles for this player
-def_tackles_for_loss	                                  	Number of tackles for loss (TFL) for this player
-def_tackles_for_loss_yards	                                  	Yards lost from TFLs involving this player
-def_fumbles_forced	                                  	Number of times a fumble was forced from this player
-def_sacks	                                  	Number of sacks form this player
-def_sack_yards	                                  	Yards lost from sacks forced by this player
-def_qb_hits	                                  	Number of QB hits from this player (should not include plays where the QB was sacked)
-def_interceptions	                                  	Number of interceptions forced by this player
-def_interception_yards	                                  	yards gained/lost by interception returns from this player
-def_pass_defended	                                  	Number of passes defended/broken up by this player
-def_tds	                                  	Number of defensive touchdowns scored by this player
-def_fumbles	                                  	Number of fumbles by this player
-def_safeties	                                  	Number of safeties forced by this player
-misc_yards	                                  	Miscellaneous yards attributed to this player
-fumble_recovery_own	                                  	Number of the player's own team fumbles recovered
-fumble_recovery_yards_own	                                  	Yards gained/lost on own fumble recoveries
-fumble_recovery_opp	                                  	Number of the opponent's fumbles recovered
-fumble_recovery_yards_opp	                                  	Yardage on opponent fumble recoveries
-fumble_recovery_tds	                                  	Fumbles recovered and advanced for a touchdown
-penalties	                                  	Number of penalties attributed to this player
-penalty_yards	                                  	Penalty yardage on penalties attributed to this player
-punt_returns	                                  	Count of punt returns by this player
-punt_return_yards	                                  	Yards gained on punts returned by this player
-kickoff_returns	                                  	Count of kick returns by this player
-kickoff_return_yards	                                  	Yards gained on kick returns by this player
-fg_made	                                  	Count of field goals made by this player
-fg_att	                                  	Count of field goals attempted by this player
-fg_missed	                                  	Count of field goals missed by this player
-fg_blocked	                                  	Count of field goals attempted by this player that were blocked
-fg_long	                                  	Longest successful field goal made by this player
-fg_pct	                                  	Percentage of field goals successfully made
-fg_made_0_19	                                  	Count of field goals within 0-19 yards made by this player
-fg_made_20_29	                                  	Count of field goals within 20-29 yards made by this player
-fg_made_30_39	                                  	Count of field goals within 30-39 yards made by this player
-fg_made_40_49	                                  	Count of field goals within 40-49 yards made by this player
-fg_made_50_59	                                  	Count of field goals within 50-59 yards made by this player
-fg_made_60_	                                  	Count of field goals over 60 yards made by this player
-fg_missed_0_19	                                  	Count of field goals missed between 0-19 yards by this player
-fg_missed_20_29	                                  	Count of field goals missed between 20-29 yards by this player
-fg_missed_30_39	                                  	Count of field goals missed between 30-39 yards by this player
-fg_missed_40_49	                                  	Count of field goals missed between 40-49 yards by this player
-fg_missed_50_59	                                  	Count of field goals missed between 50-59 yards by this player
-fg_missed_60_	                                  	Count of field goals missed over 60 yards by this player
-fg_made_list	                                              	Comma-separated string listing lengths of field goals made
-fg_missed_list	                                              	Comma-separated string listing lengths of field goals missed
-fg_blocked_list	                                              	Comma-separated string listing lengths of field goals blocked
-fg_made_distance	                                  	Total distance on field goals made
-fg_missed_distance	                                	Total distance on field goals missed
-fg_blocked_distance	                                	Total distance on field goals blocked
-pat_made	                                	Count of extra point kicks made
-pat_att	                                	Count of extra point kicks attempted
-pat_missed	                                	Count of extra point kicks missed
-pat_blocked	                                	Count of extra point kicks blocked
-pat_pct	                                	Percentage of extra point kicks successfully completed
-gwfg_made	                                	Count of game winning field goals made
-gwfg_att	                                	Count of game winning field goals attempted
-gwfg_missed	                                	Count of game winning field goals missed
-gwfg_blocked	                                	Count of game winning field goals blocked
-gwfg_distance	                                	Total distance on game winning field goals completed
-fantasy_points	                                	Standard fantasy points.
-fantasy_points_ppr	                                	PPR fantasy points.
+player_id                                                    Player's gsis_id. Use this to join to other sources, e.g. load_players().
+player_name                                                    Abbreviated name of player as provided by playstats api
+player_display_name                                             Name of player as provided by `load_players()`
+position                                                     Position of player as listed by NFL
+position_group                                                Position group of player as listed by NFL
+headshot_url                                                Player's nfl.com headshot URL
+season                                                      Official NFL season
+week                                                        Game week number
+season_type                                                    `REG` for regular season, `POST` for postseason
+team                                                        Abbreviation of player's team
+opponent_team                                                Abbreviation of opponent's team
+completions                                                    The number of completed passes.
+attempts                                                    The number of pass attempts as defined by the NFL.
+passing_yards                                                Yards gained on pass plays.
+passing_tds                                                    The number of passing touchdowns.
+passing_interceptions                                        Number of passing interceptions
+sacks_suffered                                                Number of sacks taken as a QB
+sack_yards_lost                                                Yards lost from sacks suffered by this player
+sack_fumbles                                                The number of sacks suffered with a fumble.
+        sack_fumbles_lost                                     The number of sacks suffered with a lost fumble.
+        passing_air_yards                                    Passing air yards (includes incomplete passes).
+passing_yards_after_catch                                    Yards after the catch gained on plays in which player was the passer
+passing_first_downs                                    First downs on pass attempts.
+passing_epa                                    Total expected points added on pass attempts and sacks.
+passing_cpoe                                    Completion percentage over expected for this player.
+passing_2pt_conversions                                    Two-point conversion passes.
+pacr                                    Passing (yards) Air (yards) Conversion Ratio - the number of passing yards per air yards thrown per game
+carries                                    The number of official rush attempts (incl. scrambles and kneel downs). Rushes after a lateral reception don't count as carry.
+rushing_yards                                    Yards gained when rushing with the ball (incl. scrambles and kneel downs). Also includes yards gained after obtaining a lateral on a play that started with a rushing attempt.
+rushing_tds                                    The number of rushing touchdowns (incl. scrambles). Also includes touchdowns after obtaining a lateral on a play that started with a rushing attempt.
+rushing_fumbles                                    The number of rushes with a fumble.
+rushing_fumbles_lost                                    The number of rushes with a lost fumble.
+rushing_first_downs                                    First downs on rush attempts (incl. scrambles).
+rushing_epa                                    Expected points added on rush attempts (incl. scrambles and kneel downs).
+rushing_2pt_conversions                                    Two-point conversion rushes
+receptions                                    The number of pass receptions. Lateral receptions officially don't count as reception.
+targets                                    The number of pass plays where the player was the targeted receiver.
+receiving_yards                                    Yards gained after a pass reception. Includes yards gained after receiving a lateral on a play that started as a pass play.
+receiving_tds                                    The number of touchdowns following a pass reception. Also includes touchdowns after receiving a lateral on a play that started as a pass play.
+receiving_fumbles                                    The number of fumbles after a pass reception.
+receiving_fumbles_lost                                    The number of fumbles lost after a pass reception.
+receiving_air_yards                                    Receiving air yards (incl. incomplete passes).
+receiving_yards_after_catch                                    Yards after the catch gained on plays in which player was receiver
+receiving_first_downs                                    Total number of first downs gained on receptions
+receiving_epa                                    Total EPA on plays where this receiver was targeted
+receiving_2pt_conversions                                    Two-point conversion receptions
+racr                                    Receiving (yards) Air (yards) Conversion Ratio - the number of receiving yards per air yards targeted per game
+target_share                                    Player's share of team receiving targets in this game
+air_yards_share                                    Player's share of the team's air yards in this game
+wopr                                    Weighted OPportunity Rating - 1.5 x target_share + 0.7 x air_yards_share - a weighted average that contextualizes total fantasy usage.
+special_teams_tds                                    Total number of kick/punt return touchdowns
+def_tackles_solo                                    Total number of solo tackles for this player
+def_tackles_with_assist                                    Number of tackles this player had with an assisted tackle
+def_tackle_assists                                    Number of assisted tackles for this player
+def_tackles_for_loss                                    Number of tackles for loss (TFL) for this player
+def_tackles_for_loss_yards                                    Yards lost from TFLs involving this player
+def_fumbles_forced                                    Number of times a fumble was forced from this player
+def_sacks                                    Number of sacks form this player
+def_sack_yards                                    Yards lost from sacks forced by this player
+def_qb_hits                                    Number of QB hits from this player (should not include plays where the QB was sacked)
+def_interceptions                                    Number of interceptions forced by this player
+def_interception_yards                                    yards gained/lost by interception returns from this player
+def_pass_defended                                    Number of passes defended/broken up by this player
+def_tds                                    Number of defensive touchdowns scored by this player
+def_fumbles                                    Number of fumbles by this player
+def_safeties                                    Number of safeties forced by this player
+misc_yards                                    Miscellaneous yards attributed to this player
+fumble_recovery_own                                    Number of the player's own team fumbles recovered
+fumble_recovery_yards_own                                    Yards gained/lost on own fumble recoveries
+fumble_recovery_opp                                    Number of the opponent's fumbles recovered
+fumble_recovery_yards_opp                                    Yardage on opponent fumble recoveries
+fumble_recovery_tds                                    Fumbles recovered and advanced for a touchdown
+penalties                                    Number of penalties attributed to this player
+penalty_yards                                    Penalty yardage on penalties attributed to this player
+punt_returns                                    Count of punt returns by this player
+punt_return_yards                                    Yards gained on punts returned by this player
+kickoff_returns                                    Count of kick returns by this player
+kickoff_return_yards                                    Yards gained on kick returns by this player
+fg_made                                    Count of field goals made by this player
+fg_att                                    Count of field goals attempted by this player
+fg_missed                                    Count of field goals missed by this player
+fg_blocked                                    Count of field goals attempted by this player that were blocked
+fg_long                                    Longest successful field goal made by this player
+fg_pct                                    Percentage of field goals successfully made
+fg_made_0_19                                    Count of field goals within 0-19 yards made by this player
+fg_made_20_29                                    Count of field goals within 20-29 yards made by this player
+fg_made_30_39                                    Count of field goals within 30-39 yards made by this player
+fg_made_40_49                                    Count of field goals within 40-49 yards made by this player
+fg_made_50_59                                    Count of field goals within 50-59 yards made by this player
+fg_made_60_                                    Count of field goals over 60 yards made by this player
+fg_missed_0_19                                    Count of field goals missed between 0-19 yards by this player
+fg_missed_20_29                                    Count of field goals missed between 20-29 yards by this player
+fg_missed_30_39                                    Count of field goals missed between 30-39 yards by this player
+fg_missed_40_49                                    Count of field goals missed between 40-49 yards by this player
+fg_missed_50_59                                    Count of field goals missed between 50-59 yards by this player
+fg_missed_60_                                    Count of field goals missed over 60 yards by this player
+fg_made_list                                                Comma-separated string listing lengths of field goals made
+fg_missed_list                                                Comma-separated string listing lengths of field goals missed
+fg_blocked_list                                                Comma-separated string listing lengths of field goals blocked
+fg_made_distance                                    Total distance on field goals made
+fg_missed_distance                                  Total distance on field goals missed
+fg_blocked_distance                                  Total distance on field goals blocked
+pat_made                                  Count of extra point kicks made
+pat_att                                  Count of extra point kicks attempted
+pat_missed                                  Count of extra point kicks missed
+pat_blocked                                  Count of extra point kicks blocked
+pat_pct                                  Percentage of extra point kicks successfully completed
+gwfg_made                                  Count of game winning field goals made
+gwfg_att                                  Count of game winning field goals attempted
+gwfg_missed                                  Count of game winning field goals missed
+gwfg_blocked                                  Count of game winning field goals blocked
+gwfg_distance                                  Total distance on game winning field goals completed
+fantasy_points                                  Standard fantasy points.
+fantasy_points_ppr                                  PPR fantasy points.
 
 ---
 
@@ -259,9 +257,11 @@ fantasy_points_ppr	                                	PPR fantasy points.
 # NFL Prediction System Development Report
 
 ## Overview
+
 This report tracks changes, metrics, and enhancements for the NFL ML Predictions project. It includes a professional structure with updates, graphs (descriptions), variable lists, function inventories, and productivity metrics.
 
 ## Recent Changes
+
 - **Date**: [Current Date, e.g., 2023-10-05]
 - **Time**: [Current Time, e.g., 14:00 UTC]
 - **File Modified**: untitled:Untitled-1
@@ -270,16 +270,19 @@ This report tracks changes, metrics, and enhancements for the NFL ML Predictions
 - **App Completion Estimate**: 45% (Data ingestion and validation complete; feature engineering in progress.)
 
 ## Variable Names
+
 - **Grouped by File**:
   - **untitled:Untitled-1**: player_id, player_name, player_display_name, position, position_group, headshot_url, season, week, season_type, team, opponent_team, completions, attempts, passing_yards, passing_tds, passing_interceptions, sacks_suffered, sack_yards_lost, sack_fumbles, sack_fumbles_lost, passing_air_yards, passing_yards_after_catch, passing_first_downs, passing_epa, passing_cpoe, passing_2pt_conversions, pacr, carries, rushing_yards, rushing_tds, rushing_fumbles, rushing_fumbles_lost, rushing_first_downs, rushing_epa, rushing_2pt_conversions, receptions, targets, receiving_yards, receiving_tds, receiving_fumbles, receiving_fumbles_lost, receiving_air_yards, receiving_yards_after_catch, receiving_first_downs, receiving_epa, receiving_2pt_conversions, racr, target_share, air_yards_share, wopr, special_teams_tds, def_tackles_solo, def_tackles_with_assist, def_tackle_assists, def_tackles_for_loss, def_tackles_for_loss_yards, def_fumbles_forced, def_sacks, def_sack_yards, def_qb_hits, def_interceptions, def_interception_yards, def_pass_defended, def_tds, def_fumbles, def_safeties, misc_yards, fumble_recovery_own, fumble_recovery_yards_own, fumble_recovery_opp, fumble_recovery_yards_opp, fumble_recovery_tds, penalties, penalty_yards, punt_returns, punt_return_yards, kickoff_returns, kickoff_return_yards, fg_made, fg_att, fg_missed, fg_blocked, fg_long, fg_pct, fg_made_0_19, fg_made_20_29, fg_made_30_39, fg_made_40_49, fg_made_50_59, fg_made_60_, fg_missed_0_19, fg_missed_20_29, fg_missed_30_39, fg_missed_40_49, fg_missed_50_59, fg_missed_60_, fg_made_list, fg_missed_list, fg_blocked_list, fg_made_distance, fg_missed_distance, fg_blocked_distance, pat_made, pat_att, pat_missed, pat_blocked, pat_pct, gwfg_made, gwfg_att, gwfg_missed, gwfg_blocked, gwfg_distance, fantasy_points, fantasy_points_ppr.
   - **Interactions**: Variables like player_id interact with external sources (e.g., load_players()). EPA metrics (passing_epa, rushing_epa) feed into ML models for predictions.
 
 ## Function Inventory
+
 - **Grouped by File**:
   - **untitled:Untitled-1**: No functions defined (data dictionary only).
   - **Interactions**: Relies on external functions like load_players() for data joining.
 
 ## Metrics and Productivity
+
 - **Code Quality Metrics**: Documentation coverage increased by 20% with added headers.
 - **Performance Insights**: No performance changes; documentation aids in faster onboarding.
 - **Graphs/Visuals**:
@@ -287,10 +290,10 @@ This report tracks changes, metrics, and enhancements for the NFL ML Predictions
   - Estimated completion graph: Bar chart showing 45% progress (data prep: 100%, modeling: 30%, deployment: 0%).
 
 ## Enhancement Suggestions
+
 - Implement automated data validation scripts to check for missing values in key columns like player_id.
 - Add unit tests for data parsing functions to ensure consistency.
 - Integrate real-time API updates for live game stats.
-
 
 ---
 
@@ -330,6 +333,7 @@ This report summarises the performance of base models and a convex blend on NFL 
 | Blend(Logit,GB) w=1.00 | 0.0000 | 0.0000 | 0.2451 | 0.2451 |
 
 **Notes**:
+
 - Purged walk-forward CV uses one-group embargo and five folds.
 - Hold-out season models are trained strictly on prior seasons.
 - Brier Skill Score baseline = weighted mean home-win rate on train.
@@ -345,20 +349,26 @@ This report summarises the performance of base models and a convex blend on NFL 
 This package performs a full purged walk-forward test (WFT), engineered-feature audit, train–test drift analysis, and neural network hyperparameter search on your `train.csv` and `test.csv`.
 
 ## Quick start
+
 1. Save the two files below into the same folder.
 2. Install deps:
+
    ```bash
    pip install numpy pandas scikit-learn pyyaml matplotlib
    ```
+
 3. Run:
+
    ```bash
    python full_run.py --config full_run_config.yaml
    ```
+
 4. Outputs land in `outputs_dir` from the YAML (defaults to `/mnt/data/reflexion_ds_full_run_artifacts`).
 
 ---
 
 ## `full_run_config.yaml`
+
 ```yaml
 # Reflexion DS full-run configuration
 data:
@@ -404,6 +414,7 @@ outputs_dir: /mnt/data/reflexion_ds_full_run_artifacts
 ---
 
 ## `full_run.py`
+
 ```python
 #!/usr/bin/env python3
 # Reflexion DS – Full run: WFT, feature audit, drift, and MLP HPO
@@ -660,8 +671,6 @@ if __name__ == "__main__":
     main(args.config)
 ```
 
-
-
 ---
 
 ## backend\reports\dataset_analysis_insights.md
@@ -849,7 +858,7 @@ Same differential features but with **much higher missing percentages** (~44% vs
 
 ---
 
-*This document will be updated with chart-specific insights as visualizations are generated.*
+_This document will be updated with chart-specific insights as visualizations are generated._
 
 ## Chart 1 Insights: Feature Distributions
 
@@ -896,7 +905,7 @@ Found **16 highly correlated pairs**:
 - `home_rolling_pf_10` <-> `home_rolling_pf_5`: r=0.840
 - `home_rolling_win_pct_5` <-> `home_rolling_win_pct_3`: r=0.836
 
-*Recommendation: Remove duplicate features and use regularization*
+_Recommendation: Remove duplicate features and use regularization_
 
 ### Potential Data Leakage Features
 
@@ -1008,6 +1017,7 @@ This report summarises the performance of base models and a convex blend on NFL 
 | Blend(Logit,GB) w=0.00 | 0.2237 | 0.0241 | 0.0472 | 0.2451 |
 
 **Notes**:
+
 - Purged walk-forward CV uses one-group embargo and five folds.
 - Hold-out season models are trained strictly on prior seasons.
 - Brier Skill Score baseline = weighted mean home-win rate on train.
@@ -1065,7 +1075,6 @@ Short checklist for CI/test maintainers
 - Use `with TestClient(app) as client:` for full-lifecycle tests.
 - For lightweight unit tests that don't need startup/shutdown, call `app.state.app_state.initialize()` explicitly.
 - If you need auto-initialize behavior in `create_app()`, consider using an environment variable (e.g. AUTO_INITIALIZE) in CI to opt into that behavior.
-
 
 ---
 
@@ -1156,7 +1165,6 @@ This document maps the flow of data across the NFL Prediction App, from frontend
 ## 6. Reference Maps
 
 - `docs/PREDICTION_ENDPOINT_MAP.md` provides a focused /predict endpoint map with line references.
-
 
 ---
 
@@ -1477,7 +1485,6 @@ graph TD;
 
 🎉 **Deployment fixed! Backend now deploys correctly to Heroku.**
 
-
 ---
 
 ## DEPLOYMENT_GUIDE.md
@@ -1624,7 +1631,6 @@ All changes are committed locally. Just need to push to Heroku:
 - `verify_prediction_fix.py` - Verification script
 - `test_predictions.py` - Test script
 
-
 ---
 
 ## DEPLOYMENT_STATUS.md
@@ -1749,7 +1755,6 @@ npm audit              # Review remaining issues
 3. Address npm vulnerabilities
 4. Sync master branch with working state after rollback validation
 
-
 ---
 
 ## docs\AI-METRICS.md
@@ -1803,7 +1808,6 @@ Changed since last run
 
 - Parsed ALLOWED_ORIGINS into a proper list and added catch-all OPTIONS handler to prevent 400 preflights [backend/main.py](backend/main.py#L75-L111, backend/main.py#L563-L571).
 - Removed transformed-column alignment in win prob path; pipelines now consume raw feature names, eliminating constant predictions [backend/main.py](backend/main.py#L1375-L1495).
-
 
 ---
 
@@ -1933,7 +1937,6 @@ Changed since last run
 4. `frontend/src/PredictionContext.jsx` — Check if there's an existing header or just imports
 
 If you can share a snippet of the first 10-15 lines of these files, I can craft precise replacements.
-
 
 ---
 
@@ -2094,7 +2097,6 @@ Developed with insights from Raptor mini (Preview).
 
 Updated: 2025-11-17 (UTC)
 
-
 ---
 
 ## docs\analysis_teaching_v2.md
@@ -2124,7 +2126,6 @@ This file summarizes the key design and teachable issues found in the repo. It c
 ---
 
 Updated: 2025-11-17 (UTC)
-
 
 ---
 
@@ -2186,7 +2187,6 @@ graph TD
 - **Frontend Entrypoint**: `frontend/src/index.jsx` (run with `vite`).
 - **Model Training**: `backend/train_models.py`.
 - **Primary Dataset**: `backend/data/merge_dominance.csv`.
-
 
 ---
 
@@ -2351,7 +2351,7 @@ server: {
 **File:** `frontend/src/api/client.js`
 
 ```javascript
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || 
+const BASE_URL = import.meta.env.VITE_API_BASE_URL ||
                  'https://nfl-predict-ecf5a5bd34fe.herokuapp.com';
 
 async function api(path, opts = {}) {
@@ -2441,7 +2441,7 @@ curl -X POST https://nfl-predict-ecf5a5bd34fe.herokuapp.com/predict \
 **Error Message:**
 
 ```
-Access to fetch at 'https://nfl-predict-ecf5a5bd34fe.herokuapp.com/predict' 
+Access to fetch at 'https://nfl-predict-ecf5a5bd34fe.herokuapp.com/predict'
 from origin 'https://nfl-ml-predictions.vercel.app' has been blocked by CORS policy
 ```
 
@@ -2564,7 +2564,6 @@ git push heroku main
 - Heroku Config Vars: <https://devcenter.heroku.com/articles/config-vars>
 - Vercel Environment Variables: <https://vercel.com/docs/environment-variables>
 
-
 ---
 
 ## docs\CORS_QUICK_REFERENCE.md
@@ -2573,8 +2572,8 @@ git push heroku main
 
 ## 🎯 Quick Overview
 
-**Backend:** Heroku @ `https://nfl-predict-ecf5a5bd34fe.herokuapp.com`  
-**Frontend:** Vercel @ `https://nfl-ml-predictions.vercel.app`  
+**Backend:** Heroku @ `https://nfl-predict-ecf5a5bd34fe.herokuapp.com`
+**Frontend:** Vercel @ `https://nfl-ml-predictions.vercel.app`
 **Tech Stack:** FastAPI (backend) + React/Vite (frontend)
 
 ---
@@ -2696,7 +2695,6 @@ python backend/build_csv_datasets.py --start 2016 --end 2026 --out-dir backend/d
 ---
 
 **Last Updated:** 2025-10-13
-
 
 ---
 
@@ -2847,7 +2845,6 @@ Evidence references (examples):
 - Frontend API wrapper: `frontend/src/api/client.js`
 - Frontend consumer: `frontend/src/components/TeamGrid.jsx`
 
-
 ---
 
 ## docs\DATA_FLOW.md
@@ -2899,20 +2896,21 @@ graph TD
 
 2. **API Call**: `handlePredict` calls `predictGame` from `api/client.js`, which sends a `POST` request to the backend's `/predict` endpoint.
 
-3.  **State Update**:
-    *   Upon receiving a successful response, `handlePredict` uses the `toEntry` utility function from `PredictionContext.js` to format the API response into a standardized object.
-    *   It then calls two actions from the `PredictionContext`:
-        *   `actions.setCurrent(entry)`: Updates the `current` prediction object in the global state.
-        *   `actions.pushHistory(entry)`: Prepends the new prediction object to the `history` array in the global state.
+3. **State Update**:
+    - Upon receiving a successful response, `handlePredict` uses the `toEntry` utility function from `PredictionContext.js` to format the API response into a standardized object.
+    - It then calls two actions from the `PredictionContext`:
+        - `actions.setCurrent(entry)`: Updates the `current` prediction object in the global state.
+        - `actions.pushHistory(entry)`: Prepends the new prediction object to the `history` array in the global state.
 
-4.  **Component Re-render**:
-    *   The `DashBoard.jsx` component consumes the `PredictionContext`.
-    *   When the `state.current` object changes, it passes the new data to the `PredictionResult.jsx` component, which re-renders to show the latest prediction.
-    *   When the `state.history` array changes, it passes the updated array to the `HistoryChart.jsx` component, which re-renders to display the updated prediction history.
+4. **Component Re-render**:
+    - The `DashBoard.jsx` component consumes the `PredictionContext`.
+    - When the `state.current` object changes, it passes the new data to the `PredictionResult.jsx` component, which re-renders to show the latest prediction.
+    - When the `state.history` array changes, it passes the updated array to the `HistoryChart.jsx` component, which re-renders to display the updated prediction history.
 
 ### Key Code Snippets
 
 **`TeamGrid.jsx` - `handlePredict` function**
+
 ```javascript
 // ...
 import {usePredictions, toEntry} from '../PredictionContext.js';
@@ -2940,6 +2938,7 @@ function TeamGrid() {
 ```
 
 **`PredictionContext.js` - Reducer and `toEntry` function**
+
 ```javascript
 function reducer(state, action) {
   switch (action.type) {
@@ -2971,9 +2970,9 @@ The `TeamGrid.jsx` component is responsible for fetching the weekly schedule and
 
 2. **Rendering**: The component maps over the `schedule` array. For each `game` object in the array, it renders a matchup card.
 
-    *   A unique `key` is assigned to each card for efficient re-renders.
-    *   The `game` object (containing team abbreviations, kickoff time, etc.) is passed to the card's `onClick` handler (`handlePredict`).
-    *   The local `predictions` state is used to display the result directly on the card after a prediction is made.
+    - A unique `key` is assigned to each card for efficient re-renders.
+    - The `game` object (containing team abbreviations, kickoff time, etc.) is passed to the card's `onClick` handler (`handlePredict`).
+    - The local `predictions` state is used to display the result directly on the card after a prediction is made.
 
 ### `TeamGrid.jsx` - Rendering Logic
 
@@ -3033,7 +3032,8 @@ sequenceDiagram
 
 ### Communication Layers
 
-1.  **Component Layer (`TeamGrid.jsx`)**: Initiates the call with a structured `payload`.
+1. **Component Layer (`TeamGrid.jsx`)**: Initiates the call with a structured `payload`.
+
     ```javascript
     const payload = {
       home_team: game.home_abbr,
@@ -3044,14 +3044,16 @@ sequenceDiagram
     const result = await predictGame(payload);
     ```
 
-2.  **API Client Layer (`api/client.js`)**: Handles the `fetch` request, serializes the body, and sets headers.
+2. **API Client Layer (`api/client.js`)**: Handles the `fetch` request, serializes the body, and sets headers.
+
     ```javascript
     export async function predictGame(body) {
       return api('predict', {method: 'POST', body: JSON.stringify(body)});
     }
     ```
 
-3.  **Backend Endpoint (`backend/main.py`)**: A FastAPI route receives the request, validates it against the `PredictionRequest` Pydantic model, and returns a `PredictionResponse`.
+3. **Backend Endpoint (`backend/main.py`)**: A FastAPI route receives the request, validates it against the `PredictionRequest` Pydantic model, and returns a `PredictionResponse`.
+
     ```python
     @app.post("/predict", response_model=PredictionResponse)
     def predict_game(payload: PredictionRequest):
@@ -3062,8 +3064,8 @@ sequenceDiagram
             # ...
         )
     ```
-This architecture decouples the UI from the API, centralizes state management, and ensures a predictable, one-way data flow.
 
+This architecture decouples the UI from the API, centralizes state management, and ensures a predictable, one-way data flow.
 
 ---
 
@@ -3124,7 +3126,6 @@ The following docs were consolidated and moved to `docs/legacy/` to reduce dupli
 
 — This page will remain the stable index for maintainers. See `docs/legacy/` for full historical references.
 
-
 ---
 
 ## docs\FRONTEND_AUDIT.md
@@ -3132,22 +3133,27 @@ The following docs were consolidated and moved to `docs/legacy/` to reduce dupli
 # Frontend Audit & Simplification (React/Vite)
 
 ## Goals
+
 - Keep the UI production-ready while reducing complexity and removing dead code.
 - Align the frontend strictly to the backend endpoints that exist in `backend/main.py`.
 - Avoid `useContext`/`useMemo` unless they clearly add value.
 
 ## API Contract (Verified Against `backend/main.py`)
+
 The frontend now calls only these endpoints:
+
 - `GET /schedule/next-week` → list of games
 - `POST /predict` → single-game prediction
 - `GET /history?limit=...` → recent predictions
 - `GET /status/overview` → health + dataset + history metrics
 
 Notes:
+
 - The previous UI referenced `/teams/logos` and `/predict/next-week`; those routes are not exposed by `backend/main.py`, so the frontend no longer calls them.
 - “Predict All Games” now performs one `/predict` call per game with a small concurrency limit.
 
 ## What Changed (High-Level)
+
 - Removed `PredictionContext` and related context-based docs/components to avoid global state and stale abstractions.
 - Simplified the prediction flow:
   - `Dashboard` owns schedule + predictions state.
@@ -3160,14 +3166,18 @@ Notes:
 - Updated `npm test` to pass when no tests exist: `vitest --passWithNoTests`.
 
 ## Environment Variables
+
 This is a Vite app (not CRA). Use:
+
 - `VITE_API_BASE` (recommended)
 
 Examples:
+
 - Local dev backend: `VITE_API_BASE=http://127.0.0.1:8000`
 - Production (Vercel): `VITE_API_BASE=https://<your-heroku-app>.herokuapp.com`
 
 ## Build / Run Locally
+
 ```bash
 cd frontend
 npm install
@@ -3176,12 +3186,16 @@ npm run preview
 ```
 
 ## Deployment Notes (Heroku + Vercel)
+
 ### Heroku (Backend)
+
 This repo’s Heroku deployment is a Python/FastAPI app:
+
 - `Procfile` is `web: gunicorn ... backend.main:app`
 - Buildpack is `heroku/python`
 
 Recommended verification commands (run from a machine with Heroku CLI auth):
+
 ```bash
 heroku login
 heroku apps
@@ -3191,18 +3205,19 @@ heroku logs --tail -a <app-name>
 ```
 
 ### Vercel (Frontend)
+
 - Push to GitHub; Vercel typically auto-builds from `frontend/`.
 - Ensure `VITE_API_BASE` is set in Vercel project env vars.
 
 ## Quick Smoke Checks
+
 From any terminal:
+
 ```bash
 curl -sS https://<api-host>/status/overview | head
 curl -sS https://<api-host>/schedule/next-week | head
 curl -sS "https://<api-host>/history?limit=5" | head
 ```
-
-
 
 ---
 
@@ -3456,8 +3471,8 @@ For a game **KC @ DEN (2025 Week 7)**:
    ```python
    # KC's last 5 games before 2025 Week 7
    KC_games = dataset[
-       (team == 'KC') & 
-       (time_key < 202507) & 
+       (team == 'KC') &
+       (time_key < 202507) &
        (scores_not_null)
    ].tail(5)
    ```
@@ -3532,10 +3547,9 @@ Once testing is complete:
 
 ---
 
-**Implementation Date**: October 17, 2025  
-**Commit**: 10f0b9801  
+**Implementation Date**: October 17, 2025
+**Commit**: 10f0b9801
 **Status**: ✅ Code Complete, ⏳ Testing Pending (Python env issues)
-
 
 ---
 
@@ -3549,7 +3563,7 @@ This document has been archived during documentation consolidation. See `docs/DO
 
 This checklist helps verify that the NFL ML Predictions backend and frontend are properly configured for API communication and CORS alignment.
 
-**Last Updated:** 2025-10-13  
+**Last Updated:** 2025-10-13
 **Status:** ✅ CORS Configuration Verified and Documented
 
 ---
@@ -3643,6 +3657,7 @@ heroku logs --tail -a nfl-predict
 ```
 
 **Expected in logs:**
+
 ```
 CORS Origins configured: ['http://localhost:3000', 'https://localhost:3000', ...]
 Loaded dataset rows=XXXX cols=XX
@@ -3682,6 +3697,7 @@ python scripts/verify_api_cors.py --verbose
 ```
 
 **Expected output:**
+
 ```
 ✓ Health Endpoint: PASSED
 ✓ CORS Configuration: PASSED
@@ -3706,10 +3722,11 @@ vercel --prod
 ### Step 5: Test Frontend-Backend Integration
 
 1. **Open Frontend in Browser**
-   - URL: https://nfl-ml-predictions.vercel.app
+   - URL: <https://nfl-ml-predictions.vercel.app>
    - Open browser developer console (F12)
 
 2. **Check API Client Logs** (in console):
+
    ```
    [API Client] Using BASE_URL: https://nfl-predict-ecf5a5bd34fe.herokuapp.com
    [API Client] Mode: production
@@ -3735,24 +3752,28 @@ vercel --prod
 ### Issue: CORS Error in Browser
 
 **Error:**
+
 ```
-Access to fetch at 'https://nfl-predict-ecf5a5bd34fe.herokuapp.com/predict' 
+Access to fetch at 'https://nfl-predict-ecf5a5bd34fe.herokuapp.com/predict'
 from origin 'https://nfl-ml-predictions.vercel.app' has been blocked by CORS policy
 ```
 
 **Solution:**
 
 1. Check Heroku CORS_ORIGINS:
+
    ```bash
    heroku config:get CORS_ORIGINS -a nfl-predict
    ```
 
 2. Update if needed:
+
    ```bash
    heroku config:set CORS_ORIGINS="http://localhost:3000,https://localhost:3000,https://nfl-ml-predictions.vercel.app,https://nfl-predict-frontend.vercel.app" -a nfl-predict
    ```
 
 3. Restart Heroku dyno:
+
    ```bash
    heroku restart -a nfl-predict
    ```
@@ -3762,6 +3783,7 @@ from origin 'https://nfl-ml-predictions.vercel.app' has been blocked by CORS pol
 ### Issue: API Returns 500 - Dataset Not Found
 
 **Error:**
+
 ```json
 {"detail": "Dataset not found: backend/data/merged_game_features.csv"}
 ```
@@ -3769,6 +3791,7 @@ from origin 'https://nfl-ml-predictions.vercel.app' has been blocked by CORS pol
 **Solution:**
 
 Generate the dataset:
+
 ```bash
 # On Heroku (if you have enough dyno hours)
 heroku run python backend/build_csv_datasets.py --start 2016 --end 2026 --out-dir backend/data -a nfl-predict
@@ -3789,6 +3812,7 @@ git push heroku main
    - Verify `VITE_API_BASE_URL` = `https://nfl-predict-ecf5a5bd34fe.herokuapp.com`
 
 2. Rebuild frontend:
+
    ```bash
    cd frontend
    npm run build
@@ -3800,21 +3824,25 @@ git push heroku main
 ## Success Indicators
 
 ✅ **Backend Health:**
+
 - `/health` endpoint returns 200 OK
 - Response: `{"status":"healthy"}`
 - Logs show: "CORS Origins configured: [...]"
 
 ✅ **CORS Working:**
+
 - OPTIONS preflight requests return CORS headers
 - No CORS errors in browser console
 - Fetch requests succeed from Vercel frontend
 
 ✅ **Predictions Working:**
+
 - `/predict` endpoint returns 200 OK
 - Response contains all required fields
 - Frontend displays predictions
 
 ✅ **Frontend-Backend Communication:**
+
 - Network tab shows requests to Heroku backend
 - Responses are JSON with expected data
 - No authentication or authorization errors
@@ -3824,24 +3852,27 @@ git push heroku main
 ## Next Steps
 
 1. **Generate Dataset** (if not done):
+
    ```bash
    python backend/build_csv_datasets.py --start 2016 --end 2026 --out-dir backend/data
    ```
 
 2. **Deploy Changes**:
+
    ```bash
    # Backend
    git push heroku main
-   
+
    # Frontend
    vercel --prod
    ```
 
 3. **Monitor**:
+
    ```bash
    # Backend logs
    heroku logs --tail -a nfl-predict
-   
+
    # Frontend logs
    vercel logs nfl-ml-predictions
    ```
@@ -3862,9 +3893,8 @@ git push heroku main
 
 ---
 
-**Verification Completed:** 2025-10-13  
+**Verification Completed:** 2025-10-13
 **Next Review:** After next deployment
-
 
 ---
 
@@ -3874,7 +3904,6 @@ git push heroku main
 
 This detailed guide has been archived to reduce duplication. For current configuration and operational steps, start with `docs/DOCS_CONSOLIDATED.md` and `docs/RUNBOOK.md`.
 
-
 ---
 
 ## docs\legacy\CORS_CONFIGURATION_SUMMARY.md
@@ -3883,7 +3912,6 @@ This detailed guide has been archived to reduce duplication. For current configu
 
 Superseded by `docs/DOCS_CONSOLIDATED.md`. Retained as an archive entry
 
-
 ---
 
 ## docs\legacy\CORS_QUICK_REFERENCE.md
@@ -3891,7 +3919,6 @@ Superseded by `docs/DOCS_CONSOLIDATED.md`. Retained as an archive entry
 # Archived: CORS Quick Reference
 
 Quick-reference items now live under `docs/RUNBOOK.md`. This file is archived.
-
 
 ---
 
@@ -4066,10 +4093,10 @@ _Exit criteria_: Everyone agrees on “better than 0.65 ROC, 0.63 accuracy” be
 - [ ] Weekly automation keeps models fresh with alerts on degradation.
 
 Complete each step sequentially; if you pause more than a day, re-run Step 1 to refresh baselines before resuming.
+
 # Archived: Enhancement Workflow
 
 This process note has been archived. Current operational steps reside in `docs/RUNBOOK.md` and engineering cadence is reflected in `docs/report.md`.
-
 
 ---
 
@@ -4079,7 +4106,6 @@ This process note has been archived. Current operational steps reside in `docs/R
 
 This fix report has been archived. For up-to-date status and recent engineering changes, see `docs/report.md`.
 
-
 ---
 
 ## docs\legacy\SCHEDULE_FIX_SUMMARY.md
@@ -4088,7 +4114,6 @@ This fix report has been archived. For up-to-date status and recent engineering 
 
 This issue summary has been archived. The active integration guidance is in `docs/DOCS_CONSOLIDATED.md`.
 
-
 ---
 
 ## docs\legacy\TRAIN_MODELS_REFACTOR.md
@@ -4096,7 +4121,6 @@ This issue summary has been archived. The active integration guidance is in `doc
 # Archived: train_models.py Refactoring Report
 
 Archived for historical reference. See `backend/enhanced_pipeline.py`, `backend/train_models.py`, and `docs/report.md` for current state and changes.
-
 
 ---
 
@@ -4177,7 +4201,6 @@ Contact
 If you want, I can implement the CI job and add unit tests next. I can also open PRs with the changes and include review comments.
 
 Last updated: 2024-12-19 (automated agent)
-
 
 ---
 
@@ -4318,21 +4341,23 @@ These are concrete code items that need attention. Each entry lists the exact fi
 - Documentation
   - This file supersedes scattered report notes; for setup details see `docs/ONBOARDING_DEBUG_GUIDE.md`.
 
-
 ---
 
 ## docs\MODEL_FIX_SUMMARY.md
 
 # Model Testing & Deployment Summary
-**Date:** October 15, 2025  
+
+**Date:** October 15, 2025
 **Time:** 20:15 UTC
 
 ## 🔍 Root Cause Analysis
 
 ### Issue: All Predictions Identical
+
 **Problem:** Every prediction returned the same scores regardless of teams.
 
 **Root Causes Identified:**
+
 1. **Incorrect Model Loading** (Line 520-522 in `backend/main.py`)
    - Code tried to unpack `load_objects()` as a list: `[home_model, away_model, preprocessor, win_model] = ml_models`
    - `load_objects()` returns a **dictionary**, not a list
@@ -4351,6 +4376,7 @@ These are concrete code items that need attention. Each entry lists the exact fi
 ## ✅ Fixes Applied
 
 ### 1. Corrected Model Loading (`backend/main.py`)
+
 ```python
 # BEFORE (WRONG):
 ml_models = load_objects()
@@ -4362,14 +4388,16 @@ if model_objects is None or dataset_df is None:
 ```
 
 ### 2. Fixed Variable References
+
 - Changed `ml_models["preprocessor"]` → `model_objects["preprocessor"]`
 - Removed duplicate `away_score = float(` line
 
 ### 3. Model Loading Verified Locally
+
 ```bash
 # Test results:
 ✓ Home model: LGBMRegressor
-✓ Away model: LGBMRegressor  
+✓ Away model: LGBMRegressor
 ✓ Preprocessor: ColumnTransformer
 ✓ Win model: CalibratedClassifierCV
 ```
@@ -4377,6 +4405,7 @@ if model_objects is None or dataset_df is None:
 ## ⚠️ Known Issues
 
 ### Feature Mismatch (CRITICAL)
+
 - **Status:** Identified but not yet fixed
 - **Impact:** Win probability calculations may fail
 - **Solution Required:** Retrain models with correct feature set
@@ -4384,6 +4413,7 @@ if model_objects is None or dataset_df is None:
 - **Training Command:** `python backend/train_models.py`
 
 ### Dependency Issues
+
 - Python environment has `joblib.parallel` import errors
 - Affects local testing but not Heroku deployment
 - Heroku uses requirements.txt for clean install
@@ -4391,40 +4421,49 @@ if model_objects is None or dataset_df is None:
 ## 📦 Deployment Status
 
 ### Git Repository
+
 - ✅ **Commit:** `06bc80383` - "fix: correct model loading and prediction logic"
 - ✅ **Pushed to:** GitHub `main` branch
 - ⏳ **Heroku Deploy:** Pending (use `git push heroku main`)
 
 ### Vercel Frontend
-- ✅ **Deployed:** https://nfl-predict-pdwxi5pw4-christopher-jordons-projects.vercel.app
+
+- ✅ **Deployed:** <https://nfl-predict-pdwxi5pw4-christopher-jordons-projects.vercel.app>
 - ✅ **Build:** Successful (dist/index.html)
 - ⚠️ **SSL:** Generating certificate for nfl-predict.com
 
 ## 🔧 Recommended Next Steps
 
 ### Immediate (Required for Full Functionality)
+
 1. **Retrain Models**
+
    ```bash
    cd backend
    python train_models.py
    ```
+
    - Ensures feature count matches
    - Creates ensemble models if needed
    - Updates metadata.json
 
 2. **Deploy to Heroku**
+
    ```bash
    git push heroku main
    ```
+
    - Apply model loading fix
    - Test predictions with different teams
 
 3. **Verify CORS**
+
    ```bash
    python scripts/verify_api_cors.py --backend-url https://nfl-predict.herokuapp.com
    ```
 
 ### Short-term (Stability)
+
 4. **Fix Dependency Issues**
    - Clean reinstall of Python packages
    - Verify joblib version compatibility
@@ -4435,6 +4474,7 @@ if model_objects is None or dataset_df is None:
    - Fail fast if mismatch detected
 
 ### Long-term (Enhancement)
+
 6. **Implement Model Versioning**
    - Track model/metadata versions
    - Validate compatibility on load
@@ -4459,6 +4499,7 @@ if model_objects is None or dataset_df is None:
 ## 🎯 Success Criteria
 
 **Predictions Working When:**
+
 1. Different team matchups return different scores
 2. No `ValueError` about feature count
 3. Win probabilities calculated correctly
@@ -4476,16 +4517,15 @@ if model_objects is None or dataset_df is None:
 
 ## 🔗 Resources
 
-- **Repository:** https://github.com/Jordon-py/NFL_ML_Predictions
-- **Frontend:** https://nfl-predict-pdwxi5pw4-christopher-jordons-projects.vercel.app
-- **Backend:** https://nfl-predict.herokuapp.com
+- **Repository:** <https://github.com/Jordon-py/NFL_ML_Predictions>
+- **Frontend:** <https://nfl-predict-pdwxi5pw4-christopher-jordons-projects.vercel.app>
+- **Backend:** <https://nfl-predict.herokuapp.com>
 - **Heroku App:** `nfl-predict`
 
 ---
 
-*Last Updated: 2025-10-15 20:15 UTC*  
-*Next Review: After model retraining*
-
+_Last Updated: 2025-10-15 20:15 UTC_
+_Next Review: After model retraining_
 
 ---
 
@@ -4590,7 +4630,6 @@ Prod builds:
 - [ ] `/predict` returns probabilities with `prediction_source: "model"`
 - [ ] Frontend dev server proxies API in dev
 - [ ] Heroku release shows vX with successful build logs
-
 
 ---
 
@@ -4715,7 +4754,6 @@ Feature assembly in `backend/services/inference_row.py:366`:
 | `frontend/src/components/DashBoard/Dashboard.jsx:55` | UI handler that triggers predictions. |
 | `frontend/src/utils/predictionHelpers.js:25` | Normalizes response into UI entry. |
 
-
 ---
 
 ## docs\README.md
@@ -4751,10 +4789,10 @@ Redundant or historical docs have been moved to [legacy/](legacy/) to lighten th
 
 ### I want to
 
-**...understand current contracts and where to look**  
+**...understand current contracts and where to look**
 → Read [DOCS_CONSOLIDATED.md](DOCS_CONSOLIDATED.md) and [AI-METRICS.md](AI-METRICS.md)
 
-**...see what changed recently**  
+**...see what changed recently**
 → Check [report.md](report.md)
 
 ---
@@ -4914,17 +4952,16 @@ See [report.md](report.md) for a living change log. Notable recent item: fixed u
 Last Updated: 2025-11-02
 Documentation Version: 2.0 (consolidated)
 
-
 ---
 
 ## docs\REFACTORING_REPORT_2025-11-15.md
 
 # Code Refactoring Report: Variable & Function Name Improvements
 
-**Date:** November 15, 2025  
-**Author:** GitHub Copilot  
-**Task:** Refactor variable and function names for better clarity and maintainability  
-**Status:** ✅ Completed Successfully  
+**Date:** November 15, 2025
+**Author:** GitHub Copilot
+**Task:** Refactor variable and function names for better clarity and maintainability
+**Status:** ✅ Completed Successfully
 
 ---
 
@@ -4939,12 +4976,14 @@ This refactoring effort focused on improving code readability and maintainabilit
 ### 1. Dashboard.jsx (`/frontend/src/components/DashBoard/Dashboard.jsx`)
 
 #### Constants & Helper Functions
+
 | Before | After | Rationale |
 |--------|-------|-----------|
 | `LS_KEY` | `PREDICTION_HISTORY_KEY` | More descriptive of purpose |
 | `loadHistoryLocal()` | `loadPredictionHistoryFromLocalStorage()` | Explicit about data source and type |
 
 #### Variables in Component
+
 | Before | After | Rationale |
 |--------|-------|-----------|
 | `current` | `currentPrediction` | Clearer context |
@@ -4961,6 +5000,7 @@ This refactoring effort focused on improving code readability and maintainabilit
 | `navState` | `navigationBarState` | Full name for clarity |
 
 #### Computed Values
+
 - Added `displayedPrediction` to clearly show fallback logic
 - Added `isBackendHealthy` boolean for clearer conditional
 - Added `healthMessage` to extract message computation
@@ -4972,11 +5012,13 @@ This refactoring effort focused on improving code readability and maintainabilit
 ### 2. TeamGrid.jsx (`/frontend/src/components/Card/TeamGrid.jsx`)
 
 #### Exported Functions
+
 | Before | After | Rationale |
 |--------|-------|-----------|
 | `getKey(g)` | `generateGameKey(game)` | Verb indicates action, clearer parameter name |
 
 #### Component Variables
+
 | Before | After | Rationale |
 |--------|-------|-----------|
 | `weekGames` | `gamesForCurrentWeek` | More descriptive of filtered data |
@@ -4988,6 +5030,7 @@ This refactoring effort focused on improving code readability and maintainabilit
 | `status` | `predictionStatus` | More specific status type |
 
 #### Intermediate Variables
+
 | Before | After | Rationale |
 |--------|-------|-----------|
 | `filtered` | `filteredGames` | More explicit |
@@ -5000,11 +5043,13 @@ This refactoring effort focused on improving code readability and maintainabilit
 ### 3. StatsPage.jsx (`/frontend/src/pages/StatsPage.jsx`)
 
 #### Helper Functions
+
 | Before | After | Rationale |
 |--------|-------|-----------|
 | `toGameKey(game)` | `generateGameKey(game)` | Consistent with TeamGrid naming |
 
 #### State Variables
+
 | Before | After | Rationale |
 |--------|-------|-----------|
 | `schedule` | `upcomingSchedule` | Clearer temporal context |
@@ -5014,6 +5059,7 @@ This refactoring effort focused on improving code readability and maintainabilit
 | `error` | `pageError` | Clearer scope |
 
 #### Functions
+
 | Before | After | Rationale |
 |--------|-------|-----------|
 | `hydrate()` | `loadPageData()` | More descriptive action |
@@ -5021,6 +5067,7 @@ This refactoring effort focused on improving code readability and maintainabilit
 | `renderSchedule()` | `renderScheduleList()` | More specific about what's rendered |
 
 #### Computed Values
+
 | Before | After | Rationale |
 |--------|-------|-----------|
 | `history` | `predictionHistoryEntries` | Very explicit about content |
@@ -5037,11 +5084,13 @@ This refactoring effort focused on improving code readability and maintainabilit
 ### 4. Card.jsx (`/frontend/src/components/Card/Card.jsx`)
 
 #### Helper Functions
+
 | Before | After | Rationale |
 |--------|-------|-----------|
 | `pct(v)` | `formatProbabilityAsPercentage(probabilityValue)` | Fully descriptive name |
 
 #### Computed Values
+
 - Added `cardClassNames` to pre-compute class list
 - Added `kickoffDisplayTime` for reusable time formatting
 - Added `shouldShowTopBar` for clearer conditional logic
@@ -5054,12 +5103,14 @@ This refactoring effort focused on improving code readability and maintainabilit
 ### 5. PredictionContext.jsx (`/frontend/src/PredictionContext.jsx`)
 
 #### Constants
+
 | Before | After | Rationale |
 |--------|-------|-----------|
 | `KEY` | `PREDICTION_HISTORY_KEY` | Matches Dashboard constant |
 | `MAX_HISTORY` | `MAX_HISTORY_ENTRIES` | More explicit about what's limited |
 
 #### Functions
+
 | Before | After | Rationale |
 |--------|-------|-----------|
 | `getKey(game)` | `generateGameKey(game)` | Consistent across codebase |
@@ -5067,6 +5118,7 @@ This refactoring effort focused on improving code readability and maintainabilit
 | `hydrate()` | `loadHistoryFromBackend()` | Clear data source |
 
 #### Variables in Effects & Callbacks
+
 | Before | After | Rationale |
 |--------|-------|-----------|
 | `active` | `isComponentMounted` | Boolean naming |
@@ -5079,6 +5131,7 @@ This refactoring effort focused on improving code readability and maintainabilit
 ## API Routes Verification
 
 ### Backend Endpoints Checked ✅
+
 All endpoints verified for correctness:
 
 1. **Health & Status**
@@ -5104,6 +5157,7 @@ All endpoints verified for correctness:
    - `POST /retrain` - Trigger model retraining
 
 ### Frontend API Client Validation ✅
+
 - All endpoint calls use correct paths
 - Error handling properly implemented
 - Retry logic with exponential backoff
@@ -5126,6 +5180,7 @@ dist/assets/index-D6a41W-c.js   271.36 kB │ gzip: 84.61 kB
 ```
 
 ### Issues Fixed During Build
+
 1. **Case-sensitive import path**: Fixed `Dashboard` vs `DashBoard` directory name mismatch
 2. **CSS module import**: Corrected `DashBoard.module.css` to `Dashboard.module.css`
 
@@ -5154,21 +5209,25 @@ dist/assets/index-D6a41W-c.js   271.36 kB │ gzip: 84.61 kB
 ## Naming Conventions Established
 
 ### Constants
+
 - Use `SCREAMING_SNAKE_CASE`
 - Be fully descriptive: `PREDICTION_HISTORY_KEY` not `KEY`
 
 ### Variables
+
 - Use `camelCase`
 - Prefix booleans with `is`, `has`, or `should`: `isPageLoading`, `hasScoreDetails`
 - Use descriptive names: `predictionHistoryEntries` not `history`
 - Add context: `gameError` not `error`, `backendHealth` not `health`
 
 ### Functions
+
 - Use verbs: `generate`, `load`, `render`, `format`
 - Be specific: `loadPredictionHistoryFromStorage()` not `load()`
 - Action-oriented: `handlePredictionRequest()` not `makePrediction()`
 
 ### Function Parameters
+
 - Use full words: `game` not `g`, `probabilityValue` not `v`
 - Match internal variable names when possible
 
@@ -5177,12 +5236,14 @@ dist/assets/index-D6a41W-c.js   271.36 kB │ gzip: 84.61 kB
 ## Testing & Validation
 
 ### Automated Tests
+
 - ✅ Frontend build successful
 - ✅ No TypeScript/JSX errors
 - ✅ All imports resolved correctly
 - ✅ CSS modules loading properly
 
 ### Manual Validation Required
+
 - [ ] Start backend server
 - [ ] Start frontend dev server
 - [ ] Test prediction flow end-to-end
@@ -5191,7 +5252,9 @@ dist/assets/index-D6a41W-c.js   271.36 kB │ gzip: 84.61 kB
 - [ ] Validate error states
 
 ### No Breaking Changes
+
 All refactoring maintains:
+
 - ✅ Existing component APIs
 - ✅ Prop interfaces
 - ✅ Context provider contracts
@@ -5216,18 +5279,21 @@ All refactoring maintains:
 ## Recommendations for Future Work
 
 ### Short Term
+
 1. ✅ Already completed: Variable name improvements
 2. Consider adding JSDoc comments to complex functions
 3. Extract magic numbers to named constants
 4. Add PropTypes or TypeScript for better type safety
 
 ### Medium Term
+
 1. Create shared utility file for `generateGameKey()` (used in multiple files)
 2. Standardize error message formats
 3. Add unit tests for helper functions
 4. Document component prop interfaces
 
 ### Long Term
+
 1. Migrate to TypeScript for full type safety
 2. Create design system documentation
 3. Add Storybook for component documentation
@@ -5250,6 +5316,7 @@ All refactoring maintains:
 This refactoring successfully improved code quality and maintainability across the frontend codebase without introducing any breaking changes. The new naming conventions make the code more self-documenting and significantly reduce the cognitive load when reading or modifying components.
 
 **Next Steps:**
+
 1. Review this report with the team
 2. Perform manual UI testing to ensure everything works correctly
 3. Consider adopting these naming conventions as team standards
@@ -5262,6 +5329,7 @@ This refactoring successfully improved code quality and maintainability across t
 ### Common Patterns
 
 **Before:**
+
 ```javascript
 const key = getKey(game);
 const isLoading = loading[key];
@@ -5269,6 +5337,7 @@ const error = errors[key];
 ```
 
 **After:**
+
 ```javascript
 const gameKey = generateGameKey(game);
 const isGameLoading = loadingStates[gameKey];
@@ -5279,11 +5348,10 @@ const gameError = errorStates[gameKey];
 
 ---
 
-**Report Generated:** 2025-11-15  
-**Completion Status:** ✅ All objectives met  
-**Build Status:** ✅ Passing  
+**Report Generated:** 2025-11-15
+**Completion Status:** ✅ All objectives met
+**Build Status:** ✅ Passing
 **Estimated App Completion:** 87% (based on feature completeness and code quality)
-
 
 ---
 
@@ -5904,7 +5972,6 @@ Grouped by file for productivity. Focuses on backend (primary interaction hub); 
 
 - **App Completion Gauge**: [██████████] 100% (100% complete; production-ready NFL prediction system).
 
-
 ---
 
 ## docs\RUNBOOK.md
@@ -5988,7 +6055,6 @@ npm run dev
 npm run build
 ```
 
-
 ---
 
 ## docs\SCHEDULE_FIX_SUMMARY.md
@@ -6063,14 +6129,13 @@ The application is now ready for full testing:
 - `f10236d` - Fix schedule.map TypeError and CORS configuration
 - `bc1459a` - Document schedule TypeError fix and CORS protocol correction
 
-
 ---
 
 ## docs\session_completion_report.md
 
 # 🏈 NFL Prediction System - Complete Session Report
 
-*Session completed: January 2025*
+_Session completed: January 2025_
 
 ## 📊 Executive Summary
 
@@ -6099,7 +6164,7 @@ Successfully completed comprehensive repository restructuring, frontend enhancem
 ```css
 /* Enhanced animation keyframes with stagger support */
 @keyframes fadeIn { /* Smooth fade-in transitions */ }
-@keyframes pulse { /* Attention-drawing pulse effects */ }  
+@keyframes pulse { /* Attention-drawing pulse effects */ }
 @keyframes glow { /* Interactive hover/focus feedback */ }
 ```
 
@@ -6114,7 +6179,7 @@ Successfully completed comprehensive repository restructuring, frontend enhancem
 #### Heroku Production Setup
 
 - **Python-Only Deployment**: Configured backend-specific buildpack and slug optimization
-- **CORS Configuration**: Enhanced cross-origin handling for Vercel frontend integration  
+- **CORS Configuration**: Enhanced cross-origin handling for Vercel frontend integration
 - **Environment Management**: Structured secure environment variable handling
 - **Process Configuration**: Optimized Gunicorn/Uvicorn server setup
 
@@ -6126,7 +6191,7 @@ Successfully completed comprehensive repository restructuring, frontend enhancem
 
 ### 🔧 Development Environment
 
-#### Python Environment Management  
+#### Python Environment Management
 
 - **Virtual Environment**: Restored and optimized Python development environment
 - **Dependency Management**: Fixed pip installation issues and package conflicts
@@ -6163,7 +6228,7 @@ Successfully completed comprehensive repository restructuring, frontend enhancem
 │                                 │                               │
 │  • React 18 + Vite             │  • FastAPI + Python 3.11     │
 │  • CSS Grid + Animations       │  • NFL Data Pipeline          │
-│  • NPM Package Management      │  • ML Model Serving          │  
+│  • NPM Package Management      │  • ML Model Serving          │
 │  • Static Site Generation      │  • Gunicorn/Uvicorn Server   │
 │                                 │                               │
 │  Build: npm run build          │  Build: pip install -r req.  │
@@ -6181,7 +6246,7 @@ Successfully completed comprehensive repository restructuring, frontend enhancem
 - **Build Tool**: Vite for fast development and optimized production builds
 - **Deployment**: Automatic Vercel deployment on git push
 
-### Backend Stack (Heroku)  
+### Backend Stack (Heroku)
 
 - **API Framework**: FastAPI with automatic OpenAPI documentation
 - **Data Processing**: Pandas + nfl-data-py for NFL statistics integration
@@ -6201,7 +6266,7 @@ Successfully completed comprehensive repository restructuring, frontend enhancem
 ### Code Documentation
 
 - **React Components**: Comprehensive JSDoc comments explaining component purpose, props, and usage
-- **CSS Patterns**: Detailed explanations of animation timing, responsive breakpoints, and layout strategies  
+- **CSS Patterns**: Detailed explanations of animation timing, responsive breakpoints, and layout strategies
 - **Python API**: Docstrings for all endpoints explaining parameters, responses, and business logic
 - **Configuration Files**: Inline comments for deployment settings and environment variables
 
@@ -6263,7 +6328,7 @@ Successfully completed comprehensive repository restructuring, frontend enhancem
 ### Technical Excellence
 
 - ✅ **Zero Build Errors**: All deployment configurations working correctly
-- ✅ **Clean Repository**: Proper gitignore patterns and file organization  
+- ✅ **Clean Repository**: Proper gitignore patterns and file organization
 - ✅ **Production Ready**: HTTPS endpoints, error handling, and monitoring
 - ✅ **Documentation**: Comprehensive code comments and architecture guides
 
@@ -6279,7 +6344,7 @@ Successfully completed comprehensive repository restructuring, frontend enhancem
 This session successfully transformed the NFL Prediction System from a development experiment into a production-ready application with:
 
 - **Clean Architecture**: Properly separated frontend and backend with independent deployment
-- **Educational Value**: Every component documented to teach React and CSS best practices  
+- **Educational Value**: Every component documented to teach React and CSS best practices
 - **Production Deployment**: Live system available at Heroku (API) and Vercel (frontend)
 - **Development Efficiency**: Optimized local development environment with fast feedback loops
 
@@ -6288,7 +6353,7 @@ The system now serves as both a functional NFL prediction tool and an educationa
 **Total Session Impact**: 50+ files modified, 2,842 files cleaned from git, complete deployment pipeline established, and comprehensive documentation system created.
 
 ---
-*This report documents the complete transformation of the NFL Prediction System into a production-ready, well-architected, and educational development showcase.*
+_This report documents the complete transformation of the NFL Prediction System into a production-ready, well-architected, and educational development showcase._
 
 # Session Completion Report
 
@@ -6309,15 +6374,14 @@ This report details the work completed during the session, which involved a comp
 
 - **Model Retraining**: Executed the script to retrain the `home_model`, `away_model`, and `win_clf_calibrated` models. This was necessary to resolve a `NotFittedError` caused by data leakage and stale model artifacts. The new models are stable and saved in `backend/models/`.
 
-
 ---
 
 ## docs\TRAIN_MODELS_REFACTOR.md
 
 # train_models.py Refactoring Report
 
-**Date:** 2025-10-17  
-**Session:** Code Simplification & Documentation Enhancement  
+**Date:** 2025-10-17
+**Session:** Code Simplification & Documentation Enhancement
 **Repository Guardian Protocol:** Applied
 
 ---
@@ -6479,7 +6543,7 @@ def _reg_grid() -> Dict[str, List[Any]]:
 def _reg_grid() -> Dict[str, List[Any]]:
     """
     Hyperparameter search space for HistGradientBoostingRegressor.
-    
+
     These ranges balance model complexity vs. generalization:
     - learning_rate: Controls gradient step size (lower = more stable)
     - max_depth: Tree depth limit (deeper = more overfitting risk)
@@ -6505,19 +6569,19 @@ def _reg_grid() -> Dict[str, List[Any]]:
 ```python
 def _infer_features(df: pd.DataFrame) -> Tuple[List[str], List[str]]:
     """Automatically detect numeric and categorical features."""
-    
+
     # Step 1: Collect all numeric columns that aren't metadata/targets
     for c in cols:
         if c in ignore:
             continue
         if pd.api.types.is_numeric_dtype(df[c]):
             numeric.append(c)
-    
+
     # Step 2: Explicitly mark team columns as categorical (for one-hot encoding)
     for c in ("home_team", "away_team"):
         if c in df.columns and not pd.api.types.is_numeric_dtype(df[c]):
             categorical.append(c)
-    
+
     # Step 3: Handle legacy datasets where teams are encoded as integers
     # If cardinality is low (<64 teams), treat as categorical not continuous
     ...
@@ -6535,21 +6599,21 @@ def main() -> None:
     # Step 1: Load and validate dataset
     # ---------------------------------------
     ...
-    
+
     # ---------------------------------------
     # Step 2: Feature engineering and preprocessing
     # ---------------------------------------
     ...
-    
+
     # ---------------------------------------
     # Step 3: Train prediction models
     # ---------------------------------------
     log.info("Training home score regressor...")
     res_home = _fit_regressor(X_full, y_home, pre)
-    
+
     log.info("Training away score regressor...")
     res_away = _fit_regressor(X_full, y_away, pre)
-    
+
     log.info("Training win probability classifier...")
     clf_res = _fit_classifier(X_full, y_clf)
     ...
@@ -6582,32 +6646,32 @@ def _fit_classifier(X, y_clf):
 ```python
 def _fit_classifier(X, y_clf):
     """Train and calibrate win probability classifier."""
-    
+
     # Step 1: Hyperparameter search with time-aware cross-validation
     base = LogisticRegression()
     rs = RandomizedSearchCV(...)
     rs.fit(X, y_clf)
-    
+
     # Step 2: Get validation split for calibration
     df_idx = pd.DataFrame(index=np.arange(len(y_clf)))
     tscv = _time_splits(df_idx, n_splits=N_SPLITS)
     tr_idx, te_idx = _last_split_indices(df_idx, tscv)
-    
+
     # Step 3: Calibrate probabilities (sigmoid/isotonic)
     cal = CalibratedClassifierCV(...)
     cal.fit(X[tr_idx], y_clf[tr_idx])
-    
+
     # Step 4: Compute validation metrics
     auc = roc_auc_score(...)
-    
+
     # Step 5: Build reliability diagram
     bins = np.linspace(0, 1, RELIABILITY_BINS + 1)
     ...
-    
+
     # Step 6: Optimize classification threshold
     for th in np.linspace(0.3, 0.7, 41):
         ...
-    
+
     # Step 7: Package results
     return ClfResult(model=cal, report=report, threshold=best_th)
 ```
@@ -6708,7 +6772,7 @@ $ wc -l train_models.py
    ```python
    # Current
    for w in np.linspace(0.2, 0.9, 8):
-   
+
    # Better
    MIN_BLEND_WEIGHT = 0.2
    MAX_BLEND_WEIGHT = 0.9
@@ -6776,8 +6840,7 @@ Ref: Repository Guardian Protocol, TRAIN_MODELS_REFACTOR.md"
 
 ---
 
-*Report generated: 2025-10-17 | Refactoring Session: train_models.py Analysis & Cleanup*
-
+_Report generated: 2025-10-17 | Refactoring Session: train_models.py Analysis & Cleanup_
 
 ---
 
@@ -6807,7 +6870,7 @@ graph TD
 
     %% Backend Layer
     API_Core[FastAPI: main.py]
-    
+
     %% Backend Subsystems
     Sub_Models[InferenceBundle (Models)]
     Sub_Data[Dataset (Pandas DataFrame)]
@@ -6949,7 +7012,6 @@ graph TD
 5. **Fixed**: "LA" logo missing -> Aliased "LA" to "LAR" in frontend.
 6. **Fixed**: Prediction failure for "LA" -> Added `normalize_abbr` to backend prediction logic.
 
-
 ---
 
 ## errors.md
@@ -6979,9 +7041,9 @@ For ML prediction quality, the most important files are: `build_csv_datasets.py`
 
 ## ❌ Critical Error #1 — Non-picklable fallback calibration wrapper
 
-**File:** `backend/pipeline_enhanced.py`  
-**Line:** ~470–520 (calibration fallback block added)  
-**Type:** ML Misconfiguration / Runtime  
+**File:** `backend/pipeline_enhanced.py`
+**Line:** ~470–520 (calibration fallback block added)
+**Type:** ML Misconfiguration / Runtime
 **Severity:** Critical
 
 **Description:**
@@ -7022,9 +7084,9 @@ Prevents hard crashes when saving models; ensures artifact persistence succeeds 
 
 ## ❌ Critical Error #2 — Inconsistent artifact metadata key names (load vs save)
 
-**File:** `backend/train_models.py` (saves metadata) and `backend/main.py` (loads metadata)  
-**Line:** train_models metadata write ~line 300; main.py load_objects ~line 220  
-**Type:** Runtime / Integration  
+**File:** `backend/train_models.py` (saves metadata) and `backend/main.py` (loads metadata)
+**Line:** train_models metadata write ~line 300; main.py load_objects ~line 220
+**Type:** Runtime / Integration
 **Severity:** Critical
 
 **Description:**
@@ -7056,9 +7118,9 @@ Removes brittle integration errors; API will not silently mis-locate artifacts a
 
 ## ❌ Critical Error #3 — Unhandled/incorrect exception branch in predict (variable used but not set)
 
-**File:** `backend/main.py`  
-**Line:** predict_game exception handler around win probability fallback (~line 1030)  
-**Type:** Bug / Runtime  
+**File:** `backend/main.py`
+**Line:** predict_game exception handler around win probability fallback (~line 1030)
+**Type:** Bug / Runtime
 **Severity:** Critical
 
 **Description:**
@@ -7091,9 +7153,9 @@ Avoids runtime NameError and produces predictable fallback probability or reject
 
 ## ❌ Critical Error #4 — Local class and function duplication / non-top-level definitions prevent pickling or reuse
 
-**File:** multiple (notably `pipeline_enhanced.py`)  
-**Line:** fallback wrapper class defined inside function (~lines 480–520)  
-**Type:** Runtime / Maintainability  
+**File:** multiple (notably `pipeline_enhanced.py`)
+**Line:** fallback wrapper class defined inside function (~lines 480–520)
+**Type:** Runtime / Maintainability
 **Severity:** High
 
 **Description:**
@@ -7108,9 +7170,9 @@ Improved serialization compatibility and testability.
 
 ## ❌ Critical Error #5 — Duplicate / conflicting function definitions in `build_csv_datasets.py`
 
-**File:** `backend/build_csv_datasets.py`  
-**Line:** `make_time_key` defined twice (~lines 70 and 220 in the file excerpt)  
-**Type:** Bug / Logic  
+**File:** `backend/build_csv_datasets.py`
+**Line:** `make_time_key` defined twice (~lines 70 and 220 in the file excerpt)
+**Type:** Bug / Logic
 **Severity:** High
 
 **Description:**
@@ -7128,9 +7190,9 @@ Predictable time-key computation; fewer surprises when sorting and grouping by t
 
 ## ❌ Critical Error #6 — Potential leakage via overly broad forbidden tokens handling and feature filtering
 
-**File:** `backend/pipeline_enhanced.py` and `backend/build_csv_datasets.py`  
-**Line:** leakage filter in pipeline_enhanced.py ~lines 150–190; leak blocklist in train_models.py ~lines 60–90  
-**Type:** Data Issue / ML Misconfiguration  
+**File:** `backend/pipeline_enhanced.py` and `backend/build_csv_datasets.py`
+**Line:** leakage filter in pipeline_enhanced.py ~lines 150–190; leak blocklist in train_models.py ~lines 60–90
+**Type:** Data Issue / ML Misconfiguration
 **Severity:** High
 
 **Description:**
@@ -7149,9 +7211,9 @@ Reduce chance of leaking post-game info into features, improving model validity.
 
 ## ❌ Critical Error #7 — `build_csv_datasets.py` has inconsistent rolling helper usage and a clear bug
 
-**File:** `backend/build_csv_datasets.py`  
-**Line:** `_rolling_prior_stats` around the two `if advanced_cols` blocks (~lines 290–330 in excerpt)  
-**Type:** Bug / Logic  
+**File:** `backend/build_csv_datasets.py`
+**Line:** `_rolling_prior_stats` around the two `if advanced_cols` blocks (~lines 290–330 in excerpt)
+**Type:** Bug / Logic
 **Severity:** High
 
 **Description:**
@@ -7169,9 +7231,9 @@ Fixes runtime crash during dataset build when advanced metrics are present.
 
 ## ❌ Critical Error #8 — Hard-coded Windows paths and environment coupling in training scripts
 
-**File:** `backend/train_models.py`  
-**Line:** DEFAULT train dataset path near top (~line 40–60) and load_dotenv usage  
-**Type:** Maintainability / Portability  
+**File:** `backend/train_models.py`
+**Line:** DEFAULT train dataset path near top (~line 40–60) and load_dotenv usage
+**Type:** Maintainability / Portability
 **Severity:** Medium
 
 **Description:**
@@ -7186,9 +7248,9 @@ Improved portability and reproducible runs on CI and other developers' machines.
 
 ## ❌ Critical Error #9 — Multiple incompatible OneHotEncoder params used across code
 
-**File:** `backend/train_models.py` and `backend/build_csv_datasets.py` / `pipeline_enhanced.py`  
-**Line:** `_make_preprocessor` in train_models (~lines 140–170) and other preprocessors  
-**Type:** Runtime / Compatibility  
+**File:** `backend/train_models.py` and `backend/build_csv_datasets.py` / `pipeline_enhanced.py`
+**Line:** `_make_preprocessor` in train_models (~lines 140–170) and other preprocessors
+**Type:** Runtime / Compatibility
 **Severity:** Medium
 
 **Description:**
@@ -7203,9 +7265,9 @@ Avoids hard failures when developers use different sklearn releases.
 
 ## ❌ Critical Error #10 — `main.py` duplicated helper `_glob_latest` and malformed default regex
 
-**File:** `backend/main.py`  
-**Line:** `_glob_latest` duplicated and `ALLOW_ORIGIN_REGEX` default (~lines 70–120)  
-**Type:** Maintainability / Runtime  
+**File:** `backend/main.py`
+**Line:** `_glob_latest` duplicated and `ALLOW_ORIGIN_REGEX` default (~lines 70–120)
+**Type:** Maintainability / Runtime
 **Severity:** Medium
 
 **Description:**
@@ -7221,9 +7283,9 @@ Cleaner CORS control and fewer maintenance surprises.
 
 ## ❌ Critical Error #11 — `predict` alignment logic may mangle expected preprocessing order
 
-**File:** `backend/main.py`  
-**Line:** `_get_expected_features` and `_predict_with_fill` logic (~lines 860–940)  
-**Type:** ML Misconfiguration / Logic  
+**File:** `backend/main.py`
+**Line:** `_get_expected_features` and `_predict_with_fill` logic (~lines 860–940)
+**Type:** ML Misconfiguration / Logic
 **Severity:** Medium
 
 **Description:**
@@ -7239,9 +7301,9 @@ Reduce silent feature-order/data-mismatch bugs at inference time and increase re
 
 ## ❌ Critical Error #12 — CLI flags expected by user are missing in `build_csv_datasets.py`
 
-**File:** `backend/build_csv_datasets.py`  
-**Line:** `parse_args()` (~near bottom)  
-**Type:** UX / Maintainability  
+**File:** `backend/build_csv_datasets.py`
+**Line:** `parse_args()` (~near bottom)
+**Type:** UX / Maintainability
 **Severity:** Low
 
 **Description:**
@@ -7256,9 +7318,9 @@ Improved CLI ergonomics and parity with documentation.
 
 ## ❌ Critical Error #13 — Tests not exercising critical failure paths / no integration smoke tests
 
-**File:** repository-wide (tests/)  
-**Line:** `backend/tests/*`  
-**Type:** Process / Quality  
+**File:** repository-wide (tests/)
+**Line:** `backend/tests/*`
+**Type:** Process / Quality
 **Severity:** Medium
 
 **Description:**
@@ -7282,8 +7344,8 @@ The above diagnostics outline issues that range from serialization/persistence b
 
 Guiding Principles:
 
-- Do not modify code yet. This report is diagnostic-only.  
-- Prioritize: serialization and artifact naming -> inference correctness (feature alignment) -> data leakage guards -> CLI parity and tests.  
+- Do not modify code yet. This report is diagnostic-only.
+- Prioritize: serialization and artifact naming -> inference correctness (feature alignment) -> data leakage guards -> CLI parity and tests.
 - Make small, testable commits and add unit tests that cover the exact failure modes described above.
 
 If you want, I can proceed to implement fixes in the recommended order and run the unit/CLI validations. For each change I will: (a) open a narrow PR with one focused change, (b) add a test that demonstrates the fix, (c) run a local smoke run, and (d) update this report with the validation results.
@@ -7291,7 +7353,6 @@ If you want, I can proceed to implement fixes in the recommended order and run t
 ---
 
 End of report.
-
 
 ---
 
@@ -7352,7 +7413,6 @@ function App() {
 - Use the provided handlers (setPrediction, pushHistory, setLoading, setError).
 - Pass only the props needed by each component.
 
-
 ---
 
 ## frontend\src\utils\TeamGrid (1).md
@@ -7367,51 +7427,51 @@ function App() {
 >
 > 1. **Holistic Code Awareness:**
 >
->    * Always **scan the full repository context**, including backend, frontend, configuration, and documentation files.
->    * Infer architectural intent (e.g., FastAPI backend, React frontend, CI/CD configs).
+>    - Always **scan the full repository context**, including backend, frontend, configuration, and documentation files.
+>    - Infer architectural intent (e.g., FastAPI backend, React frontend, CI/CD configs).
 > 2. **Logic Simplification:**
 >
->    * Identify and **simplify overly complex logic** that does not add tangible functionality, performance, or readability.
->    * Maintain the same external behavior unless explicitly requested otherwise.
->    * Prioritize clarity and maintainability over cleverness or density.
+>    - Identify and **simplify overly complex logic** that does not add tangible functionality, performance, or readability.
+>    - Maintain the same external behavior unless explicitly requested otherwise.
+>    - Prioritize clarity and maintainability over cleverness or density.
 > 3. **Documentation & Commenting:**
 >
->    * Add or update **top-level documentation** in every file you touch.
+>    - Add or update **top-level documentation** in every file you touch.
 >
->      * Summarize purpose, key logic flow, and dependencies.
->      * Add concise **inline comments** only where logic might confuse future maintainers.
->    * Explain syntax or unusual constructs in plain language when appropriate.
+>      - Summarize purpose, key logic flow, and dependencies.
+>      - Add concise **inline comments** only where logic might confuse future maintainers.
+>    - Explain syntax or unusual constructs in plain language when appropriate.
 > 4. **README Management:**
 >
->    * When updating the `README.md`, make **only minimal, context-accurate adjustments**.
->    * Keep tone **professional, clear, and informative**.
->    * Ensure the README reflects the current deployment architecture (FastAPI → Heroku; React → Vercel; npm-based builds).
->    * Automatically correct broken links, outdated instructions, or unclear steps.
+>    - When updating the `README.md`, make **only minimal, context-accurate adjustments**.
+>    - Keep tone **professional, clear, and informative**.
+>    - Ensure the README reflects the current deployment architecture (FastAPI → Heroku; React → Vercel; npm-based builds).
+>    - Automatically correct broken links, outdated instructions, or unclear steps.
 > 5. **Professional Tone Enforcement:**
 >
->    * Maintain a consistent, professional tone throughout the repository (code comments, docs, commit suggestions).
->    * Avoid casual phrasing or filler words — favor clean, instructional clarity.
+>    - Maintain a consistent, professional tone throughout the repository (code comments, docs, commit suggestions).
+>    - Avoid casual phrasing or filler words — favor clean, instructional clarity.
 > 6. **Change Discipline:**
 >
->    * Do not perform large refactors unless complexity, redundancy, or errors are explicitly detected.
->    * Focus on **incremental, meaningful improvements** that enhance understanding and maintain function.
+>    - Do not perform large refactors unless complexity, redundancy, or errors are explicitly detected.
+>    - Focus on **incremental, meaningful improvements** that enhance understanding and maintain function.
 > 7. **Self-Awareness & Reflexion:**
 >
->    * Before completing any major change, quickly self-check:
+>    - Before completing any major change, quickly self-check:
 >
->      * “Is this clearer?”
->      * “Is this simpler?”
->      * “Would a new contributor understand this without explanation?”
->    * If not, refactor again for clarity.
+>      - “Is this clearer?”
+>      - “Is this simpler?”
+>      - “Would a new contributor understand this without explanation?”
+>    - If not, refactor again for clarity.
 
 ---
 
 ### 🧩 Behavioral Summary
 
-* Operate as an **intelligent repo custodian**, not a blind editor.
-* Prioritize *structural awareness* and *contextual refinement*.
-* Balance **clean code**, **useful documentation**, and **minimal noise**.
-* Treat the entire codebase as a unified ecosystem with architectural intent.
+- Operate as an **intelligent repo custodian**, not a blind editor.
+- Prioritize _structural awareness_ and _contextual refinement_.
+- Balance **clean code**, **useful documentation**, and **minimal noise**.
+- Treat the entire codebase as a unified ecosystem with architectural intent.
 
 ---
 
@@ -7419,26 +7479,26 @@ function App() {
 
 **When Copilot reviews a file:**
 
-* Detects nested conditionals → replaces with clearer logic + short rationale comment.
-* Finds undocumented functions → adds purpose docstring and parameter explanation.
-* Notices outdated README build steps → updates only affected parts (e.g., “Yarn → npm”).
-* Finds verbose imports or unused components → cleans quietly, preserving readability.
+- Detects nested conditionals → replaces with clearer logic + short rationale comment.
+- Finds undocumented functions → adds purpose docstring and parameter explanation.
+- Notices outdated README build steps → updates only affected parts (e.g., “Yarn → npm”).
+- Finds verbose imports or unused components → cleans quietly, preserving readability.
 
 ---
 
 ### 🧭 Operating Parameters
 
-* **Always Active:** Apply these directives in all completions across the repo.
-* **Context Priority:** Treat `.env`, `requirements.txt`, `package.json`, and config files as primary context sources for reasoning.
-* **Documentation Format:**
+- **Always Active:** Apply these directives in all completions across the repo.
+- **Context Priority:** Treat `.env`, `requirements.txt`, `package.json`, and config files as primary context sources for reasoning.
+- **Documentation Format:**
 
-  * Use Markdown for READMEs and top-level documentation.
-  * Use consistent docstring format (`"""Triple-quoted in Python"""`, `/** ... */` in JS).
-* **Output Style:**
+  - Use Markdown for READMEs and top-level documentation.
+  - Use consistent docstring format (`"""Triple-quoted in Python"""`, `/** ... */` in JS).
+- **Output Style:**
 
-  * Professional tone
-  * No excessive verbosity
-  * No unnecessary “AI-like” commentary
+  - Professional tone
+  - No excessive verbosity
+  - No unnecessary “AI-like” commentary
 
 ---
 
@@ -7446,10 +7506,10 @@ function App() {
 
 Ensure the repository is always:
 
-* **Logically clean**
-* **Well-documented**
-* **Deployment-ready**
-* **Professionally presented**
+- **Logically clean**
+- **Well-documented**
+- **Deployment-ready**
+- **Professionally presented**
 
 ---
 
@@ -7461,13 +7521,11 @@ Inspect, refactor, and reintegrate each branch independently.
 
 Reflexion Protocol: Use a built-in review-refine loop for self-correction before output.
 
-
-Educator Mindset: Each major section should include an explanatory note guiding a reader on “why this works.” 
-Iterative Refinement: After initial output, review and refine based on self-assessment and your own self critique 
+Educator Mindset: Each major section should include an explanatory note guiding a reader on “why this works.”
+Iterative Refinement: After initial output, review and refine based on self-assessment and your own self critique
 to ensure clarity, correctness, and educational value.
 
 End each phase with a small yet helpful and detailed logging of changes and their intended benefits. in the code comments. in the docs folder there should be a md file called report.md that documents the changes made and why they were made which file and line of any changes made there should be a professional report like structure with updates graphs and images A list of all the very names being used A list of all functions they should be all grouped into what files that they are with or coming and who they interact with Just a folder full of metrics that I want you to take as you analyze the folder that should help me be more productive Just helpful in general and educational in this full file is something that every time you know you make some changes for me you will document and also document the time and the day, estimate of app completiong percentage and a section where you always update with a enhancement i could impiment
-
 
 ---
 
@@ -7488,7 +7546,7 @@ This file tracks errors, optimizations, and suggested improvements for the NFL M
     result = {"game_id": game_id, "generated_at": datetime.now(timezone.utc), "home_win_probability": win_prob}
     ```
 
-### Resolution Summary:
+### Resolution Summary
 Two options were compared: (1) keep per-request classifier fitting to avoid NotFitted errors, or (2) reuse the persisted model with guarded `predict_proba` and a logistic fallback. Option 2 was chosen for deterministic responses and to avoid mutating serialized models.
 
 ## [File: frontend/src/components/DashBoard/DashBoard.jsx | Line: 147]
@@ -7501,7 +7559,7 @@ Two options were compared: (1) keep per-request classifier fitting to avoid NotF
     pushHistory?.({ ...enrichedPrediction, timestamp: new Date().toISOString(), game });
     ```
 
-### Resolution Summary:
+### Resolution Summary
 Considered moving network calls entirely into PredictionContext versus fixing the dashboard handler. Chose the handler fix to minimize scope while keeping context lean and testable.
 
 ## [File: frontend/src/api/client.js | Line: 137] and [File: frontend/src/PredictionContext.jsx | Line: 414]
@@ -7513,7 +7571,7 @@ Considered moving network calls entirely into PredictionContext versus fixing th
     const entries = Array.isArray(res) ? res : Array.isArray(res?.entries) ? res.entries : [];
     ```
 
-### Resolution Summary:
+### Resolution Summary
 Option 1: change the backend `/history` schema; Option 2: normalize client-side. Chose client normalization to avoid API churn while preserving backward compatibility.
 
 ## [File: frontend/src/components/Card/Card.jsx | Line: 219]
@@ -7573,8 +7631,8 @@ Schedule was not being fetched or displayed correctly in the frontend. Predictio
 **Added State Variables**:
 
 ```javascript
-const initialState = { 
-  current: null, 
+const initialState = {
+  current: null,
   history: [],
   schedule: [],      // NEW: Games array from backend
   week: 11,          // NEW: Current week number
@@ -7992,11 +8050,11 @@ Now **~82%** (incremental robustness improvement).
   - - Refactored to use shared `backend/utils/feature_helpers.py`
   - - Contains latest leak-safe feature engineering logic
   - - Supports dominance matrix, ELO, advanced metrics
-  
+
 - **Scripts Variant**: `backend/scripts/build_csv_datasets.py`
   - Status: Active, used by some workflows
   - **Recommendation**: Refactor to use shared helpers (pending)
-  
+
 - **Legacy Variants**: `backend/data/legacy_data/build_csv_datasets2.py`
   - Status: - **ARCHIVED** (already in legacy_data folder)
   - No action needed
@@ -8012,7 +8070,7 @@ Now **~82%** (incremental robustness improvement).
 
 ## -- Function & Variable Mapping (Alfred Session - FUNCTION-MAP)
 
-*Generated: [Current Date/Time from your system]*
+_Generated: [Current Date/Time from your system]_
 
 ### Duplicate Functions Detected
 
@@ -8349,7 +8407,6 @@ The following functions are **exact duplicates** across multiple dataset builder
 
 Last Updated: October 21, 2025
 
-
 ---
 
 ## models\models copy\legacy_data\BUILD_ANALYSIS.md
@@ -8386,11 +8443,11 @@ def main() -> None:
 def setup_logger(out_dir: Path) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     log_file = out_dir / "build_csv_datasets.log"
-    
+
     # Clear existing handlers (FIX #1)
     for handler in logging.root.handlers[:]:
         logging.root.removeHandler(handler)
-    
+
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(message)s",
@@ -8474,20 +8531,20 @@ logging.info("=" * 80)
 
 ## ✅ Verification Results
 
-### File Created Successfully:
+### File Created Successfully
 ```
 backend/data/new_dataset.csv
 - Size: 1,006,549 bytes (~1 MB)
 - Created: 2025-10-14 5:55:52 PM
 ```
 
-### Dataset Statistics:
+### Dataset Statistics
 - **Total Games:** 3,015
 - **Seasons Covered:** 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025
 - **Total Columns:** 37
 - **Date Range:** 2015-09-10 to 2026-01-04
 
-### Column Inventory:
+### Column Inventory
 1. **Identifiers:** season, week, game_id, home_game_date
 2. **Teams:** home_team, away_team
 3. **Outcomes:** home_points_for, away_points_for, point_diff, winner, home_win
@@ -8495,7 +8552,7 @@ backend/data/new_dataset.csv
    - Prior points for/against averages
    - Prior win percentages
    - Differential features (home minus away)
-5. **Betting Context:** 
+5. **Betting Context:**
    - Moneyline probabilities
    - Spread line
    - Total line
@@ -8506,7 +8563,7 @@ backend/data/new_dataset.csv
 ## 🐛 Issues Fixed
 
 ### Issue #1: Unicode Encoding Error
-**Problem:** 
+**Problem:**
 ```
 UnicodeEncodeError: 'charmap' codec can't encode character '\u2705'
 ```
@@ -8544,17 +8601,17 @@ UnicodeEncodeError: 'charmap' codec can't encode character '\u2705'
 
 ## 🚀 How to Use
 
-### Standard Build:
+### Standard Build
 ```bash
 backend\.venv\Scripts\python.exe backend/build_csv_datasets.py --start 2015 --end 2025 --out-dir backend/data
 ```
 
-### With Legacy Copy:
+### With Legacy Copy
 ```bash
 backend\.venv\Scripts\python.exe backend/build_csv_datasets.py --start 2015 --end 2025 --out-dir backend/data --legacy-root-copy
 ```
 
-### Custom Output Directory:
+### Custom Output Directory
 ```bash
 backend\.venv\Scripts\python.exe backend/build_csv_datasets.py --start 2020 --end 2024 --out-dir custom/path
 ```
@@ -8583,10 +8640,9 @@ The dataset builder now:
 
 ---
 
-**Generated:** 2025-10-14  
-**Analyst:** AI Code Review System  
+**Generated:** 2025-10-14
+**Analyst:** AI Code Review System
 **Status:** Production Ready ✅
-
 
 ---
 
@@ -8652,7 +8708,6 @@ predictive_features = [
 - Player stats aggregated to team-week level
 - Team stats represent official team totals
 - EPA = Expected Points Added (advanced metric)
-
 
 ---
 
@@ -8818,6 +8873,7 @@ plt.show()
 ```
 
 ## 6. Optimization Matrix
+
 | Component | Current Behavior | Identified Issue | Suggested Improvement | Expected Benefit |
 | --- | --- | --- | --- | --- |
 | Synthetic row time context | `time_key` not computed in synthetic inference rows | `time_key` is filled with a median value, losing temporal context | Compute `time_key` from season and week in `build_model_input_row` | Better temporal generalization for future games |
@@ -8835,7 +8891,6 @@ Next steps:
 1) Align synthetic row construction with training features (compute `time_key` and any other derived fields).
 2) Document and standardize the training pipeline that produces the deployed bundle.
 3) Add light monitoring for prediction quality and drift using the existing history and holdout utilities.
-
 
 ---
 
@@ -9075,7 +9130,6 @@ We chose **roll-forward** because:
 ---
 
 **Bottom Line**: The dashboard will now display varying, realistic predictions based on each team's most recent performance, rather than falling back to generic heuristics.
-
 
 ---
 
@@ -9676,7 +9730,6 @@ backend/scripts/
 This project is licensed under the MIT License - see the LICENSE file for details.
 This project is licensed under the MIT License - see the LICENSE file for details.
 
-
 ---
 
 ## reports\nflex_v6_report.md
@@ -9747,7 +9800,6 @@ This report summarises the performance of base models and a convex blend on NFL 
 - Optional E2E viewport test to assert hamburger visibility at breakpoints.
 - Consider consolidating nav into a single component used by both desktop and mobile breakpoints.
 
-
 ---
 
 ## scripts\README.md
@@ -9789,14 +9841,12 @@ node .\scripts\smoke_screenshots.js http://127.0.0.1:3000
 Output
 #### Output
 
-
 - PNG files written under `scripts/screenshots/` (mobile-, tablet-, desktop- file names)
 
 #### Notes
 
 - Puppeteer downloads a recent Chromium version; ensure you have network access during install.
 - For CI, use `puppeteer-core` with a system Chromium and pass the executablePath option.
-
 
 ---
 
@@ -9824,7 +9874,6 @@ Output
 - Before -> After: imperative maps/derived values on each render -> memoized history map and schedule list, new team/logo layout with cohesive card styling.
 - Reasoning: Reduces render work, improves readability, and visually aligns the stats page with the rest of the UI.
 
-
 ---
 
 ## smoke_tests.md
@@ -9846,7 +9895,7 @@ curl http://127.0.0.1:8000/status/overview
 curl http://127.0.0.1:8000/teams/KC
 ```
 
-*Expected Output:* JSON with team colors and logo URLs.
+_Expected Output:_ JSON with team colors and logo URLs.
 
 ## 3. Prediction (Fixed)
 
@@ -9855,7 +9904,7 @@ $body = @{ home_team="KC"; away_team="BUF"; season=2024; week=11 } | ConvertTo-J
 Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8000/predict" -ContentType "application/json" -Body $body
 ```
 
-*Expected Output:* Prediction JSON or 503 if models aren't loaded (but NOT a 500 NameError).
+_Expected Output:_ Prediction JSON or 503 if models aren't loaded (but NOT a 500 NameError).
 
 ## 4. Explanation (Client Wrapper Added)
 
@@ -9865,6 +9914,4 @@ $body = @{ home_team="KC"; away_team="BUF"; season=2024; week=11 } | ConvertTo-J
 Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8000/predict/explain" -ContentType "application/json" -Body $body
 ```
 
-
 ---
-
