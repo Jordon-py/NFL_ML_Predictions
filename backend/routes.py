@@ -21,16 +21,28 @@ from backend.main_helpers import (
     select_next_week_rows,
     _pick_col,
     parse_kickoff,
-    _append_prediction_history_to_disk,
     _HOME_COLS,
     _AWAY_COLS,
-    _GAME_ID_COLS,
     _STADIUM_COLS,
+)
+from backend.prediction_store import (
+    append_prediction_record,
+    build_prediction_user_context,
+    get_prediction_history,
+    get_prediction_history_count,
 )
 from backend.services.prediction_service import PredictionService
 
 router = APIRouter()
 log = logging.getLogger(__name__)
+
+
+def _resolve_user_context(request: Request):
+    return build_prediction_user_context(request.headers.get("X-User-Id"))
+
+
+def _build_schedule_key(season: int, week: int, home_team: str, away_team: str) -> str:
+    return f"{season}-{week}-{home_team}-{away_team}"
 
 # -------------------------
 # Legacy Schemas
@@ -131,7 +143,6 @@ def schedule_next_week(request: Request, season: int = 2025) -> NextWeekGamesRes
 
     home_col = _pick_col(df_next, _HOME_COLS)
     away_col = _pick_col(df_next, _AWAY_COLS)
-    game_id_col = _pick_col(df_next, _GAME_ID_COLS)
     stadium_col = _pick_col(df_next, _STADIUM_COLS)
 
     games: List[ScheduleGame] = []
@@ -141,13 +152,7 @@ def schedule_next_week(request: Request, season: int = 2025) -> NextWeekGamesRes
         if not home or not away:
             continue
         stadium = str(r.get(stadium_col, "") if stadium_col else r.get("stadium", "")).strip()
-        game_id = None
-        if game_id_col:
-            raw_id = r.get(game_id_col)
-            if pd.notna(raw_id):
-                game_id = str(raw_id).strip()
-        if not game_id:
-            game_id = f"{use_season}-{use_week}-{home}-{away}"
+        game_id = _build_schedule_key(int(use_season), int(use_week), home, away)
 
         games.append(
             ScheduleGame(
@@ -211,9 +216,9 @@ def predict(req: PredictionRequest, request: Request) -> PredictionResponse:
 
         # best-effort history append
         try:
-             _append_prediction_history_to_disk(req.model_dump(), flat_pred.model_dump())
-        except Exception:
-            pass
+            append_prediction_record(_resolve_user_context(request), req, flat_pred.model_dump())
+        except Exception as exc:
+            log.warning("Legacy prediction history append failed: %s", exc)
 
         return flat_pred
 
@@ -256,20 +261,24 @@ def predict_next_week(request: Request, season: int = 2025) -> NextWeekPredictio
 def status_overview(request: Request):
     service = getattr(request.app.state, "service", None)
     ds = getattr(request.app.state, "dataset", None)
-    hist = getattr(request.app.state, "prediction_history", [])
-    
+
+    ready = bool(service)
     return {
-        "health": {"status": "healthy" if service else "unhealthy"},
+        "health": {
+            "status": "healthy" if ready else "unhealthy",
+            "reason": "ok" if ready else "prediction_service_not_loaded",
+        },
         "dataset": {"rows": len(ds) if ds is not None else 0},
-        "history": {"metrics": {"total_predictions": len(hist) if isinstance(hist, list) else 0}}
+        "history": {
+            "total_predictions": get_prediction_history_count(_resolve_user_context(request)),
+            "win_rate": None,
+            "note": "win_rate requires actual outcomes",
+        },
     }
 
 @router.get("/history")
 def history(request: Request, limit: int = 100):
-    hist = getattr(request.app.state, "prediction_history", []) or []
-    if isinstance(hist, list):
-        return hist[:limit]
-    return []
+    return get_prediction_history(_resolve_user_context(request), limit=limit)
 
 @router.post("/train")
 @router.post("/retrain")

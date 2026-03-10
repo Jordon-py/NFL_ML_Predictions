@@ -29,6 +29,7 @@ This document maps the flow of data across the NFL Prediction App, from frontend
 2. **Frontend Call**: `getNextWeekSchedule()` sends GET to `/schedule/next-week`.
 3. **Backend Logic (`main.py`)**:
    - Loads schedule (nflreadpy or CSV fallback) and trims schedule CSV headers.
+   - Normalizes team codes (e.g. `WSH` -> `WAS`, `LA` -> `LAR`) so logo/name lookups are consistent.
    - Infers next week and enriches each game with `game_id`, `home_name`, `away_name`, and logo URLs.
 4. **Response**: `{ games: [ ... ] }` with enriched schedule rows.
 5. **State Update**: Schedule is normalized and stored in frontend state.
@@ -68,6 +69,7 @@ This document maps the flow of data across the NFL Prediction App, from frontend
 ## 4. Environment Configuration
 
 - `VITE_API_BASE_URL`: Frontend API target.
+- `VITE_API_DEV`: Frontend API target in local dev builds (preferred over hostname-based logic).
 - `MODELS_DIR`: Backend model artifact location.
 - `DATA_DIR`: Backend dataset location.
 - `DATASET_PATH`: Optional explicit dataset file path (enforced single source).
@@ -79,6 +81,7 @@ This document maps the flow of data across the NFL Prediction App, from frontend
 
 - Backend startup now validates that model feature names exist in the dataset.
 - If features are missing, startup fails fast to prevent silent median-only predictions.
+- Backend also runs a small preprocessor smoke test so scikit-learn/joblib version mismatches are detected early; the API will report `unhealthy` and `/predict` returns 503 with a clear reason.
 
 ## 6. Reference Maps
 

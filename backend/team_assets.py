@@ -31,19 +31,12 @@ import pandas as pd
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
-# Legacy -> modern abbreviation normalization
-ALIASES: Dict[str, str] = {
-    "OAK": "LV",
-    "SD": "LAC",
-    "STL": "LAR",
-    "LA": "LAR",
-}
+from backend.utils.team_codes import normalize_team_code
 
 
 def normalize_abbr(abbr: str) -> str:
     """Normalize team abbreviations to modern canonical forms."""
-    a = (abbr or "").strip().upper()
-    return ALIASES.get(a, a)
+    return normalize_team_code(abbr)
 
 
 class TeamAsset(BaseModel):
