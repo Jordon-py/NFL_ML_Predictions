@@ -25,8 +25,39 @@ function resolveApiBase() {
   return import.meta.env.VITE_API_BASE_URL || "";
 }
 
-// Normalize: trim and remove trailing slashes
-export const API_BASE = resolveApiBase().trim().replace(/\/+$/, "");
+function stripSurroundingQuotes(value) {
+  const s = (value ?? "").toString().trim();
+  if (s.length >= 2 && s[0] === s[s.length - 1] && (s[0] === "'" || s[0] === '"')) {
+    return s.slice(1, -1).trim();
+  }
+  return s;
+}
+
+function normalizeApiBase(rawBase) {
+  let base = stripSurroundingQuotes(rawBase);
+  if (!base) return "";
+
+  // Normalize: trim and remove trailing slashes only (do NOT touch protocol slashes)
+  base = base.replace(/\/+$/, "");
+  if (!base) return "";
+
+  // Relative base (same-origin reverse proxy), e.g. "/api"
+  if (base.startsWith("/")) return base;
+
+  // Absolute URL or protocol-relative URL.
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(base) || base.startsWith("//")) {
+    return base;
+  }
+
+  // Host[:port] with missing scheme -> use current page protocol to avoid mixed-content.
+  const protocol =
+    typeof window !== "undefined" && window.location && window.location.protocol
+      ? window.location.protocol
+      : "http:";
+  return `${protocol}//${base}`;
+}
+
+export const API_BASE = normalizeApiBase(resolveApiBase());
 export const API_BASE_CONFIGURED = Boolean(API_BASE);
 
 const DEFAULT_TIMEOUT = 25000;
@@ -65,38 +96,45 @@ async function readBody(response) {
 }
 
 export async function fetchJson(path, options = {}) {
+  const { timeout, userId, ...fetchOptions } = options;
   if (!API_BASE_CONFIGURED) {
     throw new HttpError(
-      "Missing API base URL. Set VITE_API_BASE_URL (prod) and VITE_API_DEV (dev) in `frontend/.env` or Vercel env vars.",
+      "Missing API base URL. Set VITE_API_BASE_URL (prod) and VITE_API_DEV (dev) in `frontend/.env` or Vercel env vars (example: http://127.0.0.1:8000).",
       { status: 0, url: path }
     );
   }
   const url = `${API_BASE}${path.startsWith("/") ? path : `/${path}`}`;
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), options.timeout ?? DEFAULT_TIMEOUT);
+  const timeoutId = setTimeout(() => controller.abort(), timeout ?? DEFAULT_TIMEOUT);
 
   // ✅ If caller passed a signal (React cleanup), abort our controller too
-  if (options.signal) {
-    options.signal.addEventListener("abort", () => controller.abort(), { once: true });
+  if (fetchOptions.signal) {
+    fetchOptions.signal.addEventListener("abort", () => controller.abort(), { once: true });
   }
 
   try {
-    const method = (options.method || "GET").toUpperCase();
+    const method = (fetchOptions.method || "GET").toUpperCase();
 
     const headers = {
       Accept: "application/json",
-      ...(options.headers),
+      ...(fetchOptions.headers),
     };
 
+    // Signed-in sessions send a lightweight user identifier so backend history
+    // can be stored per user without a full auth provider yet.
+    if (userId) {
+      headers["X-User-Id"] = userId;
+    }
+
     // ✅ Only send Content-Type when we actually send a JSON body
-    if (options.body && typeof options.body === "string" && !headers["Content-Type"]) {
+    if (fetchOptions.body && typeof fetchOptions.body === "string" && !headers["Content-Type"]) {
       headers["Content-Type"] = "application/json";
     }
 
     const response = await fetch(url, {
       method,
-      ...options,
+      ...fetchOptions,
       headers,
       signal: controller.signal,
     });
@@ -139,7 +177,9 @@ export async function fetchJson(path, options = {}) {
     if (error.name === "AbortError") {
       throw new HttpError("Request timed out", { url, status: 408 });
     }
-    throw error;
+    // Normalize fetch() network failures into HttpError for consistent UI handling.
+    if (error instanceof HttpError) throw error;
+    throw new HttpError(error?.message || "Network error", { url, status: 0, body: null });
   } finally {
     clearTimeout(timeoutId);
   }

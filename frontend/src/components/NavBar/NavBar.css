@@ -1,222 +1,350 @@
-/* Enhancement 6: Utility for hidden SVG (removes inline style in NavBar.jsx)
-   Purpose: clean JSX; unify hidden SVG styling
-   Impact: no behavior change, better maintainability */
-.visually-hidden-svg {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 0;
-  height: 0;
-  overflow: hidden;
-  pointer-events: none;
-  z-index: -1;
-}
-
-/* Enhancement 6: Wrapper class to replace inline borderRadius: 0 */
-.navbar-shell {
-  border-radius: 0;
-}
-
-/* ---------- Outline / glow animation for NavBar ---------- */
-@keyframes outlineGlow {
-
-  0%,
-  100% {
-    box-shadow:
-      0 0 1px 0 rgba(4, 100, 210, 0.10),
-      0 0 0 1px rgba(4, 100, 210, 0.55) inset;
-    /* crisp outline */
-  }
-
-  50% {
-    box-shadow:
-      0 0 14px 4px rgba(4, 100, 210, 0.45),
-      0 0 0 1px rgba(6, 115, 239, 0.75) inset;
-  }
-}
-
-[data-scroll-watcher] {
-  position: absolute;
-  left: 0;
-  top: 0;
-  height: 1px;
-  width: 10%;
-  pointer-events: none;
-  z-index: -1;
-}
-
-/* Enhancement 8: Improved contrast on dark nav; keep structure unchanged */
 .navBar {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  padding: 18px clamp(18px, 2vw, 30px);
+  box-sizing: border-box;
+  font-family: "SF Pro Text", "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
+}
+
+.navBar__surface {
+  width: min(1320px, 100%);
+  margin: 0 auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 18px;
+  padding: 16px 18px;
+  border-radius: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.46);
+  background:
+    linear-gradient(180deg, rgba(252, 252, 253, 0.9), rgba(242, 243, 247, 0.74)),
+    rgba(255, 255, 255, 0.78);
+  color: #0f1115;
+  box-shadow:
+    0 22px 60px rgba(9, 12, 18, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(24px) saturate(1.35);
+  -webkit-backdrop-filter: blur(24px) saturate(1.35);
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    background 180ms ease,
+    border-color 180ms ease;
+}
+
+.navBar.sticking .navBar__surface {
+  transform: translateY(-1px);
+  background:
+    linear-gradient(180deg, rgba(252, 252, 253, 0.96), rgba(242, 243, 247, 0.84)),
+    rgba(255, 255, 255, 0.86);
+  border-color: rgba(255, 255, 255, 0.68);
+  box-shadow:
+    0 24px 72px rgba(10, 13, 20, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.92);
+}
+
+.navBar__brandCluster {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1 1 auto;
+}
+
+.navBar__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+  color: inherit;
+  min-width: 0;
+}
+
+.navBar__brandMark {
+  width: 15px;
+  height: 15px;
+  flex: none;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #0f1115, #8f99aa 72%, #ffffff);
+  box-shadow:
+    0 0 0 8px rgba(255, 255, 255, 0.62),
+    0 12px 30px rgba(13, 16, 22, 0.18);
+}
+
+.navBar__brandCopy,
+.navBar__pageSummary,
+.navBar__userCopy {
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  justify-content: space-around;
-  align-items: center;
-  background: radial-gradient(circle at top, lch(48.92% 86.75 292.13 / 0.58) 2%,lch(21.62% 43.66 288.28 / 0.524) 30%, lch(3.25% 34.27 297.01 / 0.921) 40%);
-  color: lch(100% 0.01 296.81);
-  /* improved contrast */
-  position: sticky;
-  
-  animation: outLineGlow;
-  z-index: 1000;
-  transition: background-color 1.9s, box-shadow 1.7s ease-in-out;
-  font-family: 'Cinzel', system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-  /* Enhancement 2 */
-  box-sizing: border-box;
-  top: 0;
-  left: 0;
-  right: 0;
-  width: auto;
 }
 
-/* mobile breakpoint controlled below at 700px */
-/* Removed older 708px breakpoint to avoid overlap with 700px rule */
+.navBar__eyebrow,
+.navBar__pageSubtitle,
+.navBar__userCopy span {
+  font-size: 0.76rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(15, 17, 21, 0.56);
+}
 
+.navBar__headline,
+.navBar__pageTitle,
+.navBar__userCopy strong {
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
 
-/* Base: hide hamburger by default (desktop), show links */
-.navBar__hamburger {
+.navBar__headline {
+  font-size: 1rem;
+}
+
+.navBar__pageSummary {
+  gap: 3px;
+}
+
+.navBar__pageTitle {
+  font-size: 1rem;
+}
+
+.navBar__pageSubtitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.navBar__menuButton {
   display: none;
+  appearance: none;
+  border: 1px solid rgba(15, 17, 21, 0.08);
+  background: rgba(255, 255, 255, 0.58);
+  color: inherit;
+  border-radius: 999px;
+  padding: 10px 16px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
 }
 
-/* Mobile breakpoint: <=700px shows hamburger, hides links */
-@media (max-width: 600px) {
-  .navBar__links {
+.navBar__menu {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-left: auto;
+}
+
+.navBar__links,
+.navBar__meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.navBar__link,
+.navBar__signOut {
+  appearance: none;
+  border: 1px solid rgba(15, 17, 21, 0.08);
+  border-radius: 999px;
+  padding: 10px 14px;
+  text-decoration: none;
+  color: rgba(15, 17, 21, 0.72);
+  background: rgba(255, 255, 255, 0.46);
+  transition:
+    transform 160ms ease,
+    background 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.navBar__link:hover,
+.navBar__signOut:hover,
+.navBar__menuButton:hover,
+.navBar__metaPill:hover {
+  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.82);
+  border-color: rgba(15, 17, 21, 0.14);
+  color: #0f1115;
+}
+
+.navBar__link.is-active {
+  background: #111317;
+  border-color: #111317;
+  color: #f7f7f9;
+  box-shadow: 0 12px 26px rgba(15, 17, 21, 0.18);
+}
+
+.navBar__meta {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.navBar__status,
+.navBar__metaPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 13px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.48);
+  border: 1px solid rgba(15, 17, 21, 0.08);
+  color: rgba(15, 17, 21, 0.72);
+  white-space: nowrap;
+}
+
+.navBar__statusDot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 999px;
+}
+
+.navBar__status--ok .navBar__statusDot {
+  background: var(--color-health-ok);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--color-health-ok) 58%, transparent);
+}
+
+.navBar__status--error .navBar__statusDot {
+  background: var(--color-health-error);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--color-health-error) 54%, transparent);
+}
+
+.navBar__status--unknown .navBar__statusDot {
+  background: var(--color-health-unknown);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--color-health-unknown) 48%, transparent);
+}
+
+.navBar__user {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px 8px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.58);
+  border: 1px solid rgba(15, 17, 21, 0.08);
+}
+
+.navBar__avatar {
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #111317, #5e6676);
+  color: #f7f7f9;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.navBar__signOut {
+  font: inherit;
+  cursor: pointer;
+}
+
+.navBar :focus-visible {
+  outline: 2px solid rgba(17, 19, 23, 0.78);
+  outline-offset: 3px;
+}
+
+@media (max-width: 1120px) {
+  .navBar__surface {
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .navBar__menu {
+    flex-basis: 100%;
+    justify-content: space-between;
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 860px) {
+  .navBar {
+    padding-inline: 16px;
+  }
+
+  .navBar__surface {
+    gap: 14px;
+    padding: 14px;
+  }
+
+  .navBar__brandCluster {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .navBar__pageSummary {
     display: none;
   }
-  .navBar {
-    display: flex;
-    flex-direction: row;
-    justify-content: space-around;
+
+  .navBar__menuButton {
+    display: inline-flex;
     align-items: center;
-    width: auto;
-    background: sticky;
-    top: 0; 
-    left: 0;
-    right: 0;
-    z-index: 1000;
-    animation: outlineGlow;
+    justify-content: center;
   }
-  .navBar__hamburger {
-    display: block;
+
+  .navBar__menu {
+    display: none;
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    margin-left: 0;
+    padding-top: 8px;
+  }
+
+  .navBar__menu.is-open {
+    display: flex;
+  }
+
+  .navBar__links,
+  .navBar__meta {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .navBar__user {
+    flex: 1 1 100%;
   }
 }
 
-/* Single mobile breakpoint is defined above at 700px; no duplicate 768px rule */
+@media (max-width: 560px) {
+  .navBar__surface {
+    border-radius: 24px;
+  }
 
-/* Enhancement 6: Sticking polish; subtle depth and border */
-.navBar.sticking {
-  background: radial-gradient(circle at top, lch(48.92% 86.75 292.13 / 0.58) 2%,lch(21.62% 43.66 288.28 / 0.524) 30%, lch(3.25% 34.27 297.01 / 0.921) 40%);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  backdrop-filter: blur(7px);
-  -webkit-backdrop-filter: blur(7px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.408);
-  animation: outlineGlow 2s ease-in-out infinite;
+  .navBar__brand {
+    min-width: 0;
+  }
+
+  .navBar__headline {
+    font-size: 0.95rem;
+  }
+
+  .navBar__links,
+  .navBar__meta {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .navBar__user,
+  .navBar__status,
+  .navBar__metaPill,
+  .navBar__signOut {
+    grid-column: 1 / -1;
+  }
 }
 
-
-
-.navBar__links ul {
-  display: flex;
-  list-style: none;
-  gap: 1.5rem;
-  margin: 0;
-  padding: 0;
-}
-
-.navBar__links a {
-  color: inherit;
-  text-decoration: none;
-  padding: 0.5rem 1rem;
-  border-radius: 4px;
-  transition: background-color 0.5s;
-}
-
-.navBar__links a:hover {
-  background-color: lch(21.61% 20.34 251.24 / 0.754);
-  color: lch(100% 0.01 296.81);
-  text-underline-offset: 4px;
-  text-decoration: underline;
-}
-
-.navBar__links a:focus-visible {
-  outline: 2px solid var(--color-focus-ring, #0080ff);
-  outline-offset: 2px;
-}
-
-/* Enhancement 1: Heading font for clearer hierarchy */
-.navBar h1 {
-  margin: 0;
-  font-size: 2.5rem;
-  font-family: 'Cinzel', system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-  letter-spacing: 1.8px;
-}
-
-/* Enhancement 7: Clear focus ring for keyboard users */
-.navBar :focus-visible {
-  outline: 1px solid var(--c-brand-1, #0080ff);
-  outline-offset: 3px;
-  border-radius: 4px;
-}
-
-/* Enhancement 10: Motion safety */
 @media (prefers-reduced-motion: reduce) {
-
-  .navBar,
-  .navBar.sticking {
+  .navBar__surface,
+  .navBar__link,
+  .navBar__signOut,
+  .navBar__menuButton,
+  .navBar__metaPill {
     transition: none;
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-  }
-}
-
-/* removed duplicate 768px breakpoint */
-
-/* (Removed duplicate 768px rule in favor of a single 700px breakpoint) */
-
-/* NavBar Health Indicator Styles */
-.nav-left {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.health-indicator {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  transition: background-color 0.3s ease;
-}
-
-.health-indicator.health-ok {
-  background-color: var(--color-health-ok);
-  /* Green (LCH token from base.css) */
-  box-shadow: 0 0 8px var(--color-health-ok);
-}
-
-.health-indicator.health-error {
-  background-color: var(--color-health-error);
-  /* Red (LCH token from base.css) */
-  box-shadow: 0 0 8px var(--color-health-error);
-}
-
-.health-indicator.health-unknown {
-  background-color: var(--color-health-unknown);
-  /* Grey (LCH token from base.css) */
-  animation: pulse 1.5s infinite;
-}
-
-@keyframes pulse {
-  0% {
-    transform: scale(0.9);
-    box-shadow: 0 0 0 0 var(--color-health-unknown);
-  }
-
-  70% {
-    transform: scale(1);
-    box-shadow: 0 0 0 10px color-mix(in lch, var(--color-health-unknown) 0%, transparent 100%);
-  }
-
-  100% {
-    transform: scale(0.9);
-    box-shadow: 0 0 0 0 color-mix(in lch, var(--color-health-unknown) 0%, transparent 100%);
   }
 }

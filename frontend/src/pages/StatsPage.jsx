@@ -41,21 +41,11 @@ import {
   getPredictionHistory,
   getStatusOverview,
 } from "../api/client";
+import { buildGameKey } from "../utils/predictionContextUtils.js";
 import "./StatsPage.css";
 
 // Keep this small so the page stays fast, but large enough for trend charts.
 const HISTORY_LIMIT = 500;
-
-/** Build a stable composite key that works for BOTH schedule rows and history entries. */
-function toGameKey(game) {
-  const season = game?.season ?? "";
-  const week = game?.week ?? "";
-  const home = (game?.home_abbr || game?.home_team || "").toString().trim().toUpperCase();
-  const away = (game?.away_abbr || game?.away_team || "").toString().trim().toUpperCase();
-
-  // Example: "2025-15-KC-BUF"
-  return [season, week, home, away].filter(Boolean).join("-");
-}
 
 /** Safe percent label for probabilities in [0, 1]. */
 function toPercentLabel(prob) {
@@ -88,7 +78,7 @@ function SummaryCard({ title, value, subtext, intent = "default" }) {
   );
 }
 
-export default function StatsPage() {
+export default function StatsPage({ authSession, onSignOut }) {
   // Remote payloads (backend-only)
   const [schedule, setSchedule] = useState([]);
   const [historyPayload, setHistoryPayload] = useState({ entries: [], total: 0, limit: 0 });
@@ -111,8 +101,8 @@ export default function StatsPage() {
 
       const [scheduleRes, historyRes, overviewRes] = await Promise.allSettled([
         getNextWeekSchedule(),
-        getPredictionHistory(HISTORY_LIMIT),
-        getStatusOverview(),
+        getPredictionHistory(HISTORY_LIMIT, authSession?.userId),
+        getStatusOverview(authSession?.userId),
       ]);
 
       if (!active) return;
@@ -149,8 +139,8 @@ export default function StatsPage() {
 
       if (failures.length === 3) {
         setPageError("Failed to load status data (schedule, history, overview). Backend may be offline.");
-      } else if (failures.length > 0) {
-        setPageError(`Some data failed to load: ${failures.join(", ")}.`);
+      } else {
+        setPageError(null);
       }
       setIsLoading(false);
     }
@@ -160,7 +150,7 @@ export default function StatsPage() {
     return () => {
       active = false; // guard against setState on unmounted component
     };
-  }, []);
+  }, [authSession?.userId]);
 
   // Normalize backend shapes into predictable view-model values.
   // client.js guarantees arrays/objects, so we can trust them more here.
@@ -172,7 +162,8 @@ export default function StatsPage() {
 
   const health = safeOverview.health || { status: "unknown" };
   const dataset = safeOverview.dataset || {};
-  const historyMetrics = safeOverview.history?.metrics || {};
+  // Backend contract: `history` is a flat object (HistoryMetrics). Keep compatibility with older `{history:{metrics:{...}}}` shapes.
+  const historyMetrics = safeOverview.history?.metrics || safeOverview.history || {};
 
   const totalPredictions =
     Number.isFinite(Number(historyMetrics.total_predictions))
@@ -189,7 +180,7 @@ export default function StatsPage() {
     for (const entry of history) {
       if (!entry) continue;
       if (entry.game_id) map.set(entry.game_id, entry);
-      const key = toGameKey(entry);
+      const key = buildGameKey(entry);
       if (key) map.set(key, entry);
     }
     return map;
@@ -227,7 +218,7 @@ export default function StatsPage() {
       <ul className="stats-schedule__list">
         {scheduleRows.map((game, idx) => {
           const idKey = game?.game_id ?? game?.id;
-          const compositeKey = toGameKey(game);
+          const compositeKey = buildGameKey(game);
           const prediction =
             (idKey && historyMap.get(idKey)) || (compositeKey && historyMap.get(compositeKey));
 
@@ -237,7 +228,7 @@ export default function StatsPage() {
           const homeCode = (game?.home_abbr || game?.home_team || "").toString().trim();
           const awayLogo = game?.away_logo;
           const homeLogo = game?.home_logo;
-          const rowKey = idKey || compositeKey || `${idx}`;
+          const rowKey = compositeKey || idKey || `${idx}`;
 
           return (
             <li key={rowKey} className="stats-schedule__item">
@@ -287,7 +278,7 @@ export default function StatsPage() {
 
   return (
     <>
-      <NavBar state={navState} />
+      <NavBar authSession={authSession} onSignOut={onSignOut} state={navState} />
 
       <div className="stats-page">
         <header className="stats-page__header">
@@ -314,7 +305,7 @@ export default function StatsPage() {
             <SummaryCard
               title="Dataset rows"
               value={dataset?.rows ?? "-"}
-              subtext={dataset?.path ? "Path loaded" : "Path unknown"}
+              subtext={Number.isFinite(Number(dataset?.features)) ? `${Number(dataset.features)} features` : null}
             />
             <SummaryCard
               title="Predictions"

@@ -28,6 +28,7 @@ import {
 } from "../api/client.js";
 import {
   buildGameKey,
+  dedupeGamesByKey,
   loadPredictionHistoryFromStorage,
   MAX_HISTORY_ENTRIES,
   PREDICTION_HISTORY_KEY,
@@ -50,7 +51,7 @@ const normalizeTeamCode = (value) =>
  */
 function normalizeSchedule(rows) {
   if (!Array.isArray(rows)) return [];
-  return rows.map((game) => {
+  const normalizedRows = rows.map((game) => {
     const home = normalizeTeamCode(game?.home_abbr || game?.home_team);
     const away = normalizeTeamCode(game?.away_abbr || game?.away_team);
     const season = toNumberOrNull(game?.season);
@@ -76,6 +77,7 @@ function normalizeSchedule(rows) {
       game_id: gameId,
     };
   });
+  return dedupeGamesByKey(normalizedRows);
 }
 
 function applyTeamMeta(rows, teamMeta) {
@@ -151,12 +153,14 @@ function ensureHistoryEntry(entry) {
   return base;
 }
 
-export function usePredictionState() {
+export function usePredictionState(authSession = null) {
+  const userId = authSession?.userId || "anonymous";
+  const historyStorageKey = `${PREDICTION_HISTORY_KEY}:${userId}`;
   const [schedule, setSchedule] = useState([]);
   const [week, setWeek] = useState(null);
   const [predictions, setPredictions] = useState({});
   const [history, setHistory] = useState(() => {
-    const stored = loadPredictionHistoryFromStorage(PREDICTION_HISTORY_KEY);
+    const stored = loadPredictionHistoryFromStorage(historyStorageKey);
     return Array.isArray(stored) ? stored.map(ensureHistoryEntry) : [];
   });
   const [current, setCurrent] = useState(null);
@@ -165,6 +169,16 @@ export function usePredictionState() {
   const [loadingByKey, setLoadingByKey] = useState({});
   const [errorsByKey, setErrorsByKey] = useState({});
 
+  useEffect(() => {
+    const stored = loadPredictionHistoryFromStorage(historyStorageKey);
+    setHistory(Array.isArray(stored) ? stored.map(ensureHistoryEntry) : []);
+    setPredictions({});
+    setErrorsByKey({});
+    setLoadingByKey({});
+    setCurrent(null);
+    setCurrentKey("");
+  }, [historyStorageKey]);
+
   // 1. Initial Load: Schedule & History
   useEffect(() => {
     let active = true;
@@ -172,7 +186,7 @@ export function usePredictionState() {
     const init = async () => {
       const [scheduleRes, historyRes, logosRes] = await Promise.allSettled([
         getNextWeekSchedule(),
-        getPredictionHistory(MAX_HISTORY_ENTRIES),
+        getPredictionHistory(MAX_HISTORY_ENTRIES, userId),
         getTeamLogos(),
       ]);
 
@@ -200,7 +214,7 @@ export function usePredictionState() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [userId]);
 
   // 2. Health Polling
   useEffect(() => {
@@ -222,11 +236,11 @@ export function usePredictionState() {
   useEffect(() => {
     try {
       const trimmed = history.slice(0, MAX_HISTORY_ENTRIES);
-      localStorage.setItem(PREDICTION_HISTORY_KEY, JSON.stringify(trimmed));
+      localStorage.setItem(historyStorageKey, JSON.stringify(trimmed));
     } catch (err) {
       console.warn("History persistence failed", err);
     }
-  }, [history]);
+  }, [history, historyStorageKey]);
 
   const setLoading = useCallback((key, value) => {
     if (!key) return;
@@ -272,9 +286,9 @@ export function usePredictionState() {
   const pushHistory = useCallback((entry) => {
     if (!entry) return;
     const normalized = ensureHistoryEntry(entry);
-    const entryKey = entry?.game_id || buildGameKey(entry?.game || entry);
+    const entryKey = normalized?.game_id || buildGameKey(normalized?.game || normalized);
     setHistory((prev) => [normalized, ...prev].slice(0, MAX_HISTORY_ENTRIES));
-    setCurrent(entry);
+    setCurrent(normalized);
     if (entryKey) setCurrentKey(entryKey);
   }, []);
 

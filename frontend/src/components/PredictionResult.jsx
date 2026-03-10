@@ -39,7 +39,7 @@ const TeamBlock = ({ team, score, range }) => {
   );
 };
 
-export default function PredictionResult({ entry }) {
+export default function PredictionResult({ entry, userId = null }) {
   const [explaining, setExplaining] = useState(false);
   const [explanation, setExplanation] = useState(null);
   const [error, setError] = useState(null);
@@ -74,7 +74,7 @@ export default function PredictionResult({ entry }) {
         away_team: entry.away_team,
         season: seasonLabel,
         week: weekLabel,
-      });
+      }, userId);
       if (!result?.used_llm) {
         setExplanation(null);
         setError(result?.error || "LLM is unavailable.");
@@ -82,7 +82,8 @@ export default function PredictionResult({ entry }) {
       }
       setExplanation(result);
     } catch (err) {
-      setError(err?.message || "Failed to generate explanation.");
+      const detail = err?.body?.detail || err?.message || "Failed to generate explanation.";
+      setError(detail);
     } finally {
       setExplaining(false);
     }

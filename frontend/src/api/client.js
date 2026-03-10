@@ -16,6 +16,7 @@
 // client.js (minimal edits)
 
 import { fetchJson } from "./fetch";
+import { dedupeGamesByKey } from "../utils/predictionContextUtils.js";
 
 const POSTSEASON_WEEK_BY_ROUND = {
   "Wild Card": 19,
@@ -31,6 +32,9 @@ const toNumberOrNull = (value) => {
 
 const normalizeTeamCode = (value) =>
   (value ?? "").toString().trim().toUpperCase();
+
+const withUserContext = (userId, options = {}) =>
+  userId ? { ...options, userId } : options;
 
 const extractScheduleRows = (data) => {
   if (Array.isArray(data)) return data;
@@ -128,7 +132,7 @@ export async function getDebugInfo() {
  * Fetch the schedule for the upcoming week.
  * 
  * @param {number|null} [season=null] - Optional season year. Defaults to current if null.
- * @returns {Promise<import('./types').ScheduleResponse>} The schedule data.
+ * @returns {Promise<Array<Object>>} Array of upcoming games (ScheduleEntry-like rows).
  */
 export async function getNextWeekSchedule(season = null) {
   let scheduleRows = [];
@@ -148,11 +152,11 @@ export async function getNextWeekSchedule(season = null) {
     week18Over;
 
   if (!shouldUsePostseason) {
-    return scheduleRows;
+    return dedupeGamesByKey(scheduleRows);
   }
 
   const postseasonRows = await fetchPostseasonSchedule();
-  return postseasonRows.length ? postseasonRows : scheduleRows;
+  return dedupeGamesByKey(postseasonRows.length ? postseasonRows : scheduleRows);
 }
 
 /**
@@ -176,7 +180,7 @@ export async function getTeamLogos() {
  * @param {number} week - Week number
  * @returns {Promise<import('./types').UnifiedPredictionResponse>} The prediction result.
  */
-export async function predictGame(home, away, season, week) {
+export async function predictGame(home, away, season, week, userId = null) {
   const payload = {
     home_team: home,
     away_team: away,
@@ -184,6 +188,7 @@ export async function predictGame(home, away, season, week) {
     week: parseInt(week, 10)
   };
   return fetchJson("/predict", {
+    ...withUserContext(userId),
     method: "POST",
     body: JSON.stringify(payload),
   });
@@ -194,8 +199,9 @@ export async function predictGame(home, away, season, week) {
  * @param {Object} payload - { messages: Array, prediction: Object }
  * @returns {Promise<Object>} LLM response.
  */
-export async function chatLLM(payload) {
+export async function chatLLM(payload, userId = null) {
   return fetchJson("/llm/chat", {
+    ...withUserContext(userId),
     method: "POST",
     body: JSON.stringify(payload),
   });
@@ -206,8 +212,9 @@ export async function chatLLM(payload) {
  * @param {Object} payload - { home_team, away_team, season, week, ... }
  * @returns {Promise<Object>} Explanation result.
  */
-export async function explainPrediction(payload) {
+export async function explainPrediction(payload, userId = null) {
   return fetchJson("/predict/explain", {
+    ...withUserContext(userId),
     method: "POST",
     body: JSON.stringify(payload),
   });
@@ -218,13 +225,8 @@ export async function explainPrediction(payload) {
  * @param {number} [limit=100] - Max number of entries.
  * @returns {Promise<{entries: Array, total: number}>} History data.
  */
-export async function getPredictionHistory(limit = 100) {
-  const data = await fetchJson(`/history?limit=${limit}`, {
-    method: "GET",
-    headers: {
-      "Content-Type": "application/json",
-    },
-  });
+export async function getPredictionHistory(limit = 100, userId = null) {
+  const data = await fetchJson(`/history?limit=${limit}`, withUserContext(userId));
   if (Array.isArray(data)) {
     return { entries: data, total: data.length };
   }
@@ -238,13 +240,8 @@ export async function getPredictionHistory(limit = 100) {
  * Get a high-level overview of system status (health, history stats, dataset info).
  * @returns {Promise<import('./types').StatusOverviewResponse>} Status overview.
  */
-export async function getStatusOverview() {
-  const data = await fetchJson("/status/overview", {
-    method: "GET",
-    headers: {
-      "Content-Type": "application/json",
-    },
-  });
+export async function getStatusOverview(userId = null) {
+  const data = await fetchJson("/status/overview", withUserContext(userId));
   if (!data) {
     return {
       health: { status: "unknown", mode: "unknown", reason: "no data" },
