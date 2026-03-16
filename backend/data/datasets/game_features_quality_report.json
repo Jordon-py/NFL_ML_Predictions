@@ -1,0 +1,25 @@
+{
+  "rows": 2762,
+  "cols": 219,
+  "seasons_min": 2016,
+  "seasons_max": 2025,
+  "weeks_min": 1,
+  "weeks_max": 22,
+  "duplicate_game_id_rows": 0,
+  "future_rows": 1,
+  "training_rows": 2761,
+  "coverage": {
+    "home_team": 1.0,
+    "away_team": 1.0,
+    "home_rest": 0.999637943519189,
+    "away_rest": 0.999637943519189,
+    "spread_line": 0.999637943519189,
+    "total_line": 0.999637943519189,
+    "neutral_site": 0.0,
+    "roof": 0.999637943519189,
+    "surface": 0.9837074583635047,
+    "temp": 0.6498913830557567,
+    "wind": 0.6498913830557567,
+    "kickoff_hour_utc": 0.0003620564808110065
+  }
+}

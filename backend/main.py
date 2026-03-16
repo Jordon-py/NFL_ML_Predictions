@@ -104,6 +104,7 @@ from .schemas import (
     HistoryResponse,
     ScheduleResponse,
     ScheduleEntry,
+    SeasonContextResponse,
     ExplainPredictionRequest,
     ExplainPredictionResponse,
     ChatRequest,
@@ -263,6 +264,11 @@ def _derive_season_phase(df_next: pd.DataFrame) -> tuple[str, str]:
 # -------------------------------------
 # FUNCTIONS -----
 # -------------------------------------
+def _build_game_id(season: int, week: int, home_team: str, away_team: str) -> str:
+    """Build a stable game identifier used across schedule, prediction, and history views."""
+
+    return f"{int(season)}-{int(week)}-{str(home_team).strip().upper()}-{str(away_team).strip().upper()}"
+
 def _build_prediction_payload(req: PredictionRequest, res: PredictionResponse) -> Dict[str, Any]:
     """Flatten model output into the unified API response shape."""
     home_code = str(req.home_team).strip().upper()
@@ -439,6 +445,24 @@ def _resolve_expected_features(bundle: Any, metadata: Dict[str, Any] | None = No
         raw = metadata.get("raw_feature_columns")
     return _filter_expected_features(_flatten_raw_feature_columns(raw))
 
+def _materialize_preprocessor_placeholders(bundle: Any, dataset: pd.DataFrame) -> pd.DataFrame:
+    """Add deterministic placeholder columns that legacy sklearn artifacts still expect."""
+
+    if dataset is None or dataset.empty:
+        return dataset
+
+    pre = getattr(bundle, "preprocessor", None)
+    features_in = getattr(pre, "feature_names_in_", None)
+    if features_in is None:
+        return dataset
+
+    for name in [str(x).strip() for x in list(features_in)]:
+        if not name or name in dataset.columns:
+            continue
+        if name.lower().startswith("unnamed:"):
+            dataset[name] = np.arange(len(dataset), dtype=float)
+    return dataset
+
 def _validate_feature_schema(bundle: Any, dataset: pd.DataFrame, metadata: Dict[str, Any] | None = None) -> None:
     expected = _resolve_expected_features(bundle, metadata=metadata)
     if not expected:
@@ -489,7 +513,9 @@ def _run_preprocessor_smoke_test(bundle: Any, dataset: pd.DataFrame, expected_fe
     pre = getattr(bundle, "preprocessor", None)
     if pre is None or not expected_features:
         return
-    sample = dataset.reindex(columns=expected_features).head(1).copy()
+    feature_names_in = getattr(pre, "feature_names_in_", None)
+    required_columns = list(feature_names_in) if feature_names_in is not None else expected_features
+    sample = dataset.reindex(columns=required_columns).head(1).copy()
     pre.transform(sample)
 
 @asynccontextmanager
@@ -509,6 +535,7 @@ async def lifespan(app: FastAPI):
             if ds_path is None:
                 raise
             state["dataset"] = pd.read_csv(ds_path)
+        state["dataset"] = _materialize_preprocessor_placeholders(state["bundle"], state["dataset"])
         state["dataset_path"] = str(_find_latest_dataset_csv(CFG_DATA_DIR) or "")
         _validate_feature_schema(state["bundle"], state["dataset"], metadata=state.get("model_metadata"))
         state["service"] = PredictionService(state["bundle"], state["dataset"])
@@ -586,19 +613,18 @@ async def health():
     return HealthResponse(status=status, mode=mode, reason=reason)
 
 @app.get("/api/status/overview", response_model=StatusOverviewResponse)
-async def get_status_overview():
+async def get_status_overview(request: Request):
     """High-level system overview."""
     h = await health()
     dataset_info = {
         "rows": len(state["dataset"]) if state["dataset"] is not None else 0,
         "features": (len(_resolve_expected_features(state["bundle"], metadata=state.get("model_metadata"))) if state["bundle"] else 0),
     }
-    with _prediction_history_lock:
-        history_metrics = {
-            "total_predictions": len(prediction_history_entries),
-            "win_rate": None,
-            "note": "win_rate requires actual outcomes",
-        }
+    history_metrics = {
+        "total_predictions": get_prediction_history_count(_resolve_user_context(request)),
+        "win_rate": None,
+        "note": "win_rate requires actual outcomes",
+    }
     return StatusOverviewResponse(health=h, dataset=dataset_info, history=history_metrics)
 
 @app.get("/api/status/models")
@@ -889,6 +915,7 @@ async def admin_reload(request: Request) -> Dict[str, Any]:
         if ds_path is None:
             raise
         state["dataset"] = pd.read_csv(ds_path)
+    state["dataset"] = _materialize_preprocessor_placeholders(state["bundle"], state["dataset"])
 
     state["dataset_path"] = str(_find_latest_dataset_csv(CFG_DATA_DIR) or "")
 

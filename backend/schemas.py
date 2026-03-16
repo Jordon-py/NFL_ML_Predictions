@@ -111,6 +111,26 @@ class ScheduleEntry(BaseModel):
 class ScheduleResponse(BaseModel):
     games: List[ScheduleEntry]
 
+class TeamMeta(BaseModel):
+    logoUrl: str
+    name: Optional[str] = None
+    primaryColor: Optional[str] = None
+    secondaryColor: Optional[str] = None
+    wordmark: Optional[str] = None
+
+class TeamLogosResponse(BaseModel):
+    teams: Dict[str, TeamMeta]
+
+class SeasonContextResponse(BaseModel):
+    phase: str
+    label: str
+    message: str
+    current_season: int
+    display_week: Optional[int] = None
+    games_in_next_window: int
+    next_kickoff: Optional[datetime.datetime] = None
+    generated_at: datetime.datetime
+
 class StoredPredictionRecord(HistoryEntry):
     request: PredictionRequest
 
@@ -165,6 +185,9 @@ __all__ = [
     "StatusOverviewResponse",
     "ScheduleEntry",
     "ScheduleResponse",
+    "TeamMeta",
+    "TeamLogosResponse",
+    "SeasonContextResponse",
     "ExplainPredictionRequest",
     "ExplainPredictionResponse",
     "ChatMessage",

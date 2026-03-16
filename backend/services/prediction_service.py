@@ -59,6 +59,16 @@ def _accepts_raw_dataframe(model: Any) -> bool:
 
     return False
 
+def _align_to_preprocessor_input(frame: pd.DataFrame, preprocessor: Any) -> pd.DataFrame:
+    """Match the exact column contract saved on a fitted sklearn preprocessor."""
+
+    if frame is None or preprocessor is None:
+        return frame
+    feature_names_in = getattr(preprocessor, "feature_names_in_", None)
+    if feature_names_in is None:
+        return frame
+    return frame.reindex(columns=list(feature_names_in))
+
 def _sigmoid(x: float) -> float:
     return 1.0 / (1.0 + np.exp(-x))
 
@@ -165,7 +175,9 @@ class PredictionService:
             if X_transformed is None:
                 if self.preprocessor is None:
                     raise RuntimeError("preprocessor missing but transformed features requested")
-                X_transformed = self.preprocessor.transform(row_df)
+                X_transformed = self.preprocessor.transform(
+                    _align_to_preprocessor_input(row_df, self.preprocessor)
+                )
             return X_transformed
 
         def _predict_regressor(model: Any) -> float:
