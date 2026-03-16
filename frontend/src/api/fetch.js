@@ -13,15 +13,7 @@
 
 function resolveApiBase() {
   // Prefer build-mode, not hostname: dev builds can be served from LAN IPs.
-  if (import.meta.env.DEV) {
-    console.log(`Using local API base URL: ${import.meta.env.DEV}`);
-    return (
-      import.meta.env.VITE_API_DEV ||
-      import.meta.env.VITE_API_BASE_DEV ||
-      import.meta.env.VITE_API_BASE_URL ||
-      ""
-    );
-  }
+  const DEV = import.meta.env.DEV;
   console.log(`Using API base URL: ${import.meta.env.VITE_API_BASE_URL}`);
   return import.meta.env.VITE_API_BASE_URL ? import.meta.env.VITE_API_BASE_URL : "https://nfl-ml-pipe-pr-78.herokuapp.com/";
 }

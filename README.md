@@ -1,5 +1,18 @@
 # NFL ML Predictions
 
+Production-ready FastAPI backend serving NFL ML predictions with a Vite/React frontend.
+
+## Quickstart
+
+Backend (FastAPI):
+```
+cd backend
+python -m pip install -r requirements.txt
+uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+Frontend (Vite):
+```
 Last updated: March 10, 2026
 
 NFL ML Predictions is a full-stack forecasting workspace for NFL matchups. It includes:

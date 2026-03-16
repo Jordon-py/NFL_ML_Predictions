@@ -45,7 +45,7 @@ if not MODELS_DIR.exists():
 # 1. Env var DATASET_PATH
 # 2. Env var DATA_DIR
 # 3. Default relative location
-DATA_DIR = (BASE_DIR / "data" / "datasets").resolve()
+DATA_DIR = (BASE_DIR / "data" / "datasets").resolve(True)
 if not DATA_DIR.exists():
     DATA_DIR = (BASE_DIR / "data").resolve()
 

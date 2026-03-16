@@ -57,7 +57,7 @@ def calculate_team_metrics(pbp: pd.DataFrame) -> pd.DataFrame:
     cols_to_fill = ["epa", "success", "pass", "yards_gained", "rush_attempt", "interception", "fumble_lost"]
     for c in cols_to_fill:
         if c in df.columns:
-            df[c] = df[c].fillna(0.0)
+            df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0.0)
         else:
             df[c] = 0.0
 

@@ -31,3 +31,4 @@ ollama
 # FastAPI already depends on Starlette, but pinning here makes CORS explicit
 # and helps Heroku/Pipfiles resolve compatible versions during deployments.
 starlette>=0.27.0,<2.0.0
+apscheduler>=3.10.0
