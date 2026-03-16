@@ -361,7 +361,12 @@ def _roll_forward_stats(
 
     # Apply updates
     if updates:
-        row_df = row_df.assign(**updates)
+        update_cols = list(updates.keys())
+        updates_df = pd.DataFrame([{col: updates[col] for col in update_cols}], index=row_df.index)
+        row_df = pd.concat(
+            [row_df.drop(columns=update_cols, errors="ignore").copy(), updates_df],
+            axis=1,
+        )
 
     return row_df
 

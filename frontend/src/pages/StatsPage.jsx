@@ -41,18 +41,12 @@ import {
   getPredictionHistory,
   getStatusOverview,
 } from "../api/client";
+import { toWholePercent } from "../utils/predictionHelpers.js";
 import { buildGameKey } from "../utils/predictionContextUtils.js";
 import "./StatsPage.css";
 
 // Keep this small so the page stays fast, but large enough for trend charts.
 const HISTORY_LIMIT = 500;
-
-/** Safe percent label for probabilities in [0, 1]. */
-function toPercentLabel(prob) {
-  const n = Number(prob);
-  if (!Number.isFinite(n)) return "n/a";
-  return `${Math.round(n * 100)}%`;
-}
 
 function LoadingSpinner({ label = "Loading" }) {
   return (

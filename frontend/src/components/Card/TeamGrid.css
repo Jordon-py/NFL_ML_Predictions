@@ -50,7 +50,10 @@
   place-items: center;
   padding: 1.25rem;
   color: var(--c-ink-soft);
-  background: radial-gradient(circle at top, #0b112040, #020617 60%);
+   background:
+    linear-gradient(180deg, lch(0% 0 0), lch(74.03% 40.02 271.38 / 0.403)),
+    lch(0% 0 0);
+  color: lch(95.47% 6.86 276.24);
 }
 
 .team-grid__empty-text {
@@ -76,12 +79,12 @@
 
 /* Medium Context (Tablet/Half-width) */
 @container team-grid (min-width: 481px) and (max-width: 1960px) {
-  .team-grid__grid {  
+  .team-grid__grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(var(--card-min-width), 1fr));
     flex-grow: 1;
     justify-content: space-around;
-    align-items: center;  
+    align-items: center;
   }
 }
 

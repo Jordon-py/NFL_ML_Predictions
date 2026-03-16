@@ -5,7 +5,10 @@
   margin: 1.5rem 1rem 2rem;
   padding: 1.25rem;
   border-radius: var(--r-md);
-  background: oklch(16% 0.05 240 / 0.78);
+   background:
+    linear-gradient(180deg, lch(0% 0 0), lch(74.03% 40.02 271.38 / 0.403)),
+    lch(0% 0 0);
+  color: lch(95.47% 6.86 276.24);
   border: 1px solid oklch(80% 0.05 240 / 0.2);
   box-shadow: 0 12px 32px oklch(0% 0 0 / 0.35);
   backdrop-filter: blur(18px);

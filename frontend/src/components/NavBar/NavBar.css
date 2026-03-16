@@ -1,28 +1,29 @@
 .navBar {
   position: sticky;
   top: 0;
+  left: 0;
+  right: 0;
   z-index: 1000;
-  padding: 18px clamp(18px, 2vw, 30px);
+  padding: 1px;
   box-sizing: border-box;
   font-family: "SF Pro Text", "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
 }
 
 .navBar__surface {
-  width: min(1320px, 100%);
   margin: 0 auto;
   display: flex;
   align-items: flex-start;
-  gap: 18px;
-  padding: 16px 18px;
-  border-radius: 30px;
-  border: 1px solid rgba(255, 255, 255, 0.46);
+  padding:.2rem 1.4rem;
+  border-bottom-left-radius: 30px;
+  border-bottom-right-radius: 30px;
+  border: 1px solid lch(25, 205, 255, 0.46);
   background:
-    linear-gradient(180deg, rgba(252, 252, 253, 0.9), rgba(242, 243, 247, 0.74)),
-    rgba(255, 255, 255, 0.78);
-  color: #0f1115;
+    linear-gradient(180deg, lch(0% 0 0), lch(74.03% 40.02 271.38 / 0.403)),
+    lch(0% 0 0);
+  color: lch(95.47% 6.86 276.24);
   box-shadow:
-    0 22px 60px rgba(9, 12, 18, 0.14),
-    inset 0 1px 0 rgba(255, 255, 255, 0.82);
+    0 22px 60px lch(9, 12, 18, 0.14),
+    inset 0 1px 0 lch(255, 255, 255, 0.82);
   backdrop-filter: blur(24px) saturate(1.35);
   -webkit-backdrop-filter: blur(24px) saturate(1.35);
   transition:
@@ -35,12 +36,12 @@
 .navBar.sticking .navBar__surface {
   transform: translateY(-1px);
   background:
-    linear-gradient(180deg, rgba(252, 252, 253, 0.96), rgba(242, 243, 247, 0.84)),
-    rgba(255, 255, 255, 0.86);
-  border-color: rgba(255, 255, 255, 0.68);
+    linear-gradient(180deg, lch(252, 252, 253, 0.96), lch(242, 243, 247, 0.84)),
+    lch(255, 255, 255, 0.86);
+  border-color: lch(255, 255, 255, 0.68);
   box-shadow:
-    0 24px 72px rgba(10, 13, 20, 0.18),
-    inset 0 1px 0 rgba(255, 255, 255, 0.92);
+    0 24px 72px lch(10, 13, 20, 0.18),
+    inset 0 1px 0 lch(255, 255, 255, 0.92);
 }
 
 .navBar__brandCluster {
@@ -67,8 +68,8 @@
   border-radius: 999px;
   background: linear-gradient(135deg, #0f1115, #8f99aa 72%, #ffffff);
   box-shadow:
-    0 0 0 8px rgba(255, 255, 255, 0.62),
-    0 12px 30px rgba(13, 16, 22, 0.18);
+    0 0 0 8px lch(255, 255, 255, 0.62),
+    0 12px 30px lch(13, 16, 22, 0.18);
 }
 
 .navBar__brandCopy,
@@ -85,7 +86,7 @@
   font-size: 0.76rem;
   letter-spacing: 0.2em;
   text-transform: uppercase;
-  color: rgba(15, 17, 21, 0.56);
+  color: lch(15, 17, 21, 0.56);
 }
 
 .navBar__headline,
@@ -116,11 +117,11 @@
 .navBar__menuButton {
   display: none;
   appearance: none;
-  border: 1px solid rgba(15, 17, 21, 0.08);
-  background: rgba(255, 255, 255, 0.58);
+  border: 1px solid lch(15, 17, 21, 0.08);
+  background: lch(70.92% 44.96 269.26 / 0.094);
   color: inherit;
   border-radius: 999px;
-  padding: 10px 16px;
+  padding: 5px 8px;
   font: inherit;
   font-weight: 600;
   cursor: pointer;
@@ -128,9 +129,9 @@
 
 .navBar__menu {
   display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-left: auto;
+  flex-direction: row;
+  flex-wrap: wrap-reverse;
+  justify-content:space-evenly;
 }
 
 .navBar__links,
@@ -142,36 +143,36 @@
 
 .navBar__link,
 .navBar__signOut {
-  appearance: none;
-  border: 1px solid rgba(15, 17, 21, 0.08);
+  appearance: auto;
+  border: 1.5px solid lch(78.81% 32.61 275.55 / 0.663);
   border-radius: 999px;
-  padding: 10px 14px;
+  padding: 3px 5px;
   text-decoration: none;
-  color: rgba(15, 17, 21, 0.72);
-  background: rgba(255, 255, 255, 0.46);
+  color: lch(100% 0.01 296.81);
+  background: lch(52.3% 78.73 288.08 / 0);
   transition:
-    transform 160ms ease,
-    background 160ms ease,
-    border-color 160ms ease,
-    color 160ms ease,
-    box-shadow 160ms ease;
+    transform 160ms ease-in-out,
+    background 160ms ease-in-out,
+    border-color 160ms ease-in-out,
+    color 160ms ease-in-out,
+    box-shadow 160ms ease-in-out;
 }
 
 .navBar__link:hover,
 .navBar__signOut:hover,
 .navBar__menuButton:hover,
 .navBar__metaPill:hover {
-  transform: translateY(-1px);
-  background: rgba(255, 255, 255, 0.82);
-  border-color: rgba(15, 17, 21, 0.14);
-  color: #0f1115;
+  transform: translateY(-3px);
+  background: lch(0% 0 0 / 0.506);
+  border-color: lch(100% 0.01 296.81 / 0.853);
+  color: lch(87.98% 18.87 285.66);
 }
 
 .navBar__link.is-active {
-  background: #111317;
-  border-color: #111317;
-  color: #f7f7f9;
-  box-shadow: 0 12px 26px rgba(15, 17, 21, 0.18);
+  background: lch(0% 0 0);
+  border-color: lch(68.31% 28.32 276.68);
+  color: lch(89.93% 15.26 272.26);
+  box-shadow: 0 12px 26px lch(58.7% 31.26 279.18 / 0.597);
 }
 
 .navBar__meta {
@@ -186,9 +187,9 @@
   gap: 9px;
   padding: 10px 13px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.48);
-  border: 1px solid rgba(15, 17, 21, 0.08);
-  color: rgba(15, 17, 21, 0.72);
+  background: lch(255, 255, 255, 0.48);
+  border: 1px solid lch(15, 17, 21, 0.08);
+  color: lch(15, 17, 21, 0.72);
   white-space: nowrap;
 }
 
@@ -220,8 +221,8 @@
   gap: 12px;
   padding: 8px 10px 8px 8px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.58);
-  border: 1px solid rgba(15, 17, 21, 0.08);
+  background: lch(255, 255, 255, 0.58);
+  border: 1px solid lch(15, 17, 21, 0.08);
 }
 
 .navBar__avatar {
@@ -244,7 +245,7 @@
 }
 
 .navBar :focus-visible {
-  outline: 2px solid rgba(17, 19, 23, 0.78);
+  outline: 2px solid lch(17, 19, 23, 0.78);
   outline-offset: 3px;
 }
 

@@ -25,7 +25,7 @@
   --c-text-muted-on-dark: #c9d3e0;
 
   /* Special */
-  --glass: lch(10 23 264.58 / 0.67);
+  --glass: lch(10.81% 21.31 274.8 / 0.347);
 
   /* Radii */
   --r-md: 12px;
@@ -54,8 +54,8 @@
   --lch-primary: lch(70% 52 265);
   --lch-secondary: lch(82% 38 240);
   --lch-accent: lch(58% 68 320);
-  --lch-bg: lch(15% 6 250 / 0.88);
-  --lch-card: lch(22% 8 250 / 0.60);
+  --lch-bg: lch(15.04% 5.67 247.54 / 0.577);
+  --lch-card: lch(21.87% 8.36 252.74 / 0.799);
   --lch-border: lch(80% 10 250 / 0.20);
   --lch-text: lch(95% 4 250);
   --lch-muted: lch(85% 6 250 / 0.85);

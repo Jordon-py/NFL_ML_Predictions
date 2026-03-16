@@ -32,6 +32,55 @@ def _normalize_host(host: str) -> str:
     return str(host or "").strip().rstrip("/")
 
 
+def _parse_ollama_response_text(raw_text: str) -> Dict[str, Any]:
+    """
+    Parse either a normal JSON response or Ollama's newline-delimited streaming JSON.
+
+    When streaming is enabled, Ollama returns one JSON object per line. We join the
+    incremental `message.content` chunks into one final payload so callers can treat
+    both response shapes the same way.
+    """
+    text = (raw_text or "").strip()
+    if not text:
+        raise ValueError("empty response body")
+
+    try:
+        data = json.loads(text)
+        if isinstance(data, dict):
+            return data
+        raise ValueError("expected top-level JSON object")
+    except json.JSONDecodeError:
+        chunks: list[str] = []
+        last_obj: Dict[str, Any] | None = None
+
+        for line in text.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            obj = json.loads(line)
+            if not isinstance(obj, dict):
+                continue
+            last_obj = obj
+
+            message = obj.get("message")
+            if isinstance(message, dict):
+                chunk = message.get("content")
+                if chunk is not None:
+                    chunks.append(str(chunk))
+
+        if last_obj is None:
+            raise ValueError("no JSON objects found in response body")
+
+        if chunks:
+            merged = dict(last_obj)
+            merged_message = dict(merged.get("message") or {})
+            merged_message["content"] = "".join(chunks)
+            merged["message"] = merged_message
+            return merged
+
+        return last_obj
+
+
 async def _ollama_list_model_names(*, host: str, timeout_s: float) -> list[str]:
     host = _normalize_host(host)
     if not host:
@@ -119,7 +168,9 @@ async def _ollama_chat(
     payload: Dict[str, Any] = {
         "model": model,
         "messages": messages,
-        "stream": True,
+        # We consume a single completed response; non-streaming avoids NDJSON parsing
+        # issues on the common path, while we still keep a fallback parser below.
+        "stream": False,
     }
 
     timeout = httpx.Timeout(timeout_s)
@@ -152,7 +203,7 @@ async def _ollama_chat(
         }
 
     try:
-        data = resp.json()
+        data = _parse_ollama_response_text(resp.text)
     except Exception as e:
         return {
             "ok": False,

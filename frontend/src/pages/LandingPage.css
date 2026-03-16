@@ -3,21 +3,16 @@
 :root {
   --landing-bg: #f5f2ea;
   --landing-bg-soft: rgba(255, 255, 255, 0.82);
-  --landing-ink: #121212;
+  --landing-ink: #ffffff;
   --landing-muted: #59544c;
   --landing-line: rgba(18, 18, 18, 0.08);
-  --landing-shadow: 0 28px 80px rgba(17, 17, 17, 0.12);
+  --landing-shadow: 0 28px 80px rgba(187, 201, 255, 0.248);
   --landing-accent: #d3d7dd;
 }
 
 .landing-shell {
   position: relative;
   min-height: 100vh;
-  padding: 28px;
-  background:
-    radial-gradient(circle at top left, rgba(255, 255, 255, 0.92), transparent 36%),
-    radial-gradient(circle at 80% 20%, rgba(216, 221, 229, 0.72), transparent 28%),
-    linear-gradient(180deg, #f8f6f1 0%, #efebe2 100%);
   color: var(--landing-ink);
   isolation: isolate;
   overflow: hidden;
@@ -51,7 +46,10 @@
   padding: 18px 22px;
   border: 1px solid rgba(255, 255, 255, 0.72);
   border-radius: 28px;
-  background: rgba(255, 255, 255, 0.58);
+  background:
+    linear-gradient(180deg, lch(0% 0 0), lch(74.03% 40.02 271.38 / 0.403)),
+    lch(0% 0 0);
+  color: lch(95.47% 6.86 276.24);
   backdrop-filter: blur(18px);
   box-shadow: 0 20px 50px rgba(23, 24, 27, 0.08);
 }
@@ -135,18 +133,27 @@
 .landing-hero {
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
-  gap: 28px;
+  gap: 2rem;
   max-width: 1320px;
+  border-radius: 4rem;
   margin: 0 auto;
   align-items: stretch;
+  color: lch(95.47% 6.86 276.24);
 }
+
+
 
 .landing-copy,
 .landing-panel__glass,
 .landing-card {
+  height: auto;
   border: 1px solid rgba(255, 255, 255, 0.76);
   border-radius: 34px;
-  background: rgba(255, 255, 255, 0.66);
+  margin-bottom: 0rem;
+  background:
+    linear-gradient(180deg, lch(0% 0 0), lch(74.03% 40.02 271.38 / 0.403)),
+    lch(0% 0 0);
+  color: lch(95.47% 6.86 276.24);
   backdrop-filter: blur(24px);
   box-shadow: var(--landing-shadow);
 }
@@ -213,7 +220,6 @@
 }
 
 .landing-panel__glass {
-  height: 100%;
   padding: 30px;
   display: flex;
   flex-direction: column;
@@ -238,7 +244,10 @@
   border-radius: 20px;
   padding: 16px 18px;
   font: inherit;
-  background: rgba(255, 255, 255, 0.76);
+  background:
+    linear-gradient(180deg, lch(0% 0 0), lch(74.03% 40.02 271.38 / 0.403)),
+    lch(0% 0 0);
+  color: lch(95.47% 6.86 276.24);
   color: var(--landing-ink);
 }
 

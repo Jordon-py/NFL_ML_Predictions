@@ -63,7 +63,7 @@ section.team-main {
   flex-direction: row;
   justify-content: space-between;
   /* Center grid items */
-  
+
   /* Consistent gap */
   padding: 1rem;
 }
@@ -384,7 +384,7 @@ section.team-main {
   }
 }
 
-/* ========================================================================== 
+/* ==========================================================================
    theme-grid.css - Components & Sections
    Purpose: team grid, cards, logos, timings, and section-specific styles.
    Load order: 2 of 2 (after base.css)
@@ -728,17 +728,42 @@ img.team-logo:hover {
 }
 
 .dashboard-header {
-  margin-bottom: 1rem;
+  width: min(100%, 62rem);
+  margin: 0 auto 1.5rem;
+  min-height: 0;
+  padding-inline: clamp(0rem, 1.5vw, 0.5rem);
 }
 
+
+
 .dashboard-header-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  width: 100%;
+  box-sizing: border-box;
   border: 1px solid color-mix(in oklab, var(--c-brand-1) 36%, transparent);
   border-radius: 14px;
-  padding: 1rem 1.1rem;
+  padding: clamp(1rem, 2vw, 1.5rem);
   backdrop-filter: blur(6px);
   background:
-    radial-gradient(circle at 10% 10%, oklch(58% 0.22 215 / 0.22), transparent 42%),
-    linear-gradient(140deg, oklch(21% 0.07 250 / 0.86), oklch(15% 0.05 255 / 0.78));
+    linear-gradient(180deg, lch(0% 0 0), lch(74.03% 40.02 271.38 / 0.403)),
+    lch(0% 0 0);
+  color: lch(95.47% 6.86 276.24);
+  text-align: center;
+}
+
+.dashboard-title {
+  margin: 0;
+  font-size: clamp(2rem, 4vw + 0.6rem, 4rem);
+  line-height: 1.02;
+  text-wrap: balance;
+}
+
+.dashboard-subtitle {
+  margin: 0;
+  font-size: clamp(0.95rem, 1.1vw + 0.65rem, 1.15rem);
+  color: color-mix(in oklab, lch(95.47% 6.86 276.24) 88%, white 12%);
 }
 
 .season-context-ribbon {
@@ -747,6 +772,7 @@ img.team-logo:hover {
   flex-wrap: wrap;
   gap: 0.55rem;
   align-items: center;
+  justify-content: center;
 }
 
 .season-context-pill {
@@ -762,6 +788,8 @@ img.team-logo:hover {
 .season-context-kickoff {
   font-size: 0.9rem;
   color: var(--c-text-muted-on-dark);
+  flex: 1 1 15rem;
+  min-width: min(100%, 15rem);
 }
 
 .phase-offseason .season-context-pill {
@@ -788,8 +816,9 @@ img.team-logo:hover {
   border-radius: 16px;
   padding: 1rem;
   background:
-    radial-gradient(circle at 12% 0%, oklch(57% 0.21 188 / 0.17), transparent 38%),
-    linear-gradient(165deg, oklch(17% 0.06 255 / 0.88), oklch(12% 0.05 250 / 0.9));
+    linear-gradient(180deg, lch(0% 0 0), lch(74.03% 40.02 271.38 / 0.403)),
+    lch(0% 0 0);
+  color: lch(95.47% 6.86 276.24);
   box-shadow: 0 15px 32px oklch(0% 0 0 / 0.45);
 }
 
@@ -828,7 +857,44 @@ img.team-logo:hover {
 }
 
 @media (max-width: 1024px) {
+  .dashboard-main {
+    padding: 0.85rem;
+  }
+
+  .dashboard-header {
+    width: 100%;
+    margin-bottom: 1.25rem;
+    padding-inline: 0;
+  }
+
   .content-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 680px) {
+  .dashboard-main {
+    padding: 0.75rem;
+  }
+
+  .dashboard-header-content {
+    padding: 1rem;
+    text-align: left;
+  }
+
+  .dashboard-title,
+  .dashboard-subtitle {
+    text-align: left;
+  }
+
+  .season-context-ribbon {
+    justify-content: flex-start;
+    align-items: flex-start;
+  }
+
+  .season-context-message,
+  .season-context-kickoff {
+    flex-basis: 100%;
+    min-width: 0;
   }
 }

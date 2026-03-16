@@ -12,10 +12,19 @@
  */
 
 function resolveApiBase() {
-  // Prefer build-mode, not hostname: dev builds can be served from LAN IPs.
-  const DEV = import.meta.env.DEV;
-  console.log(`Using API base URL: ${import.meta.env.VITE_API_BASE_URL}`);
-  return import.meta.env.VITE_API_BASE_URL ? import.meta.env.VITE_API_BASE_URL : "https://nfl-ml-pipe-pr-78.herokuapp.com/";
+  // In local dev, prefer the explicit dev API target instead of production.
+  const isDev = Boolean(import.meta.env.DEV);
+  const devBase =
+    import.meta.env.VITE_API_DEV ||
+    import.meta.env.VITE_API_BASE_DEV ||
+    import.meta.env.VITE_DEV_ENV ||
+    "";
+  const prodBase =
+    import.meta.env.VITE_API_BASE_URL ||
+    "https://nfl-ml-pipe-pr-78.herokuapp.com/";
+  const selected = isDev && devBase ? devBase : prodBase;
+  console.log(`Using API base URL: ${selected}`);
+  return selected;
 }
 
 function stripSurroundingQuotes(value) {

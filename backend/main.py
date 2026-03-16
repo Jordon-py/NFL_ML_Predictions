@@ -692,7 +692,30 @@ async def get_season_context(season: int | None = None) -> SeasonContextResponse
             )
         )
 
-    return ScheduleResponse(games=games)
+    phase, label = _derive_season_phase(df_next)
+    next_kickoff = None
+    kickoff_values = [game.kickoff for game in games if game.kickoff is not None]
+    if kickoff_values:
+        next_kickoff = min(kickoff_values)
+
+    games_in_next_window = len(games)
+    if phase == "in_season" and use_week is not None:
+        message = f"{games_in_next_window} game(s) available for Week {int(use_week)}."
+    elif phase == "postseason":
+        message = f"{games_in_next_window} postseason game(s) available in the next slate."
+    else:
+        message = "No live weekly slate is available right now."
+
+    return SeasonContextResponse(
+        phase=phase,
+        label=label,
+        message=message,
+        current_season=int(use_season),
+        display_week=int(use_week) if phase != "offseason" else None,
+        games_in_next_window=games_in_next_window,
+        next_kickoff=next_kickoff,
+        generated_at=datetime.now(timezone.utc),
+    )
 
 @app.get("/teams/logos", response_model=TeamLogosResponse)
 async def get_team_logos() -> TeamLogosResponse:
@@ -704,6 +727,7 @@ async def debug() -> Dict[str, Any]:
     dataset = state["dataset"]
     rows = int(len(dataset)) if dataset is not None else 0
     cols = int(dataset.shape[1]) if dataset is not None else 0
+    cors_restrict = os.getenv("RESTRICT_CORS", "false").strip().lower() in TRUTHY
     return {
         "status": "ok" if state["service"] else ("error" if state.get("init_error") else "initializing"),
         "init_error": state.get("init_error"),
