@@ -26,6 +26,16 @@ function normalizeGameId(rawId) {
   return trimmed;
 }
 
+function buildCompositeKey(gameLike) {
+  const parts = [
+    gameLike?.season,
+    gameLike?.week,
+    normalizeToken(gameLike?.home_abbr || gameLike?.home_team),
+    normalizeToken(gameLike?.away_abbr || gameLike?.away_team),
+  ].filter(Boolean);
+  return parts.join("-");
+}
+
 /**
  * Build a consistent game key from either schedule rows or prediction entries.
  * @param {any} gameLike
@@ -33,16 +43,41 @@ function normalizeGameId(rawId) {
  */
 export function buildGameKey(gameLike) {
   if (!gameLike) return "";
+  const compositeKey = buildCompositeKey(gameLike);
+  if (compositeKey) {
+    return compositeKey;
+  }
   if (typeof gameLike.game_id === "string" && gameLike.game_id.trim()) {
     return normalizeGameId(gameLike.game_id);
   }
-  const parts = [
-    gameLike.season,
-    gameLike.week,
-    normalizeToken(gameLike.home_abbr || gameLike.home_team),
-    normalizeToken(gameLike.away_abbr || gameLike.away_team),
-  ].filter(Boolean);
-  return parts.join("-");
+  return "";
+}
+
+/**
+ * Remove duplicate games while preserving the first occurrence order.
+ * This protects the UI against noisy schedule feeds without changing card rendering logic.
+ * @param {any[]} rows
+ * @returns {any[]}
+ */
+export function dedupeGamesByKey(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) return [];
+
+  const seen = new Set();
+  const deduped = [];
+  for (const row of rows) {
+    const key = buildGameKey(row);
+    const fallbackKey = key || JSON.stringify([
+      row?.season ?? "",
+      row?.week ?? "",
+      row?.kickoff ?? "",
+      normalizeToken(row?.home_team ?? row?.home_abbr),
+      normalizeToken(row?.away_team ?? row?.away_abbr),
+    ]);
+    if (seen.has(fallbackKey)) continue;
+    seen.add(fallbackKey);
+    deduped.push(row);
+  }
+  return deduped;
 }
 
 /**

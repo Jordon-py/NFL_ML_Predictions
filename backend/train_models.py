@@ -24,10 +24,13 @@ Other improvements:
 from __future__ import annotations
 
 import argparse
+import calendar
 import hashlib
 import json
 import logging
 import os
+import shutil
+import sys
 import time
 from dataclasses import dataclass, asdict, field
 from datetime import datetime, timezone
@@ -60,6 +63,15 @@ from sklearn.model_selection import RandomizedSearchCV, TimeSeriesSplit
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
+if __name__ == "__main__" and __package__ is None:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from backend.pipeline_models import (
+    TrainingArtifactManifest,
+    TrainingExecutionResult,
+    TrainingRunConfig,
+    TrainingScheduleManifest,
+)
 
 # -----------------------
 # Environment + knobs
@@ -210,6 +222,139 @@ class TrainingSummary:
 def _timer(start: float) -> str:
     elapsed = time.time() - start
     return f"{elapsed:.1f}s" if elapsed < 60 else f"{elapsed/60:.1f}m"
+
+
+def _write_json(path: Path, payload: object) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+
+def _find_latest_dataset_for_training() -> Path:
+    dataset_root = _backend_dir / "data" / "datasets"
+    latest_manifest = dataset_root / "latest_dataset.json"
+    if latest_manifest.exists():
+        try:
+            payload = json.loads(latest_manifest.read_text(encoding="utf-8"))
+            clean_dataset = payload.get("clean_dataset_path")
+            if clean_dataset:
+                clean_path = Path(clean_dataset)
+                if clean_path.exists():
+                    return clean_path
+        except Exception as exc:
+            log.warning("Could not read latest_dataset.json: %s", exc)
+
+    candidates = sorted(dataset_root.glob("**/game_features_*_clean.csv"))
+    if not candidates:
+        candidates = sorted(dataset_root.glob("**/game_features_*.csv"))
+    if not candidates:
+        return _backend_dir / "data" / "game_features_latest.csv"
+    return max(candidates, key=lambda item: item.stat().st_mtime)
+
+
+def _configure_file_logging(log_path: Path) -> None:
+    # Admin retraining can call this in-process multiple times, so make sure
+    # only the active run keeps a file handler attached.
+    for handler in list(log.handlers):
+        if isinstance(handler, logging.FileHandler):
+            log.removeHandler(handler)
+            handler.close()
+
+    file_handler = logging.FileHandler(log_path, mode="w", encoding="utf-8")
+    file_handler.setLevel(logging.INFO)
+    file_handler.setFormatter(
+        logging.Formatter(
+            "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
+    )
+    log.addHandler(file_handler)
+
+
+def _is_nfl_season(moment: datetime) -> bool:
+    return moment.month in {8, 9, 10, 11, 12, 1, 2}
+
+
+def _next_monthly_refresh(moment: datetime) -> Optional[str]:
+    if not _is_nfl_season(moment):
+        return None
+
+    year = moment.year + (1 if moment.month == 12 else 0)
+    month = 1 if moment.month == 12 else moment.month + 1
+    day = min(moment.day, calendar.monthrange(year, month)[1])
+    candidate = moment.replace(year=year, month=month, day=day)
+    # Once the season window closes, monthly retraining pauses until the next season.
+    if not _is_nfl_season(candidate):
+        return None
+    return candidate.isoformat()
+
+
+def _parse_utc_datetime(value: str | None) -> Optional[datetime]:
+    if not value:
+        return None
+    normalized = value.strip().replace("Z", "+00:00")
+    if not normalized:
+        return None
+    parsed = datetime.fromisoformat(normalized)
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _load_latest_training_manifest(out_dir: Path) -> tuple[Path | None, TrainingArtifactManifest | None]:
+    manifest_path = out_dir / "latest_training_run.json"
+    if not manifest_path.exists():
+        return None, None
+    try:
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+        return manifest_path, TrainingArtifactManifest.model_validate(payload)
+    except Exception as exc:
+        log.warning("Could not read latest training manifest at %s: %s", manifest_path, exc)
+        return manifest_path, None
+
+
+def _maybe_skip_for_monthly_cadence(
+    config: TrainingRunConfig,
+    out_dir: Path,
+    now_utc: datetime,
+) -> Optional[TrainingExecutionResult]:
+    if config.force_retrain:
+        return None
+    if not _is_nfl_season(now_utc):
+        # Off-season runs are allowed on demand for experimentation or full refreshes.
+        return None
+
+    manifest_path, latest_manifest = _load_latest_training_manifest(out_dir)
+    if latest_manifest is None:
+        return None
+
+    next_due = _parse_utc_datetime(latest_manifest.schedule.next_recommended_training_at_utc)
+    if next_due is None or now_utc >= next_due:
+        return None
+
+    reason = (
+        f"Skipped retraining because the active in-season model run {latest_manifest.run_id} "
+        f"is still current until {next_due.isoformat()}."
+    )
+    return TrainingExecutionResult(
+        trained=False,
+        skipped=True,
+        reason=reason,
+        run_id=latest_manifest.run_id,
+        dataset_path=latest_manifest.dataset_path,
+        out_dir=str(out_dir),
+        latest_manifest_path=str(manifest_path) if manifest_path else None,
+        archived_run_dir=latest_manifest.archived_run_dir,
+        next_recommended_training_at_utc=latest_manifest.schedule.next_recommended_training_at_utc,
+    )
+
+
+def _archive_run(out_dir: Path, run_id: str, files: List[Path]) -> Path:
+    archive_dir = out_dir / "runs" / run_id
+    archive_dir.mkdir(parents=True, exist_ok=True)
+    for file_path in files:
+        if file_path.exists():
+            shutil.copy2(file_path, archive_dir / file_path.name)
+    return archive_dir
 
 
 def _normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -673,10 +818,14 @@ def _walk_forward_eval(
 # -----------------------
 # Main
 # -----------------------
-def main() -> None:
+def main(
+    data_path: str | None = None,
+    out_dir: str | None = None,
+    force_retrain: bool = False,
+) -> TrainingExecutionResult:
     parser = argparse.ArgumentParser(description="Train NFL ML models (merged + walk-forward)")
-    parser.add_argument("--data", type=str, default="data/game_features_20250109.csv")
-    parser.add_argument("--out", type=str, default="prod-models/models")
+    parser.add_argument("--data", type=str, default=str(_find_latest_dataset_for_training()))
+    parser.add_argument("--out", type=str, default=str((_backend_dir / "models").resolve()))
 
     # Hygiene knobs
     parser.add_argument("--near_empty_threshold", type=float, default=0.95)
@@ -691,26 +840,66 @@ def main() -> None:
 
     # Prediction knobs
     parser.add_argument("--threshold", type=float, default=0.54)
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Ignore the monthly in-season freshness window and retrain immediately.",
+    )
 
-    args = parser.parse_args()
+    args = parser.parse_args([] if data_path is not None or out_dir is not None or force_retrain else None)
+    if data_path is not None:
+        args.data = data_path
+    if out_dir is not None:
+        args.out = out_dir
+    if force_retrain:
+        args.force = True
 
-    out_dir = Path(args.out)
+    config = TrainingRunConfig(
+        data_path=args.data,
+        out_dir=args.out,
+        near_empty_threshold=args.near_empty_threshold,
+        complete_missing_max=args.complete_missing_max,
+        future_missing_min=args.future_missing_min,
+        numeric_object_parse_rate=args.numeric_object_parse_rate,
+        walk_start_calib=args.walk_start_calib,
+        walk_end_calib=args.walk_end_calib,
+        bootstrap_samples=args.bootstrap_samples,
+        threshold=args.threshold,
+        force_retrain=args.force,
+    )
+
+    out_dir = Path(config.out_dir).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
+    run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    log_path = out_dir / f"train_models_{run_id}.log"
+    _configure_file_logging(log_path)
 
     t0 = time.time()
     np.random.seed(RANDOM_SEED)
 
     log.info("=" * 72)
-    log.info("TRAIN MODELS (MERGED) | data=%s | out=%s", args.data, str(out_dir))
+    log.info("TRAIN MODELS (MERGED) | run_id=%s | data=%s | out=%s", run_id, config.data_path, str(out_dir))
     log.info("=" * 72)
 
-    df_raw = pd.read_csv(args.data)
+    skip_result = _maybe_skip_for_monthly_cadence(config, out_dir, datetime.now(timezone.utc))
+    if skip_result is not None:
+        log.info(skip_result.reason)
+        return skip_result
+
+    df_raw = pd.read_csv(config.data_path)
     if df_raw.empty:
-        raise RuntimeError(f"Dataset is empty: {args.data}")
+        raise RuntimeError(f"Dataset is empty: {config.data_path}")
     df_raw = _normalize_columns(df_raw)
     _ensure_columns(df_raw, TIME_KEYS + [TARGET_HOME, TARGET_AWAY, CLASS_LABEL] + REPORT_COLS)
     df_raw = _dataset_sort(df_raw)
     ds_hash = _dataset_hash(df_raw)
+    log.info(
+        "Loaded dataset | rows=%d | columns=%d | completed=%d | future=%d",
+        len(df_raw),
+        len(df_raw.columns),
+        int(df_raw[CLASS_LABEL].notna().sum()),
+        int(df_raw[CLASS_LABEL].isna().sum()),
+    )
 
     # Extract labels BEFORE dropping
     y_home_all = df_raw[TARGET_HOME].copy()
@@ -726,9 +915,9 @@ def main() -> None:
     df_feat, dropped_leaky_internal = _drop_leaky_and_internal(df_raw.copy())
 
     # Near-empty drop
-    near_empty = [c for c in _find_near_empty_cols(df_feat, args.near_empty_threshold) if c not in set(REPORT_COLS)]
+    near_empty = [c for c in _find_near_empty_cols(df_feat, config.near_empty_threshold) if c not in set(REPORT_COLS)]
     if near_empty:
-        log.info("Dropping %d near-empty cols (>=%.2f missing): %s", len(near_empty), args.near_empty_threshold, near_empty[:12])
+        log.info("Dropping %d near-empty cols (>=%.2f missing): %s", len(near_empty), config.near_empty_threshold, near_empty[:12])
         df_feat = df_feat.drop(columns=near_empty, errors="ignore")
 
     # Suspicious post-game drop (using future rows signal)
@@ -739,8 +928,8 @@ def main() -> None:
         df_complete=df_complete_feat,
         df_future=df_future_feat,
         candidate_cols=candidate,
-        complete_missing_max=args.complete_missing_max,
-        future_missing_min=args.future_missing_min,
+        complete_missing_max=config.complete_missing_max,
+        future_missing_min=config.future_missing_min,
     )
     suspicious = [c for c in suspicious if c not in set(REPORT_COLS)]
     if suspicious:
@@ -752,6 +941,12 @@ def main() -> None:
     base_feature_cols = num_cols + cat_cols
     if not base_feature_cols:
         raise RuntimeError("No training features remain after sanitization. Check drop rules.")
+    log.info(
+        "Feature inventory after hygiene | total=%d | numeric=%d | categorical=%d",
+        len(base_feature_cols),
+        len(num_cols),
+        len(cat_cols),
+    )
 
     # Align complete/future frames
     df_complete = df_feat.loc[complete_mask].copy().reset_index(drop=True)
@@ -777,7 +972,7 @@ def main() -> None:
         log.info("Dropping %d constant cols for regression (sample): %s", len(const_reg), const_reg[:12])
         X_reg = X_reg[feature_cols_reg]
 
-    X_reg, _, coerced_reg = _coerce_numeric_object_cols(X_reg, [], min_parse_rate=args.numeric_object_parse_rate)
+    X_reg, _, coerced_reg = _coerce_numeric_object_cols(X_reg, [], min_parse_rate=config.numeric_object_parse_rate)
     cat_reg = X_reg.select_dtypes(include=["object", "category"]).columns.tolist()
     num_reg = [c for c in X_reg.columns if c not in cat_reg]
     pre_reg = _make_preprocessor(num_reg, cat_reg)
@@ -809,14 +1004,14 @@ def main() -> None:
         df_complete=df_complete,
         y_win=y_win,
         base_feature_cols=base_feature_cols,
-        walk_start_calib=args.walk_start_calib,
-        walk_end_calib=args.walk_end_calib,
-        n_boot=args.bootstrap_samples,
+        walk_start_calib=config.walk_start_calib,
+        walk_end_calib=config.walk_end_calib,
+        n_boot=config.bootstrap_samples,
         seed=RANDOM_SEED,
-        min_parse_rate=args.numeric_object_parse_rate,
-        near_empty_threshold=args.near_empty_threshold,
-        complete_missing_max=args.complete_missing_max,
-        future_missing_min=args.future_missing_min,
+        min_parse_rate=config.numeric_object_parse_rate,
+        near_empty_threshold=config.near_empty_threshold,
+        complete_missing_max=config.complete_missing_max,
+        future_missing_min=config.future_missing_min,
     )
 
     oos_path = out_dir / "walkforward_oos_predictions.csv"
@@ -868,9 +1063,14 @@ def main() -> None:
     X_train_w = X_train_w[feat_w]
     X_calib_w = X_calib_w[feat_w]
     X_future_w = df_future[feat_w].copy() if len(df_future) > 0 else pd.DataFrame()
+    log.info(
+        "Deployment classifier feature set | selected=%d | constants_dropped=%d",
+        len(feat_w),
+        len(const_w),
+    )
 
     X_train_w, [X_calib_w, X_future_w], coerced_w = _coerce_numeric_object_cols(
-        X_train_w, [X_calib_w, X_future_w], min_parse_rate=args.numeric_object_parse_rate
+        X_train_w, [X_calib_w, X_future_w], min_parse_rate=config.numeric_object_parse_rate
     )
 
     cat_w = X_train_w.select_dtypes(include=["object", "category"]).columns.tolist()
@@ -899,7 +1099,7 @@ def main() -> None:
     future_path = out_dir / "predictions_future.csv"
     if len(df_future) > 0:
         p_future = win_model.predict_proba(X_future_w)[:, 1]
-        pred_future = (p_future >= args.threshold).astype(int)
+        pred_future = (p_future >= config.threshold).astype(int)
 
         out_future = df_future_raw[REPORT_COLS].copy()
         out_future["home_win_proba"] = p_future
@@ -942,10 +1142,29 @@ def main() -> None:
     dump(lr_cal, out_dir / "log_win_clf_calibrated.joblib")
 
     duration = time.time() - t0
-    ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    trained_at = datetime.now(timezone.utc)
+    trained_at_iso = trained_at.isoformat()
+    inference_feature_columns = [
+        column
+        for column in base_feature_cols
+        if column in set(feature_cols_reg) or column in set(feat_w)
+    ]
+    inference_categorical_columns = [
+        column for column in inference_feature_columns if column in set(cat_reg) or column in set(cat_w)
+    ]
+    inference_numeric_columns = [
+        column for column in inference_feature_columns if column not in set(inference_categorical_columns)
+    ]
+
+    schedule_manifest = TrainingScheduleManifest(
+        cadence="monthly_in_season",
+        in_season=_is_nfl_season(trained_at),
+        last_trained_at_utc=trained_at_iso,
+        next_recommended_training_at_utc=_next_monthly_refresh(trained_at),
+    )
 
     summary = TrainingSummary(
-        training_timestamp_utc=ts,
+        training_timestamp_utc=trained_at_iso,
         training_duration_seconds=float(round(duration, 2)),
         rows_total=int(len(df_raw)),
         rows_completed=int(complete_mask.sum()),
@@ -971,18 +1190,49 @@ def main() -> None:
     )
 
     metadata = {
-        "trained_at_utc": ts,
+        "run_id": run_id,
+        "trained_at_utc": trained_at_iso,
+        "training_schedule": schedule_manifest.model_dump(mode="json"),
+        "dataset_path": config.data_path,
         "dataset_hash": ds_hash,
         "production_ready": True,
         "artifacts": {
             "preprocessor": "preprocessor.joblib",
+            "home_model": "home_model.joblib",
+            "away_model": "away_model.joblib",
+            "win_clf_calibrated": "win_clf_calibrated.joblib",
+            "hist_win_clf_calibrated": "hist_win_clf_calibrated.joblib",
+            "log_win_clf_calibrated": "log_win_clf_calibrated.joblib",
+            # Backward-compatible aliases for older loaders.
             "reg_home": "home_model.joblib",
             "reg_away": "away_model.joblib",
             "clf_home_win": "win_clf_calibrated.joblib",
         },
+        # This union is the safest inference contract because the regressors and
+        # calibrated classifier do not always retain exactly the same feature set.
+        "feature_names": inference_feature_columns,
         "raw_feature_columns": {
-            "numeric": num_cols,
-            "categorical": cat_cols,
+            "numeric": inference_numeric_columns,
+            "categorical": inference_categorical_columns,
+        },
+        "feature_columns": {
+            "base": {
+                "numeric": num_cols,
+                "categorical": cat_cols,
+                "total": len(base_feature_cols),
+            },
+            "regression": {
+                "selected_columns": feature_cols_reg,
+                "selected_count": len(feature_cols_reg),
+                "constant_columns_removed": const_reg,
+                "numeric_like_object_columns_converted": coerced_reg,
+            },
+            "deployment_classifier": {
+                "selected_columns": feat_w,
+                "selected_count": len(feat_w),
+                "constant_columns_removed": const_w,
+                "numeric_like_object_columns_converted": coerced_w,
+            },
         },
         "dropped_columns": {
             "leaky_internal": dropped_leaky_internal,
@@ -1000,14 +1250,68 @@ def main() -> None:
         },
     }
 
-    (out_dir / "training_report.json").write_text(json.dumps(asdict(summary), indent=2), encoding="utf-8")
-    (out_dir / "metadata.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
+    training_report_path = out_dir / "training_report.json"
+    metadata_path = out_dir / "metadata.json"
+    schedule_path = out_dir / "training_schedule.json"
+    _write_json(training_report_path, asdict(summary))
+    _write_json(metadata_path, metadata)
+    _write_json(schedule_path, schedule_manifest.model_dump(mode="json"))
+
+    archive_dir = _archive_run(
+        out_dir,
+        run_id,
+        [
+            out_dir / "preprocessor.joblib",
+            out_dir / "home_model.joblib",
+            out_dir / "away_model.joblib",
+            out_dir / "win_clf_calibrated.joblib",
+            out_dir / "hist_win_clf_calibrated.joblib",
+            out_dir / "log_win_clf_calibrated.joblib",
+            training_report_path,
+            metadata_path,
+            schedule_path,
+            oos_path,
+            test_2025_path,
+            future_path,
+            log_path,
+        ],
+    )
+
+    latest_manifest = TrainingArtifactManifest(
+        run_id=run_id,
+        trained_at_utc=trained_at.isoformat(),
+        dataset_path=config.data_path,
+        deployed_models_dir=str(out_dir),
+        archived_run_dir=str(archive_dir),
+        training_report_path=str(training_report_path),
+        metadata_path=str(metadata_path),
+        schedule_path=str(schedule_path),
+        log_path=str(log_path),
+        predictions_future_path=str(future_path) if future_path.exists() else None,
+        walkforward_predictions_path=str(oos_path) if oos_path.exists() else None,
+        schedule=schedule_manifest,
+    )
+    _write_json(out_dir / "latest_training_run.json", latest_manifest.model_dump(mode="json"))
+    _write_json(archive_dir / "run_manifest.json", latest_manifest.model_dump(mode="json"))
 
     log.info("=" * 72)
     log.info("DONE in %s | dataset_hash=%s", _timer(t0), ds_hash)
-    log.info("Report: %s", str(out_dir / "training_report.json"))
-    log.info("Meta  : %s", str(out_dir / "metadata.json"))
+    log.info("Report: %s", str(training_report_path))
+    log.info("Meta  : %s", str(metadata_path))
+    log.info("Schedule: %s", str(schedule_path))
+    log.info("Archive : %s", str(archive_dir))
     log.info("=" * 72)
+    return TrainingExecutionResult(
+        trained=True,
+        skipped=False,
+        reason="Training completed successfully.",
+        run_id=run_id,
+        dataset_path=config.data_path,
+        out_dir=str(out_dir),
+        latest_manifest_path=str(out_dir / "latest_training_run.json"),
+        archived_run_dir=str(archive_dir),
+        next_recommended_training_at_utc=schedule_manifest.next_recommended_training_at_utc,
+    )
 
 
 if __name__ == "__main__":

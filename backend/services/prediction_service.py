@@ -19,7 +19,12 @@ from backend.schemas import (
     WinnerPrediction,
     SimulationMetrics,
 )
-from backend.services.inference_row import build_model_input_row, build_team_history_cache
+from backend.services.inference_row import (
+    build_model_input_row,
+    build_team_history_cache,
+    build_exact_match_index,
+    compute_impute_medians,
+)
 from backend.config import load_schedule_data_safe
 
 logger = logging.getLogger(__name__)
@@ -106,6 +111,9 @@ class PredictionService:
         self._schedule_cache: dict[int, pd.DataFrame] = {}
         # Cache team history once to avoid re-scanning the full dataset each call.
         self._team_history_cache = build_team_history_cache(dataset)
+        # Cache exact-match lookup + numeric medians for inference-time imputation.
+        self._exact_match_index = build_exact_match_index(dataset)
+        self._impute_medians = compute_impute_medians(dataset)
 
     def _get_schedule_df(self, season: int) -> Optional[pd.DataFrame]:
 
@@ -145,6 +153,8 @@ class PredictionService:
             schedule_df=schedule_df,
             raw_feature_columns=self.raw_feature_columns,
             team_history_cache=self._team_history_cache,
+            exact_match_index=self._exact_match_index,
+            impute_medians=self._impute_medians,
             debug=False,
         )
 

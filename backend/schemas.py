@@ -71,10 +71,13 @@ class HealthResponse(BaseModel):
 
 class HistoryEntry(UnifiedPredictionResponse):
     ts: str
+    user_id: Optional[str] = None
+    storage_key: Optional[str] = None
 
 class HistoryResponse(BaseModel):
     entries: List[HistoryEntry]
     total: int
+    user_id: Optional[str] = None
 
 class DatasetInfo(BaseModel):
     rows: int
@@ -108,25 +111,43 @@ class ScheduleEntry(BaseModel):
 class ScheduleResponse(BaseModel):
     games: List[ScheduleEntry]
 
-class TeamMeta(BaseModel):
-    logoUrl: str
-    name: Optional[str] = None
-    primaryColor: Optional[str] = None
-    secondaryColor: Optional[str] = None
-    wordmark: Optional[str] = None
+class StoredPredictionRecord(HistoryEntry):
+    request: PredictionRequest
 
-class TeamLogosResponse(BaseModel):
-    teams: Dict[str, TeamMeta]
+class ExplainPredictionRequest(BaseModel):
+    home_team: Optional[str] = None
+    away_team: Optional[str] = None
+    season: Optional[int] = None
+    week: Optional[int] = None
+    prediction: Optional[Dict[str, Any]] = None
 
-class SeasonContextResponse(BaseModel):
-    phase: str
-    label: str
-    message: str
-    current_season: int
-    display_week: Optional[int] = None
-    games_in_next_window: int
-    next_kickoff: Optional[datetime.datetime] = None
-    generated_at: datetime.datetime
+class ExplainPredictionResponse(BaseModel):
+    game_id: Optional[str] = None
+    used_llm: bool = False
+    llm_model: Optional[str] = None
+    explanation: str = ""
+    bullets: List[str] = Field(default_factory=list)
+    caveats: List[str] = Field(default_factory=list)
+    error: Optional[str] = None
+
+class ChatMessage(BaseModel):
+    role: str = Field(..., pattern="^(system|user|assistant)$")
+    content: str
+
+class ChatRequest(BaseModel):
+    messages: List[ChatMessage] = Field(default_factory=list)
+    prediction: Optional[Dict[str, Any]] = None
+
+class ChatResponse(BaseModel):
+    reply: str
+    used_llm: bool = False
+    llm_model: Optional[str] = None
+    error: Optional[str] = None
+
+class AdminRetrainRequest(BaseModel):
+    dataset_path: Optional[str] = None
+    out_dir: Optional[str] = None
+    force: bool = False
 
 __all__ = [
     "PredictionRequest",
@@ -138,12 +159,16 @@ __all__ = [
     "HealthResponse",
     "HistoryEntry",
     "HistoryResponse",
+    "StoredPredictionRecord",
     "DatasetInfo",
     "HistoryMetrics",
     "StatusOverviewResponse",
     "ScheduleEntry",
     "ScheduleResponse",
-    "TeamMeta",
-    "TeamLogosResponse",
-    "SeasonContextResponse",
+    "ExplainPredictionRequest",
+    "ExplainPredictionResponse",
+    "ChatMessage",
+    "ChatRequest",
+    "ChatResponse",
+    "AdminRetrainRequest",
 ]

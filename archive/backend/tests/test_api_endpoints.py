@@ -32,6 +32,15 @@ def test_schedule_next_week_is_not_empty():
     assert isinstance(payload["games"], list)
 
 
+def test_schedule_next_week_game_ids_are_unique():
+    with TestClient(app) as client:
+        r = client.get("/schedule/next-week")
+    assert r.status_code == 200
+    games = r.json().get("games", [])
+    game_ids = [game.get("game_id") for game in games if game.get("game_id")]
+    assert len(game_ids) == len(set(game_ids))
+
+
 def test_predict_works_for_first_game_in_schedule():
     # Use the schedule endpoint to find a valid game
     with TestClient(app) as client:

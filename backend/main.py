@@ -104,20 +104,21 @@ from .schemas import (
     HistoryResponse,
     ScheduleResponse,
     ScheduleEntry,
-    TeamLogosResponse,
-    SeasonContextResponse,
+    ExplainPredictionRequest,
+    ExplainPredictionResponse,
+    ChatRequest,
+    ChatResponse,
+    AdminRetrainRequest,
 )
+from .pipeline_models import TrainingExecutionResult
 from .services.prediction_service import PredictionService
 from .services.inference_row import build_model_input_row
 from .config import DATA_DIR as CFG_DATA_DIR, MODELS_DIR as CFG_MODELS_DIR, resolve_cors, TRUTHY
-from .utils.artifact_loader import ensure_artifacts
+from .utils.team_codes import normalize_team_code
 from .main_helpers import (
     InferenceBundle,
     load_inference_bundle,
     load_dataset_df,
-    _append_prediction_history_to_disk,
-    prediction_history_entries,
-    _prediction_history_lock,
     get_schedule,
     select_next_week_rows,
     get_team_meta,
@@ -125,17 +126,20 @@ from .main_helpers import (
     _pick_col,
     _HOME_COLS,
     _AWAY_COLS,
-    _GAME_ID_COLS,
     _STADIUM_COLS,
     load_prediction_history,
 )
+from .prediction_store import (
+    append_prediction_record,
+    build_prediction_user_context,
+    get_prediction_history,
+    get_prediction_history_count,
+)
 from .ollama.llm_ollama import explain_prediction as llm_explain_prediction, chat_messages as llm_chat_messages
-
-def _build_game_id(season, week, home, away):
-    """Normalized game ID builder."""
-    return f"{season}-{week}-{str(home).strip().upper()}-{str(away).strip().upper()}"
-
-
+from .routes import (
+    TeamLogosResponse,
+    router as legacy_router,
+)
 if __name__ == "__main__" and __package__ is None:
     # Allow running as a script by ensuring repo root is on sys.path.
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -166,6 +170,7 @@ state: Dict[str, Any] = {
     "bundle": None,
     "dataset": None,
     "service": None,
+    "init_error": None,
     "model_metadata": None,
     "model_metadata_path": None,
     "dataset_path": None,
@@ -182,8 +187,8 @@ def get_logos(home_team, away_team):
     return home_logo, away_logo
 
 def _normalize_team_code(value: str) -> str:
-    """Normalize team abbreviation to uppercase."""
-    return str(value or "").strip().upper()
+    """Normalize team identifiers to canonical abbreviations."""
+    return normalize_team_code(value)
 
 
 def _get_team_meta_map() -> Dict[str, Dict[str, str]]:
@@ -346,248 +351,6 @@ def _find_latest_metadata_json(models_dir: Path) -> Path | None:
         return None
     return max(candidates, key=lambda p: p.stat().st_mtime)
 
-
-def _pick_positive_class_index(clf: Any) -> int:
-    classes = getattr(clf, "classes_", None)
-    if classes is None:
-        return 1
-    cls = list(classes)
-    for label in (1, True, "HOME", "home", "home_win", "1", "True"):
-        if label in cls:
-            return cls.index(label)
-    return 1 if len(cls) > 1 else 0
-
-
-
-
-
-def _get_feature_columns(bundle: InferenceBundle) -> Tuple[List[str], List[str], List[str]]:
-    raw = bundle.meta.get("raw_feature_columns", {}) if bundle.meta else {}
-    numeric = list(raw.get("numeric", []) or [])
-    categorical = list(raw.get("categorical", []) or [])
-
-    # Defensive fallback (same as your original)
-    if not numeric and not categorical:
-        all_cols = bundle.raw_feature_columns
-        return all_cols, [], all_cols
-
-    return numeric, categorical, numeric + categorical
-
-
-def _dataset_means(df: pd.DataFrame, numeric_cols: List[str]) -> Dict[str, float]:
-    if df is None or df.empty:
-        return {}
-    means: Dict[str, float] = {}
-    for col in numeric_cols:
-        if col in df.columns:
-            series = pd.to_numeric(df[col], errors="coerce")
-            m = series.mean()
-            if not pd.isna(m):
-                means[col] = float(m)
-    return means
-
-
-def _roll_forward_team_features(
-    df: pd.DataFrame,
-    team: str,
-    season: int,
-    week: int,
-    target_side: str,
-    numeric_cols: List[str],
-) -> Dict[str, float]:
-    """
-    Roll forward numeric features from the most recent completed game for a team.
-    """
-    if df is None or df.empty:
-        return {}
-    if "season" not in df.columns or "week" not in df.columns:
-        return {}
-
-    season_num = pd.to_numeric(df["season"], errors="coerce").fillna(0).astype(int)
-    week_num = pd.to_numeric(df["week"], errors="coerce").fillna(0).astype(int)
-    time_key = season_num * 100 + week_num
-    cutoff = int(season) * 100 + int(week)
-
-    team_mask = ((df.get("home_team") == team) | (df.get("away_team") == team)) & (time_key < cutoff)
-
-    # Keep “completed games only” heuristic if points exist
-    if "home_points_for" in df.columns and "away_points_for" in df.columns:
-        team_mask &= df["home_points_for"].notna() & df["away_points_for"].notna()
-
-    if not bool(team_mask.any()):
-        return {}
-
-    last_idx = time_key[team_mask].idxmax()
-    last_game = df.loc[last_idx]
-    last_side = "home" if str(last_game.get("home_team")) == team else "away"
-
-    out: Dict[str, float] = {}
-    target_prefix = f"{target_side}_"
-    source_prefix = f"{last_side}_"
-
-    for col in numeric_cols:
-        if not col.startswith(target_prefix):
-            continue
-        source_col = source_prefix + col[len(target_prefix):]
-        if source_col in last_game and pd.notna(last_game[source_col]):
-            try:
-                out[col] = float(last_game[source_col])
-            except Exception:
-                continue
-
-    return out
-
-
-
-TEAM_ALIAS = {
-    "LA": "LAR", "STL": "LAR", "SD": "LAC", "OAK": "LV", "WSH": "WAS",
-}
-
-def norm_team(team: str) -> str:
-    """Normalize team abbreviations."""
-    t = str(team).strip().upper()
-    return TEAM_ALIAS.get(t, t)
-
-def _find_inference_rows(df: pd.DataFrame, home: str, away: str, season: int, week: int) -> pd.DataFrame:
-    """Find specific rows in the dataframe matching the matchup."""
-    if df is None or df.empty:
-        return pd.DataFrame()
-    
-    # Pre-normalization
-    h_norm = norm_team(home)
-    a_norm = norm_team(away)
-    
-    # Safe casting
-    season_col = pd.to_numeric(df["season"], errors="coerce").fillna(0).astype(int)
-    week_col = pd.to_numeric(df["week"], errors="coerce").fillna(0).astype(int)
-    
-    # Masking
-    mask = (season_col == int(season)) & (week_col == int(week))
-    
-    # Match team names (handling potential raw discrepancies if needed, but norm_team usually enough)
-    # We apply norm logic to the DF columns on the fly if needed, but for speed assume standard abbrs usually match.
-    # If standard retrieval fails, we can try more aggressive matching.
-    mask &= (df["home_team"] == h_norm) & (df["away_team"] == a_norm)
-    
-    return df.loc[mask]
-
-def _build_future_row(
-    df: pd.DataFrame,
-    bundle: InferenceBundle,
-    home: str,
-    away: str,
-    season: int,
-    week: int,
-) -> pd.Series:
-    """
-    Build a row for future games:
-      1) Lookup existing row in dataset (preferred).
-      2) Roll-forward if missing (fallback).
-    """
-    # 1. Try finding exact match
-    matches = _find_inference_rows(df, home, away, season, week)
-    if not matches.empty:
-        return matches.iloc[0]
-
-    # 2. Fallback: Roll forward
-    numeric_cols, categorical_cols, _ = _get_feature_columns(bundle)
-    means = _dataset_means(df, numeric_cols)
-
-    features: Dict[str, Any] = {}
-    features.update(_roll_forward_team_features(df, home, season, week, "home", numeric_cols))
-    features.update(_roll_forward_team_features(df, away, season, week, "away", numeric_cols))
-
-    # Explicitly set season/week
-    if "season" in numeric_cols: features["season"] = int(season)
-    if "week" in numeric_cols: features["week"] = int(week)
-
-    # Team identifiers
-    features["home_team"] = home
-    features["away_team"] = away
-    features["has_home_team"] = True
-    
-    # Dynamic categorical columns (e.g. home_team_ARI)
-    for col in categorical_cols:
-        if col.startswith("home_team_"):
-            features[col] = (col == f"home_team_{home}")
-        elif col.startswith("away_team_"):
-            features[col] = (col == f"away_team_{away}")
-
-    # Fill gaps with means
-    for col in numeric_cols:
-        if col not in features or pd.isna(features.get(col)):
-            features[col] = means.get(col, 0.0)
-
-    return pd.Series(features)
-
-
-# ---------------------------
-# History persistence
-# ---------------------------
-
-
-
-# ---------------------------
-# API models
-# ---------------------------
-
-# Prediction history entries (loaded from disk) are maintained in main_helpers
-# We use the refs provided by imports from main_helpers.
-
-# ---------------------------
-# LLM helper (best-effort)
-# ---------------------------
-
-def _fallback_explain(pred: Dict[str, Any]) -> Dict[str, Any]:
-    home = str(pred.get("home_team", "")).upper()
-    away = str(pred.get("away_team", "")).upper()
-    hs = pred.get("home_score")
-    as_ = pred.get("away_score")
-    p_home = pred.get("home_win_probability")
-    pdiff = pred.get("point_diff")
-
-    bullets: List[str] = []
-    if isinstance(pdiff, (int, float)):
-        fav = home if float(pdiff) >= 0 else away
-        bullets.append(f"{fav} is favored by about {abs(float(pdiff)):.1f} points (model estimate).")
-    if isinstance(p_home, (int, float)):
-        bullets.append(f"Home win probability is ~{100.0 * float(p_home):.0f}% (calibrated/ensemble output).")
-    if isinstance(hs, (int, float)) and isinstance(as_, (int, float)):
-        bullets.append(f"Projected score: {home} {hs}  •  {away} {as_}.")
-
-    caveats = [
-        "This is a pre-game estimate. Late injuries, weather, and market moves can shift reality.",
-        "If the game row was missing, features may be rolled-forward/mean-filled (see prediction_source).",
-    ]
-
-    favored = home if (isinstance(pdiff, (int, float)) and float(pdiff) >= 0) else away
-    explanation = f"{home} vs {away}: model leans {favored} based on learned pre-game feature patterns."
-    return {"explanation": explanation, "bullets": bullets, "caveats": caveats}
-
-
-def _build_chat_context(pred: Optional[Dict[str, Any]]) -> Optional[str]:
-    if not pred:
-        return None
-    home = str(pred.get("home_team", "")).upper()
-    away = str(pred.get("away_team", "")).upper()
-
-    lines = [
-        "You are an NFL predictions assistant.",
-        "Use this prediction context when answering if relevant:",
-    ]
-    if home or away:
-        lines.append(f"matchup: {home} vs {away}")
-    if pred.get("season") or pred.get("week"):
-        lines.append(f"season_week: {pred.get('season')} / {pred.get('week')}")
-    if isinstance(pred.get("home_score"), (int, float)) and isinstance(pred.get("away_score"), (int, float)):
-        lines.append(f"predicted_score: {home} {pred.get('home_score')} - {away} {pred.get('away_score')}")
-    if isinstance(pred.get("home_win_probability"), (int, float)):
-        lines.append(f"home_win_probability: {pred.get('home_win_probability')}")
-    if pred.get("prediction_source"):
-        lines.append(f"prediction_source: {pred.get('prediction_source')}")
-
-    return "\n".join(lines)
-
 def _load_model_metadata(models_dir: Path) -> tuple[Path | None, Dict[str, Any] | None]:
     md_path = _find_latest_metadata_json(models_dir)
     if md_path is None:
@@ -607,6 +370,18 @@ def _find_latest_dataset_csv(data_dir: Path=os.getenv("DATA_DIR", Path("./data/d
         return None
     if root.is_file():
         return root if root.suffix.lower() == ".csv" else None
+
+    latest_manifest = root / "latest_dataset.json"
+    if latest_manifest.exists():
+        try:
+            payload = json.loads(latest_manifest.read_text(encoding="utf-8"))
+            clean_dataset_path = payload.get("clean_dataset_path")
+            if clean_dataset_path:
+                manifest_dataset = Path(clean_dataset_path)
+                if manifest_dataset.exists():
+                    return manifest_dataset
+        except Exception as exc:
+            log.warning("Could not read latest_dataset.json from %s: %s", latest_manifest, exc)
 
     patterns = ("game_features_*.csv", "*.csv")
     candidates: list[Path] = []
@@ -682,144 +457,88 @@ def _extract_prediction_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
     return {}
 
 
-def _predict_home_win_prob(bundle: InferenceBundle, X_raw: pd.DataFrame, point_diff: float) -> Tuple[float, bool]:
-    """
-    Returns (probability, used_fallback).
-    Since we use full pipelines (preprocessor included), we pass raw data directly.
-    """
-    clf = bundle.win_pipe or bundle.hist_win_clf  # prefer win_pipe (pipeline) logic
-    
-    if hasattr(clf, "predict_proba"):
-        try:
-            # Direct prediction using the pipeline
-            proba = clf.predict_proba(X_raw)
-            idx = _pick_positive_class_index(clf)
-            val = float(proba[0][idx])
-            return float(np.clip(val, 0.0, 1.0)), False
-        except Exception as e:
-            log.warning("[Predict] Pipeline predict_proba failed: %s", e)
+def _resolve_user_context(request: Request):
+    """Use the signed-in frontend identity when persisting local predictions."""
 
-    # logistic fallback
-    if pd.isna(point_diff):
-        return 0.5, True
-    p = 1.0 / (1.0 + math.exp(-0.25 * float(point_diff)))
-    return float(np.clip(p, 0.0, 1.0)), True
+    return build_prediction_user_context(request.headers.get("X-User-Id"))
 
-async def build_and_reload_dataset():
-    """
-    Scheduled task:
-      1. Run build_csv_datasets_v3.py as a subprocess to fetch new data.
-      2. If successful, reload the dataset into memory.
-    """
-    log.info("Starting scheduled dataset build...")
-    try:
-        # Run the build script as a module from the project root
-        # We need to add 'backend' to PYTHONPATH so 'utils' can be imported directly
-        # because build_csv_datasets_v3.py uses 'from utils import ...'
-        repo_root = Path(__file__).resolve().parent.parent
-        backend_dir = repo_root / "backend"
-        process = await asyncio.create_subprocess_exec(
-            sys.executable, "-m", "backend.build_csv_datasets_v3",
-            "--out-dir", str(CFG_DATA_DIR),
-            "--legacy-root-copy",
-            cwd=str(repo_root),
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env={**os.environ, "PYTHONPATH": str(backend_dir)} 
-        )
-        
-        stdout, stderr = await process.communicate()
-        
-        if stdout:
-            log.info(f"Build Subprocess STDOUT:\n{stdout.decode().strip()}")
-        if stderr:
-            log.error(f"Build Subprocess STDERR:\n{stderr.decode().strip()}")
-            
-        if process.returncode == 0:
-            log.info("Dataset build successful.")
-            log.info("Reloading dataset...")
-            new_csv = _find_latest_dataset_csv(CFG_DATA_DIR)
-            if new_csv:
-                expected_features = _resolve_expected_features(state["bundle"], metadata=state.get("model_metadata"))
-                state["dataset"] = load_dataset_df(CFG_DATA_DIR, expected_features=expected_features)
-                state["dataset_path"] = str(new_csv)
-                
-                # Update app state
-                app.state.dataset = state["dataset"]
-                
-                # Re-initialize service with new dataset
-                state["service"] = PredictionService(state["bundle"], state["dataset"])
-                
-                # Update status overview metrics in real-time? 
-                # (metrics are pulled from state["dataset"] so they should auto-update)
-                
-                log.info(f"Dataset reloaded from {new_csv}")
-            else:
-                log.warning("Build finished but no CSV found to reload.")
-        else:
-            log.error(f"Dataset build failed with return code {process.returncode}")
-            if stderr:
-                log.error(f"Build Error: {stderr.decode()}")
-            if stdout:
-                log.info(f"Build Output: {stdout.decode()}")
-                
-    except Exception as e:
-        log.error(f"Error during scheduled dataset build: {e}", exc_info=True)
 
-# Startup / Lifespan
+def _sync_app_state(app: FastAPI) -> None:
+    """Keep `app.state` aligned with the module-level runtime cache."""
+
+    bundle = state.get("bundle")
+    app.state.dataset = state.get("dataset")
+    app.state.model_metadata = state.get("model_metadata") or {}
+    app.state.model_metadata_path = str(state.get("model_metadata_path") or "")
+    app.state.dataset_path = state.get("dataset_path") or ""
+    app.state.models = {
+        "preprocessor": getattr(bundle, "preprocessor", None) if bundle is not None else None,
+        "home_model": getattr(bundle, "home_model", None) if bundle is not None else None,
+        "away_model": getattr(bundle, "away_model", None) if bundle is not None else None,
+        "hist_win_clf": getattr(bundle, "hist_win_clf", None) if bundle is not None else None,
+        "models_dir": str(CFG_MODELS_DIR),
+    }
+    app.state.service = state.get("service")
+    app.state.team_logos = state.get("team_logos") or {}
+    app.state.started_at = state.get("started_at") or datetime.now(timezone.utc).isoformat()
+
+
+def _run_preprocessor_smoke_test(bundle: Any, dataset: pd.DataFrame, expected_features: list[str]) -> None:
+    """Raise early when sklearn artifacts and the current runtime are incompatible."""
+
+    pre = getattr(bundle, "preprocessor", None)
+    if pre is None or not expected_features:
+        return
+    sample = dataset.reindex(columns=expected_features).head(1).copy()
+    pre.transform(sample)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: Load models and dataset
     try:
-        log.info(f"Starting up: Loading model bundle from {CFG_MODELS_DIR}...")
-        ensure_artifacts()
-        load_prediction_history()
-        
-        # 1. Load Bundle (Models)
+        log.info("Starting up: Loading model bundle and dataset...")
+        state["started_at"] = datetime.now(timezone.utc).isoformat()
         state["bundle"] = load_inference_bundle(CFG_MODELS_DIR)
-        
-        # 2. Load Metadata (if separate)
-        # Assuming metadata.json is always in MODELS_DIR as enforced by config
-        meta_path = CFG_MODELS_DIR / "metadata.json"
-        if meta_path.exists():
-            state["model_metadata"] = json.loads(meta_path.read_text(encoding="utf-8"))
-            state["model_metadata_path"] = str(meta_path)
-        
+        state["model_metadata_path"], state["model_metadata"] = _load_model_metadata(CFG_MODELS_DIR)
         expected_features = _resolve_expected_features(state["bundle"], metadata=state.get("model_metadata"))
-        
-        # 3. Load Dataset
-        # Config enforces DATASET_PATH if specific file is needed.
-        log.info(f"Loading dataset from {CFG_DATA_DIR}...")
-        state["dataset"] = load_dataset_df(CFG_DATA_DIR, expected_features=expected_features)
-        
-        # Validate
+        # Dataset: prefer helper loader; fall back to newest CSV under DATA_DIR
+        try:
+            state["dataset"] = load_dataset_df(CFG_DATA_DIR, expected_features=expected_features)
+        except Exception:
+            ds_path = _find_latest_dataset_csv(CFG_DATA_DIR)
+            if ds_path is None:
+                raise
+            state["dataset"] = pd.read_csv(ds_path)
+        state["dataset_path"] = str(_find_latest_dataset_csv(CFG_DATA_DIR) or "")
         _validate_feature_schema(state["bundle"], state["dataset"], metadata=state.get("model_metadata"))
-        
-        # Init Service
         state["service"] = PredictionService(state["bundle"], state["dataset"])
+        state["init_error"] = None
+
+        # Smoke-test the fitted preprocessor to fail fast on sklearn version mismatches.
+        # Without this, the app can "start" but crash on the first /predict call.
+        try:
+            _run_preprocessor_smoke_test(state["bundle"], state["dataset"], expected_features)
+        except Exception as exc:
+            msg = (
+                "Model preprocessing smoke test failed (likely scikit-learn version mismatch for joblib artifacts). "
+                f"Error: {exc}"
+            )
+            log.error(msg, exc_info=True)
+            state["service"] = None
+            state["init_error"] = msg
+
         _get_team_meta_map()
-        
-        # Expose state
-        app.state.dataset = state["dataset"]
-        app.state.models = {"models_dir": str(CFG_MODELS_DIR)}
-        app.state.team_logos = state.get("team_logos") or {}
-        app.state.started_at = datetime.now(timezone.utc).isoformat()
-        
-        app.state.started_at = datetime.now(timezone.utc).isoformat()
-        
-        # 4. Start Scheduler
-        scheduler = AsyncIOScheduler()
-        # Schedule to run every day at 3:00 AM (server time/UTC depending on env)
-        scheduler.add_job(build_and_reload_dataset, 'cron', hour=3, minute=0)
-        scheduler.start()
-        log.info("Scheduler started: Auto-build set for 03:00 daily.")
-        
+        _sync_app_state(app)
         log.info("Startup complete: Models and dataset ready.")
     except Exception as e:
-        log.error(f"Startup failed: {e}", exc_info=True)
-        # We raise here because the user wants to fix the traceback, meaning we should fail if invalid.
-        raise
-    
+        msg = f"Startup failed: {e}"
+        log.error(msg, exc_info=True)
+        state["service"] = None
+        state["init_error"] = msg
+        # Ensure optional app.state bindings exist even when startup fails.
+        state["started_at"] = state.get("started_at") or datetime.now(timezone.utc).isoformat()
+        _sync_app_state(app)
+
     yield
 
 app = FastAPI(title="NFL ML Predictions API", lifespan=lifespan)
@@ -847,7 +566,10 @@ app.add_middleware(
 
 def _require_ready() -> PredictionService:
     if state["service"] is None:
-        raise HTTPException(status_code=503, detail="Prediction engine not initialized.")
+        raise HTTPException(
+            status_code=503,
+            detail=state.get("init_error") or "Prediction engine not initialized.",
+        )
     return state["service"]
 
 # ---------------------------
@@ -860,7 +582,7 @@ async def health():
     ready = state.get("service") is not None
     status = "healthy" if ready else "unhealthy"
     mode = "ml-inference" if ready else "initializing"
-    reason = "models_loaded" if ready else "prediction engine not initialized"
+    reason = "models_loaded" if ready else (state.get("init_error") or "prediction engine not initialized")
     return HealthResponse(status=status, mode=mode, reason=reason)
 
 @app.get("/api/status/overview", response_model=StatusOverviewResponse)
@@ -903,50 +625,52 @@ async def get_season_context(season: int | None = None) -> SeasonContextResponse
     """
     df = get_schedule(season=season)
     df_next, use_season, use_week = select_next_week_rows(df)
-    phase, label = _derive_season_phase(df_next)
+    team_meta = _get_team_meta_map()
 
-    next_kickoff: Optional[datetime] = None
-    if isinstance(df_next, pd.DataFrame) and not df_next.empty:
-        kickoff_candidates = [parse_kickoff(row) for _, row in df_next.iterrows()]
-        kickoff_candidates = [dt for dt in kickoff_candidates if isinstance(dt, datetime)]
-        if kickoff_candidates:
-            next_kickoff = min(kickoff_candidates)
+    home_col = _pick_col(df_next, _HOME_COLS)
+    away_col = _pick_col(df_next, _AWAY_COLS)
+    stadium_col = _pick_col(df_next, _STADIUM_COLS)
 
-    now_utc = datetime.now(timezone.utc)
-    if phase != "offseason":
-        kickoff_utc = None
-        if isinstance(next_kickoff, datetime):
-            kickoff_utc = (
-                next_kickoff.astimezone(timezone.utc)
-                if next_kickoff.tzinfo is not None
-                else next_kickoff.replace(tzinfo=timezone.utc)
+    games: list[ScheduleEntry] = []
+    for _, row in df_next.iterrows():
+        # Identify Teams
+        home = _normalize_team_code(row.get(home_col, "") if home_col else row.get("home", ""))
+        away = _normalize_team_code(row.get(away_col, "") if away_col else row.get("away", ""))
+        if not home or not away:
+            continue
+
+        home_info = team_meta.get(home, {})
+        away_info = team_meta.get(away, {})
+
+        # Emit one canonical key format so frontend storage and schedule cards align.
+        game_id = _build_game_id(use_season, use_week, home, away)
+
+        stadium = row.get(stadium_col, "") if stadium_col else row.get("stadium", "")
+
+        games.append(
+            ScheduleEntry(
+                season=int(use_season),
+                week=int(use_week),
+                kickoff=parse_kickoff(row),
+                home_team=home,
+                away_team=away,
+                game_id=game_id,
+                home_abbr=home,
+                away_abbr=away,
+                home_logo=home_info.get("logoUrl"),
+                away_logo=away_info.get("logoUrl"),
+                # Prefer name from metadata -> schedule -> abbr
+                home_name=home_info.get("name") or str(row.get("home_team_name", "")) or home,
+                away_name=away_info.get("name") or str(row.get("away_team_name", "")) or away,
+                stadium=stadium,
             )
-        # If no future kickoff is available during typical offseason months,
-        # force offseason mode to keep client UX stable.
-        if (kickoff_utc is None or kickoff_utc < now_utc) and 2 <= now_utc.month <= 8:
-            phase, label = "offseason", "Offseason"
-
-    games_count = int(len(df_next)) if isinstance(df_next, pd.DataFrame) else 0
-    if phase == "offseason":
-        message = (
-            "No live weekly slate is available right now. "
-            "Use Offseason Mode to explore projected matchups and model health."
         )
-    elif phase == "postseason":
-        message = "Postseason slate is active."
-    else:
-        message = "Regular season slate is active."
 
-    return SeasonContextResponse(
-        phase=phase,
-        label=label,
-        message=message,
-        current_season=int(use_season),
-        display_week=int(use_week) if use_week is not None else None,
-        games_in_next_window=games_count,
-        next_kickoff=next_kickoff,
-        generated_at=datetime.now(timezone.utc),
-    )
+    return ScheduleResponse(games=games)
+
+@app.get("/teams/logos", response_model=TeamLogosResponse)
+async def get_team_logos() -> TeamLogosResponse:
+    return TeamLogosResponse(teams=_get_team_meta_map())
 
 @app.get("/api/debug")
 async def debug() -> Dict[str, Any]:
@@ -955,7 +679,8 @@ async def debug() -> Dict[str, Any]:
     rows = int(len(dataset)) if dataset is not None else 0
     cols = int(dataset.shape[1]) if dataset is not None else 0
     return {
-        "status": "ok" if state["service"] else "initializing",
+        "status": "ok" if state["service"] else ("error" if state.get("init_error") else "initializing"),
+        "init_error": state.get("init_error"),
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "config": {
             "models_dir": str(CFG_MODELS_DIR),
@@ -963,60 +688,99 @@ async def debug() -> Dict[str, Any]:
             "offline_mode": os.getenv("OFFLINE_MODE", "false"),
         },
         "dataset_info": {
-             "rows": rows,
-             "cols": cols,
-             "path": state.get("dataset_path"),
-        }
+            "rows": rows,
+            "cols": cols,
+            "shape": [rows, cols],
+            "sample_cols": list(dataset.columns[:25]) if dataset is not None else [],
+        },
+        "cors_origins": cors_origins,
+        "cors_origin_regex": cors_origin_regex,
+        "restrict_cors": cors_restrict,
     }
 
-@app.post("/api/debug/trigger-build")
-async def trigger_build_manually():
-    """Manually trigger the day's dataset build (async)."""
-    if not ADMIN_ENABLED:
-         # Optional: secure this endpoint
-         pass
-         
-    asyncio.create_task(build_and_reload_dataset())
-    return {"status": "Build triggered in background. Check server logs."}
+@app.post("/debug/predict-input")
+async def debug_predict_input(req: PredictionRequest) -> Dict[str, Any]:
+    service = _require_ready()
+    bundle = state.get("bundle")
+    dataset = state.get("dataset")
+    if bundle is None or dataset is None:
+        raise HTTPException(status_code=503, detail="Models or dataset not loaded.")
 
+    schedule_df = None
+    if hasattr(service, "_get_schedule_df"):
+        try:
+            schedule_df = service._get_schedule_df(req.season)
+        except Exception:
+            schedule_df = None
 
-# --- Core Prediction Routes ---
-
-@app.post("/api/predict", response_model=UnifiedPredictionResponse)
-async def predict(req: PredictionRequest):
-    """Generate a prediction for a single NFL matchup."""
-    home_norm = norm_team(req.home_team)
-    away_norm = norm_team(req.away_team)
-    if not home_norm or not away_norm or home_norm == away_norm:
-        raise HTTPException(status_code=422, detail="home_team and away_team must be different valid teams")
-    if req.week < 1 or req.week > 22:
-        raise HTTPException(status_code=422, detail="week must be between 1 and 22")
-
-    req = PredictionRequest(
-        home_team=home_norm,
-        away_team=away_norm,
+    row_df, source, debug_info = build_model_input_row(
+        dataset_df=dataset,
+        preprocessor=getattr(bundle, "preprocessor", None),
         season=req.season,
         week=req.week,
+        home_team=req.home_team,
+        away_team=req.away_team,
+        schedule_df=schedule_df,
+        raw_feature_columns=getattr(bundle, "raw_feature_columns", None),
+        team_history_cache=getattr(service, "_team_history_cache", None),
+        exact_match_index=getattr(service, "_exact_match_index", None),
+        impute_medians=getattr(service, "_impute_medians", None),
+        debug=True,
     )
 
-    service = _require_ready()
-    try:
-        res = service.predict(req)
-        payload = _build_prediction_payload(req, res)
-        _append_prediction_history_to_disk(req.model_dump(), payload)
-        return payload
-    except Exception as e:
-        log.error(f"[Predict] Error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+    log.info(
+        "Debug input %s@%s W%s: source=%s missing_after=%s missing_home_prior=%s missing_away_prior=%s",
+        req.away_team,
+        req.home_team,
+        req.week,
+        source,
+        debug_info.get("missing_after_impute"),
+        debug_info.get("missing_home_prior_count"),
+        debug_info.get("missing_away_prior_count"),
+    )
 
-@app.post("/api/predict/explain")
-async def explain(payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
-    """Generate a natural language explanation for a prediction."""
-    pred = _extract_prediction_payload(payload)
-    home_team = payload.get("home_team") or pred.get("home_team")
-    away_team = payload.get("away_team") or pred.get("away_team")
-    season_raw = payload.get("season") or pred.get("season")
-    week_raw = payload.get("week") or pred.get("week")
+    return {
+        "models_dir": str(CFG_MODELS_DIR),
+        "prediction_source": source,
+        "debug": debug_info,
+    }
+
+@app.post("/predict", response_model=UnifiedPredictionResponse)
+async def predict(req: PredictionRequest, request: Request):
+    service = _require_ready()
+    res = service.predict(req)
+    payload = _build_prediction_payload(req, res)
+    append_prediction_record(_resolve_user_context(request), req, payload)
+    return payload
+
+@app.get("/predict/next-week")
+async def predict_next_week() -> Dict[str, Any]:
+    service = _require_ready()
+    schedule = await get_next_week_schedule()
+    games: list[Dict[str, Any]] = []
+
+    for game in schedule.games:
+        req = PredictionRequest(
+            home_team=game.home_team,
+            away_team=game.away_team,
+            season=game.season,
+            week=game.week,
+        )
+        prediction = _build_prediction_payload(req, service.predict(req))
+        item = game.model_dump()
+        item["prediction"] = prediction
+        games.append(item)
+
+    return {"games": games}
+
+@app.post("/predict/explain", response_model=ExplainPredictionResponse)
+async def explain(payload: ExplainPredictionRequest = Body(...)) -> ExplainPredictionResponse:
+    payload_data = payload.model_dump(exclude_none=True)
+    pred = _extract_prediction_payload(payload_data)
+    home_team = payload.home_team or pred.get("home_team")
+    away_team = payload.away_team or pred.get("away_team")
+    season_raw = payload.season or pred.get("season")
+    week_raw = payload.week or pred.get("week")
 
     try:
         season = int(season_raw) if season_raw is not None else None
@@ -1047,90 +811,20 @@ async def explain(payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
         game_id = _build_game_id(season, week, home_team, away_team)
 
     llm_result = await llm_explain_prediction(pred)
-    return {
-        "game_id": game_id,
-        "used_llm": bool(llm_result.get("used_llm")),
-        "llm_model": llm_result.get("model"),
-        "explanation": llm_result.get("explanation", ""),
-        "bullets": llm_result.get("bullets", []) or [],
-        "caveats": llm_result.get("caveats", []) or [],
-        "error": llm_result.get("error"),
-    }
+    return ExplainPredictionResponse(
+        game_id=game_id,
+        used_llm=bool(llm_result.get("used_llm")),
+        llm_model=llm_result.get("model"),
+        explanation=llm_result.get("explanation", ""),
+        bullets=llm_result.get("bullets", []) or [],
+        caveats=llm_result.get("caveats", []) or [],
+        error=llm_result.get("error"),
+    )
 
-@app.get("/api/schedule/next-week", response_model=ScheduleResponse)
-async def get_next_week_schedule(season: int | None = None) -> ScheduleResponse:
-    """Fetch the schedule for the next upcoming games."""
-    df = get_schedule(season=season)
-    if not isinstance(df, pd.DataFrame) or df.empty:
-        fallback_path = Path(__file__).resolve().parent / "post_schedule.json"
-        if fallback_path.exists():
-            try:
-                raw = json.loads(fallback_path.read_text(encoding="utf-8"))
-                games_list = raw.get("games")
-                if isinstance(games_list, list) and games_list:
-                    df = pd.DataFrame(games_list)
-            except Exception as exc:
-                log.warning("Schedule fallback failed: %s", exc)
-        if not isinstance(df, pd.DataFrame):
-            df = pd.DataFrame()
-            
-    df_next, use_season, use_week = select_next_week_rows(df)
-    team_meta = _get_team_meta_map()
-
-    home_col = _pick_col(df_next, _HOME_COLS)
-    away_col = _pick_col(df_next, _AWAY_COLS)
-    game_id_col = _pick_col(df_next, _GAME_ID_COLS)
-    stadium_col = _pick_col(df_next, _STADIUM_COLS)
-
-    games: list[ScheduleEntry] = []
-    for _, row in df_next.iterrows():
-        home = str(row.get(home_col, "") if home_col else row.get("home", "")).strip().upper()
-        away = str(row.get(away_col, "") if away_col else row.get("away", "")).strip().upper()
-        if not home or not away:
-            continue
-
-        home_info = team_meta.get(home, {})
-        away_info = team_meta.get(away, {})
-
-        game_id = _clean_s(row.get(game_id_col)) if game_id_col else _build_game_id(use_season, use_week, home, away)
-        stadium = _clean_s(row.get(stadium_col))
-
-        games.append(
-            ScheduleEntry(
-                season=int(use_season),
-                week=int(use_week),
-                kickoff=parse_kickoff(row),
-                home_team=home,
-                away_team=away,
-                game_id=game_id,
-                home_abbr=home,
-                away_abbr=away,
-                home_logo=_clean_s(home_info.get("logoUrl")),
-                away_logo=_clean_s(away_info.get("logoUrl")),
-                home_name=_clean_s(home_info.get("name")) or home,
-                away_name=_clean_s(away_info.get("name")) or away,
-                stadium=stadium,
-            )
-        )
-    return ScheduleResponse(games=games)
-
-@app.get("/api/teams/logos", response_model=TeamLogosResponse)
-async def get_team_logos() -> TeamLogosResponse:
-    """Fetch current team metadata dictionary."""
-    return TeamLogosResponse(teams=_get_team_meta_map())
-
-@app.get("/api/history", response_model=HistoryResponse)
-async def get_history(limit: int = 100):
-    """Get recent prediction history from disk."""
-    with _prediction_history_lock:
-        data = prediction_history_entries[:limit]
-        return HistoryResponse(entries=data, total=len(prediction_history_entries))
-
-@app.post("/api/llm/chat")
-async def llm_chat(payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
-    """Context-aware LLM chat interface."""
-    messages = payload.get("messages")
-    prediction = payload.get("prediction")
+@app.post("/llm/chat", response_model=ChatResponse)
+async def llm_chat(payload: ChatRequest = Body(...)) -> ChatResponse:
+    messages = [message.model_dump() for message in payload.messages]
+    prediction = payload.prediction
     system_prompt = None
 
     if isinstance(prediction, dict) and prediction:
@@ -1148,18 +842,37 @@ async def llm_chat(payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
     reply = result.get("reply") or ""
     if not reply and result.get("error"):
         reply = f"Error: {result.get('error')}"
+    return ChatResponse(
+        reply=reply,
+        used_llm=bool(result.get("used_llm")),
+        llm_model=result.get("model"),
+        error=result.get("error"),
+    )
+
+@app.get("/history", response_model=HistoryResponse)
+async def get_history(request: Request, limit: int = 100):
+    return get_prediction_history(_resolve_user_context(request), limit=limit)
+
+
+@app.get("/status/models")
+async def get_status_models() -> Dict[str, Any]:
+    """Return model + dataset provenance (from training metadata), plus expected feature schema."""
+    bundle = state.get("bundle")
+    md = state.get("model_metadata") or {}
+    expected = _resolve_expected_features(bundle, metadata=md) if bundle is not None else []
     return {
-        "reply": reply,
-        "used_llm": bool(result.get("used_llm")),
-        "llm_model": result.get("model"),
-        "error": result.get("error"),
+        "health": "ok" if state.get("service") else "initializing",
+        "models_dir": str(CFG_MODELS_DIR),
+        "metadata_path": str(state.get("model_metadata_path") or ""),
+        "dataset_path": state.get("dataset_path") or "",
+        "expected_features_count": len(expected),
+        "expected_features_sample": expected[:25],
+        "metadata": md,
     }
 
-# --- Admin & Debug Routes ---
-
-@app.post("/api/admin/reload")
-async def admin_reload() -> Dict[str, Any]:
-    """Hot-reload models and datasets."""
+@app.post("/admin/reload")
+async def admin_reload(request: Request) -> Dict[str, Any]:
+    """Reload model bundle + dataset without restarting the server (local/dev only)."""
     if not ADMIN_ENABLED:
         raise HTTPException(status_code=403, detail="Admin disabled")
 
@@ -1167,18 +880,41 @@ async def admin_reload() -> Dict[str, Any]:
     state["bundle"] = load_inference_bundle(CFG_MODELS_DIR)
     state["model_metadata_path"], state["model_metadata"] = _load_model_metadata(CFG_MODELS_DIR)
     expected_features = _resolve_expected_features(state["bundle"], metadata=state.get("model_metadata"))
-    state["dataset"] = load_dataset_df(CFG_DATA_DIR, expected_features=expected_features)
+
+    # Dataset reload
+    try:
+        state["dataset"] = load_dataset_df(CFG_DATA_DIR, expected_features=expected_features)
+    except Exception:
+        ds_path = _find_latest_dataset_csv(CFG_DATA_DIR)
+        if ds_path is None:
+            raise
+        state["dataset"] = pd.read_csv(ds_path)
+
+    state["dataset_path"] = str(_find_latest_dataset_csv(CFG_DATA_DIR) or "")
+
+    _validate_feature_schema(state["bundle"], state["dataset"], metadata=state.get("model_metadata"))
+    _run_preprocessor_smoke_test(state["bundle"], state["dataset"], expected_features)
     state["service"] = PredictionService(state["bundle"], state["dataset"])
+    state["init_error"] = None
+    _sync_app_state(request.app)
 
     return {"reloaded": True, "models_dir": str(CFG_MODELS_DIR)}
 
-@app.post("/api/admin/retrain")
-async def admin_retrain(payload: Dict[str, Any] = Body(default={})) -> Dict[str, Any]:
-    """Trigger model retraining."""
+@app.post("/admin/retrain", response_model=TrainingExecutionResult)
+async def admin_retrain(
+    request: Request,
+    payload: AdminRetrainRequest | None = Body(default=None),
+) -> TrainingExecutionResult:
+    """Train models on the newest dataset and hot-reload them (local/dev only).
+
+    NOTE: training can take minutes and will block this request while it runs.
+    """
     if not ADMIN_ENABLED:
         raise HTTPException(status_code=403, detail="Admin disabled")
 
-    dataset_path = payload.get("dataset_path") or state.get("dataset_path") or ""
+    payload = payload or AdminRetrainRequest()
+
+    dataset_path = payload.dataset_path or (state.get("dataset_path") or "")
     if not dataset_path:
          ds = _find_latest_dataset_csv(CFG_DATA_DIR)
          dataset_path = str(ds) if ds else ""
@@ -1186,28 +922,40 @@ async def admin_retrain(payload: Dict[str, Any] = Body(default={})) -> Dict[str,
     if not dataset_path or not Path(dataset_path).exists():
         raise HTTPException(status_code=400, detail="dataset path not found")
 
-    from .train_models import main as train_main
-    train_main(data_path=str(dataset_path), out_dir=str(CFG_MODELS_DIR))
-    await admin_reload()
-    return {"trained": True}
+    out_dir = payload.out_dir or str(CFG_MODELS_DIR)
+    log.info("Admin retrain: dataset=%s out_dir=%s", dataset_path, out_dir)
 
-@app.post("/api/debug/predict-input")
-async def debug_predict_input(req: PredictionRequest) -> Dict[str, Any]:
-    """Expose the raw feature vector for debugging."""
-    service = _require_ready()
-    bundle = state.get("bundle")
-    dataset = state.get("dataset")
-    row_df, source, debug_info = build_model_input_row(
-        dataset_df=dataset,
-        preprocessor=getattr(bundle, "preprocessor", None),
-        season=req.season,
-        week=req.week,
-        home_team=req.home_team,
-        away_team=req.away_team,
-        raw_feature_columns=getattr(bundle, "raw_feature_columns", None),
-        debug=True,
+    # Import lazily to avoid import cycles during normal startup
+    try:
+        from .train_models import main as train_main
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Could not import training script: {e}")
+
+    training_result = train_main(
+        data_path=str(dataset_path),
+        out_dir=str(out_dir),
+        force_retrain=payload.force,
     )
-    return {"prediction_source": source, "debug": debug_info}
+
+    if training_result.trained:
+        # Reload freshly trained artifacts only when a new run was actually produced.
+        await admin_reload(request)
+
+    return training_result
+
+@app.get("/status/overview", response_model=StatusOverviewResponse)
+async def get_status_overview(request: Request):
+    h = await health()
+    dataset_info = {
+        "rows": len(state["dataset"]) if state["dataset"] is not None else 0,
+        "features": (len(_resolve_expected_features(state["bundle"], metadata=state.get("model_metadata"))) if state["bundle"] else 0),
+    }
+    history_metrics = {
+        "total_predictions": get_prediction_history_count(_resolve_user_context(request)),
+        "win_rate": None,
+        "note": "win_rate requires actual outcomes",
+    }
+    return StatusOverviewResponse(health=h, dataset=dataset_info, history=history_metrics)
 
 if __name__ == "__main__":
     import uvicorn

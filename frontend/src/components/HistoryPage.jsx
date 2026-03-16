@@ -29,6 +29,8 @@ import HistoryChart from './HistoryChart.jsx';
 import D_BUTTON from './D_BUTTON.jsx';
 
 export default function HistoryPage({
+  authSession,
+  onSignOut,
   history = [],
   health,
   onClearHistory,
@@ -41,7 +43,20 @@ export default function HistoryPage({
 
   return (
     <>
-      <NavBar state={{ health }} />
+      <NavBar
+        authSession={authSession}
+        onSignOut={onSignOut}
+        state={{
+          health,
+          title: 'Historical Trail',
+          heroSubtitle: 'Review stored predictions, chart movement, and reset the local record.',
+          subtitle: `${safeCount} entries currently retained in the frontend session`,
+          healthLabel:
+            health?.status === 'healthy'
+              ? 'Backend: Healthy'
+              : `Backend: ${health?.status ?? 'unknown'}`,
+        }}
+      />
 
       <section className="history-controls">
         <D_BUTTON onClear={onClearHistory} count={safeCount} />

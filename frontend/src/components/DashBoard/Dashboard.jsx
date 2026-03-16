@@ -26,6 +26,8 @@ import { buildGameKey } from "../../utils/predictionContextUtils";
 import { toEntry } from "../../utils/predictionHelpers";
 
 export default function Dashboard({
+  authSession,
+  onSignOut,
   schedule,
   week,
   predictions,
@@ -82,10 +84,9 @@ export default function Dashboard({
       const season = game.season;
       const week = game.week;
 
-      const rawPrediction = await predictGame(home, away, season, week);
+      const rawPrediction = await predictGame(home, away, season, week, authSession?.userId);
       const entry = toEntry({ prediction: rawPrediction, game, source: "teamgrid" });
-
-
+      const predictionKey = buildGameKey(entry) || key;
       const normalizedEntry = {
         ...entry,
         game_id: key || entry.game_id,
@@ -186,7 +187,21 @@ export default function Dashboard({
 
   return (
     <div className="dashboard-layout advanced">
-      <NavBar state={{ health }} />
+      <NavBar
+        authSession={authSession}
+        onSignOut={onSignOut}
+        state={{
+          health,
+          title: "Prediction Dashboard",
+          heroSubtitle: "Weekly matchups, live model outputs, and conversational analysis.",
+          subtitle: modelLabel ? `Model: ${modelLabel}` : "Live schedule and prediction workspace",
+          weekLabel: Number.isFinite(Number(week)) ? `Week ${Number(week)}` : null,
+          healthLabel:
+            health?.status === "healthy"
+              ? "Backend: Healthy"
+              : `Backend: ${health?.status ?? "unknown"}`,
+        }}
+      />
 
       <main className="dashboard-main advanced">
         <header className="dashboard-header advanced">
@@ -245,14 +260,12 @@ export default function Dashboard({
           </div>
         </section>
 
-        {!isOffseasonMode && (
-          <section className="prediction-results-section advanced" aria-live="polite">
-            <PredictionResult entry={current} />
-          </section>
-        )}
+        <section className="prediction-results-section advanced" aria-live="polite">
+          <PredictionResult entry={current} userId={authSession?.userId} />
+        </section>
 
         <section className="llm-chat-section">
-          <LLMChat prediction={current} />
+          <LLMChat prediction={current} userId={authSession?.userId} />
         </section>
       </main>
     </div>

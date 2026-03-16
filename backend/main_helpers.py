@@ -29,6 +29,7 @@ import joblib
 import pandas as pd
 import numpy as np
 from backend.config import TRUTHY, load_schedule_data_safe
+from backend.utils.team_codes import TEAM_ABBR_ALIASES, normalize_team_code
 
 log = logging.getLogger(__name__)
 
@@ -147,6 +148,18 @@ def _pick_best_dataset(files: List[Path], expected_features: List[str]) -> Optio
     return best[3], best[0]
 
 def load_dataset_df(data_dir: Path, expected_features: Optional[List[str]] = None) -> pd.DataFrame:
+    latest_manifest = data_dir / "latest_dataset.json"
+    if latest_manifest.exists():
+        try:
+            payload = json.loads(latest_manifest.read_text(encoding="utf-8"))
+            clean_dataset_path = payload.get("clean_dataset_path")
+            if clean_dataset_path:
+                manifest_path = Path(clean_dataset_path)
+                if manifest_path.exists():
+                    return pd.read_csv(manifest_path)
+        except Exception as exc:
+            log.warning("Could not load latest_dataset.json from %s: %s", latest_manifest, exc)
+
     dataset_path = os.getenv("DATASET_PATH")
     if dataset_path:
         # Aggressive strip: handle whitespace and mixed quotes
@@ -199,6 +212,8 @@ def load_dataset_df(data_dir: Path, expected_features: Optional[List[str]] = Non
         return pd.read_csv(data_dir)
 
     files = sorted(data_dir.glob("game_features_*.csv"))
+    if not files:
+        files = sorted(data_dir.glob("**/game_features_*.csv"))
     if not files:
         raise FileNotFoundError(f"No game_features_*.csv in {data_dir}")
     if expected_features:
@@ -519,6 +534,45 @@ def _infer_next_week(schedule_df: pd.DataFrame) -> tuple[int, int]:
     return (season, int(weeks.max()))
 
 
+def _dedupe_schedule_rows(schedule_df: pd.DataFrame, season: int, week: int) -> pd.DataFrame:
+    if schedule_df is None or schedule_df.empty:
+        return pd.DataFrame() if schedule_df is None else schedule_df
+
+    home_col = _pick_col(schedule_df, _HOME_COLS)
+    away_col = _pick_col(schedule_df, _AWAY_COLS)
+    game_id_col = _pick_col(schedule_df, _GAME_ID_COLS)
+    keep_index: List[Any] = []
+    seen_keys: set[str] = set()
+    duplicates_removed = 0
+
+    for index, row in schedule_df.iterrows():
+        home = normalize_team_code(row.get(home_col, "") if home_col else row.get("home", ""))
+        away = normalize_team_code(row.get(away_col, "") if away_col else row.get("away", ""))
+        key = f"{season}-{week}-{home}-{away}" if home and away else ""
+
+        if not key and game_id_col:
+            raw_id = row.get(game_id_col)
+            if pd.notna(raw_id):
+                key = str(raw_id).strip().replace("_", "-").upper()
+
+        if key and key in seen_keys:
+            duplicates_removed += 1
+            continue
+        if key:
+            seen_keys.add(key)
+        keep_index.append(index)
+
+    if duplicates_removed:
+        log.warning(
+            "Removed %d duplicate schedule rows for season=%s week=%s.",
+            duplicates_removed,
+            season,
+            week,
+        )
+
+    return schedule_df.loc[keep_index].reset_index(drop=True)
+
+
 def select_next_week_rows(schedule_df: pd.DataFrame) -> tuple[pd.DataFrame, int, int]:
     season, week = _infer_next_week(schedule_df)
     df_use = schedule_df.copy() if isinstance(schedule_df, pd.DataFrame) else pd.DataFrame()
@@ -531,7 +585,7 @@ def select_next_week_rows(schedule_df: pd.DataFrame) -> tuple[pd.DataFrame, int,
     if week_col:
         df_use = df_use[pd.to_numeric(df_use[week_col], errors="coerce") == week]
 
-    return df_use, season, week
+    return _dedupe_schedule_rows(df_use, season, week), season, week
 
 def get_team_meta(csv_path: Path) -> Dict[str, Dict[str, str]]:
     try:
@@ -574,7 +628,7 @@ def get_team_meta(csv_path: Path) -> Dict[str, Dict[str, str]]:
 
     out: Dict[str, Dict[str, str]] = {}
     for _, r in df.iterrows():
-        abbr = str(r.get(abbr_col, "")).strip().upper()
+        abbr = normalize_team_code(r.get(abbr_col, ""))
         logo = str(r.get(logo_col, "")).strip()
         if not abbr or not logo:
             continue
@@ -592,4 +646,10 @@ def get_team_meta(csv_path: Path) -> Dict[str, Dict[str, str]]:
             wordmark = str(r.get(wordmark_col, "")).strip()
             if wordmark: item["wordmark"] = wordmark
         out[abbr] = item
+
+    # Backward-compatible aliases (e.g., WSH -> WAS) so lookups succeed even if callers
+    # have not normalized codes on their side.
+    for alias, canonical in TEAM_ABBR_ALIASES.items():
+        if canonical in out and alias not in out:
+            out[alias] = out[canonical]
     return out

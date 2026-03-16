@@ -61,7 +61,7 @@ function buildContextLabel(predictionContext) {
   return suffix ? `${home} vs ${away} - ${suffix}` : `${home} vs ${away}`;
 }
 
-export default function LLMChat({ prediction }) {
+export default function LLMChat({ prediction, userId = null }) {
   const [messages, setMessages] = useState(() => [
     {
       role: "assistant",
@@ -100,7 +100,7 @@ export default function LLMChat({ prediction }) {
       const response = await chatLLM({
         messages: trimmedMessages,
         prediction: predictionContext,
-      });
+      }, userId);
 
       const reply =
         response?.reply?.toString().trim() ||
@@ -117,7 +117,7 @@ export default function LLMChat({ prediction }) {
         { role: "assistant", content: reply },
       ]);
     } catch (error) {
-      const message = error?.message || "Unable to reach the LLM.";
+      const message = error?.body?.detail || error?.message || "Unable to reach the LLM.";
       setMeta({ used_llm: false, llm_model: null, error: message });
       setMessages([
         ...nextMessages,
