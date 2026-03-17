@@ -66,7 +66,7 @@ export default function LLMChat({ prediction, userId = null }) {
     {
       role: "assistant",
       content:
-        "Ask me about a matchup, the model output, or how to read the prediction.",
+        "Ask about the matchup, how to read the forecast, or what could shift the result.",
     },
   ]);
   const [input, setInput] = useState("");
@@ -117,7 +117,7 @@ export default function LLMChat({ prediction, userId = null }) {
         { role: "assistant", content: reply },
       ]);
     } catch (error) {
-      const message = error?.body?.detail || error?.message || "Unable to reach the LLM.";
+      const message = error?.body?.detail || error?.message || "Unable to reach the assistant.";
       setMeta({ used_llm: false, llm_model: null, error: message });
       setMessages([
         ...nextMessages,
@@ -141,8 +141,8 @@ export default function LLMChat({ prediction, userId = null }) {
   };
 
   const badgeText = meta.used_llm
-    ? `LLM: ${meta.llm_model || "active"}`
-    : "LLM: fallback";
+    ? `Live insights: ${meta.llm_model || "available"}`
+    : "Quick guidance";
 
   const quickPrompts = [
     "Explain the current prediction in plain language.",
@@ -154,7 +154,7 @@ export default function LLMChat({ prediction, userId = null }) {
     <section className="llm-chat card-shell" aria-live="polite">
       <header className="llm-chat__header">
         <div>
-          <h3>LLM Coach</h3>
+          <h3>Matchup assistant</h3>
           <p className="llm-chat__context">{contextLabel}</p>
         </div>
         <span className={`llm-chat__badge ${meta.used_llm ? "on" : "off"}`}>
@@ -197,7 +197,7 @@ export default function LLMChat({ prediction, userId = null }) {
       <form className="llm-chat__input" onSubmit={handleSubmit}>
         <textarea
           rows={2}
-          placeholder="Ask about the matchup, context, or model output..."
+          placeholder="Ask a question about the matchup or forecast..."
           value={input}
           onChange={(event) => setInput(event.target.value)}
           onKeyDown={handleKeyDown}

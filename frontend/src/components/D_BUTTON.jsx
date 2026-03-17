@@ -36,11 +36,11 @@ export default function D_BUTTON({ onClear, count = 0 }) {
       type="button"
       className="clear-history-button"
       onClick={handleClear}
-      aria-label="Clear prediction history"
-      title="Clear prediction history"
+      aria-label="Clear saved prediction history"
+      title="Clear saved prediction history"
       disabled={count === 0}
     >
-      Clear History
+      Clear saved history
     </button>
   );
 }

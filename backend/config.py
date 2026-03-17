@@ -29,6 +29,8 @@ DEFAULT_ALLOWED_ORIGINS = [
     "https://nfl-predict.vercel.app",
     "https://new-nfl-predict.vercel.app",
     "https://nfl-ml-predictions-git-main-iprog.vercel.app",
+    "https://nfl-predict-christopher-jordons-projects.vercel.app",
+    "https://nfl-predict-git-main-christopher-jordons-projects.vercel.app",
 ]
 DEFAULT_ORIGIN_REGEX = r"https://.*\.vercel\.app$"
 

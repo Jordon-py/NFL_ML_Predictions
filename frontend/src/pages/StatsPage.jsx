@@ -188,14 +188,14 @@ export default function StatsPage({ authSession, onSignOut }) {
 
   const navState = useMemo(
     () => ({
-      title: "Prediction Status",
-      heroSubtitle: "Live backend health, dataset stats, and recorded predictions.",
-      subtitle: `${totalPredictions} historical predictions stored`,
+      title: "Service Overview",
+      heroSubtitle: "Track service status, schedule coverage, and saved prediction totals.",
+      subtitle: `${totalPredictions} saved forecast${totalPredictions === 1 ? "" : "s"}`,
       weekLabel: currentWeek ? `Week ${currentWeek}` : "Week ?",
       healthLabel:
         health?.status === "healthy"
-          ? "Backend: Healthy"
-          : `Backend: ${health?.status ?? "unknown"}`,
+          ? "Service: Live"
+          : `Service: ${health?.status ?? "unknown"}`,
     }),
     [currentWeek, health?.status, totalPredictions]
   );
@@ -261,7 +261,7 @@ export default function StatsPage({ authSession, onSignOut }) {
                   </p>
                 </div>
               ) : (
-                <p className="stats-schedule__pending">No prediction recorded yet.</p>
+                <p className="stats-schedule__pending">No forecast saved yet.</p>
               )}
             </li>
           );
@@ -276,16 +276,17 @@ export default function StatsPage({ authSession, onSignOut }) {
 
       <div className="stats-page">
         <header className="stats-page__header">
-          <h1 className="stats-page__title">Prediction Status Page</h1>
+          <h1 className="stats-page__title">Service Overview</h1>
           <p className="stats-page__lead">
-            Live backend health, dataset stats, and recorded predictions.
+            See whether the forecast service is ready, how much schedule data is loaded, and how
+            many predictions you have saved.
           </p>
         </header>
 
         <section className="stats-summary">
           <div className="stats-summary__grid">
             <SummaryCard
-              title="Backend Health"
+              title="Service"
               value={health?.status ?? "unknown"}
               subtext={health?.reason}
               intent={
@@ -297,12 +298,12 @@ export default function StatsPage({ authSession, onSignOut }) {
               }
             />
             <SummaryCard
-              title="Dataset rows"
+              title="Data loaded"
               value={dataset?.rows ?? "-"}
               subtext={Number.isFinite(Number(dataset?.features)) ? `${Number(dataset.features)} features` : null}
             />
             <SummaryCard
-              title="Predictions"
+              title="Saved forecasts"
               value={totalPredictions}
               subtext={`Win rate: ${winRateLabel}`}
             />
@@ -310,12 +311,12 @@ export default function StatsPage({ authSession, onSignOut }) {
         </section>
 
         <section className="stats-section">
-          <h2 className="stats-section__title">Next Week Schedule</h2>
+          <h2 className="stats-section__title">Upcoming slate</h2>
           {renderSchedule()}
         </section>
 
         <section className="stats-section">
-          <h2 className="stats-section__title">Historical Predictions</h2>
+          <h2 className="stats-section__title">Prediction history</h2>
           <HistoryChart history={history} state={{ health }} />
         </section>
       </div>

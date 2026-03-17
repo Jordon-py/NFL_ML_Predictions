@@ -31,11 +31,15 @@ function SettingsPage({ authSession, onSignOut }) {
       <NavBar authSession={authSession} onSignOut={onSignOut} />
       <main className="settings-page">
         <div className="settings-page__card">
-          <p className="settings-page__eyebrow">Settings</p>
-          <h1>Account and application controls are still being built.</h1>
+          <p className="settings-page__eyebrow">Account</p>
+          <h1>Keep your forecasting workspace organized.</h1>
           <p>
-            The new landing and access flow are live. Settings can be layered in without
-            changing the session model that now protects the app experience.
+            Your recent forecasts stay tied to this email on this device, so you can return to
+            the dashboard, review history, and pick up where you left off.
+          </p>
+          <p>
+            When you are finished, sign out to clear the active session and start fresh the next
+            time you open the app.
           </p>
         </div>
       </main>
@@ -93,6 +97,7 @@ function PredictionAppRoutes({ authSession, onSignOut }) {
             setLoading={setLoading}
             setError={setError}
             pushHistory={pushHistory}
+            seasonContext={seasonContext}
           />
         )}
       />

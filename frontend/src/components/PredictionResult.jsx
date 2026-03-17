@@ -47,8 +47,8 @@ export default function PredictionResult({ entry, userId = null }) {
   if (!entry) {
     return (
       <div className="prediction-result" aria-live="polite">
-        <h3>Prediction</h3>
-        <p>No prediction selected yet.</p>
+        <h3>Forecast</h3>
+        <p>Select a matchup to view the forecast and full breakdown.</p>
       </div>
     );
   }
@@ -77,7 +77,7 @@ export default function PredictionResult({ entry, userId = null }) {
       }, userId);
       if (!result?.used_llm) {
         setExplanation(null);
-        setError(result?.error || "LLM is unavailable.");
+        setError(result?.error || "Insights are unavailable right now.");
         return;
       }
       setExplanation(result);
@@ -96,12 +96,12 @@ export default function PredictionResult({ entry, userId = null }) {
     <div className={`prediction-result-container ${sim ? 'expert-mode' : ''}`} aria-live="polite">
       <header className="prediction-header">
         <div className="header-text">
-          <h3>{sim ? 'Ensemble Mixture Analysis' : 'Prediction'}</h3>
+          <h3>{sim ? 'Matchup forecast' : 'Forecast'}</h3>
           <span className="meta-text">
             Week {weekLabel ?? "?"} - {seasonLabel ?? "?"}
           </span>
         </div>
-        {sim && <div className="expert-badge">ML + MC Ensemble</div>}
+        {sim && <div className="expert-badge">Forecast model</div>}
       </header>
 
       <div className="expert-content">
@@ -132,13 +132,13 @@ export default function PredictionResult({ entry, userId = null }) {
 
         <div className="explanation-section">
           {!explanation && !explaining && (
-            <button className="explain-btn" onClick={handleExplain}>Explain This Prediction</button>
+            <button className="explain-btn" onClick={handleExplain}>Get matchup breakdown</button>
           )}
-          {explaining && <div className="explaining-loader">Analyzing...</div>}
+          {explaining && <div className="explaining-loader">Preparing insights...</div>}
           {error && <div className="explanation-error">{error}</div>}
           {explanation && (
             <div className="explanation-box animate-in">
-              <h4>AI Strategy Insights</h4>
+              <h4>Why this forecast</h4>
               <p>{explanation.explanation}</p>
             </div>
           )}

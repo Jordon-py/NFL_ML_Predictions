@@ -75,8 +75,8 @@ export default function TeamGrid({
     return (
       <div className="team-grid__empty">
         <div className="team-grid__empty-text">
-          <h3>No games found for {week ? `Week ${week}` : "the selected window"}</h3>
-          <p>The schedule might not be loaded or the week is invalid.</p>
+          <h3>No matchups are available right now.</h3>
+          <p>Check back closer to kickoff for the next slate.</p>
         </div>
       </div>
     );
@@ -91,7 +91,7 @@ export default function TeamGrid({
         <h2 className="team-grid__title">{gridTitle}</h2>
         {features.queueAware && (
           <div className="team-grid__status-bar">
-            <span>{gameItems.filter(g => g.prediction).length} / {gameItems.length} Predictions Ready</span>
+            <span>{gameItems.filter(g => g.prediction).length} / {gameItems.length} forecasts ready</span>
           </div>
         )}
       </header>
@@ -116,7 +116,7 @@ export default function TeamGrid({
 
       <footer className="team-grid__footer">
         <p className="footer-note">
-          Predictions are generated using a multi-variate regression ensemble trained on historical NFL data.
+          Select any matchup to generate a forecast and open the detailed breakdown below.
         </p>
       </footer>
     </section>

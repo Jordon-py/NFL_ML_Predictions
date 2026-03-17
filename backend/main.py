@@ -300,6 +300,48 @@ def _build_prediction_payload(req: PredictionRequest, res: PredictionResponse) -
     }
     return payload
 
+def _build_next_slate_games(season: int | None = None) -> tuple[list[ScheduleEntry], pd.DataFrame, int, int]:
+    """Build the next available slate in the canonical schedule shape used by the UI."""
+
+    df = get_schedule(season=season)
+    df_next, use_season, use_week = select_next_week_rows(df)
+    team_meta = _get_team_meta_map()
+
+    home_col = _pick_col(df_next, _HOME_COLS)
+    away_col = _pick_col(df_next, _AWAY_COLS)
+    stadium_col = _pick_col(df_next, _STADIUM_COLS)
+
+    games: list[ScheduleEntry] = []
+    for _, row in df_next.iterrows():
+        home = _normalize_team_code(row.get(home_col, "") if home_col else row.get("home", ""))
+        away = _normalize_team_code(row.get(away_col, "") if away_col else row.get("away", ""))
+        if not home or not away:
+            continue
+
+        home_info = team_meta.get(home, {})
+        away_info = team_meta.get(away, {})
+        stadium = row.get(stadium_col, "") if stadium_col else row.get("stadium", "")
+
+        games.append(
+            ScheduleEntry(
+                season=int(use_season),
+                week=int(use_week),
+                kickoff=parse_kickoff(row),
+                home_team=home,
+                away_team=away,
+                game_id=_build_game_id(use_season, use_week, home, away),
+                home_abbr=home,
+                away_abbr=away,
+                home_logo=home_info.get("logoUrl"),
+                away_logo=away_info.get("logoUrl"),
+                home_name=home_info.get("name") or str(row.get("home_team_name", "")) or home,
+                away_name=away_info.get("name") or str(row.get("away_team_name", "")) or away,
+                stadium=stadium,
+            )
+        )
+
+    return games, df_next, int(use_season), int(use_week)
+
 def _flatten_raw_feature_columns(raw: Any) -> list[str]:
     """Normalize 'raw_feature_columns' shapes into a flat list of column names.
 
@@ -603,6 +645,7 @@ def _require_ready() -> PredictionService:
 # API ROUTES
 # ---------------------------
 
+@app.get("/health", response_model=HealthResponse)
 @app.get("/api/health", response_model=HealthResponse)
 async def health():
     """System health check."""
@@ -649,48 +692,7 @@ async def get_season_context(season: int | None = None) -> SeasonContextResponse
     Return schedule-aware season context so clients can render
     in-season/postseason/offseason UX without guessing.
     """
-    df = get_schedule(season=season)
-    df_next, use_season, use_week = select_next_week_rows(df)
-    team_meta = _get_team_meta_map()
-
-    home_col = _pick_col(df_next, _HOME_COLS)
-    away_col = _pick_col(df_next, _AWAY_COLS)
-    stadium_col = _pick_col(df_next, _STADIUM_COLS)
-
-    games: list[ScheduleEntry] = []
-    for _, row in df_next.iterrows():
-        # Identify Teams
-        home = _normalize_team_code(row.get(home_col, "") if home_col else row.get("home", ""))
-        away = _normalize_team_code(row.get(away_col, "") if away_col else row.get("away", ""))
-        if not home or not away:
-            continue
-
-        home_info = team_meta.get(home, {})
-        away_info = team_meta.get(away, {})
-
-        # Emit one canonical key format so frontend storage and schedule cards align.
-        game_id = _build_game_id(use_season, use_week, home, away)
-
-        stadium = row.get(stadium_col, "") if stadium_col else row.get("stadium", "")
-
-        games.append(
-            ScheduleEntry(
-                season=int(use_season),
-                week=int(use_week),
-                kickoff=parse_kickoff(row),
-                home_team=home,
-                away_team=away,
-                game_id=game_id,
-                home_abbr=home,
-                away_abbr=away,
-                home_logo=home_info.get("logoUrl"),
-                away_logo=away_info.get("logoUrl"),
-                # Prefer name from metadata -> schedule -> abbr
-                home_name=home_info.get("name") or str(row.get("home_team_name", "")) or home,
-                away_name=away_info.get("name") or str(row.get("away_team_name", "")) or away,
-                stadium=stadium,
-            )
-        )
+    games, df_next, use_season, use_week = _build_next_slate_games(season=season)
 
     phase, label = _derive_season_phase(df_next)
     next_kickoff = None
@@ -717,10 +719,18 @@ async def get_season_context(season: int | None = None) -> SeasonContextResponse
         generated_at=datetime.now(timezone.utc),
     )
 
+@app.get("/api/schedule/next-week", response_model=ScheduleResponse)
+@app.get("/schedule/next-week", response_model=ScheduleResponse)
+async def get_next_week_schedule(season: int | None = None) -> ScheduleResponse:
+    games, _, _, _ = _build_next_slate_games(season=season)
+    return ScheduleResponse(games=games)
+
+@app.get("/api/teams/logos", response_model=TeamLogosResponse)
 @app.get("/teams/logos", response_model=TeamLogosResponse)
 async def get_team_logos() -> TeamLogosResponse:
     return TeamLogosResponse(teams=_get_team_meta_map())
 
+@app.get("/debug")
 @app.get("/api/debug")
 async def debug() -> Dict[str, Any]:
     """In-depth debugging information."""
@@ -899,6 +909,7 @@ async def llm_chat(payload: ChatRequest = Body(...)) -> ChatResponse:
         error=result.get("error"),
     )
 
+@app.get("/api/history", response_model=HistoryResponse)
 @app.get("/history", response_model=HistoryResponse)
 async def get_history(request: Request, limit: int = 100):
     return get_prediction_history(_resolve_user_context(request), limit=limit)

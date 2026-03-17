@@ -4,23 +4,23 @@ import './LandingPage.css';
 
 const VALUE_PILLARS = [
   {
-    title: 'Signal-first weekly models',
-    body: 'Schedule health, prediction history, and matchup context are surfaced in one place so the interface feels calm instead of crowded.',
+    title: '1. Sign in and start fast',
+    body: 'Use your email to open the app, keep your recent activity on this device, and return without extra setup.',
   },
   {
-    title: 'Fast research surface',
-    body: 'Move from the premium landing experience into the prediction dashboard, stats view, and history trail without a separate auth backend.',
+    title: '2. Choose a matchup',
+    body: 'Open the dashboard, select the next game you want to review, and generate a score forecast with win probabilities in one click.',
   },
   {
-    title: 'Session-aware access flow',
-    body: 'A local session gives you a real sign-in and sign-out path today while leaving room for a proper identity layer later.',
+    title: '3. Review and track your calls',
+    body: 'Use the forecast breakdown, saved history, and service overview to stay organized throughout the week.',
   },
 ];
 
 const HERO_METRICS = [
-  { label: 'Prediction Surface', value: '4 Views' },
-  { label: 'Model Posture', value: 'Live Ready' },
-  { label: 'Access Layer', value: 'Local Session' },
+  { label: 'Workflow', value: '3 Steps' },
+  { label: 'Coverage', value: 'Weekly Slate' },
+  { label: 'History', value: 'Saved Per User' },
 ];
 
 export default function LandingPage({ authSession, onSignIn, onSignOut }) {
@@ -32,7 +32,7 @@ export default function LandingPage({ authSession, onSignIn, onSignOut }) {
 
   const destinationLabel = useMemo(() => {
     const from = location.state?.from;
-    return from && from !== '/' ? `Continue to ${from}` : 'Enter dashboard';
+    return from && from !== '/' ? 'Continue where you left off' : 'Open dashboard';
   }, [location.state]);
 
   const handleSubmit = (event) => {
@@ -57,13 +57,13 @@ export default function LandingPage({ authSession, onSignIn, onSignOut }) {
           <span className="landing-brand__mark" aria-hidden="true" />
           <div>
             <p className="landing-brand__eyebrow">NFL ML Predictions</p>
-            <strong className="landing-brand__name">Private Forecast Studio</strong>
+            <strong className="landing-brand__name">Game Forecast Center</strong>
           </div>
         </div>
 
         <nav className="landing-nav" aria-label="Landing sections">
-          <a href="#experience">Experience</a>
-          <a href="#access">Access</a>
+          <a href="#experience">How it works</a>
+          <a href="#access">Sign in</a>
         </nav>
 
         <div className="landing-topbar__actions">
@@ -86,12 +86,11 @@ export default function LandingPage({ authSession, onSignIn, onSignOut }) {
 
       <section className="landing-hero" id="experience">
         <div className="landing-copy">
-          <p className="landing-kicker">Minimal, premium, and purpose-built</p>
-          <h1>Model-driven NFL forecasting in a calmer, sharper front door.</h1>
+          <p className="landing-kicker">Fast weekly forecasts, clearer decisions</p>
+          <h1>Pick a matchup, review the outlook, and track your calls in one place.</h1>
           <p className="landing-lead">
-            A new landing experience now frames the prediction product like a private studio:
-            polished entry, cleaner routing, and immediate sign-in access without touching the
-            existing prediction engine underneath.
+            Sign in with your email to open the dashboard, generate matchup forecasts, and keep a
+            simple history of the predictions you have already reviewed.
           </p>
 
           <div className="landing-hero__actions">
@@ -107,10 +106,10 @@ export default function LandingPage({ authSession, onSignIn, onSignOut }) {
             ) : (
               <>
                 <a className="landing-button landing-button--solid" href="#access">
-                  Sign in to continue
+                  Open the app
                 </a>
                 <a className="landing-button landing-button--ghost" href="#access">
-                  Preview access flow
+                  See the workflow
                 </a>
               </>
             )}
@@ -132,13 +131,13 @@ export default function LandingPage({ authSession, onSignIn, onSignOut }) {
             {authSession.isAuthenticated ? (
               <div className="landing-session">
                 <div>
-                  <p className="landing-session__eyebrow">Signed in locally</p>
+                  <p className="landing-session__eyebrow">Signed in on this device</p>
                   <h2>{authSession.user?.name}</h2>
                   <p>{authSession.user?.email}</p>
                 </div>
                 <div className="landing-session__meta">
-                  <span>Session active</span>
-                  <span>Dashboard protected</span>
+                  <span>History ready</span>
+                  <span>Dashboard available</span>
                 </div>
                 <button type="button" className="landing-button landing-button--solid" onClick={handleContinue}>
                   Continue to dashboard
@@ -154,7 +153,7 @@ export default function LandingPage({ authSession, onSignIn, onSignOut }) {
                     type="email"
                     value={email}
                     onChange={(event) => setEmail(event.target.value)}
-                    placeholder="analyst@gridline.ai"
+                    placeholder="you@example.com"
                     autoComplete="email"
                   />
                 </label>
@@ -177,8 +176,8 @@ export default function LandingPage({ authSession, onSignIn, onSignOut }) {
                   Sign in
                 </button>
                 <p className="landing-form__note">
-                  This is a local session layer for the current frontend. It protects the app flow
-                  without requiring a backend identity provider yet.
+                  Your session stays on this device so your recent forecasts are ready the next
+                  time you return.
                 </p>
               </form>
             )}

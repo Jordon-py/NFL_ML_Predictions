@@ -48,13 +48,13 @@ export default function HistoryPage({
         onSignOut={onSignOut}
         state={{
           health,
-          title: 'Historical Trail',
-          heroSubtitle: 'Review stored predictions, chart movement, and reset the local record.',
-          subtitle: `${safeCount} entries currently retained in the frontend session`,
+          title: 'Prediction History',
+          heroSubtitle: 'Review saved forecasts and clear older activity when needed.',
+          subtitle: `${safeCount} saved prediction${safeCount === 1 ? '' : 's'}`,
           healthLabel:
             health?.status === 'healthy'
-              ? 'Backend: Healthy'
-              : `Backend: ${health?.status ?? 'unknown'}`,
+              ? 'Service: Live'
+              : `Service: ${health?.status ?? 'unknown'}`,
         }}
       />
 

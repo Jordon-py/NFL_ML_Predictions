@@ -137,9 +137,9 @@ export default function HistoryChart({ history: historyOverride = [] }) {
       <section className="history-chart" aria-live="polite">
         <header>
           <h2>Prediction History</h2>
-          <small>0 item(s)</small>
+          <small>0 saved</small>
         </header>
-        <p>No history yet. Make some predictions to populate this view.</p>
+        <p>No saved predictions yet. Generate a forecast to start your history.</p>
       </section>
     );
   }
@@ -150,7 +150,7 @@ export default function HistoryChart({ history: historyOverride = [] }) {
         <h2>Prediction History</h2>
 
         <small>
-
+          {statsSummary.totalCount} saved
 
           {statsSummary.mostRecentDate && (
             <>

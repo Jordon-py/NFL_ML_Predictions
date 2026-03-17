@@ -14,15 +14,15 @@ import './NavBar.css';
 const NAV_ITEMS = [
   { to: '/app', label: 'Dashboard', end: true },
   { to: '/history', label: 'History' },
-  { to: '/stats', label: 'Stats' },
-  { to: '/settings', label: 'Settings' },
+  { to: '/stats', label: 'Overview' },
+  { to: '/settings', label: 'Account' },
 ];
 
 const ROUTE_LABELS = {
   '/app': 'Prediction Dashboard',
-  '/history': 'Historical Trail',
-  '/stats': 'System Status',
-  '/settings': 'Workspace Settings',
+  '/history': 'Prediction History',
+  '/stats': 'Service Overview',
+  '/settings': 'Account',
 };
 
 function formatTimestamp(value) {
@@ -76,8 +76,8 @@ function NavBar({ state = {}, authSession, onSignOut }) {
       : 'unknown';
 
   const pageTitle = state?.title || ROUTE_LABELS[location.pathname] || 'Forecast Workspace';
-  const pageSubtitle = state?.heroSubtitle || state?.subtitle || 'Protected forecasting surfaces';
-  const healthLabel = state?.healthLabel || `Backend: ${health?.status ?? 'unknown'}`;
+  const pageSubtitle = state?.heroSubtitle || state?.subtitle || 'Forecasts, history, and guided matchup insights';
+  const healthLabel = state?.healthLabel || `Service: ${health?.status ?? 'unknown'}`;
   const weekLabel = state?.weekLabel || null;
   const signedInLabel = formatTimestamp(authSession?.user?.signedInAt);
   const canSignOut = typeof onSignOut === 'function' && authSession?.isAuthenticated;
@@ -104,9 +104,9 @@ function NavBar({ state = {}, authSession, onSignOut }) {
         <div className="navBar__brandCluster">
           <NavLink className="navBar__brand" to={authSession?.isAuthenticated ? '/app' : '/'}>
             <span className="navBar__brandMark" aria-hidden="true" />
-            <span className="navBar__brandCopy">
-              <span className="navBar__eyebrow">NFL ML Predictions</span>
-              <span className="navBar__headline">Forecast Studio</span>
+              <span className="navBar__brandCopy">
+              <span className="navBar__eyebrow">NFL Forecasts</span>
+              <span className="navBar__headline">Forecast Center</span>
             </span>
           </NavLink>
 

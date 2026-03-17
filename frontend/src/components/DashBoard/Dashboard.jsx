@@ -13,15 +13,14 @@
  * Straightforward container for predictions, schedule display, history, and LLM chat.
  */
 
-import { useState, useEffect, useMemo } from "react";
-import { getDebugInfo, predictGame } from "../../api/client.js";
+import { useState, useMemo } from "react";
+import { predictGame } from "../../api/client.js";
 import TeamGrid from "../Card/TeamGrid";
 import PredictionResult from "../PredictionResult";
 import HistoryChart from "../HistoryChart";
 import NavBar from "../NavBar/NavBar";
 import ErrorDisplay from "../ErrorDisplay";
 import LLMChat from "../LLMChat/LLMChat";
-import { API_BASE } from "../../api/fetch";
 import { buildGameKey } from "../../utils/predictionContextUtils";
 import { toEntry } from "../../utils/predictionHelpers";
 
@@ -42,7 +41,6 @@ export default function Dashboard({
   setError,
   pushHistory,
 }) {
-  const [debugInfo, setDebugInfo] = useState(null);
   const [showcase, setShowcase] = useState(null);
   const [showcaseLoading, setShowcaseLoading] = useState(false);
   const [showcaseError, setShowcaseError] = useState("");
@@ -56,18 +54,6 @@ export default function Dashboard({
     ],
     []
   );
-
-  useEffect(() => {
-    let active = true;
-    getDebugInfo()
-      .then((data) => {
-        if (active) setDebugInfo(data);
-      })
-      .catch(() => { });
-    return () => {
-      active = false;
-    };
-  }, []);
 
   const handlePredict = async (game) => {
     if (!game) return;
@@ -170,20 +156,13 @@ export default function Dashboard({
     scheduleEmpty && Boolean(healthStatus) && healthStatus !== "loading" && !backendHealthy;
 
   if (shouldShowBackendError) {
-    const reason = health?.reason || health?.mode || `Backend status: ${healthStatus}`;
-    const message = API_BASE ? `${reason} (API: ${API_BASE})` : reason;
     return (
       <ErrorDisplay
-        error={new Error(message)}
+        error={new Error(health?.reason || health?.mode || `Service status: ${healthStatus}`)}
         onRetry={() => window.location.reload()}
       />
     );
   }
-
-  const modelDir = debugInfo?.config?.models_dir;
-  const modelLabel = modelDir
-    ? modelDir.split(/[\\/]/).slice(-2).join("/")
-    : null;
 
   return (
     <div className="dashboard-layout advanced">
@@ -192,24 +171,24 @@ export default function Dashboard({
         onSignOut={onSignOut}
         state={{
           health,
-          title: "Prediction Dashboard",
-          heroSubtitle: "Weekly matchups, live model outputs, and conversational analysis.",
-          subtitle: modelLabel ? `Model: ${modelLabel}` : "Live schedule and prediction workspace",
+          title: "Dashboard",
+          heroSubtitle: "Choose a matchup to generate a score forecast and win probability.",
+          subtitle: "Start with the next available slate and review saved calls in History.",
           weekLabel: Number.isFinite(Number(week)) ? `Week ${Number(week)}` : null,
           healthLabel:
             health?.status === "healthy"
-              ? "Backend: Healthy"
-              : `Backend: ${health?.status ?? "unknown"}`,
+              ? "Service: Live"
+              : `Service: ${health?.status ?? "unknown"}`,
         }}
       />
 
       <main className="dashboard-main advanced">
         <header className="dashboard-header advanced">
           <div className="dashboard-header-content">
-            <h1 className="dashboard-title">NFL Prediction Dashboard</h1>
-            {modelLabel && (
-              <p className="dashboard-subtitle">Model: {modelLabel}</p>
-            )}
+            <h1 className="dashboard-title">Upcoming matchups</h1>
+            <p className="dashboard-subtitle">
+              Select any game to generate a forecast, then review the full breakdown below.
+            </p>
             <div className={`season-context-ribbon phase-${seasonPhase}`}>
               <strong className="season-context-pill">{seasonLabel}</strong>
               <span className="season-context-message">{seasonMessage}</span>
@@ -222,10 +201,10 @@ export default function Dashboard({
           <div className="content-grid advanced">
             {isOffseasonMode ? (
               <section className="offseason-mode-panel" aria-live="polite">
-                <h2>Offseason Mode</h2>
+                <h2>No live slate right now</h2>
                 <p>
-                  Live games are paused, so this mode runs showcase predictions for potential matchups
-                  and keeps model exploration useful between seasons.
+                  Generate a sample matchup to preview the forecast experience between official NFL
+                  slates.
                 </p>
                 <div className="offseason-mode-actions">
                   <button
@@ -234,7 +213,7 @@ export default function Dashboard({
                     disabled={showcaseLoading}
                     className="offseason-mode-button"
                   >
-                    {showcaseLoading ? "Generating matchup..." : "Generate Offseason Showcase Matchup"}
+                    {showcaseLoading ? "Generating sample matchup..." : "Generate sample matchup"}
                   </button>
                 </div>
                 {showcaseError ? <p className="offseason-mode-error">{showcaseError}</p> : null}

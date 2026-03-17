@@ -58,7 +58,7 @@ export function useAuthSession() {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(nextSession));
     } catch {
-      return { ok: false, message: 'Unable to persist the local session.' };
+      return { ok: false, message: 'Unable to save your session on this device.' };
     }
 
     setSession(nextSession);
