@@ -21,7 +21,7 @@ function resolveApiBase() {
     "";
   const prodBase =
     import.meta.env.VITE_API_BASE_URL ||
-    "https://nfl-ml-pipe-pr-78.herokuapp.com/";
+    "https://nfl-predict-ecf5a5bd34fe.herokuapp.com/";
   const selected = isDev && devBase ? devBase : prodBase;
   console.log(`Using API base URL: ${selected}`);
   return selected;
