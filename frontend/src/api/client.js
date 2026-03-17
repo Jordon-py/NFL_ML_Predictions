@@ -227,7 +227,6 @@ export async function getNextWeekSchedule(season = null) {
   const week18Over = weekValue === 18 && !hasFutureKickoff(scheduleRows);
   const shouldUsePostseason =
     scheduleRows.length === 0 ||
-    (weekValue != null && weekValue > 18) ||
     week18Over;
 
   if (!shouldUsePostseason) {
