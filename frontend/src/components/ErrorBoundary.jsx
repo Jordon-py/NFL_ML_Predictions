@@ -7,7 +7,7 @@
 // Notes: Presentation-focused component.
 // ==========================================
 
-import React, { Component } from 'react';
+import { Component } from 'react';
 import './ErrorBoundary.css';
 
 /**
@@ -30,6 +30,25 @@ class ErrorBoundary extends Component {
   componentDidCatch(error, errorInfo) {
     this.setState({ error, errorInfo });
     console.error("ErrorBoundary caught an error", error, errorInfo);
+
+    // Report error to backend for observability
+    try {
+      const payload = JSON.stringify({
+        message: error?.message,
+        stack: error?.stack,
+        componentStack: errorInfo?.componentStack,
+        url: window.location.href,
+        userAgent: navigator.userAgent,
+        ts: new Date().toISOString(),
+      });
+
+      // sendBeacon avoids blocking unload/navigation
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon('/api/client-errors', new Blob([payload], { type: 'application/json' }));
+      }
+    } catch (reportError) {
+      console.warn('Failed to report error to backend:', reportError);
+    }
   }
 
   render() {

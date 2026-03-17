@@ -75,6 +75,8 @@ import logging
 import sys
 import os
 import json
+import uuid
+import time
 import math
 from pathlib import Path
 from datetime import datetime, timezone
@@ -83,87 +85,65 @@ from typing import Dict, Any, List, Optional, Tuple, Literal
 from pydantic import BaseModel, Field
 import pandas as pd
 import numpy as np
-from fastapi import FastAPI, HTTPException, Request, Body
+from fastapi import FastAPI, HTTPException, Body, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-import subprocess
-import asyncio
+from starlette.middleware.base import BaseHTTPMiddleware
 from dotenv import load_dotenv
 try:
-    from backend.schemas import (
-        PredictionRequest,
-        PredictionResponse,
-        UnifiedPredictionResponse,
-        HealthResponse,
-        StatusOverviewResponse,
-        HistoryResponse,
-        ScheduleResponse,
-        ScheduleEntry,
-        TeamLogosResponse,
-        SeasonContextResponse,
-    )
-    from backend.services.prediction_service import PredictionService
-    from backend.services.inference_row import build_model_input_row
-    from backend.config import DATA_DIR as CFG_DATA_DIR, MODELS_DIR as CFG_MODELS_DIR, resolve_cors, TRUTHY
-    from backend.utils.artifact_loader import ensure_artifacts
-    from backend.main_helpers import (
-        InferenceBundle,
-        load_inference_bundle,
-        load_dataset_df,
-        _append_prediction_history_to_disk,
-        prediction_history_entries,
-        _prediction_history_lock,
-        get_schedule,
-        select_next_week_rows,
-        get_team_meta,
-        parse_kickoff,
-        _pick_col,
-        _HOME_COLS,
-        _AWAY_COLS,
-        _GAME_ID_COLS,
-        _STADIUM_COLS,
-        load_prediction_history,
-    )
+    from pythonjsonlogger import jsonlogger
+    HAS_JSON_LOGGER = True
 except ImportError:
-    from schemas import (
-        PredictionRequest,
-        PredictionResponse,
-        UnifiedPredictionResponse,
-        HealthResponse,
-        StatusOverviewResponse,
-        HistoryResponse,
-        ScheduleResponse,
-        ScheduleEntry,
-        TeamLogosResponse,
-        SeasonContextResponse,
-    )
-    from services.prediction_service import PredictionService
-    from services.inference_row import build_model_input_row
-    from config import DATA_DIR as CFG_DATA_DIR, MODELS_DIR as CFG_MODELS_DIR, resolve_cors, TRUTHY
-    from utils.artifact_loader import ensure_artifacts
-    from main_helpers import (
-        InferenceBundle,
-        load_inference_bundle,
-        load_dataset_df,
-        _append_prediction_history_to_disk,
-        prediction_history_entries,
-        _prediction_history_lock,
-        get_schedule,
-        select_next_week_rows,
-        get_team_meta,
-        parse_kickoff,
-        _pick_col,
-        _HOME_COLS,
-        _AWAY_COLS,
-        _GAME_ID_COLS,
-        _STADIUM_COLS,
-        load_prediction_history,
-    )
+    HAS_JSON_LOGGER = False
+try:
+    from prometheus_fastapi_instrumentator import Instrumentator
+    HAS_PROMETHEUS = True
+except ImportError:
+    HAS_PROMETHEUS = False
+from .schemas import (
+    PredictionRequest,
+    PredictionResponse,
+    UnifiedPredictionResponse,
+    HealthResponse,
+    StatusOverviewResponse,
+    HistoryResponse,
+    ScheduleResponse,
+    ScheduleEntry,
+    TeamLogosResponse,
+)
+from .services.prediction_service import PredictionService
+from .services.inference_row import build_model_input_row
+from .config import DATA_DIR as CFG_DATA_DIR, MODELS_DIR as CFG_MODELS_DIR, resolve_cors, TRUTHY
+from .main_helpers import (
+    load_inference_bundle,
+    load_dataset_df,
+    _append_prediction_history_to_disk,
+    prediction_history_entries,
+    _prediction_history_lock,
+    get_schedule,
+    select_next_week_rows,
+    get_team_meta,
+    parse_kickoff,
+    _pick_col,
+    _HOME_COLS,
+    _AWAY_COLS,
+    _GAME_ID_COLS,
+    _STADIUM_COLS,
+)
+from .ollama.llm_ollama import explain_prediction as llm_explain_prediction, chat_messages as llm_chat_messages
+from .team_assets import (
+    normalize_abbr,
+    load_team_assets_map,
+    TeamAsset
+)
+try:
+    from .routes.auth import router as auth_router
+except ImportError:
+    auth_router = None
 
-def _build_game_id(season, week, home, away):
-    """Normalized game ID builder."""
-    return f"{season}-{week}-{str(home).strip().upper()}-{str(away).strip().upper()}"
-
+try:
+    from .routes.upload import router as upload_router
+except ImportError:
+    upload_router = None
 
 if __name__ == "__main__" and __package__ is None:
     # Allow running as a script by ensuring repo root is on sys.path.
@@ -176,12 +156,19 @@ if __name__ == "__main__" and __package__ is None:
 # Load environment variables
 load_dotenv(dotenv_path=".env")
 
+# Setup logging with JSON format for production observability
 def setup_logging():
     handler = logging.StreamHandler(sys.stdout)
-    formatter = logging.Formatter(
-        fmt="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S"
-    )
+    if HAS_JSON_LOGGER and os.getenv("LOG_FORMAT", "text").lower() == "json":
+        formatter = jsonlogger.JsonFormatter(
+            fmt="%(asctime)s %(levelname)s %(name)s %(message)s",
+            datefmt="%Y-%m-%dT%H:%M:%S"
+        )
+    else:
+        formatter = logging.Formatter(
+            fmt="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S"
+        )
     handler.setFormatter(formatter)
     logging.getLogger().handlers = [handler]
     logging.getLogger().setLevel(logging.INFO)
@@ -203,6 +190,9 @@ state: Dict[str, Any] = {
 
 ADMIN_ENABLED = os.getenv("ENABLE_ADMIN", "false").strip().lower() in TRUTHY
 
+# -------------------------------------
+# Helper Functions
+# -------------------------------------
 
 def get_logos(home_team, away_team):
     team_logos = _get_team_meta_map()
@@ -376,192 +366,7 @@ def _find_latest_metadata_json(models_dir: Path) -> Path | None:
     return max(candidates, key=lambda p: p.stat().st_mtime)
 
 
-def _pick_positive_class_index(clf: Any) -> int:
-    classes = getattr(clf, "classes_", None)
-    if classes is None:
-        return 1
-    cls = list(classes)
-    for label in (1, True, "HOME", "home", "home_win", "1", "True"):
-        if label in cls:
-            return cls.index(label)
-    return 1 if len(cls) > 1 else 0
 
-
-
-
-
-def _get_feature_columns(bundle: InferenceBundle) -> Tuple[List[str], List[str], List[str]]:
-    raw = bundle.meta.get("raw_feature_columns", {}) if bundle.meta else {}
-    numeric = list(raw.get("numeric", []) or [])
-    categorical = list(raw.get("categorical", []) or [])
-
-    # Defensive fallback (same as your original)
-    if not numeric and not categorical:
-        all_cols = bundle.raw_feature_columns
-        return all_cols, [], all_cols
-
-    return numeric, categorical, numeric + categorical
-
-
-def _dataset_means(df: pd.DataFrame, numeric_cols: List[str]) -> Dict[str, float]:
-    if df is None or df.empty:
-        return {}
-    means: Dict[str, float] = {}
-    for col in numeric_cols:
-        if col in df.columns:
-            series = pd.to_numeric(df[col], errors="coerce")
-            m = series.mean()
-            if not pd.isna(m):
-                means[col] = float(m)
-    return means
-
-
-def _roll_forward_team_features(
-    df: pd.DataFrame,
-    team: str,
-    season: int,
-    week: int,
-    target_side: str,
-    numeric_cols: List[str],
-) -> Dict[str, float]:
-    """
-    Roll forward numeric features from the most recent completed game for a team.
-    """
-    if df is None or df.empty:
-        return {}
-    if "season" not in df.columns or "week" not in df.columns:
-        return {}
-
-    season_num = pd.to_numeric(df["season"], errors="coerce").fillna(0).astype(int)
-    week_num = pd.to_numeric(df["week"], errors="coerce").fillna(0).astype(int)
-    time_key = season_num * 100 + week_num
-    cutoff = int(season) * 100 + int(week)
-
-    team_mask = ((df.get("home_team") == team) | (df.get("away_team") == team)) & (time_key < cutoff)
-
-    # Keep “completed games only” heuristic if points exist
-    if "home_points_for" in df.columns and "away_points_for" in df.columns:
-        team_mask &= df["home_points_for"].notna() & df["away_points_for"].notna()
-
-    if not bool(team_mask.any()):
-        return {}
-
-    last_idx = time_key[team_mask].idxmax()
-    last_game = df.loc[last_idx]
-    last_side = "home" if str(last_game.get("home_team")) == team else "away"
-
-    out: Dict[str, float] = {}
-    target_prefix = f"{target_side}_"
-    source_prefix = f"{last_side}_"
-
-    for col in numeric_cols:
-        if not col.startswith(target_prefix):
-            continue
-        source_col = source_prefix + col[len(target_prefix):]
-        if source_col in last_game and pd.notna(last_game[source_col]):
-            try:
-                out[col] = float(last_game[source_col])
-            except Exception:
-                continue
-
-    return out
-
-
-
-TEAM_ALIAS = {
-    "LA": "LAR", "STL": "LAR", "SD": "LAC", "OAK": "LV", "WSH": "WAS",
-}
-
-def norm_team(team: str) -> str:
-    """Normalize team abbreviations."""
-    t = str(team).strip().upper()
-    return TEAM_ALIAS.get(t, t)
-
-def _find_inference_rows(df: pd.DataFrame, home: str, away: str, season: int, week: int) -> pd.DataFrame:
-    """Find specific rows in the dataframe matching the matchup."""
-    if df is None or df.empty:
-        return pd.DataFrame()
-
-    # Pre-normalization
-    h_norm = norm_team(home)
-    a_norm = norm_team(away)
-
-    # Safe casting
-    season_col = pd.to_numeric(df["season"], errors="coerce").fillna(0).astype(int)
-    week_col = pd.to_numeric(df["week"], errors="coerce").fillna(0).astype(int)
-
-    # Masking
-    mask = (season_col == int(season)) & (week_col == int(week))
-
-    # Match team names (handling potential raw discrepancies if needed, but norm_team usually enough)
-    # We apply norm logic to the DF columns on the fly if needed, but for speed assume standard abbrs usually match.
-    # If standard retrieval fails, we can try more aggressive matching.
-    mask &= (df["home_team"] == h_norm) & (df["away_team"] == a_norm)
-
-    return df.loc[mask]
-
-def _build_future_row(
-    df: pd.DataFrame,
-    bundle: InferenceBundle,
-    home: str,
-    away: str,
-    season: int,
-    week: int,
-) -> pd.Series:
-    """
-    Build a row for future games:
-      1) Lookup existing row in dataset (preferred).
-      2) Roll-forward if missing (fallback).
-    """
-    # 1. Try finding exact match
-    matches = _find_inference_rows(df, home, away, season, week)
-    if not matches.empty:
-        return matches.iloc[0]
-
-    # 2. Fallback: Roll forward
-    numeric_cols, categorical_cols, _ = _get_feature_columns(bundle)
-    means = _dataset_means(df, numeric_cols)
-
-    features: Dict[str, Any] = {}
-    features.update(_roll_forward_team_features(df, home, season, week, "home", numeric_cols))
-    features.update(_roll_forward_team_features(df, away, season, week, "away", numeric_cols))
-
-    # Explicitly set season/week
-    if "season" in numeric_cols: features["season"] = int(season)
-    if "week" in numeric_cols: features["week"] = int(week)
-
-    # Team identifiers
-    features["home_team"] = home
-    features["away_team"] = away
-    features["has_home_team"] = True
-
-    # Dynamic categorical columns (e.g. home_team_ARI)
-    for col in categorical_cols:
-        if col.startswith("home_team_"):
-            features[col] = (col == f"home_team_{home}")
-        elif col.startswith("away_team_"):
-            features[col] = (col == f"away_team_{away}")
-
-    # Fill gaps with means
-    for col in numeric_cols:
-        if col not in features or pd.isna(features.get(col)):
-            features[col] = means.get(col, 0.0)
-
-    return pd.Series(features)
-
-
-# ---------------------------
-# History persistence
-# ---------------------------
-
-
-
-# ---------------------------
-# API models
-# ---------------------------
-
-# Prediction history entries (loaded from disk) are maintained in main_helpers
-# We use the refs provided by imports from main_helpers.
 
 # ---------------------------
 # LLM helper (best-effort)
@@ -830,6 +635,11 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="NFL ML Predictions API", lifespan=lifespan)
 
+# Optional auth and file upload routes.
+if auth_router is not None:
+    app.include_router(auth_router, prefix="/auth")
+if upload_router is not None:
+    app.include_router(upload_router, prefix="/upload")
 # CORS Middleware
 cors_origins, cors_origin_regex = resolve_cors()
 app.add_middleware(
@@ -839,17 +649,59 @@ app.add_middleware(
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["*"],
+    expose_headers=["*", "X-Request-ID"],
 )
+
+# Request-ID and timing middleware for observability
+class RequestContextMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+        start_time = time.perf_counter()
+        
+        # Attach to request state for use in handlers
+        request.state.request_id = request_id
+        
+        response = await call_next(request)
+        
+        duration_ms = (time.perf_counter() - start_time) * 1000
+        response.headers["X-Request-ID"] = request_id
+        
+        # Structured log entry
+        log.info(
+            "request_complete",
+            extra={
+                "request_id": request_id,
+                "method": request.method,
+                "path": str(request.url.path),
+                "status_code": response.status_code,
+                "duration_ms": round(duration_ms, 2),
+            }
+        )
+        return response
+
+app.add_middleware(RequestContextMiddleware)
+
+# Prometheus metrics instrumentation
+if HAS_PROMETHEUS:
+    Instrumentator().instrument(app).expose(app, endpoint="/api/metrics")
 
 # ---------------------------
 # Routes
 # ---------------------------
 
 
+@app.get("/api/teams/{team_abbr}", response_model=TeamAsset)
+def teams_get(team_abbr: str) -> TeamAsset:
+    """
+    Get a team's branding assets (preferred non-square logo included).
 
-
-
+    Example:
+      GET /teams/LAR
+    """
+    response_model = get_team_asset(team_abbr)
+    if response_model is None:
+        raise HTTPException(status_code=404, detail=f"Team not found: {team_abbr}")
+    return response_model
 
 def _require_ready() -> PredictionService:
     if state["service"] is None:
@@ -862,12 +714,80 @@ def _require_ready() -> PredictionService:
 
 @app.get("/api/health", response_model=HealthResponse)
 async def health():
-    """System health check."""
+    """System health check (fast)."""
     ready = state.get("service") is not None
     status = "healthy" if ready else "unhealthy"
     mode = "ml-inference" if ready else "initializing"
     reason = "models_loaded" if ready else "prediction engine not initialized"
     return HealthResponse(status=status, mode=mode, reason=reason)
+
+@app.get("/health", response_model=HealthResponse)
+async def health_legacy():
+    """Legacy system health check alias for compatibility."""
+    return await health()
+
+@app.get("/api/health/deep")
+async def health_deep() -> Dict[str, Any]:
+    """Deep health check: verifies models, dataset, and dependencies."""
+    checks = {}
+    overall_healthy = True
+    
+    # Check model bundle
+    bundle = state.get("bundle")
+    if bundle is not None:
+        checks["model_bundle"] = {"status": "ok", "loaded": True}
+    else:
+        checks["model_bundle"] = {"status": "error", "loaded": False}
+        overall_healthy = False
+    
+    # Check dataset
+    dataset = state.get("dataset")
+    if dataset is not None and len(dataset) > 0:
+        checks["dataset"] = {"status": "ok", "rows": len(dataset)}
+    else:
+        checks["dataset"] = {"status": "error", "rows": 0}
+        overall_healthy = False
+    
+    # Check prediction service
+    service = state.get("service")
+    if service is not None:
+        checks["prediction_service"] = {"status": "ok", "initialized": True}
+    else:
+        checks["prediction_service"] = {"status": "error", "initialized": False}
+        overall_healthy = False
+    
+    # Check metadata
+    metadata = state.get("model_metadata")
+    checks["metadata"] = {
+        "status": "ok" if metadata else "warning",
+        "loaded": metadata is not None,
+    }
+    
+    return {
+        "status": "healthy" if overall_healthy else "unhealthy",
+        "checks": checks,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+@app.post("/api/client-errors", status_code=204)
+async def receive_client_error(request: Request):
+    """Receive and log frontend error reports."""
+    try:
+        body = await request.body()
+        error_data = json.loads(body.decode("utf-8")) if body else {}
+        log.warning(
+            "client_error_reported",
+            extra={
+                "client_error": error_data.get("message"),
+                "url": error_data.get("url"),
+                "user_agent": error_data.get("userAgent"),
+                "timestamp": error_data.get("ts"),
+                "stack": error_data.get("stack", "")[:500],  # Truncate stack
+            }
+        )
+    except Exception as e:
+        log.warning(f"Failed to parse client error: {e}")
+    return Response(status_code=204)
 
 @app.get("/api/status/overview", response_model=StatusOverviewResponse)
 async def get_status_overview():
@@ -884,6 +804,7 @@ async def get_status_overview():
             "note": "win_rate requires actual outcomes",
         }
     return StatusOverviewResponse(health=h, dataset=dataset_info, history=history_metrics)
+
 
 @app.get("/api/status/models")
 async def get_status_models() -> Dict[str, Any]:
