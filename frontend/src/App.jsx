@@ -72,6 +72,7 @@ function App() {
     current,
     history,
     health,
+    seasonContext,
     setPrediction,
     setLoading,
     setError,
@@ -98,6 +99,7 @@ function App() {
                     current={current}
                     history={history}
                     health={health}
+                    seasonContext={seasonContext}
                     setPrediction={setPrediction}
                     setLoading={setLoading}
                     setError={setError}

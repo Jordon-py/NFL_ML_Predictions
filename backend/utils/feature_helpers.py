@@ -39,7 +39,10 @@ from pathlib import Path
 from typing import Any, List, Optional, Sequence, Union
 import numpy as np
 import pandas as pd
-from config import MODELS_DIR
+try:
+    from backend.config import MODELS_DIR
+except ImportError:
+    from config import MODELS_DIR
 
 log = logging.getLogger(__name__)
 

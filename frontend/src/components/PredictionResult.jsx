@@ -75,12 +75,16 @@ export default function PredictionResult({ entry }) {
         season: seasonLabel,
         week: weekLabel,
       });
-      if (!result?.used_llm) {
+      if (!result?.explanation) {
         setExplanation(null);
-        setError(result?.error || "LLM is unavailable.");
+        setError(result?.error || "Explanation is unavailable.");
         return;
       }
-      setExplanation(result);
+      setExplanation({
+        explanation: result.explanation,
+        bullets: Array.isArray(result?.bullets) ? result.bullets : [],
+        caveats: Array.isArray(result?.caveats) ? result.caveats : [],
+      });
     } catch (err) {
       setError(err?.message || "Failed to generate explanation.");
     } finally {
@@ -137,8 +141,21 @@ export default function PredictionResult({ entry }) {
           {error && <div className="explanation-error">{error}</div>}
           {explanation && (
             <div className="explanation-box animate-in">
-              <h4>AI Strategy Insights</h4>
+              <h4>Model Strategy Insights</h4>
               <p>{explanation.explanation}</p>
+              {explanation.bullets?.length > 0 && (
+                <ul className="explanation-bullets">
+                  {explanation.bullets.map((line, idx) => <li key={idx}>{line}</li>)}
+                </ul>
+              )}
+              {explanation.caveats?.length > 0 && (
+                <div className="explanation-caveats">
+                  <h5>Caveats</h5>
+                  <ul>
+                    {explanation.caveats.map((line, idx) => <li key={idx}>{line}</li>)}
+                  </ul>
+                </div>
+              )}
             </div>
           )}
         </div>

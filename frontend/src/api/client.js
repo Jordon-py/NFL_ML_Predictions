@@ -28,6 +28,17 @@ const toNumberOrNull = (value) => {
   return Number.isFinite(n) ? n : null;
 };
 
+const DEFAULT_SEASON_CONTEXT = {
+  phase: "offseason",
+  label: "Offseason",
+  message: "No live weekly slate is available right now.",
+  current_season: new Date().getFullYear(),
+  display_week: null,
+  games_in_next_window: 0,
+  next_kickoff: null,
+  generated_at: new Date().toISOString(),
+};
+
 /**
  * Robust CSV parser for schedule data.
  */
@@ -168,6 +179,26 @@ export async function getHealthStatus() {
 }
 
 /**
+ * Fetch schedule-aware season context (in-season/postseason/offseason).
+ * @returns {Promise<Object>} Normalized season context.
+ */
+export async function getSeasonContext() {
+  try {
+    const data = await fetchJson("/api/season/context");
+    if (!data || typeof data !== "object") return DEFAULT_SEASON_CONTEXT;
+    return {
+      ...DEFAULT_SEASON_CONTEXT,
+      ...data,
+      current_season: toNumberOrNull(data.current_season) ?? DEFAULT_SEASON_CONTEXT.current_season,
+      display_week: toNumberOrNull(data.display_week),
+      games_in_next_window: toNumberOrNull(data.games_in_next_window) ?? 0,
+    };
+  } catch {
+    return DEFAULT_SEASON_CONTEXT;
+  }
+}
+
+/**
  * Retrieve debug information about the backend state, including dataset stats.
  * @returns {Promise<Object>} Debug info object.
  */
@@ -235,39 +266,12 @@ export async function predictGame(home, away, season, week, options = {}) {
     week: parseInt(week, 10)
   };
   const record = options.record !== false;
-  const useLlm = options.useLlm === true && import.meta.env.VITE_ENABLE_LLM === "true";
 
-  // Raw model-only fallback (preserves legacy behavior).
   const url = record ? "/api/predict" : "/api/predict?record=0";
-  const prediction = await fetchJson(url, {
+  return fetchJson(url, {
     method: "POST",
     body: JSON.stringify(payload),
   });
-  if (!useLlm) return prediction;
-
-  try {
-    const explain = await fetchJson("/api/predict/explain", {
-      method: "POST",
-      body: JSON.stringify({ prediction, ...payload }),
-    });
-    return { ...prediction, llm_explanation: explain };
-  } catch (error) {
-    const message = error?.message || "LLM explanation failed";
-    return { ...prediction, llm_explanation_error: message };
-  }
-}
-
-/**
- * simple chat interface for context-aware LLM interactions.
- * @param {Object} payload - { messages: Array, prediction: Object }
- * @returns {Promise<Object>} LLM response.
- */
-export async function chatLLM(payload) {
-  const response = await fetchJson("/api/llm/chat", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-  return response;
 }
 
 /**
