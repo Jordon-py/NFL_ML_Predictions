@@ -75,6 +75,9 @@ class TrainingRunConfig(BaseModel):
     walk_end_calib: int = Field(default=2024, ge=1999)
     bootstrap_samples: int = Field(default=1500, ge=100)
     threshold: float = Field(default=0.54, ge=0.0, le=1.0)
+    train_end_season: int = Field(default=2025, ge=1999)
+    train_end_week: int = Field(default=17, ge=0)
+    test_season: int = Field(default=2025, ge=1999)
     force_retrain: bool = Field(
         default=False,
         description="When true, ignore the monthly in-season freshness check and retrain immediately.",

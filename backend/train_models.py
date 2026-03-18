@@ -840,6 +840,9 @@ def main(
 
     # Prediction knobs
     parser.add_argument("--threshold", type=float, default=0.54)
+    parser.add_argument("--train_end_season", type=int, default=2025)
+    parser.add_argument("--train_end_week", type=int, default=17)
+    parser.add_argument("--test_season", type=int, default=2025)
     parser.add_argument(
         "--force",
         action="store_true",
@@ -865,6 +868,9 @@ def main(
         walk_end_calib=args.walk_end_calib,
         bootstrap_samples=args.bootstrap_samples,
         threshold=args.threshold,
+        train_end_season=args.train_end_season,
+        train_end_week=args.train_end_week,
+        test_season=args.test_season,
         force_retrain=args.force,
     )
 
@@ -1040,8 +1046,15 @@ def main(
     log.info("-" * 72)
     log.info("Deployment win model: train<=2024, calib=2025, predict future rows...")
 
-    train_deploy = df_complete["season"] <= 2024
-    calib_deploy = df_complete["season"] == 2025
+    # Custom training filter: training seasons OR current season up to cutoff week
+    train_deploy = (df_complete["season"] < config.train_end_season) | (
+        (df_complete["season"] == config.train_end_season) & (df_complete["week"] <= config.train_end_week)
+    )
+    # Calibration filter: the remaining completed games in the test season
+    # Note: If no 2025 games exist yet, fallback logic below handles it.
+    calib_deploy = (df_complete["season"] == config.test_season) & (
+        (df_complete["season"] > config.train_end_season) | (df_complete["week"] > config.train_end_week)
+    )
 
     # Fallback if 2025 isn't present in completed data
     if calib_deploy.sum() == 0:

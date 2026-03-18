@@ -335,7 +335,8 @@ def _build_scoreboard_entries(events: List[Dict[str, Any]]) -> list[Dict[str, ob
         if not competitions:
             continue
         competition = competitions[0]
-        week_value = competition.get("week")
+        week_data = event.get("week", {})
+        week_value = competition.get("week") or week_data.get("number")
         season_value = (
             competition.get("season", {}).get("year")
             or event.get("season", {}).get("year")

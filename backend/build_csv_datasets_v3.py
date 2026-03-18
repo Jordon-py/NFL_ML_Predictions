@@ -654,7 +654,20 @@ def load_schedules(seasons: List[int], include_future: bool = False) -> pd.DataF
             sch = None
 
     if sch is None or sch.empty:
-        raise RuntimeError("Could not load schedules from any backend")
+        logging.info("Schedule backend lookup failed; attempting nflverse direct fallback...")
+        try:
+            # URL for canonical nflverse games data (one row per game with scores)
+            url = "https://github.com/nflverse/nfldata/raw/master/data/games.csv"
+            df_full = pd.read_csv(url)
+            # Filter for requested seasons
+            sch = df_full[df_full["season"].isin(seasons)].copy()
+            if not sch.empty:
+                logging.info("Successfully loaded %d games from nflverse direct CSV", len(sch))
+        except Exception as e:
+            logging.error("nflverse direct fallback failed: %s", e)
+
+    if sch is None or sch.empty:
+        raise RuntimeError("Could not load schedules from any backend or nflverse fallback")
 
     # Optional postseason fallback (user-provided JSON) for upcoming games.
     sch["_source_rank"] = 0
