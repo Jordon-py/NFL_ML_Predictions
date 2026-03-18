@@ -91,20 +91,18 @@ Open `http://localhost:3000`.
 
 ### Sign in
 
-- The current sign-in layer is local-only.
-- Use any email and any password with 6 or more characters.
-- The email is used as the user identity for prediction history storage.
+- Sign in with your email and a password (six characters or more). The identity stays local to this device so you can return to the dashboard instantly.
+- Your email is the key for per-user prediction history—everything you forecast is tied to that identity.
 
-### Make predictions
+### Browse slates
 
-- Open the dashboard after signing in.
-- Pick a matchup and request a prediction.
-- Predictions are stored in the backend per signed-in user and also cached locally under a user-specific browser key.
+- Use the week/season controls on the dashboard to pivot between the next live slate, archived weeks, or past seasons. The grid updates to match the slate you pick so there is always something to explore.
+- Final scores sync automatically every Sunday, Monday, and Thursday night, so the matchup cards and History page always include the latest official results.
 
-### View history
+### Forecast & compare
 
-- History is scoped to the signed-in user.
-- `Status` and `History` pages read the same per-user backend ledger.
+- Tap any matchup, run the prediction, and the system saves your forecast in the backend (via the SQLite ledger under `backend/predictions.db`) and in your browser cache for fast access.
+- Once final scores arrive, the cards and History chart compare your prediction to the actual outcome so you can see how each call landed.
 
 ## Developer Guide
 

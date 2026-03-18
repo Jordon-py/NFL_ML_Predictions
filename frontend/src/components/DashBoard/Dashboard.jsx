@@ -13,8 +13,8 @@
  * Straightforward container for predictions, schedule display, history, and LLM chat.
  */
 
-import { useState, useMemo } from "react";
-import { predictGame } from "../../api/client.js";
+import { useState, useMemo, useEffect, useCallback } from "react";
+import { getGameScores, predictGame } from "../../api/client.js";
 import TeamGrid from "../Card/TeamGrid";
 import PredictionResult from "../PredictionResult";
 import HistoryChart from "../HistoryChart";
@@ -23,6 +23,7 @@ import ErrorDisplay from "../ErrorDisplay";
 import LLMChat from "../LLMChat/LLMChat";
 import { buildGameKey } from "../../utils/predictionContextUtils";
 import { toEntry } from "../../utils/predictionHelpers";
+import "./Dashboard.css";
 
 export default function Dashboard({
   authSession,
@@ -36,6 +37,7 @@ export default function Dashboard({
   history,
   health,
   seasonContext,
+  loadScheduleForWeek,
   setPrediction,
   setLoading,
   setError,
@@ -44,6 +46,34 @@ export default function Dashboard({
   const [showcase, setShowcase] = useState(null);
   const [showcaseLoading, setShowcaseLoading] = useState(false);
   const [showcaseError, setShowcaseError] = useState("");
+  const [selectedSeason, setSelectedSeason] = useState(
+    () => seasonContext?.current_season ?? new Date().getFullYear()
+  );
+  const [selectedWeek, setSelectedWeek] = useState(() =>
+    Number.isFinite(Number(week))
+      ? Number(week)
+      : seasonContext?.display_week ?? null
+  );
+  const [scheduleOverrideLoading, setScheduleOverrideLoading] = useState(false);
+  const [scheduleOverrideError, setScheduleOverrideError] = useState("");
+  const [actualScores, setActualScores] = useState({});
+  const [scoreLoading, setScoreLoading] = useState(false);
+  const [scoreError, setScoreError] = useState("");
+  const SCORE_SYNC_LABEL = "Sun · Mon · Thu nights (UTC)";
+  const activeSeason =
+    selectedSeason ?? seasonContext?.current_season ?? new Date().getFullYear();
+  const activeWeek =
+    Number.isFinite(Number(selectedWeek)) && selectedWeek !== null
+      ? selectedWeek
+      : Number.isFinite(Number(week))
+        ? Number(week)
+        : seasonContext?.display_week ?? null;
+  const finalScoreCount = Object.keys(actualScores).length;
+  const scoreboardSummaryHeadline = finalScoreCount
+    ? `${finalScoreCount} final result${finalScoreCount === 1 ? "" : "s"} synced`
+    : "Final scores appear after the next sync.";
+  const scoreboardSummaryDetail = `Latest refresh: ${SCORE_SYNC_LABEL}.`;
+  const gridWeek = activeWeek ?? week;
 
   const TEAM_POOL = useMemo(
     () => [
@@ -54,6 +84,19 @@ export default function Dashboard({
     ],
     []
   );
+
+  useEffect(() => {
+    if (seasonContext?.current_season) {
+      setSelectedSeason(seasonContext.current_season);
+    }
+  }, [seasonContext?.current_season]);
+
+  useEffect(() => {
+    const weekValue = Number.isFinite(Number(week))
+      ? Number(week)
+      : seasonContext?.display_week ?? null;
+    setSelectedWeek(weekValue);
+  }, [week, seasonContext?.display_week]);
 
   const handlePredict = async (game) => {
     if (!game) return;
@@ -96,6 +139,91 @@ export default function Dashboard({
     setError(key, null);
     setLoading(key, false);
   };
+
+  const fetchScoresForSelection = useCallback(
+    async (seasonValue, weekValue) => {
+      if (!seasonValue || !Number.isFinite(Number(weekValue))) {
+        setActualScores({});
+        return;
+      }
+      setScoreError("");
+      setScoreLoading(true);
+      try {
+        const rows = await getGameScores(seasonValue, weekValue);
+        const map = rows.reduce((acc, entry) => {
+          if (entry?.game_id) {
+            acc[entry.game_id] = entry;
+          }
+          return acc;
+        }, {});
+        setActualScores(map);
+      } catch (err) {
+        setActualScores({});
+        setScoreError("Unable to load final scores for that slate.");
+      } finally {
+        setScoreLoading(false);
+      }
+    },
+    []
+  );
+
+  const applyScheduleOverride = useCallback(
+    async (seasonValue, weekValue) => {
+      if (!Number.isFinite(Number(weekValue))) return;
+      setScheduleOverrideLoading(true);
+      setScheduleOverrideError("");
+      try {
+        await loadScheduleForWeek(seasonValue, weekValue);
+        setSelectedSeason(seasonValue);
+        setSelectedWeek(weekValue);
+      } catch (error) {
+        setScheduleOverrideError(
+          "Could not load that week. Try another week or reset to live slate."
+        );
+      } finally {
+        setScheduleOverrideLoading(false);
+      }
+    },
+    [loadScheduleForWeek]
+  );
+
+  const handleWeekChange = (delta) => {
+    const baseWeek = Number.isFinite(Number(selectedWeek))
+      ? selectedWeek
+      : Number.isFinite(Number(week))
+        ? Number(week)
+        : seasonContext?.display_week ?? 1;
+    const targetWeek = Math.max(1, baseWeek + delta);
+    const targetSeason =
+      selectedSeason ?? seasonContext?.current_season ?? new Date().getFullYear();
+    applyScheduleOverride(targetSeason, targetWeek);
+  };
+
+  const handleSeasonChange = (delta) => {
+    const baseSeason = selectedSeason ?? seasonContext?.current_season ?? new Date().getFullYear();
+    const targetSeason = Math.max(2000, baseSeason + delta);
+    const targetWeek = Number.isFinite(Number(selectedWeek))
+      ? selectedWeek
+      : Number.isFinite(Number(week))
+        ? Number(week)
+        : seasonContext?.display_week ?? 1;
+    applyScheduleOverride(targetSeason, targetWeek);
+  };
+
+  const handleResetSchedule = () => {
+    const seasonValue = seasonContext?.current_season ?? new Date().getFullYear();
+    const weekValue =
+      Number.isFinite(Number(week)) ? Number(week) : seasonContext?.display_week ?? 1;
+    applyScheduleOverride(seasonValue, weekValue);
+  };
+
+  useEffect(() => {
+    if (selectedSeason && Number.isFinite(Number(selectedWeek))) {
+      fetchScoresForSelection(selectedSeason, selectedWeek);
+    } else {
+      setActualScores({});
+    }
+  }, [selectedSeason, selectedWeek, fetchScoresForSelection]);
 
   const runOffseasonShowcase = async () => {
     if (showcaseLoading) return;
@@ -166,18 +294,22 @@ export default function Dashboard({
 
   return (
     <div className="dashboard-layout advanced">
-      <NavBar
-        authSession={authSession}
-        onSignOut={onSignOut}
-        state={{
-          health,
-          title: "Dashboard",
-          heroSubtitle: "Choose a matchup to generate a score forecast and win probability.",
-          subtitle: "Start with the next available slate and review saved calls in History.",
-          weekLabel: Number.isFinite(Number(week)) ? `Week ${Number(week)}` : null,
-          healthLabel:
-            health?.status === "healthy"
-              ? "Service: Live"
+        <NavBar
+          authSession={authSession}
+          onSignOut={onSignOut}
+          state={{
+            health,
+            title: "Dashboard",
+            heroSubtitle: "Load a slate, run a forecast, and compare once the final score lands.",
+            subtitle:
+              "Use the week + season controls to browse live or archived slates; final scores sync Sun/Mon/Thu nights.",
+            weekLabel:
+              typeof activeWeek === "number" && Number.isFinite(activeWeek)
+                ? `Week ${activeWeek}`
+                : null,
+            healthLabel:
+              health?.status === "healthy"
+                ? "Service: Live"
               : `Service: ${health?.status ?? "unknown"}`,
         }}
       />
@@ -220,17 +352,99 @@ export default function Dashboard({
                 <PredictionResult entry={showcase || current} />
               </section>
             ) : (
-              <div className="team-grid-section enhanced">
+              <>
+                <div className="schedule-selector">
+                  <div className="schedule-selector__row">
+                    <button
+                      type="button"
+                      onClick={() => handleWeekChange(-1)}
+                      disabled={scheduleOverrideLoading}
+                    >
+                      Previous Week
+                    </button>
+                    <span className="schedule-selector__label">
+                      Week {activeWeek ?? "—"} · Season {activeSeason}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleWeekChange(1)}
+                      disabled={scheduleOverrideLoading}
+                    >
+                      Next Week
+                    </button>
+                  </div>
+                  <div className="schedule-selector__row">
+                    <button
+                      type="button"
+                      onClick={() => handleSeasonChange(-1)}
+                      disabled={scheduleOverrideLoading}
+                    >
+                      Previous Season
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSeasonChange(1)}
+                      disabled={scheduleOverrideLoading}
+                    >
+                      Next Season
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleResetSchedule}
+                      disabled={scheduleOverrideLoading}
+                    >
+                      Live slate
+                    </button>
+                  </div>
+                  <p className="schedule-selector__feedback">
+                    {scheduleOverrideError ||
+                      scoreError ||
+                      "Use the controls to load a different week or season, then pick any matchup to forecast."}
+                  </p>
+                  <div
+                    className={`scoreboard-summary ${
+                      finalScoreCount ? "scoreboard-summary--ready" : "scoreboard-summary--waiting"
+                    }`}
+                  >
+                    <div className="scoreboard-summary__body">
+                      <strong>{scoreboardSummaryHeadline}</strong>
+                      <span>{scoreboardSummaryDetail}</span>
+                    </div>
+                    <span className="scoreboard-summary__cta">
+                      {scoreLoading
+                        ? "Refreshing final results…"
+                        : finalScoreCount
+                          ? "Matchups now show the synced final score."
+                          : "Run a forecast to compare it to the scoreboard."}
+                    </span>
+                  </div>
+                </div>
+                {(!schedule || schedule.length <= 1) && (
+                  <div className="schedule-hint">
+                    <p>
+                      Only {schedule?.length ?? 0} matchup{schedule?.length === 1 ? "" : "s"} are available for Week{" "}
+                      {activeWeek ?? "—"} of Season {activeSeason}. Use the week and season controls above to
+                      explore another slate or pull last season's archive.
+                    </p>
+                    <p className="schedule-hint__note">
+                      Final scores will show up here after they sync on Sunday, Monday, and Thursday nights.
+                    </p>
+                  </div>
+                )}
+                <div className="team-grid-section enhanced">
                 <TeamGrid
-                  week={week}
+                  week={gridWeek}
+                  season={activeSeason}
                   games={schedule}
                   predictions={predictions}
                   loading={loading}
                   errors={errors}
                   onPredict={handlePredict}
                   onReset={handleReset}
+                  actualScores={actualScores}
                 />
               </div>
+              </>
             )}
 
             <div className="history-section enhanced">

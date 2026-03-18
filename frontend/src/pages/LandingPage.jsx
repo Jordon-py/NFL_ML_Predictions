@@ -4,23 +4,23 @@ import './LandingPage.css';
 
 const VALUE_PILLARS = [
   {
-    title: '1. Sign in and start fast',
-    body: 'Use your email to open the app, keep your recent activity on this device, and return without extra setup.',
+    title: '1. Sign in once',
+    body: 'Open the app with your email so your work stays cached on this device and you can pick up exactly where you left off.',
   },
   {
-    title: '2. Choose a matchup',
-    body: 'Open the dashboard, select the next game you want to review, and generate a score forecast with win probabilities in one click.',
+    title: '2. Browse any slate',
+    body: 'Toggle current or past weeks and seasons, then pick a matchup to generate a polished forecast in a single tap.',
   },
   {
-    title: '3. Review and track your calls',
-    body: 'Use the forecast breakdown, saved history, and service overview to stay organized throughout the week.',
+    title: '3. Track predictions vs. final score',
+    body: 'History saves every forecast alongside the final score that syncs after Sunday, Monday, and Thursday nights.',
   },
 ];
 
 const HERO_METRICS = [
-  { label: 'Workflow', value: '3 Steps' },
-  { label: 'Coverage', value: 'Weekly Slate' },
-  { label: 'History', value: 'Saved Per User' },
+  { label: 'Score sync', value: 'Sun · Mon · Thu' },
+  { label: 'Season navigation', value: 'Live + archives' },
+  { label: 'History', value: 'Saved per user' },
 ];
 
 export default function LandingPage({ authSession, onSignIn, onSignOut }) {
@@ -86,11 +86,11 @@ export default function LandingPage({ authSession, onSignIn, onSignOut }) {
 
       <section className="landing-hero" id="experience">
         <div className="landing-copy">
-          <p className="landing-kicker">Fast weekly forecasts, clearer decisions</p>
-          <h1>Pick a matchup, review the outlook, and track your calls in one place.</h1>
+          <p className="landing-kicker">Weekly slates, finalized results</p>
+          <h1>Forecast any matchup, then compare how your call stacked up once the final score syncs.</h1>
           <p className="landing-lead">
-            Sign in with your email to open the dashboard, generate matchup forecasts, and keep a
-            simple history of the predictions you have already reviewed.
+            Sign in to capture forecasts, browse the current or past slate, and rely on synced final scores
+            after Sunday, Monday, and Thursday night games.
           </p>
 
           <div className="landing-hero__actions">
@@ -108,7 +108,7 @@ export default function LandingPage({ authSession, onSignIn, onSignOut }) {
                 <a className="landing-button landing-button--solid" href="#access">
                   Open the app
                 </a>
-                <a className="landing-button landing-button--ghost" href="#access">
+                <a className="landing-button landing-button--ghost" href="#experience">
                   See the workflow
                 </a>
               </>
@@ -176,8 +176,8 @@ export default function LandingPage({ authSession, onSignIn, onSignOut }) {
                   Sign in
                 </button>
                 <p className="landing-form__note">
-                  Your session stays on this device so your recent forecasts are ready the next
-                  time you return.
+                  Your session stays on this device and final scores refresh automatically after every Sunday,
+                  Monday, and Thursday night slate.
                 </p>
               </form>
             )}

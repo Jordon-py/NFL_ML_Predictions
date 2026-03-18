@@ -10,10 +10,6 @@
  *  - Defensive JSON parsing resilient to empty or malformed responses.
  *  - Data normalization layers to bridge backend-frontend schema drift.
  */
-/**
- * Retrieve system health and model readiness.
- */
-// client.js (minimal edits)
 
 import { fetchJson } from "./fetch";
 import { dedupeGamesByKey } from "../utils/predictionContextUtils.js";
@@ -235,6 +231,40 @@ export async function getNextWeekSchedule(season = null) {
 
   const postseasonRows = await fetchPostseasonSchedule();
   return dedupeGamesByKey(postseasonRows.length ? postseasonRows : scheduleRows);
+}
+
+const buildQueryString = (params = {}) => {
+  const qp = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value != null && value !== "") {
+      qp.set(key, String(value));
+    }
+  });
+  const query = qp.toString();
+  return query ? `?${query}` : "";
+};
+
+export async function getScheduleForWeek(season = null, week = null) {
+  try {
+    const query = buildQueryString({ season, week });
+    const data = await fetchJson(`/api/schedule/week${query}`);
+    const rows = extractScheduleRows(data);
+    return dedupeGamesByKey(rows);
+  } catch (error) {
+    console.warn("Failed to load schedule for week", season, week, error);
+    return [];
+  }
+}
+
+export async function getGameScores(season = null, week = null) {
+  try {
+    const query = buildQueryString({ season, week });
+    const data = await fetchJson(`/api/scores${query}`);
+    return Array.isArray(data) ? data : [];
+  } catch (error) {
+    console.warn("Failed to load game scores", season, week, error);
+    return [];
+  }
 }
 
 /**

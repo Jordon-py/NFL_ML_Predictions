@@ -1,210 +1,102 @@
-/* Card.module.css — v3 Cohesive Layout + Containment
-   --------------------------------------------------
-   Goals:
-   - 4-col grid (via .cardGrid) for the parent layout
-   - Card internals are flex-based (header → matchup → footer)
-   - Prevent overflow: min-width: 0, max-width: 100%, wrap-safe text
-   - Preserve your colors, glow, and motion tokens (uses base.css vars)
-*/
-
 .cardGrid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--gap, 16px);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  gap: clamp(1rem, 2vw, 1.25rem);
   align-items: stretch;
-  justify-items: center; /* keep cards centered in their cell */
   width: 100%;
-  max-width: 100%;
 }
 
-/* Responsive: 4 → 2 → 1 columns */
-@media (max-width: 1000px) {
-  .cardGrid {
-    grid-template-columns: repeat(2, minmax(auto-track-list, 1fr));
-  }
-}
-@media (max-width: 600px) {
-  .cardGrid {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* Glass Card — v3 (Premium Glass) */
 .card {
   position: relative;
   isolation: isolate;
-
   display: flex;
   flex-direction: column;
-  gap: 1.2rem;
-
+  gap: 1rem;
+  width: 100%;
+  min-width: 0;
+  min-height: 100%;
+  padding: 1rem;
+  border-radius: 16px;
+  border: 1px solid color-mix(in oklab, var(--c-brand-1, #54ade8) 34%, transparent);
+  background:
+    linear-gradient(180deg, lch(0% 0 0 / 0.92), lch(24% 26 270 / 0.42)),
+    lch(0% 0 0 / 0.88);
+  box-shadow: 0 18px 40px oklch(0% 0 0 / 0.42);
+  backdrop-filter: blur(10px);
+  color: var(--lch-text);
+  overflow: hidden;
+  outline: none;
+  animation: cardPop 500ms ease both;
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    border-color 180ms ease;
   --home-color: var(--lch-primary);
   --away-color: var(--lch-accent);
   --home-color-2: var(--home-color);
   --away-color-2: var(--away-color);
-
-  /* Stronger glass read (still subtle) */
-  backdrop-filter: blur(10px) saturate(140%);
-
-  border-radius: var(--r-md);
-  color: var(--lch-text);
-
-  padding: 1.5rem;
-
-  width: 100%;
-  max-width: 300px;
-  min-width: 0;
-  height: 100%;
-  max-height: 350px;
-  overflow: hidden;
-  margin-left: 2rem;
-
-  /* ---- Radial gradient: layered = depth + tint + vignette ----
-     Layer 1: bright top highlight (the “glass catch light”)
-     Layer 2: main blue tint bloom
-     Layer 3: subtle vignette to keep edges premium + readable
-  */
-  background:
-    radial-gradient(120% 140% at 18% 8%,
-      hsla(0, 0%, 100%, 0.18) 0%,
-      hsla(0, 0%, 100%, 0.08) 22%,
-      hsla(0, 0%, 100%, 0.00) 55%
-    ),
-    radial-gradient(140% 120% at 30% 0%,
-      hsla(224, 100%, 62%, 0.34) 0%,
-      hsla(224, 100%, 50%, 0.18) 35%,
-      hsla(230, 80%, 16%, 0.10) 70%,
-      hsla(230, 80%, 10%, 0.06) 100%
-    ),
-    radial-gradient(120% 140% at 50% 110%,
-      hsla(230, 80%, 6%, 0.35) 0%,
-      hsla(230, 80%, 6%, 0.00) 55%
-    );
-
-  /* Border should feel like a thin glass edge (not a heavy outline) */
-  border: 1px solid lch(77.05% 36.24 284.18 / 0.471);
-
-  /* ---- Box shadow: multiple layers = premium elevation ----
-     1) top inner highlight (glass edge)
-     2) soft inner ambient (depth)
-     3) main lift shadow (elevation)
-     4) bloom/glow (tasteful, modern)
-  */
-  box-shadow:
-    0 1px 0 hsla(0, 0%, 100%, 0.30) inset,
-    0 -22px 60px hsla(230, 80%, 6%, 0.30) inset,
-    0 14px 38px hsla(230, 70%, 6%, 0.55),
-    0 8px 18px lch(20% 40 285 / 0.28);
-
-  /* Motion (kept) */
-  animation: cardPop 0.9s var(--a-ease) calc(var(--i, 0) * 80ms) both;
-  transform-style: preserve-3d;
-  transition:
-    transform 0.75s var(--a-ease),
-    box-shadow 0.75s var(--a-ease),
-    border-color 0.95s var(--a-ease);
-  outline: none;
-
-  /* Your custom props */
-  --card-tilt: 130deg;
-  --glow-time: 350ms;
-  --glow-accent: lch(13.16% 45.21 326.7 / 0.594);
 }
 
-/* Specular sheen overlay (makes it feel “expensive”) */
 .card::before {
   content: "";
   position: absolute;
-  inset: -1px; /* cover border edge */
+  inset: 0;
   pointer-events: none;
-  border-radius: inherit;
-
   background:
-    radial-gradient(90% 70% at 22% 12%,
-      hsla(0, 0%, 100%, 0.22) 0%,
-      hsla(0, 0%, 100%, 0.10) 28%,
-      hsla(0, 0%, 100%, 0.00) 60%
-    ),
-    radial-gradient(100% 90% at 85% 18%,
-      lch(60% 45 285 / 0.10) 0%,
-      lch(60% 45 285 / 0.00) 55%
-    );
-
-  mix-blend-mode: screen;
-  opacity: 0.8;
+    radial-gradient(circle at top left, color-mix(in oklab, var(--away-color) 24%, transparent), transparent 45%),
+    radial-gradient(circle at top right, color-mix(in oklab, var(--home-color) 24%, transparent), transparent 50%);
+  opacity: 0.85;
 }
 
-/* Matchup accent strip uses team colors to anchor the matchup identity. */
 .card::after {
   content: "";
   position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  height: 6px;
+  inset: 0 auto auto 0;
+  width: 100%;
+  height: 4px;
   background: linear-gradient(90deg, var(--away-color-2), var(--home-color-2));
-  opacity: 0.85;
+  opacity: 0.95;
   pointer-events: none;
-  z-index: 0;
 }
 
-/* Hover/focus: cleaner lift + controlled glow (no harsh jump) */
 .card:hover,
 .card:focus-within {
-  border-color: lch(78% 35 283 / 0.55);
-  box-shadow:
-    0 1px 0 hsla(0, 0%, 100%, 0.34) inset,
-    0 -26px 70px hsla(230, 80%, 6%, 0.34) inset,
-    0 18px 54px hsla(230, 70%, 6%, 0.60),
-    0 10px 22px lch(20% 45 285 / 0.35);
-  transform: translateY(-12px) scale(1.02);
-  transition-duration: 2.5s;
-  transition-timing-function: ease-in-out;
-  transition-property: transform, box-shadow, border-color;
+  transform: translateY(-4px);
+  box-shadow: 0 22px 48px oklch(0% 0 0 / 0.5);
+  border-color: color-mix(in oklab, var(--c-brand-1, #54ade8) 52%, white 8%);
 }
 
-/* Ensure all inner nodes obey the card's box model */
 .card,
 .card * {
   box-sizing: border-box;
-  max-width: 100%;
-  min-width: 0; /* allows ellipsis + prevents flex overflow */
+  min-width: 0;
 }
 
 @keyframes cardPop {
   from {
-    transform: translateY(10px) scale(0.98);
     opacity: 0;
+    transform: translateY(10px);
   }
-  to {
-    transform: translateY(-10) scale(1);
-    opacity: 1;
-  }
-}
 
-.card:hover,
-.card:focus-within {
-  transform: translateY(-8px) scale(1.02) rotateX(0.9deg) rotateY(0.9deg);
-  box-shadow:
-    1px 4px 16px 4px oklch(14.489% 0.05946 29.223 / 0.568),
-    0 0 22px var(--glow-accent);
-  cursor: pointer;
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .cardInner {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.9rem;
   height: 100%;
-  min-height: 0;
-  z-index: 1;
 }
 
-/* Header */
 .head {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.65rem;
 }
 
 .topBar {
@@ -217,91 +109,80 @@
 .left {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  min-width: 0;
+  gap: 0.5rem;
 }
 
 .icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex: 0 0 auto;
-  filter: drop-shadow(0 0 10px var(--lch-primary));
 }
 
 .title {
-  font-family: var(--font-tech);
-  letter-spacing: 0.3px;
+  font-size: 0.92rem;
   font-weight: 700;
-  font-size: 0.95rem;
-
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-family: var(--font-display);
 }
 
 .status {
-  font-size: 0.8rem;
-  color: var(--lch-muted);
-  font-family: var(--font-tech);
-  opacity: 0.9;
-
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.22rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in oklab, var(--c-brand-1, #54ade8) 40%, transparent);
+  background: color-mix(in oklab, var(--c-brand-1, #54ade8) 12%, transparent);
+  color: var(--lch-text);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
-/* Kickoff */
 .kickoffRow {
   display: flex;
-  align-items: center;
   justify-content: center;
 }
 
 .kickoffTime {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.05rem;
+  font-size: 0.92rem;
   color: var(--lch-muted);
-  white-space: nowrap;
   font-family: var(--font-tech);
-
-  overflow: hidden;
-  text-overflow: ellipsis;
+  text-align: center;
 }
 
-/* Matchup row */
 .teamRow {
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: center;
-  gap: 1rem;
-
-  width: 100%;
-  min-height: 0;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: stretch;
+  gap: 0.75rem;
 }
 
 .gameCard {
+  position: relative;
+  isolation: isolate;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
-  gap: 0.55rem;
-  min-width: 0;
-  position: relative;
-  isolation: isolate;
+  gap: 0.65rem;
+  padding: 0.9rem 0.8rem;
+  min-height: 172px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in oklab, var(--team-primary, var(--c-brand-1, #54ade8)) 24%, transparent);
+  background:
+    linear-gradient(180deg, oklch(100% 0 0 / 0.06), oklch(100% 0 0 / 0.02)),
+    oklch(0% 0 0 / 0.12);
+  text-align: center;
 }
 
 .gameCard::after {
   content: "";
   position: absolute;
   inset: 0;
-  background: var(--team-wordmark) center / contain no-repeat;
-  opacity: 0.08;
-  filter: grayscale(100%);
   pointer-events: none;
-  z-index: 0;
+  background: var(--team-wordmark) center / 80% auto no-repeat;
+  opacity: 0.06;
+  filter: grayscale(100%);
 }
 
 .gameCard > * {
@@ -309,209 +190,254 @@
   z-index: 1;
 }
 
-/* "VS" */
-.vs {
-  font-family: var(--font-tech);
-  font-weight: 800;
-  letter-spacing: 0.2px;
-  font-size: 1.4rem;
-  color: var(--lch-accent);
-  opacity: 0.9;
+.logoFrame {
+  display: grid;
+  place-items: center;
+  width: 78px;
+  height: 78px;
+  border-radius: 20px;
+  border: 1px solid color-mix(in oklab, var(--team-primary, var(--c-brand-1, #54ade8)) 26%, transparent);
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in oklab, var(--team-primary, var(--c-brand-1, #54ade8)) 16%, transparent),
+      color-mix(in oklab, var(--team-secondary, var(--team-primary, var(--c-brand-1, #54ade8))) 10%, transparent)
+    ),
+    oklch(0% 0 0 / 0.22);
+  box-shadow:
+    inset 0 1px 0 oklch(100% 0 0 / 0.08),
+    0 10px 24px oklch(0% 0 0 / 0.24);
 }
 
-/* Logos */
 .gameCardLogo {
-  width: clamp(88px, 18vw, 140px);
-  aspect-ratio: 1 / 1;
-  height: auto;
-
-  object-fit: cover;
-  border-radius: 50%;
-  background: oklch(0% 0 0 / 0.295);
-  padding: 4px;
-
-  transition: transform 0.4s var(--a-ease), filter 0.4s var(--a-ease);
-  filter: drop-shadow(0 0 12px color-mix(in oklab, var(--lch-primary) 35%, transparent));
+  width: 58px;
+  height: 58px;
+  object-fit: contain;
+  filter: drop-shadow(0 8px 14px oklch(0% 0 0 / 0.34));
 }
 
-.gameCardLogo:hover {
-  transform: scale(1.12) rotate(5deg);
-  filter: brightness(1.2) drop-shadow(0 0 12px var(--lch-primary));
-}
-
-/* Team labels + names */
-.gameCardLabel {
-  font-size: 0.75rem;
-  color: var(--lch-muted);
+.logoFallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 58px;
+  height: 58px;
+  border-radius: 16px;
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in oklab, var(--team-primary, var(--c-brand-1, #54ade8)) 54%, black 24%),
+      color-mix(in oklab, var(--team-secondary, var(--team-primary, var(--c-brand-1, #54ade8))) 46%, black 30%)
+    );
+  color: #f8fbff;
   font-family: var(--font-tech);
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.teamMetaRow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.gameCardLabel {
+  font-size: 0.7rem;
+  color: var(--lch-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+}
+
+.teamCodePill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.16rem 0.5rem;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--team-primary, var(--c-brand-1, #54ade8)) 12%, transparent);
+  border: 1px solid color-mix(in oklab, var(--team-primary, var(--c-brand-1, #54ade8)) 26%, transparent);
+  color: var(--lch-text);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
 }
 
 .gameCardName {
-  font-size: 0.95rem;
+  font-size: 1rem;
   font-weight: 700;
-  color: var(--lch-text);
-  text-align: center;
-  line-height: 1.15;
-
-  /* Keep names from breaking layout */
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.25;
+  text-wrap: balance;
 }
 
-/* Footer */
+.vs {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in oklab, var(--c-brand-1, #54ade8) 26%, transparent);
+  background: oklch(0% 0 0 / 0.28);
+  color: var(--lch-text);
+  font-family: var(--font-tech);
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
 .gameCardFooter {
   position: relative;
-  margin-top: auto; /* push footer to bottom */
-  padding-top: 0.75rem;
-  border-top: 1px solid var(--c-border-subtle);
-  font-size: 1.1rem;
-  color: var(--c-ink-softer);
-
+  margin-top: auto;
+  padding-top: 0.8rem;
+  border-top: 1px solid color-mix(in oklab, var(--c-brand-1, #54ade8) 18%, transparent);
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
 }
 
-/* Prediction body */
 .predictionBody {
   display: flex;
   flex-direction: column;
-  gap: 0.9rem;
+  gap: 0.85rem;
 }
 
-/* Badges */
 .badgeRow {
   display: flex;
-  gap: 0.35rem;
   flex-wrap: wrap;
+  gap: 0.4rem;
   justify-content: center;
 }
 
 .badge {
-  font-size: 0.75rem;
-  padding: 0.15rem 0.5rem;
-  border-radius: var(--r-sm, 4px);
-  border: 1px solid var(--lch-border);
-  background: oklch(10% 0 0 / 0.4);
-
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in oklab, var(--c-brand-1, #54ade8) 22%, transparent);
+  background: oklch(100% 0 0 / 0.04);
+  color: var(--lch-text);
+  font-size: 0.72rem;
+  text-align: center;
 }
 
 .expertBadge {
-  background: linear-gradient(90deg, #0048ff80, #00c8ff80);
-  border-color: #00c8ff;
-  color: #fff;
-  font-weight: 700;
-  text-shadow: 0 0 8px rgba(0, 200, 255, 0.5);
-  animation: pulseExpert 2s ease-in-out infinite;
-}
-
-@keyframes pulseExpert {
-  0% { opacity: 0.85; }
-  50% { opacity: 1; transform: scale(1.01); }
-  100% { opacity: 0.85; }
+  background: linear-gradient(90deg, oklch(58% 0.19 240 / 0.34), oklch(68% 0.14 195 / 0.3));
+  border-color: color-mix(in oklab, #7cd3ff 45%, transparent);
 }
 
 .predScore {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.4rem;
+}
+
+.actualRow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+  color: color-mix(in oklab, var(--c-text-on-dark) 70%, white 10%);
+}
+
+.actualLabel {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--lch-muted);
+}
+
+.actualStatus {
+  font-size: 0.7rem;
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in oklab, var(--c-accent, #54ade8) 30%, transparent);
+  background: color-mix(in oklab, var(--c-accent, #54ade8) 12%, transparent);
+}
+
+.actualDiff {
+  font-size: 0.75rem;
+  font-family: var(--font-tech);
+  color: color-mix(in oklab, var(--c-accent, #54ade8) 70%, white 10%);
 }
 
 .scoreRow {
   display: flex;
   align-items: baseline;
   justify-content: center;
-  gap: 0.5rem;
+  gap: 0.45rem;
   flex-wrap: wrap;
   text-align: center;
+  font-size: 0.94rem;
 }
 
 .expertRange {
-  font-size: 0.7rem;
-  opacity: 0.8;
-  color: #00c8ff;
-  font-family: var(--font-tech);
-
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0.35rem;
   flex-wrap: wrap;
   text-align: center;
+  font-size: 0.72rem;
+  color: color-mix(in oklab, var(--c-accent, #54ade8) 78%, white 10%);
+  font-family: var(--font-tech);
 }
 
-/* Reset button */
 .resetButton {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-
-  background: transparent;
+  align-self: flex-end;
+  padding: 0.32rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in oklab, var(--c-brand-1, #54ade8) 28%, transparent);
+  background: oklch(100% 0 0 / 0.04);
   color: var(--lch-text);
-  border: 1px solid var(--lch-border);
-  padding: 0.35rem 0.6rem;
-  border-radius: 6px;
-  font-weight: 600;
-  letter-spacing: 0.2px;
+  font-size: 0.78rem;
+  font-weight: 700;
   cursor: pointer;
-
-  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
-  will-change: transform;
+  transition:
+    transform 150ms ease,
+    border-color 150ms ease,
+    background-color 150ms ease;
 }
 
 .resetButton:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12), 0 0 8px var(--lch-accent);
-  border-color: var(--lch-primary);
-}
-
-/* Loading indicator overlay */
-.loadingIndicator {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: oklch(0% 0 0 / 0.18);
-  border-radius: 50%;
-  border: 1px solid oklch(80% 0 0 / 0.12);
-  box-shadow: 0 0 8px var(--lch-accent);
-  z-index: 10;
+  transform: translateY(-1px);
+  border-color: color-mix(in oklab, var(--c-brand-1, #54ade8) 48%, white 8%);
+  background: color-mix(in oklab, var(--c-brand-1, #54ade8) 12%, transparent);
 }
 
 .spinner {
+  display: inline-flex;
   width: 14px;
   height: 14px;
-  border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.12);
-  border-top-color: var(--lch-accent);
+  border-radius: 999px;
+  border: 2px solid oklch(100% 0 0 / 0.16);
+  border-top-color: var(--c-accent, #54ade8);
   animation: cardSpin 800ms linear infinite;
 }
 
 @keyframes cardSpin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
-/* Progress meter */
 .progressTrack {
-  position:absolute;
-  left: 0;
-  right: 0;
-  top: 0;
+  position: absolute;
+  inset: auto 0 0;
   height: 3px;
-  background: lch(20% 5 250 / 0.35);
+  background: oklch(100% 0 0 / 0.06);
   overflow: hidden;
-  border-bottom-left-radius: var(--r-md);
-  border-bottom-right-radius: var(--r-md);
-  z-index: 5;
 }
 
 .progressBar {
@@ -519,26 +445,59 @@
   background: linear-gradient(90deg, var(--away-color), var(--home-color));
 }
 
-/* State variants */
 .isLoading {
   cursor: progress;
 }
 
 .isError {
-  border-color: lch(58% 78 30);
-  box-shadow: 0 0 0 1px lch(58% 78 30 / 0.4) inset;
+  border-color: color-mix(in oklab, var(--c-danger, #df1b05) 70%, transparent);
 }
 
-/* Accent for cards that have predictions (keeps everything inside bounds) */
 .hasPrediction {
-  height: 100%;
-  max-height: 650px;
-  border-color: var(--lch-primary);
-  box-shadow: 3px 3px 12px 3px inset oklch(0% 0 0), 0 0 25px var(--lch-primary);
+  border-color: color-mix(in oklab, var(--c-brand-1, #54ade8) 46%, white 8%);
+  box-shadow:
+    0 18px 40px oklch(0% 0 0 / 0.42),
+    0 0 0 1px color-mix(in oklab, var(--c-brand-1, #54ade8) 22%, transparent) inset;
 }
 
-/* Dev-only visual hint when a card receives a click (short-lived) */
 .debugClicked {
-  box-shadow: 0 0 0 4px rgba(0, 200, 255, 0.18), 0 8px 28px rgba(0, 0, 0, 0.35) !important;
-  transform: translateY(-6px) scale(1.01) !important;
+  box-shadow:
+    0 0 0 3px oklch(72% 0.14 210 / 0.18),
+    0 22px 48px oklch(0% 0 0 / 0.5) !important;
+}
+
+@media (max-width: 680px) {
+  .card {
+    padding: 0.9rem;
+  }
+
+  .teamRow {
+    gap: 0.6rem;
+  }
+
+  .gameCard {
+    min-height: 158px;
+    padding: 0.8rem 0.65rem;
+  }
+
+  .logoFrame {
+    width: 68px;
+    height: 68px;
+  }
+
+  .gameCardLogo,
+  .logoFallback {
+    width: 50px;
+    height: 50px;
+  }
+
+  .gameCardName {
+    font-size: 0.92rem;
+  }
+
+  .vs {
+    width: 36px;
+    height: 36px;
+    font-size: 0.74rem;
+  }
 }

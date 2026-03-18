@@ -13,7 +13,6 @@ PURPOSE: Canonical Pydantic models for NFL Prediction API contracts.
 """
 from __future__ import annotations
 import datetime
-import fastapi
 from typing import Optional, Any, Dict, List
 from pydantic import BaseModel, Field
 
@@ -92,6 +91,17 @@ class StatusOverviewResponse(BaseModel):
     health: HealthResponse
     dataset: DatasetInfo
     history: HistoryMetrics
+
+class ScoreEntry(BaseModel):
+    game_id: str
+    season: Optional[int] = None
+    week: Optional[int] = None
+    home_team: Optional[str] = None
+    away_team: Optional[str] = None
+    home_score: Optional[int] = None
+    away_score: Optional[int] = None
+    status: Optional[str] = None
+    updated_at: Optional[datetime.datetime] = None
 
 class ScheduleEntry(BaseModel):
     home_team: str
@@ -194,4 +204,5 @@ __all__ = [
     "ChatRequest",
     "ChatResponse",
     "AdminRetrainRequest",
+    "ScoreEntry",
 ]

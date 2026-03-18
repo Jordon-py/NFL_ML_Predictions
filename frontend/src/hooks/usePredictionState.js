@@ -24,6 +24,7 @@ import {
   getNextWeekSchedule,
   getHealthStatus as fetchHealth,
   getPredictionHistory,
+  getScheduleForWeek,
   getTeamLogos,
   getSeasonContext,
 } from "../api/client.js";
@@ -180,6 +181,7 @@ export function usePredictionState(authSession = null) {
   const [seasonContext, setSeasonContext] = useState(INITIAL_SEASON_CONTEXT);
   const [loadingByKey, setLoadingByKey] = useState({});
   const [errorsByKey, setErrorsByKey] = useState({});
+  const [teamMeta, setTeamMeta] = useState({});
 
   useEffect(() => {
     const stored = loadPredictionHistoryFromStorage(historyStorageKey);
@@ -219,6 +221,7 @@ export function usePredictionState(authSession = null) {
           : INITIAL_SEASON_CONTEXT;
       setSeasonContext(nextSeasonContext);
       setWeek(toNumberOrNull(enriched?.[0]?.week) ?? toNumberOrNull(nextSeasonContext?.display_week));
+      setTeamMeta(teamMeta);
 
       if (historyRes.status === "fulfilled") {
         const entries = Array.isArray(historyRes.value?.entries)
@@ -236,10 +239,10 @@ export function usePredictionState(authSession = null) {
 
   // 2. Health Polling
   useEffect(() => {
-    const poll = async () => {
-      try {
-        const h = await fetchHealth();
-        setHealth(h);
+  const poll = async () => {
+    try {
+      const h = await fetchHealth();
+      setHealth(h);
       } catch (err) {
         const message = err?.message || "fetch failed";
         setHealth({ status: "error", reason: message });
@@ -259,6 +262,26 @@ export function usePredictionState(authSession = null) {
       console.warn("History persistence failed", err);
     }
   }, [history, historyStorageKey]);
+
+  const loadScheduleForWeek = useCallback(
+    async (seasonOverride, weekOverride) => {
+      const rows = await getScheduleForWeek(seasonOverride, weekOverride);
+      const normalized = normalizeSchedule(rows);
+      const enriched = applyTeamMeta(normalized, teamMeta);
+      const derivedWeek = toNumberOrNull(weekOverride ?? normalized?.[0]?.week);
+      const derivedSeason =
+        toNumberOrNull(seasonOverride ?? normalized?.[0]?.season) || seasonOverride || seasonContext?.current_season;
+      setSchedule(enriched);
+      setWeek(derivedWeek);
+      setSeasonContext((prev) => ({
+        ...prev,
+        current_season: derivedSeason || prev.current_season,
+        display_week: derivedWeek ?? prev.display_week,
+      }));
+      return enriched;
+    },
+    [seasonContext?.current_season, teamMeta]
+  );
 
   const setLoading = useCallback((key, value) => {
     if (!key) return;
@@ -332,5 +355,6 @@ export function usePredictionState(authSession = null) {
     pushHistory,
     resetHistory,
     count: history.length,
+    loadScheduleForWeek,
   };
 }

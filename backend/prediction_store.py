@@ -20,6 +20,8 @@ from typing import Iterable
 from .pipeline_models import PredictionStorageProfile, PredictionUserContext
 from .schemas import HistoryEntry, HistoryResponse, PredictionRequest, StoredPredictionRecord
 
+from .sqlite_store import get_user_history, persist_prediction
+
 log = logging.getLogger(__name__)
 
 PREDICTION_STORE_ROOT = Path(__file__).resolve().parent / "Predictions" / "users"
@@ -132,6 +134,7 @@ def append_prediction_record(
             profile.model_dump(mode="json"),
         )
 
+    persist_prediction(context, record.model_dump(mode="json"))
     return record
 
 
@@ -140,6 +143,11 @@ def get_prediction_history(context: PredictionUserContext, limit: int = 100) -> 
 
     bounded_limit = max(1, min(int(limit or 100), PREDICTION_HISTORY_MAX))
     history_path = _user_history_path(context)
+
+    sqlite_entries = get_user_history(context, limit=bounded_limit)
+    if sqlite_entries:
+        entries = [HistoryEntry.model_validate(entry) for entry in sqlite_entries]
+        return HistoryResponse(entries=entries, total=len(sqlite_entries), user_id=context.user_id)
 
     with _prediction_store_lock:
         records = _read_history_records(history_path)

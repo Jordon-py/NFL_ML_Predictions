@@ -83,10 +83,11 @@ import os
 import json
 import math
 from pathlib import Path
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta, date
 from contextlib import asynccontextmanager
 from typing import Dict, Any, List, Optional, Tuple, Literal
 from pydantic import BaseModel, Field
+import httpx
 import pandas as pd
 import numpy as np
 from fastapi import FastAPI, HTTPException, Request, Body
@@ -104,6 +105,7 @@ from .schemas import (
     HistoryResponse,
     ScheduleResponse,
     ScheduleEntry,
+    ScoreEntry,
     SeasonContextResponse,
     ExplainPredictionRequest,
     ExplainPredictionResponse,
@@ -128,6 +130,8 @@ from .main_helpers import (
     _HOME_COLS,
     _AWAY_COLS,
     _STADIUM_COLS,
+    _SEASON_COLS,
+    _WEEK_COLS,
     load_prediction_history,
 )
 from .prediction_store import (
@@ -137,6 +141,7 @@ from .prediction_store import (
     get_prediction_history_count,
 )
 from .ollama.llm_ollama import explain_prediction as llm_explain_prediction, chat_messages as llm_chat_messages
+from .sqlite_store import get_game_scores, upsert_game_scores
 from .routes import (
     TeamLogosResponse,
     router as legacy_router,
@@ -179,6 +184,12 @@ state: Dict[str, Any] = {
 }
 
 ADMIN_ENABLED = os.getenv("ENABLE_ADMIN", "false").strip().lower() in TRUTHY
+SCORE_SYNC_TZ = os.getenv("SCORE_SYNC_TZ", "UTC")
+SCORE_SYNC_DAYS = os.getenv("SCORE_SYNC_DAYS", "sun,mon,thu")
+SCORE_SYNC_ENABLED = os.getenv("DISABLE_SCORE_SYNC", "false").strip().lower() not in TRUTHY
+SCORE_SYNC_LOOKBACK = max(0, min(int(os.getenv("SCORE_SYNC_LOOKBACK", "2")), 5))
+SCOREBOARD_API_URL = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
+LOCAL_SCORE_DIR = Path(__file__).resolve().parent / "data" / "scores"
 
 
 def get_logos(home_team, away_team):
@@ -307,12 +318,80 @@ def _build_next_slate_games(season: int | None = None) -> tuple[list[ScheduleEnt
     df_next, use_season, use_week = select_next_week_rows(df)
     team_meta = _get_team_meta_map()
 
-    home_col = _pick_col(df_next, _HOME_COLS)
-    away_col = _pick_col(df_next, _AWAY_COLS)
-    stadium_col = _pick_col(df_next, _STADIUM_COLS)
+    games = _map_schedule_entries(df_next, use_season, use_week, team_meta)
 
+    return games, df_next, int(use_season), int(use_week)
+
+def _parse_score_value(value: Any) -> Optional[int]:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+def _build_scoreboard_entries(events: List[Dict[str, Any]]) -> list[Dict[str, object]]:
+    entries: list[Dict[str, object]] = []
+    for event in events:
+        competitions = event.get("competitions") or []
+        if not competitions:
+            continue
+        competition = competitions[0]
+        week_value = competition.get("week")
+        season_value = (
+            competition.get("season", {}).get("year")
+            or event.get("season", {}).get("year")
+            or datetime.now(timezone.utc).year
+        )
+        competitors = competition.get("competitors") or []
+        home = next((c for c in competitors if c.get("homeAway") == "home"), None)
+        away = next((c for c in competitors if c.get("homeAway") == "away"), None)
+        if not home or not away or week_value is None:
+            continue
+        home_team = _normalize_team_code(
+            home.get("team", {}).get("abbreviation") or home.get("team", {}).get("shortDisplayName")
+        )
+        away_team = _normalize_team_code(
+            away.get("team", {}).get("abbreviation") or away.get("team", {}).get("shortDisplayName")
+        )
+        home_score = _parse_score_value(home.get("score"))
+        away_score = _parse_score_value(away.get("score"))
+        status = event.get("status", {})
+        status_type = status.get("type", {})
+        state = str(status_type.get("state", "")).lower()
+        is_final = (
+            state in {"post", "final", "complete"}
+            or status_type.get("completed") is True
+            or str(status_type.get("name", "")).lower() == "final"
+        )
+        if not is_final:
+            continue
+
+        game_id = _build_game_id(season_value, week_value, home_team, away_team)
+        entries.append(
+            {
+                "game_id": game_id,
+                "season": season_value,
+                "week": week_value,
+                "home_team": home_team,
+                "away_team": away_team,
+                "home_score": home_score,
+                "away_score": away_score,
+                "status": status_type.get("description") or status_type.get("name") or "Final",
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }
+        )
+    return entries
+
+def _map_schedule_entries(
+    df: pd.DataFrame,
+    season_value: int,
+    week_value: int,
+    team_meta: Dict[str, Dict[str, str]],
+) -> list[ScheduleEntry]:
+    home_col = _pick_col(df, _HOME_COLS)
+    away_col = _pick_col(df, _AWAY_COLS)
+    stadium_col = _pick_col(df, _STADIUM_COLS)
     games: list[ScheduleEntry] = []
-    for _, row in df_next.iterrows():
+    for _, row in df.iterrows():
         home = _normalize_team_code(row.get(home_col, "") if home_col else row.get("home", ""))
         away = _normalize_team_code(row.get(away_col, "") if away_col else row.get("away", ""))
         if not home or not away:
@@ -324,12 +403,12 @@ def _build_next_slate_games(season: int | None = None) -> tuple[list[ScheduleEnt
 
         games.append(
             ScheduleEntry(
-                season=int(use_season),
-                week=int(use_week),
+                season=int(season_value),
+                week=int(week_value),
                 kickoff=parse_kickoff(row),
                 home_team=home,
                 away_team=away,
-                game_id=_build_game_id(use_season, use_week, home, away),
+                game_id=_build_game_id(season_value, week_value, home, away),
                 home_abbr=home,
                 away_abbr=away,
                 home_logo=home_info.get("logoUrl"),
@@ -339,8 +418,84 @@ def _build_next_slate_games(season: int | None = None) -> tuple[list[ScheduleEnt
                 stadium=stadium,
             )
         )
+    return games
 
-    return games, df_next, int(use_season), int(use_week)
+def _build_schedule_for_week(season: int | None = None, week: int | None = None) -> tuple[list[ScheduleEntry], pd.DataFrame, int, int]:
+    """Return a specific week vs season slate (falls back to next-week when not provided)."""
+
+    if week is None:
+        return _build_next_slate_games(season=season)
+
+    df = get_schedule(season=season)
+    if df is None or df.empty:
+        return [], pd.DataFrame(), season or datetime.now(timezone.utc).year, week
+
+    season_col = _pick_col(df, _SEASON_COLS)
+    week_col = _pick_col(df, _WEEK_COLS)
+
+    filtered = df.copy()
+    use_season = season or datetime.now(timezone.utc).year
+    if season_col:
+        if season is not None:
+            filtered = filtered[pd.to_numeric(filtered[season_col], errors="coerce") == season]
+            use_season = season
+        else:
+            seasons = pd.to_numeric(filtered[season_col], errors="coerce").dropna().astype(int)
+            if not seasons.empty:
+                use_season = int(seasons.max())
+                filtered = filtered[pd.to_numeric(filtered[season_col], errors="coerce") == use_season]
+
+    if week_col:
+        filtered = filtered[pd.to_numeric(filtered[week_col], errors="coerce") == week]
+    else:
+        filtered = filtered.iloc[0:0]
+
+    team_meta = _get_team_meta_map()
+    games = _map_schedule_entries(filtered, use_season, week, team_meta)
+    return games, filtered, use_season, week
+
+async def _fetch_remote_scores_for_date(date_str: str) -> list[Dict[str, object]]:
+    async with httpx.AsyncClient(timeout=15) as client:
+        resp = await client.get(f"{SCOREBOARD_API_URL}?dates={date_str}")
+        resp.raise_for_status()
+        payload = resp.json()
+    events = payload.get("events") or []
+    return _build_scoreboard_entries(events)
+
+def _load_local_scores_for_date(date_str: str) -> list[Dict[str, object]]:
+    path = LOCAL_SCORE_DIR / f"{date_str}.json"
+    if not path.exists():
+        return []
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        log.warning("Failed to parse local scoreboard for %s: %s", date_str, exc)
+        return []
+    return _build_scoreboard_entries(data.get("events") or [])
+
+def _score_sync_dates() -> list[date]:
+    today = datetime.now(timezone.utc).date()
+    return [today - timedelta(days=i) for i in range(0, SCORE_SYNC_LOOKBACK + 1)]
+
+async def _sync_scores_job() -> None:
+    entries: list[Dict[str, object]] = []
+    target_dates = _score_sync_dates()
+    for target in target_dates:
+        date_str = target.strftime("%Y%m%d")
+        try:
+            remote_entries = await _fetch_remote_scores_for_date(date_str)
+            if remote_entries:
+                entries.extend(remote_entries)
+                continue
+        except Exception as exc:
+            log.debug("Score sync remote fetch failed for %s: %s", date_str, exc)
+
+        local_entries = _load_local_scores_for_date(date_str)
+        if local_entries:
+            entries.extend(local_entries)
+    if entries:
+        upsert_game_scores(entries)
+        log.info("Score sync ingested %d entries", len(entries))
 
 def _flatten_raw_feature_columns(raw: Any) -> list[str]:
     """Normalize 'raw_feature_columns' shapes into a flat list of column names.
@@ -562,6 +717,8 @@ def _run_preprocessor_smoke_test(bundle: Any, dataset: pd.DataFrame, expected_fe
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    scheduler = AsyncIOScheduler(timezone=SCORE_SYNC_TZ)
+    job_added = False
     # Startup: Load models and dataset
     try:
         log.info("Starting up: Loading model bundle and dataset...")
@@ -599,6 +756,23 @@ async def lifespan(app: FastAPI):
         _get_team_meta_map()
         _sync_app_state(app)
         log.info("Startup complete: Models and dataset ready.")
+
+        if SCORE_SYNC_ENABLED:
+            scheduler.add_job(
+                _sync_scores_job,
+                trigger="cron",
+                id="score-sync",
+                day_of_week=SCORE_SYNC_DAYS,
+                hour=23,
+                minute=45,
+                timezone=SCORE_SYNC_TZ,
+                replace_existing=True,
+                coalesce=True,
+                max_instances=1,
+            )
+            scheduler.start()
+            job_added = True
+            await _sync_scores_job()
     except Exception as e:
         msg = f"Startup failed: {e}"
         log.error(msg, exc_info=True)
@@ -608,7 +782,11 @@ async def lifespan(app: FastAPI):
         state["started_at"] = state.get("started_at") or datetime.now(timezone.utc).isoformat()
         _sync_app_state(app)
 
-    yield
+    try:
+        yield
+    finally:
+        if job_added:
+            scheduler.shutdown(wait=False)
 
 app = FastAPI(title="NFL ML Predictions API", lifespan=lifespan)
 
@@ -724,6 +902,19 @@ async def get_season_context(season: int | None = None) -> SeasonContextResponse
 async def get_next_week_schedule(season: int | None = None) -> ScheduleResponse:
     games, _, _, _ = _build_next_slate_games(season=season)
     return ScheduleResponse(games=games)
+
+
+@app.get("/api/schedule/week", response_model=ScheduleResponse)
+@app.get("/schedule/week", response_model=ScheduleResponse)
+async def get_schedule_for_week(season: int | None = None, week: int | None = None) -> ScheduleResponse:
+    games, _, _, _ = _build_schedule_for_week(season=season, week=week)
+    return ScheduleResponse(games=games)
+
+
+@app.get("/api/scores", response_model=List[ScoreEntry])
+@app.get("/scores", response_model=List[ScoreEntry])
+async def get_scores(season: int | None = None, week: int | None = None):
+    return get_game_scores(season=season, week=week)
 
 @app.get("/api/teams/logos", response_model=TeamLogosResponse)
 @app.get("/teams/logos", response_model=TeamLogosResponse)

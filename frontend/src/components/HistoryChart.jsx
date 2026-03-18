@@ -98,12 +98,25 @@ export default function HistoryChart({ history: historyOverride = [] }) {
   const chartPoints = historyItems.map((event, index) => {
     const timestamp = extractTimestamp(event);
     const prob = extractHomeWinProbability(event);
+    const predictedHome = typeof event.home_score === "number" ? event.home_score : null;
+    const predictedAway = typeof event.away_score === "number" ? event.away_score : null;
+    const actualHome =
+      typeof event.final_home_score === "number" ? event.final_home_score : null;
+    const actualAway =
+      typeof event.final_away_score === "number" ? event.final_away_score : null;
+    const actualLabel =
+      actualHome != null && actualAway != null ? `${actualHome}-${actualAway}` : null;
+    const actualStatus = event.game_status;
 
     return {
       index,
       timestamp,
       homeWinPercent: toWholePercent(prob),
       label: buildGameLabel(event, index),
+      predictedHome,
+      predictedAway,
+      actualLabel,
+      actualStatus,
     };
   });
 
@@ -177,6 +190,17 @@ export default function HistoryChart({ history: historyOverride = [] }) {
               {row.homeWinPercent != null ? `${row.homeWinPercent}%` : "n/a"}
             </strong>{" "}
             <em>({row.label})</em>
+            <div className="history-score">
+              <span>
+                Pred: {row.predictedHome ?? "—"}-{row.predictedAway ?? "—"}
+              </span>
+              {row.actualLabel && (
+                <span>
+                  Final: {row.actualLabel}
+                  {row.actualStatus ? ` (${row.actualStatus})` : ""}
+                </span>
+              )}
+            </div>
           </li>
         ))}
       </ol>

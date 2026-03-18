@@ -69,6 +69,7 @@ function PredictionAppRoutes({ authSession, onSignOut }) {
     history,
     health,
     seasonContext,
+    loadScheduleForWeek,
     setPrediction,
     setLoading,
     setError,
@@ -82,18 +83,19 @@ function PredictionAppRoutes({ authSession, onSignOut }) {
       <Route
         path="app"
         element={(
-          <Dashboard
-            authSession={authSession}
-            onSignOut={onSignOut}
-            schedule={schedule}
-            week={week}
-            predictions={predictions}
-            loading={loading}
-            errors={errors}
-            current={current}
-            history={history}
-            health={health}
-            setPrediction={setPrediction}
+            <Dashboard
+              authSession={authSession}
+              onSignOut={onSignOut}
+              schedule={schedule}
+              week={week}
+              predictions={predictions}
+              loading={loading}
+              errors={errors}
+              current={current}
+              history={history}
+              health={health}
+              loadScheduleForWeek={loadScheduleForWeek}
+              setPrediction={setPrediction}
             setLoading={setLoading}
             setError={setError}
             pushHistory={pushHistory}

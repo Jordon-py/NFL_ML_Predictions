@@ -45,6 +45,7 @@ const NFL_TEAMS_MAP = {
   IND: 'Indianapolis Colts',
   JAX: 'Jacksonville Jaguars',
   KC: 'Kansas City Chiefs',
+  LA: 'Los Angeles Rams',
   LV: 'Las Vegas Raiders',
   LAC: 'Los Angeles Chargers',
   LAR: 'Los Angeles Rams',
@@ -56,12 +57,116 @@ const NFL_TEAMS_MAP = {
   NYJ: 'New York Jets',
   PHI: 'Philadelphia Eagles',
   PIT: 'Pittsburgh Steelers',
+  SD: 'Los Angeles Chargers',
   SF: 'San Francisco 49ers',
   SEA: 'Seattle Seahawks',
+  STL: 'Los Angeles Rams',
   TB: 'Tampa Bay Buccaneers',
   TEN: 'Tennessee Titans',
+  WAS: 'Washington Commanders',
   WSH: 'Washington Commanders',
 };
+
+const TEAM_CODE_ALIASES = {
+  LA: 'LAR',
+  STL: 'LAR',
+  SD: 'LAC',
+  OAK: 'LV',
+  WSH: 'WAS',
+  COMMANDERS: 'WAS',
+  RAMS: 'LAR',
+  RAIDERS: 'LV',
+  CHARGERS: 'LAC',
+  JAGUARS: 'JAX',
+};
+
+const NFLVERSE_ASSET_ROOT = 'https://raw.githubusercontent.com/nflverse/nflverse-pbp/master';
+const GENERIC_LEAGUE_LOGO = `${NFLVERSE_ASSET_ROOT}/NFL.png`;
+const SPECIAL_LOGO_FALLBACKS = {
+  AFC: `${NFLVERSE_ASSET_ROOT}/AFC.png`,
+  NFC: `${NFLVERSE_ASSET_ROOT}/NFC.png`,
+  NFL: GENERIC_LEAGUE_LOGO,
+};
+
+const normalizeLogoTeamCode = (value) => {
+  const raw = (value ?? '').toString().trim().toUpperCase();
+  if (!raw) return '';
+  return TEAM_CODE_ALIASES[raw] ?? raw;
+};
+
+const buildTeamLogoCandidates = (teamCode, explicitLogo) => {
+  const normalizedCode = normalizeLogoTeamCode(teamCode);
+  const candidates = [explicitLogo];
+
+  if (normalizedCode && SPECIAL_LOGO_FALLBACKS[normalizedCode]) {
+    candidates.push(SPECIAL_LOGO_FALLBACKS[normalizedCode]);
+  } else if (normalizedCode && /^[A-Z]{2,3}$/.test(normalizedCode)) {
+    candidates.push(`${NFLVERSE_ASSET_ROOT}/squared_logos/${normalizedCode}.png`);
+  }
+
+  candidates.push(GENERIC_LEAGUE_LOGO);
+
+  return Array.from(new Set(candidates.filter(Boolean)));
+};
+
+const buildTeamStyleVars = (wordmark, primaryColor, secondaryColor) => ({
+  ...(wordmark ? { '--team-wordmark': `url(${wordmark})` } : {}),
+  ...(primaryColor ? { '--team-primary': primaryColor } : {}),
+  ...((secondaryColor || primaryColor)
+    ? { '--team-secondary': secondaryColor || primaryColor }
+    : {}),
+});
+
+const getTeamBadgeText = (teamCode, teamName) => {
+  const normalizedCode = normalizeLogoTeamCode(teamCode);
+  if (normalizedCode) return normalizedCode;
+
+  const initials = (teamName ?? '')
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part[0])
+    .join('')
+    .slice(0, 3)
+    .toUpperCase();
+
+  return initials || 'NFL';
+};
+
+function TeamLogoBadge({ teamCode, teamName, logoSrc }) {
+  const logoCandidates = React.useMemo(
+    () => buildTeamLogoCandidates(teamCode, logoSrc),
+    [teamCode, logoSrc]
+  );
+  const [candidateIndex, setCandidateIndex] = React.useState(0);
+
+  React.useEffect(() => {
+    setCandidateIndex(0);
+  }, [logoCandidates]);
+
+  const activeLogo = logoCandidates[candidateIndex];
+  const badgeText = getTeamBadgeText(teamCode, teamName);
+  const accessibleTeamLabel = teamName || teamCode || 'NFL team';
+
+  if (!activeLogo) {
+    return (
+      <div className={styles.logoFrame} aria-hidden="true">
+        <span className={styles.logoFallback}>{badgeText}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className={styles.logoFrame}>
+      <img
+        src={activeLogo}
+        alt={`${accessibleTeamLabel} logo`}
+        className={styles.gameCardLogo}
+        loading="lazy"
+        onError={() => setCandidateIndex((current) => current + 1)}
+      />
+    </div>
+  );
+}
 
 /**
  * Normalize a 0-1 probability into a rounded 0-100 integer.
@@ -170,6 +275,7 @@ const derivePredictionMeta = (prediction) => {
  * @property {string} [error]
  * @property {number} [index]
  * @property {() => void} [onClick]
+ * @property {Object} [actualScore] - Optional final result ({home_score, away_score, status}) returned from scoreboard sync.
  * @property {(matchup: Matchup) => void} [onReset] - Optional callback when the reset button is clicked.
  */
 
@@ -207,6 +313,7 @@ export default function Card({
   progress,
   loading = false,
   error,
+  actualScore,
   index = 0,
   onClick,
   onReset,
@@ -241,6 +348,18 @@ export default function Card({
     (hasScoreDetails ||
       prediction?.home_win_probability != null ||
       prediction?.away_win_probability != null);
+  const predictedDiff =
+    hasPrediction && typeof homeScore === "number" && typeof awayScore === "number"
+      ? Math.round(homeScore - awayScore)
+      : null;
+  const actualHasScore =
+    actualScore?.home_score != null && actualScore?.away_score != null;
+  const actualDiff =
+    actualHasScore && typeof actualScore.home_score === "number" && typeof actualScore.away_score === "number"
+      ? Math.round(actualScore.home_score - actualScore.away_score)
+      : null;
+  const finalDelta =
+    actualDiff != null && predictedDiff != null ? actualDiff - predictedDiff : null;
 
   const cardClassName = buildCardClassNames({ hasPrediction, loading, error, debugClicked });
   const cardStyle = {
@@ -250,8 +369,8 @@ export default function Card({
     ...(awayColor2 ? { "--away-color-2": awayColor2 } : {}),
     ...(homeColor2 ? { "--home-color-2": homeColor2 } : {}),
   };
-  const awayTeamStyle = awayWordmark ? { "--team-wordmark": `url(${awayWordmark})` } : undefined;
-  const homeTeamStyle = homeWordmark ? { "--team-wordmark": `url(${homeWordmark})` } : undefined;
+  const awayTeamStyle = buildTeamStyleVars(awayWordmark, awayColor, awayColor2);
+  const homeTeamStyle = buildTeamStyleVars(homeWordmark, homeColor, homeColor2);
 
   /**
    * Main click handler wrapper.
@@ -261,49 +380,9 @@ export default function Card({
    */
   const handleArticleClick = () => {
     try {
-      // Visual dev cue
+      // Brief visual click cue for dev feedback
       setDebugClicked(true);
       setTimeout(() => setDebugClicked(false), 700);
-
-      // eslint-disable-next-line no-console
-      console.debug('[Card] article clicked', { matchup });
-
-      // Dev-only observable hooks (window event + localStorage)
-      try {
-        if (typeof window !== 'undefined') {
-          let isDev = false;
-          try {
-            // eslint-disable-next-line no-undef
-            isDev = !!(import.meta && import.meta.env && import.meta.env.DEV);
-          } catch (_e) {
-            isDev = false;
-          }
-
-          if (isDev) {
-            try {
-              window.dispatchEvent(
-                new CustomEvent('nfl-card-click', { detail: { matchup } })
-              );
-            } catch (_e) {
-              /* ignore */
-            }
-          }
-
-          try {
-            localStorage.setItem(
-              'nfl_last_card_click',
-              JSON.stringify({
-                game_id: matchup?.game_id || null,
-                ts: new Date().toISOString(),
-              })
-            );
-          } catch (_e) {
-            /* ignore localStorage failures */
-          }
-        }
-      } catch (_err) {
-        /* noop */
-      }
 
       if (typeof onClick === 'function') {
         onClick();
@@ -352,16 +431,7 @@ export default function Card({
       tabIndex={onClick ? 0 : -1}
       aria-busy={loading ? 'true' : undefined}
     >
-      <header className="game-card__header">
-        <span className="game-card__week">
-          {matchup.game_type && matchup.game_type !== 'REG'
-            ? `${matchup.game_type} Round`
-            : `Week ${matchup.week ?? '-'}`}
-        </span>
-        <time className="game-card__kickoff" dateTime={kickoff?.toISOString?.()}>
-          {kickoffDisplayTime}
-        </time>
-      </header>
+
 
       {/* Card content lives in a single inner wrapper so overlays + progress bars can be positioned safely */}
       <div className={styles.cardInner}>
@@ -399,17 +469,12 @@ export default function Card({
             className={`${styles.gameCard} game-card__team game-card__team--away`}
             style={awayTeamStyle}
           >
-            {awayLogo && (
-              <img
-                src={awayLogo}
-                alt={`${awayTeam} logo`}
-                id="away-logo"
-                className={styles.gameCardLogo}
-                loading="lazy"
-              />
-            )}
+            <TeamLogoBadge teamCode={awayTeam} teamName={awayFullName} logoSrc={awayLogo} />
 
-            <span className={`${styles.gameCardLabel} game-card__label`}>Away</span>
+            <div className={styles.teamMetaRow}>
+              <span className={`${styles.gameCardLabel} game-card__label`}>Away</span>
+              <span className={styles.teamCodePill}>{normalizeLogoTeamCode(awayTeam) || awayTeam}</span>
+            </div>
             <span className={`${styles.gameCardName} game-card__name`}>{awayFullName}</span>
           </div>
 
@@ -419,17 +484,12 @@ export default function Card({
             className={`${styles.gameCard} game-card__team game-card__team--home`}
             style={homeTeamStyle}
           >
-            {homeLogo && (
-              <img
-                src={homeLogo}
-                alt={`${homeTeam} logo`}
-                id="home-logo"
-                className={styles.gameCardLogo}
-                loading="lazy"
-              />
-            )}
+            <TeamLogoBadge teamCode={homeTeam} teamName={homeFullName} logoSrc={homeLogo} />
 
-            <span className={`${styles.gameCardLabel} game-card__label`}>Home</span>
+            <div className={styles.teamMetaRow}>
+              <span className={`${styles.gameCardLabel} game-card__label`}>Home</span>
+              <span className={styles.teamCodePill}>{normalizeLogoTeamCode(homeTeam) || homeTeam}</span>
+            </div>
             <span className={`${styles.gameCardName} game-card__name`}>{homeFullName}</span>
           </div>
         </div>
@@ -501,6 +561,23 @@ export default function Card({
                     </div>
                   )}
                 </div>
+                {actualHasScore && (
+                  <div className={styles.actualRow}>
+                    <span className={styles.actualLabel}>Final</span>
+                    <strong>
+                      {actualScore.home_score} - {actualScore.away_score}
+                    </strong>
+                    {actualScore.status && (
+                      <span className={styles.actualStatus}>{actualScore.status}</span>
+                    )}
+                    {finalDelta != null && (
+                      <span className={styles.actualDiff}>
+                        Diff vs prediction {finalDelta >= 0 ? "+" : ""}
+                        {finalDelta}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             </>
           ) : (
