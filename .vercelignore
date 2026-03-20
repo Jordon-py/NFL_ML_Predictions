@@ -4,15 +4,29 @@
 coverage/
 .cache/
 __pycache__/
+venv/
+.venv*/
+nflenv/
 
 backend/
-backend/models/
-backend/data/
+data/
+
+node_modules/
+**/node_modules/
+**/venv/
+**/.venv*/
 
 *.joblib
-*.csv
 *.pkl
 *.md
 *.ts
+*.csv
+*.png
+*.jpg
+*.ipynb
+
 dist/
-node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/.vercel/
+frontend/.env*

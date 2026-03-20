@@ -8,73 +8,36 @@
 :root {
   /* Keep your existing tokens; these are just examples */
   --c-brand-1: #0080ff;
-  --c-brand-1-soft: #0080ff1f;
+  --c-brand-1-soft: lch(29.54% 44.53 284.62);
   --c-brand-2: #003264;
   --c-ink: #0f172a;
-  --c-ink-soft: #64748b;
+  --c-ink-soft: #93aed4;
   --c-surface: #0b1120;
   --c-surface-soft: #020617;
   --c-border-subtle: #1e293b;
   --c-border-strong: #334155;
 
   --radius-card: 16px;
-  --shadow-soft: 0 18px 40px rgba(15, 23, 42, 0.45);
+  --shadow-soft: 0 18px 40px rgba(6, 20, 52, 0.489);
+
+  /* Layout Configuration */
+  --grid-gap: clamp(2.5rem, 3vw, 30px);
+  --card-min-width: 350px;
 }
 
 /* Root section */
 
 .team-grid {
-    width: 100%;
-    max-width: 30rem;
-    /* margin: 0 auto; */
-    padding: 1.5rem 1rem 2.5rem;
-    display: flex;
-    /* gap: 1.5rem; */
-    flex-direction: column;
-}
-
-/* Header */
-
-.team-grid__header {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-}
-
-.team-grid__heading {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.team-grid__badge {
-  padding: 0.15rem 0.6rem;
-  border-radius: 999px;
-  border: 1px solid var(--c-border-subtle);
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--c-ink-soft);
-  background: rgba(15, 23, 42, 0.65);
-}
-
-.team-grid__title {
-  font-size: 1.4rem;
-  font-weight: 600;
-  color: #e5e7eb;
-}
-
-.team-grid__subtitle {
-  font-size: 0.9rem;
-  color: var(--c-ink-soft);
+  /* Enable container queries below (they key off `team-grid`) */
+  container-name: team-grid;
+  container-type: inline-size;
 }
 
 /* Grid */
 
 .team-grid__grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 1rem;
+  width: 100%;
+  max-width: 1200px;
 }
 
 /* Empty / loading state */
@@ -87,7 +50,10 @@
   place-items: center;
   padding: 1.25rem;
   color: var(--c-ink-soft);
-  background: radial-gradient(circle at top, #0b112040, #020617 60%);
+   background:
+    linear-gradient(180deg, lch(0% 0 0), lch(74.03% 40.02 271.38 / 0.403)),
+    lch(0% 0 0);
+  color: lch(95.47% 6.86 276.24);
 }
 
 .team-grid__empty-text {
@@ -102,7 +68,7 @@
   border-radius: 999px;
   border: 3px solid var(--c-border-subtle);
   border-top-color: var(--c-brand-1);
-  animation: team-grid-spin 0.7s linear infinite;
+  animation: team-grid-spin 0.9s linear infinite;
 }
 
 @keyframes team-grid-spin {
@@ -111,17 +77,26 @@
   }
 }
 
-/* =======================================================================
-   Game Card
-   ======================================================================= */
+/* Medium Context (Tablet/Half-width) */
+@container team-grid (min-width: 481px) and (max-width: 1960px) {
+  .team-grid__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(var(--card-min-width), 1fr));
+    flex-grow: 1;
+    justify-content: space-around;
+    align-items: center;
+  }
+}
 
 .game-card {
   position: relative;
   border-radius: var(--radius-card);
-  padding: 0.9rem 1rem 1rem;
+  padding: 2rem; /* Adjusted from 4rem which seemed excessive for card content */
+
+  /* PRESERVED VISUAL STYLING */
   background:
-    radial-gradient(circle at 0% 0%, var(--c-brand-1-soft), transparent 60%),
-    linear-gradient(145deg, #020617, #020617 45%, #020617 100%);
+    radial-gradient(circle at top, lch(12.48% 50.02 298.39 / 0.473), transparent 20%),
+    linear-gradient(145deg, lch(15.37% 56.93 299.04 / 0.724), lch(7.86% 22.89 282.19 / 0.327) 15%, lch(0.76% 15.34 290.29 / 0.792) 39%);
   border: 1px solid var(--c-border-subtle);
   box-shadow: var(--shadow-soft);
   display: flex;
@@ -134,21 +109,19 @@
     border-color 150ms ease-out;
 }
 
-.game-card--loading {
-  cursor: progress;
-  opacity: 0.9;
-}
-
-.game-card--error {
-  border-color: var(--c-border-strong);
+/* Hover Effects */
+.game-card:hover {
+  transform: translateY(-7px);
+  box-shadow: 0 22px 50px lch(48.92% 86.75 292.13 / 0.58);
+  border-color: var(--c-brand-1); /* Fallback removed, relying on var */
 }
 
 .game-card::before {
   content: "";
   position: absolute;
-  inset: -40%;
-  background: radial-gradient(circle at 0 0,
-      rgba(56, 189, 248, 0.2),
+  inset: -20%;
+  background: radial-gradient(circle at top,
+      lch( 48.92% 86.75 292.13 / 0.58),
       transparent 55%);
   opacity: 0;
   transition: opacity 150ms ease-out;
@@ -157,7 +130,7 @@
 
 .game-card:hover {
   transform: translateY(-3px);
-  box-shadow: 0 22px 50px rgba(15, 23, 42, 0.7);
+  box-shadow: 0 22px 50px lch(48.92% 86.75 292.13 / 0.58);
   border-color: var(--c-brand-1-70, var(--c-brand-1));
 }
 
@@ -170,8 +143,9 @@
 .game-card__header {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
   font-size: 0.75rem;
+  gap: 1.3rem;
   color: var(--c-ink-soft);
 }
 
@@ -343,6 +317,22 @@
 }
 
 /* Responsive tweaks */
+
+/* Postseason Styles */
+
+.postseason-card {
+  border-color: var(--c-brand-1-soft);
+  background: radial-gradient(circle at top, lch(15% 60 280 / 0.6), transparent 40%),
+              linear-gradient(145deg, lch(18% 40 280 / 0.8), lch(5% 10 280 / 0.5));
+}
+
+/* Ensure logos are visible */
+.team-logo-small {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  margin-right: 8px;
+}
 
 @media (max-width: 600px) {
   .team-grid {

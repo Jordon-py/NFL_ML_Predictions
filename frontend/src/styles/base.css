@@ -21,11 +21,11 @@
   --c-danger: #df1b05;
   --c-accent: #54ade8;
   --c-card: lch(18.91% 65.26 299.63 / 0.196);
-  --c-text-on-dark: #e8edf4;
+  --c-text-on-dark: #dae6f6;
   --c-text-muted-on-dark: #c9d3e0;
 
   /* Special */
-  --glass: lch(69.08% 49.28 256.85 / 0.251);
+  --glass: lch(10.81% 21.31 274.8 / 0.347);
 
   /* Radii */
   --r-md: 12px;
@@ -38,12 +38,12 @@
   /* Primary gradient */
   --grad-primary: linear-gradient(90deg,
       lch(69.59% 47.1 272.94 / 0.731),
-      lch(48.74% 96.11 303.13 / 0.778),
+      lch(5 50.9 304.32 / 0.84),
       lch(32.42% 133.68 306.35 / 0.483));
 
   /* Animation defaults */
   --a-dur: 600ms;
-  --a-ease: cubic-bezier(.22, .61, .36, 1);
+  --a-ease: cubic-bezier(0, 0.5, 1, 0.69);
   --a-delay: 200ms;
   --a-iter: 1;
 
@@ -54,8 +54,8 @@
   --lch-primary: lch(70% 52 265);
   --lch-secondary: lch(82% 38 240);
   --lch-accent: lch(58% 68 320);
-  --lch-bg: lch(15% 6 250 / 0.88);
-  --lch-card: lch(22% 8 250 / 0.60);
+  --lch-bg: lch(15.04% 5.67 247.54 / 0.577);
+  --lch-card: lch(21.87% 8.36 252.74 / 0.799);
   --lch-border: lch(80% 10 250 / 0.20);
   --lch-text: lch(95% 4 250);
   --lch-muted: lch(85% 6 250 / 0.85);

@@ -1,5 +1,6 @@
 # Python
 __pycache__/
+.exe
 
 *$py.class
 *.so
@@ -20,9 +21,7 @@ ENV/
 *.log
 
 # Model files
-models/*.pkl
-models/*.model
-!models/.gitkeep
+
 
 # Data files (keep structure but not data)
 

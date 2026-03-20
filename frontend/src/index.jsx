@@ -1,3 +1,12 @@
+// ==========================================
+// File: frontend/src/index.jsx
+// Role: Frontend module.
+// Input Data: Module inputs.
+// Output Data: Exports for UI usage.
+// Dependencies: react, react-dom/client, ./App, ./components/ErrorBoundary
+// Notes: Shared application code.
+// ==========================================
+
 /**
  * index.jsx
  * ---------
@@ -18,13 +27,18 @@
  *   - Preserve `<ErrorBoundary>` wrapper or replace it with your custom boundary
  *     to avoid uncaught errors crashing the whole page.
  */
-import App from './App';
-import ReactDOM from 'react-dom/client';
-import ErrorBoundary from './components/ErrorBoundary';
 import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+import App from './App';
+import ErrorBoundary from './components/ErrorBoundary';
 
 import './styles/base.css';        // ← load first
 import './styles/theme-grid.css';  // ← load second
+import '@material/web/button/filled-button.js';
+import '@material/web/button/outlined-button.js';
+import '@material/web/checkbox/checkbox.js';
+
+
 // Grab the static DOM node that Vite injects for us.
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -32,7 +46,7 @@ if (!rootElement) {
 }
 
 // React 18's concurrent root API replaces the legacy render function.
-const root = ReactDOM.createRoot(rootElement);
+const root = createRoot(rootElement);
 root.render(
   <StrictMode>
     <ErrorBoundary>

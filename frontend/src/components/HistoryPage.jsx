@@ -1,43 +1,68 @@
+// ==========================================
+// File: frontend/src/components/HistoryPage.jsx
+// Role: React component for UI rendering.
+// Input Data: Props (data and callbacks).
+// Output Data: JSX markup.
+// Dependencies: react, ./NavBar/NavBar.jsx, ./HistoryChart.jsx, ./D_BUTTON.jsx
+// Notes: Presentation-focused component.
+// ==========================================
+
 /**
  * HistoryPage.jsx
  * ----------------
  * Purpose:
- *   Standalone route that renders the HistoryChart using data from `/history`.
- *   This allows the chart to be opened directly at /history.
+ *   Standalone route that renders the HistoryChart using props
+ *   supplied by the top-level App state.
  *
  * Contract:
+ *   - Receives prediction state via props.
  *   - Supplies a safe `history` array to <HistoryChart/>.
  *
  * Notes:
  *   - Chart render cost is roughly O(n) over `history.length`.
- *   - Page re-renders when `state.history` changes in context.
+ *   - Page re-renders when `history` changes in App state.
  */
+import React from 'react';
+import NavBar from './NavBar/NavBar.jsx';
 import HistoryChart from './HistoryChart.jsx';
-import { useEffect, useState } from 'react';
-import { getPredictionHistory } from '../api/client.js';
 
-export default function HistoryPage() {
-  // lightweight client-backed history loader — avoids missing selector hooks
-  const [history, setHistory] = useState([]);
+import D_BUTTON from './D_BUTTON.jsx';
 
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        const res = await getPredictionHistory(100);
-        if (!mounted) return;
-        setHistory(Array.isArray(res.entries) ? res.entries : res.entries ?? res ?? []);
-      } catch (err) {
-        setHistory([]);
-      }
-    })();
-    return () => (mounted = false);
-  }, []);
+export default function HistoryPage({
+  authSession,
+  onSignOut,
+  history = [],
+  health,
+  onClearHistory,
+  historyCount = 0,
+}) {
+  const safeHistory = Array.isArray(history) ? history : [];
+  const safeCount = Number.isFinite(Number(historyCount))
+    ? Number(historyCount)
+    : safeHistory.length;
 
-  // NavBar can display static info; HistoryChart reads `history` prop
   return (
     <>
-      <HistoryChart history={history} />
+      <NavBar
+        authSession={authSession}
+        onSignOut={onSignOut}
+        state={{
+          health,
+          title: 'Prediction History',
+          heroSubtitle: 'Review saved forecasts and clear older activity when needed.',
+          subtitle: `${safeCount} saved prediction${safeCount === 1 ? '' : 's'}`,
+          healthLabel:
+            health?.status === 'healthy'
+              ? 'Service: Live'
+              : `Service: ${health?.status ?? 'unknown'}`,
+        }}
+      />
+
+      <section className="history-controls">
+        <D_BUTTON onClear={onClearHistory} count={safeCount} />
+      </section>
+
+      <HistoryChart history={safeHistory} />
     </>
   );
 }

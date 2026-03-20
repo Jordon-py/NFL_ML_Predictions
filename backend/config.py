@@ -1,116 +1,106 @@
-"""
-Configuration helpers for the NFL ML Predictions backend.
+# ==========================================
+# File: backend/config.py
+# Role: Backend configuration and env resolution.
+# Input Data: Environment variables.
+# Output Data: Resolved paths and flags.
+# Dependencies: __future__, os, pathlib, pandas
+# Notes: Used during startup.
+# ==========================================
 
-This module centralizes environment loading, common path constants,
-feature toggles, and CORS parsing so they can be reused across the app
-and supporting scripts.
-"""
-# -------------------------------------
-# IMPORTS -----
-# -------------------------------------
+# backend/config.py
 from __future__ import annotations
+
 import os
 from pathlib import Path
-from typing import List, Tuple, Optional
-from dotenv import load_dotenv
-# -------------------------------------
+import pandas as pd
 
-# Locations
-BACKEND_DIR = Path(__file__).parent
-BASE_DIR = BACKEND_DIR.parent
-DATA_DIR = BACKEND_DIR / "data"
-MODELS_DIR = BACKEND_DIR / "models"
-LOG_DIR = BACKEND_DIR / "logs"
-FRONTEND_DIR = BASE_DIR / "frontend"
-FRONTEND_DIST = FRONTEND_DIR / "dist"
-FRONTEND_BUILD = FRONTEND_DIST  # Alias for compatibility
+TRUTHY = {"1", "true", "yes", "y", "on"}
 
-# Truthy parsing helper
-TRUTHY = {"true", "t", "1", "yes", "y"}
+BASE_DIR = Path(__file__).resolve().parent
+REPO_ROOT = BASE_DIR.parent
+DEFAULT_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:4173",
+    "http://127.0.0.1:4173",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "https://nfl-ml-predictions.vercel.app",
+    "https://nfl-predict.vercel.app",
+    "https://new-nfl-predict.vercel.app",
+    "https://nfl-ml-predictions-git-main-iprog.vercel.app",
+    "https://nfl-predict-christopher-jordons-projects.vercel.app",
+    "https://nfl-predict-git-main-christopher-jordons-projects.vercel.app",
+]
+DEFAULT_ORIGIN_REGEX = r"https://.*\.vercel\.app$"
 
 
-def _load_env() -> None:
+# Relative paths for portability (Heroku/Vercel/Local)
+# NOTE: Ensure '20260115' folder is tracked in git if you rely on it!
+# Otherwise, fall back to generic 'models' folder.
+
+MODELS_DIR = (BASE_DIR / "20260115" / "models").resolve()
+if not MODELS_DIR.exists():
+    MODELS_DIR = (BASE_DIR / "models").resolve()
+
+# Dataset priority:
+# 1. Env var DATASET_PATH
+# 2. Env var DATA_DIR
+# 3. Default relative location
+DATA_DIR = (BASE_DIR / "data" / "datasets").resolve(True)
+if not DATA_DIR.exists():
+    DATA_DIR = (BASE_DIR / "data").resolve()
+
+# Pre-set env vars for main.py (optional but helps consistency)
+if os.getenv("MODELS_DIR") is None:
+    os.environ["MODELS_DIR"] = str(MODELS_DIR)
+if os.getenv("DATA_DIR") is None:
+    os.environ["DATA_DIR"] = str(DATA_DIR)
+
+def _split_origins(raw: str) -> list[str]:
+    return [o.strip().rstrip("/") for o in raw.split(",") if o.strip()]
+
+def resolve_cors():
     """
-    Load .env from backend or repo root.
+    Resolve allowed origins and regex from env, with safe defaults for dev + previews.
     """
-    dotenv_loaded = load_dotenv(BACKEND_DIR / ".env")
-    if not dotenv_loaded:
-        load_dotenv(BASE_DIR / ".env")
-_load_env()
+    raw_origins = os.getenv("ALLOWED_ORIGINS") or os.getenv("CORS_ORIGINS", "")
+    env_origins = _split_origins(raw_origins)
+    restrict = os.getenv("RESTRICT_CORS", "false").strip().lower() in TRUTHY
 
+    if restrict:
+        origins = env_origins or DEFAULT_ALLOWED_ORIGINS
+    else:
+        # Default to a more permissive set or "*" if env allows
+        origins = ["*"] if os.getenv("PERMISSIVE_CORS") in TRUTHY else list(dict.fromkeys([*DEFAULT_ALLOWED_ORIGINS, *env_origins]))
 
-# Data and schedule defaults (lazily loaded to avoid startup failures)
-# Use the latest engineered dataset in the backend root; aligns with production path.
-DEFAULT_DATASET = BACKEND_DIR / "game_features_20251208.csv"
-DEFAULT_SCHEDULE: Optional[object] = None  # Loaded on demand via load_schedule_data()
+    origin_regex = (
+        os.getenv("ALLOW_ORIGIN_REGEX")
+        or os.getenv("CORS_ORIGINS_REGEX")
+        or DEFAULT_ORIGIN_REGEX
+    )
+    return origins, origin_regex
 
-
-def load_schedule_data(year: int = 2025):
+def load_schedule_data_safe(season: int):
     """
-    Lazily load NFL schedule data. Called only when needed.
-    nflreadpy must be installed in the environment calling this.
+    Optional dependency. Returns a DataFrame or None.
+    Tries common nflreadpy signatures to reduce breakage.
     """
     try:
         import nflreadpy as nfl
-        return nfl.load_schedules(year).to_pandas()
-    except ImportError:
+    except Exception:
         return None
 
-# Feature toggles
-SERVE_FRONTEND = os.getenv("SERVE_FRONTEND", "false").strip().lower() in TRUTHY
-ALLOW_FALLBACK_PREDICTIONS = os.getenv("ALLOW_FALLBACK_PREDICTIONS", "false").strip().lower() in TRUTHY
+    # Try a few variants (nflreadpy has varied docs/usage)
+    for attempt in (
+        lambda: nfl.load_schedules(season),                 # positional
+        lambda: nfl.load_schedules(seasons=[season]),       # keyword list
+        lambda: nfl.load_schedules(seasons=season),         # keyword int
+    ):
+        try:
+            df = attempt()
+            return df if isinstance(df, pd.DataFrame) else None
+        except Exception:
+            continue
 
-# CORS -----------------------------------------------------------------
-# Default curated origins with scheme to match browser origin headers.
-DEFAULT_ALLOWED_ORIGINS: List[str] = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "https://nfl-ml-predictions.vercel.app",
-    "https://nfl-ml-predictions-pr5uahmqx-christopher-jordons-projects.vercel.app",
-    "https://nfl-predict-6fghcp7sx-christopher-jordons-projects.vercel.app",
-    "https://new-nfl-predict.vercel.app",
-    "https://nfl-predict.vercel.app",
-]
-
-ALLOW_ORIGIN_REGEX = os.getenv("ALLOW_ORIGIN_REGEX","https://nfl-ml-predictions.vercel.app")
-
-
-def _normalize_origin(origin: str) -> str:
-    """
-    Ensure origins include scheme and no trailing slash so they match
-    browser Origin headers.
-    """
-    if not origin:
-        return ALLOW_ORIGIN_REGEX
-    candidate = origin.strip()
-    # Remove trailing slash
-    candidate = candidate[:-1] if candidate.endswith("/") else candidate
-    if candidate.startswith("http://") or candidate.startswith("https://"):
-        return candidate
-    # Default to https scheme for bare hosts
-    return f"https://{candidate}"
-
-
-def parse_allowed_origins(raw: str | None = None) -> List[str]:
-    """
-    Parse ALLOWED_ORIGINS env var or fall back to curated defaults.
-    """
-    source = raw if raw is not None else os.getenv("ALLOWED_ORIGINS", "")
-    entries = [_normalize_origin(o) for o in source.split(",") if o.strip()]
-    entries = [e for e in entries if e]
-    return entries or DEFAULT_ALLOWED_ORIGINS
-
-
-def resolve_cors() -> Tuple[List[str], str | None]:
-    """
-    Build the effective allow_origins list and optional regex for FastAPI.
-    """
-    restrict = os.getenv("RESTRICT_CORS", "false").strip().lower() in TRUTHY
-    if restrict:
-        origins = parse_allowed_origins()
-    else:
-        # Broad default: allow curated list and defer to regex for previews.
-        origins = DEFAULT_ALLOWED_ORIGINS
-    regex = ALLOW_ORIGIN_REGEX or r"https://.*\.vercel\.app"
-    return origins, regex
-
+    return None

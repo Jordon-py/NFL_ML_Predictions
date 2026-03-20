@@ -2,15 +2,18 @@
 __pycache__/
 *.py[cod]
 *$py.class
-
+*.exe
 ## Virtual environments
 .venv/
+.venv*/
 venv/
 env/
 ENV/
 env.bak/
 backend/.venv/
 backend/venv/
+nfl_env/
+nflenv/
 
 ## Node artifacts
 node_modules/
@@ -21,11 +24,15 @@ yarn-error.log*
 pnpm-debug.log*
 
 ## Build outputs
-
+build/
+dist/
+frontend/build/
+frontend/dist/
 frontend/dist/node_modules
 frontend/.vite/
+frontend/.vercel/
 .parcel-cache/
-.vercel
+.vercel/
 
 ## Environment configuration
 .env
@@ -54,7 +61,7 @@ backend/logs/
 .ipynb_checkpoints/
 
 ## Packaging artifacts
-
+.slugignore
 *.so
 .Python
 develop-eggs/
@@ -75,22 +82,49 @@ share/python-wheels/
 MANIFEST
 
 ## Data & models (allow curated assets)
-data/
-
+/data/
+*.csv
 *.json
+!backend/data/*.json
+!backend/data/datasets/*.json
+!backend/data/team_logos.csv
+!backend/data/team_logo.csv
+!backend/Nfl_schedule_2025.csv
+!backend/data/Nfl_schedule_2025.csv
+backend/data/datasets_local/
+
+# Local-only backend artifacts (keep production datasets under backend/data/datasets)
+backend/data/legacy_data/
+backend/data/prod-models/
+backend/data/data.ipynb
+backend/data/learning_memory.json
+backend/data/team_logo_squared_by_abbr.json
+frontend/public/data/
+
+.bundle
+
+*.bundle
 *.txt
 
+*.pkl
+*.model
+*.joblib
+backend/models/
+backend/data/models/
+backend/*/models/
+!requirements.txt
 !README.md
+
+
 
 
 ## AI tooling
 .serena/
 
 ## Deployment configs
-
-node_modules
-
+!vercel.json
 .vercel
 .env*.local
 
-
+# Local Netlify folder
+.netlify

@@ -1,5 +1,5 @@
-/* ========================================================================== 
-   theme-grid.css - Components & Sections
+/* ==========================================================================
+   theme-grid.css — Components & Sections
    Purpose: team grid, cards, logos, timings, and section-specific styles.
    Load order: 2 of 2 (after base.css)
    ========================================================================== */
@@ -11,29 +11,30 @@
   align-items: center;
   text-align: center;
 }
-
 h1 {
-  font-family: 'Playfair', 'Lucida Sans Unicode', 'Lucida Grande', 'Lucida Sans', Arial, sans-serif;
-  text-align: center;
+  font-family: 'Orbitron', 'Playfair', 'Lucida Sans Unicode', 'Lucida Grande', 'Lucida Sans', Arial, sans-serif;
 }
 
 h2.nfl-matchups {
   backdrop-filter: blur(2px);
   text-shadow: 0 4px 14px oklch(0% 0 0 / 0.5);
   font-size: clamp(3rem, 8vw + 1rem, 6rem);
+  /* Responsive font size */
   font-family: "Cinzel", serif;
   font-weight: 800;
   color: oklch(95% 0.05 240);
+  /* Slightly off-white for depth */
   margin: 0;
-  animation: textFadeSlide 1s var(--a-ease) both;
+  animation: textFadeSlide 2s var(--a-ease) both;
+  /* Apply text intro */
 }
-
 p.nfl-matchups {
   font-size: clamp(1rem, 2vw + 0.5rem, 1.25rem);
   color: oklch(85% 0.05 240 / 0.9);
   margin-top: 0.5rem;
   max-width: 60ch;
   animation: textFadeSlide 3s var(--a-ease) 200ms both;
+  /* Staggered intro */
 }
 
 /* --- Lists used by History/Insights ------------------------------------- */
@@ -43,13 +44,26 @@ section.history-chart {
   background-color: oklch(0% 0 0 / 0.7);
   gap: 20px;
   font-size: 1rem;
+  /* Adjusted for consistency */
   border-left: 2px solid oklch(70% 0.15 265 / 0.7);
   border-top: 1px solid oklch(70% 0.17 269 / 0.5);
   border-radius: var(--r-sm);
   padding: 1rem;
   margin: 1rem;
   max-width: 400px;
+  /* Constrain width */
   animation: cardPop 1.8s var(--a-ease) both;
+  /* Pop-in animation */
+}
+
+.history-score {
+  margin-top: 0.35rem;
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  justify-content: center;
+  font-size: 0.85rem;
+  color: var(--c-ink-soft);
 }
 
 /* --- Team grid layout ---------------------------------------------------- */
@@ -58,12 +72,15 @@ section.team-main {
   flex-wrap: wrap;
   flex-direction: row;
   justify-content: space-between;
-  gap: 1rem;
+  /* Center grid items */
+
+  /* Consistent gap */
   padding: 1rem;
 }
 
 .team-grid-cards {
   display: contents;
+  /* Use parent grid for layout */
 }
 
 /* --- Micro info rows ----------------------------------------------------- */
@@ -71,6 +88,7 @@ section.team-main {
   display: flex;
   flex-direction: row;
   gap: 1rem;
+  /* Reduced gap */
 }
 
 /* Probabilities (top summary strip) */
@@ -78,6 +96,7 @@ div.probability.home-win-prob.inner-card {
   font-size: 1rem;
   color: oklch(94.104% 0.04575 215.5);
   animation: a-shine 3s linear infinite;
+  /* Apply shine animation */
 }
 
 /* Predicted score (fixed summary, top-right) */
@@ -86,19 +105,23 @@ div.probability.home-win-prob.inner-card {
   flex-direction: row;
   gap: .5rem;
   font-weight: 600;
+  /* Bolder */
   font-size: 1.5rem;
   color: oklch(98% 0.02 240);
   background-color: oklch(15% 0.05 240 / 0.8);
   font-family: var(--font-tech);
+  /* Use tech font */
   position: fixed;
   border-radius: var(--r-sm);
   top: 1rem;
   right: 1rem;
   padding: 0.5rem 1rem;
   animation: a-shine 2.5s linear infinite;
+  /* Slower shine */
 }
 
 /* --- Cards --------------------------------------------------------------- */
+/* Base card shell for matchups */
 .matchup-card {
   display: flex;
   flex-direction: column;
@@ -112,12 +135,16 @@ div.probability.home-win-prob.inner-card {
   flex: 1 1 320px;
   color: oklch(95% 0.02 240);
   border: 1px solid oklch(80% 0.05 240 / 0.2);
+
+  /* Entrance Animation */
   --i: 0;
+  /* Stagger index */
   animation: cardPop 0.6s var(--a-ease) calc(var(--i) * 80ms) both;
 }
 
 .inner-card {
   border-radius: var(--r-sm);
+  /* Consistent radius */
 }
 
 .matchup-card:hover {
@@ -186,21 +213,26 @@ div.probability.home-win-prob.inner-card {
 
 .at-symbol {
   font-weight: 600;
+  /* Bolder */
   color: var(--c-accent);
   font-size: 1.2rem;
   font-family: var(--font-tech);
+  /* Use tech font */
 }
 
 img.team-logo {
   width: clamp(5rem, 15vw, 7rem);
+  /* Responsive logo size */
   height: auto;
   aspect-ratio: 1 / 1;
   object-fit: contain;
   border-radius: 50%;
+  /* Circular logos */
   background: oklch(0% 0 0 / 0.2);
   padding: 8px;
   transition: transform 0.4s var(--a-ease), filter 0.4s var(--a-ease);
   animation: a-fade-in 0.8s var(--a-ease) both;
+  /* Apply fade-in */
 }
 
 img.team-logo:hover {
@@ -213,7 +245,9 @@ img.team-logo:hover {
   color: var(--c-text-muted-on-dark);
   white-space: nowrap;
   font-family: var(--font-tech);
+  /* Use tech font */
   animation: a-text-fade-slide 1s var(--a-ease) 300ms both;
+  /* Apply text intro */
 }
 
 .prediction {
@@ -231,7 +265,9 @@ img.team-logo:hover {
   text-align: center;
   font-weight: 600;
   font-family: var(--font-tech);
+  /* Use tech font */
   animation: a-pulse 2s ease-in-out infinite 1s;
+  /* Subtle pulse for attention */
 }
 
 /* --- Side readouts / badges --------------------------------------------- */
@@ -248,6 +284,7 @@ img.team-logo:hover {
   font-family: var(--font-tech);
   transition: transform 0.3s ease;
   animation: a-fade-in 1s var(--a-ease) 500ms both;
+  /* Fade in */
 }
 
 .point-prob {
@@ -256,12 +293,14 @@ img.team-logo:hover {
   top: 8%;
   left: 50%;
   transform: translateX(-50%);
+  /* Center properly */
   display: flex;
   flex-direction: row;
   background: var(--grad-primary);
   padding: 0.5rem 1rem;
   border-radius: var(--r-sm);
   animation: a-fade-in 1s var(--a-ease) 400ms both;
+  /* Fade in */
 }
 
 /* Prediction result block */
@@ -276,6 +315,7 @@ img.team-logo:hover {
   font-family: var(--font-tech);
   transition: transform 0.3s ease-in-out;
   animation: a-glow 2.5s ease-in-out infinite;
+  /* Apply glow */
 }
 
 /* --- States & motion safety --------------------------------------------- */
@@ -284,11 +324,14 @@ img.team-logo:hover {
   align-items: center;
   gap: 8px;
   font-family: var(--font-tech);
+  /* Use tech font */
+  /* pulsing while loading */
   animation: pulseOpacity 1.5s ease-in-out infinite;
   filter: brightness(1.05);
 }
 
 @media (prefers-reduced-motion: reduce) {
+
   .matchup-card,
   .team-logo,
   .kickoff,
@@ -300,5 +343,320 @@ img.team-logo:hover {
   p.nfl-matchups {
     transition: none;
     animation: none;
+  }
+}
+
+/* --- Unified logo & card visual upgrades ---------------------------------
+   These rules enhance logos and card surfaces globally so both module
+   and non-module selectors receive the same visual treatment. They are
+   intentionally additive and responsive. */
+
+.team-logo,
+img.team-logo {
+  width: clamp(4.5rem, 12vw, 8rem);
+  height: auto;
+  aspect-ratio: 1 / 1;
+  object-fit: contain;
+  border-radius: 50%;
+  padding: 6px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(0,0,0,0.06));
+  box-shadow: 0 8px 22px rgba(2,6,23,0.45), inset 0 1px 0 rgba(255,255,255,0.02);
+  transition: transform .45s var(--a-ease), filter .45s var(--a-ease), box-shadow .45s var(--a-ease);
+  will-change: transform, filter;
+}
+
+/* prediction-sizing is handled in component CSS modules (.gameCardLogo.hasPrediction) */
+
+.team-logo:hover {
+  transform: translateY(-6px) scale(1.08) rotate(3deg);
+  filter: brightness(1.12) saturate(1.06) drop-shadow(0 6px 20px var(--c-brand-1));
+}
+
+/* Glassy card accent for the team grid area — subtle gradient + border */
+section.team-main {
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.06));
+  border-radius: var(--r-lg, 12px);
+  padding: 1.25rem;
+  gap: 1rem;
+}
+
+/* Focus styles for keyboard users */
+.team-logo:focus,
+.team-logo:focus-visible,
+.team-logo:focus-visible {
+  outline: 3px solid color-mix(in oklab, var(--c-brand-1) 35%, white 10%);
+  outline-offset: 6px;
+}
+
+@media (max-width: 600px) {
+  .team-logo {
+    width: clamp(3rem, 18vw, 5.5rem);
+  }
+}
+
+
+
+.rain-drops {
+  display: contents;
+  position: absolute;
+  top: 10%;
+  height: 120px;
+  width: 6px;
+  border-right: OutLine;
+  background: linear-gradient(70deg, lch(69.13% 48.85 282.55 / 0.765), transparent 70%);
+  transform: rotate(-35deg);
+  border-radius: 50%;
+  translate: -450px 1px ;
+  animation: fallingRain 2s linear forwards;
+}
+@keyframes fallingRain {
+  0% {
+    opacity: .9;
+    transform: translateY(0) rotate(-35deg);
+  }
+  50% {
+    opacity: 0.5;
+    transform: translateY(150px) rotate(-35deg);
+    animation: outlineGlow;
+    transition: filter(brightness(1.03) ease-in-out);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(300px) rotate(-35deg);
+  }
+}
+
+
+/* --- Dashboard shell + Offseason Mode ----------------------------------- */
+.dashboard-main {
+  max-width: 1500px;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+.dashboard-header {
+  width: min(100%, 62rem);
+  margin: 0 auto 1.5rem;
+  min-height: 0;
+  padding-inline: clamp(0rem, 1.5vw, 0.5rem);
+}
+
+
+
+.dashboard-header-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid color-mix(in oklab, var(--c-brand-1) 36%, transparent);
+  border-radius: 14px;
+  padding: clamp(1rem, 2vw, 1.5rem);
+  backdrop-filter: blur(6px);
+  background:
+    linear-gradient(180deg, lch(0% 0 0), lch(74.03% 40.02 271.38 / 0.403)),
+    lch(0% 0 0);
+  color: lch(95.47% 6.86 276.24);
+  text-align: center;
+}
+
+.dashboard-title {
+  margin: 0;
+  font-size: clamp(2rem, 4vw + 0.6rem, 4rem);
+  line-height: 1.02;
+  text-wrap: balance;
+}
+
+.dashboard-subtitle {
+  margin: 0;
+  font-size: clamp(0.95rem, 1.1vw + 0.65rem, 1.15rem);
+  color: color-mix(in oklab, lch(95.47% 6.86 276.24) 88%, white 12%);
+}
+
+.season-context-ribbon {
+  margin-top: 0.9rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  align-items: center;
+  justify-content: center;
+}
+
+.season-context-pill {
+  border: 1px solid color-mix(in oklab, var(--c-accent) 58%, transparent);
+  border-radius: 999px;
+  padding: 0.2rem 0.65rem;
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.season-context-message,
+.season-context-kickoff {
+  font-size: 0.9rem;
+  color: var(--c-text-muted-on-dark);
+  flex: 1 1 15rem;
+  min-width: min(100%, 15rem);
+}
+
+.phase-offseason .season-context-pill {
+  background: linear-gradient(90deg, oklch(63% 0.16 150 / 0.28), oklch(66% 0.12 225 / 0.28));
+}
+
+.phase-in_season .season-context-pill {
+  background: linear-gradient(90deg, oklch(58% 0.2 145 / 0.28), oklch(66% 0.11 230 / 0.28));
+}
+
+.phase-postseason .season-context-pill {
+  background: linear-gradient(90deg, oklch(68% 0.13 70 / 0.34), oklch(70% 0.14 40 / 0.30));
+}
+
+.content-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2.2fr) minmax(320px, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.schedule-selector {
+  border: 1px solid color-mix(in oklab, var(--c-brand-1) 32%, transparent);
+  border-radius: var(--r-md);
+  padding: 0.85rem;
+  margin-bottom: 1rem;
+  background:
+    linear-gradient(180deg, lch(0% 0 0 / 0.35), lch(0% 0 0 / 0.12)),
+    lch(0% 0 0 / 0.75);
+}
+
+.schedule-selector__row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.35rem;
+}
+
+.schedule-selector__label {
+  font-weight: 600;
+  font-size: 0.95rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--c-text-on-dark);
+}
+
+.schedule-selector__feedback {
+  margin: 0;
+  font-size: 0.8rem;
+  text-align: center;
+  color: var(--c-text-muted-on-dark);
+}
+
+.schedule-selector button {
+  border-radius: 999px;
+  padding: 0.35rem 0.9rem;
+  border: 1px solid color-mix(in oklab, var(--c-brand-1) 40%, transparent);
+  background: linear-gradient(90deg, var(--c-brand-1), color-mix(in oklab, var(--c-brand-1) 25%, black 80%));
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 200ms ease, box-shadow 200ms ease;
+}
+
+.schedule-selector button:disabled {
+  opacity: 0.55;
+  cursor: progress;
+}
+
+.schedule-selector button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+}
+
+.offseason-mode-panel {
+  border: 1px solid color-mix(in oklab, var(--c-brand-1) 42%, transparent);
+  border-radius: 16px;
+  padding: 1rem;
+  background:
+    linear-gradient(180deg, lch(0% 0 0), lch(74.03% 40.02 271.38 / 0.403)),
+    lch(0% 0 0);
+  color: lch(95.47% 6.86 276.24);
+  box-shadow: 0 15px 32px oklch(0% 0 0 / 0.45);
+}
+
+.offseason-mode-panel h2 {
+  margin: 0 0 0.5rem 0;
+}
+
+.offseason-mode-actions {
+  margin: 0.85rem 0;
+}
+
+.offseason-mode-button {
+  border: 1px solid color-mix(in oklab, var(--c-accent) 60%, transparent);
+  background: linear-gradient(90deg, oklch(57% 0.22 200 / 0.28), oklch(66% 0.14 235 / 0.3));
+  color: #f6fbff;
+  border-radius: 999px;
+  padding: 0.5rem 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 220ms ease, filter 220ms ease;
+}
+
+.offseason-mode-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(1.08);
+}
+
+.offseason-mode-button:disabled {
+  opacity: 0.7;
+  cursor: progress;
+}
+
+.offseason-mode-error {
+  color: oklch(75% 0.16 25);
+  font-size: 0.9rem;
+}
+
+@media (max-width: 1024px) {
+  .dashboard-main {
+    padding: 0.85rem;
+  }
+
+  .dashboard-header {
+    width: 100%;
+    margin-bottom: 1.25rem;
+    padding-inline: 0;
+  }
+
+  .content-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 680px) {
+  .dashboard-main {
+    padding: 0.75rem;
+  }
+
+  .dashboard-header-content {
+    padding: 1rem;
+    text-align: left;
+  }
+
+  .dashboard-title,
+  .dashboard-subtitle {
+    text-align: left;
+  }
+
+  .season-context-ribbon {
+    justify-content: flex-start;
+    align-items: flex-start;
+  }
+
+  .season-context-message,
+  .season-context-kickoff {
+    flex-basis: 100%;
+    min-width: 0;
   }
 }

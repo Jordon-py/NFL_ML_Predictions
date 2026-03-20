@@ -1,69 +1,178 @@
-import { Suspense, lazy, useEffect, useState } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import NavBar from './components/NavBar/NavBar.jsx';
-import { getStatusOverview } from './api/client.js';
+// ==========================================
+// File: frontend/src/App.jsx
+// Role: Frontend module.
+// Input Data: Module inputs.
+// Output Data: Exports for UI usage.
+// Dependencies: react, react-router-dom, ./components/ErrorBoundary, ./hooks/usePredictionState
+// Notes: Shared application code.
+// ==========================================
 
-// Lazy load components for better performance
+import React, { Suspense, lazy } from 'react';
+import {
+  BrowserRouter as Router,
+  Navigate,
+  Route,
+  Routes,
+  useLocation,
+} from 'react-router-dom';
+import ErrorBoundary from './components/ErrorBoundary';
+import { usePredictionState } from './hooks/usePredictionState';
+import { useAuthSession } from './hooks/useAuthSession';
+import NavBar from './components/NavBar/NavBar';
+
 const Dashboard = lazy(() => import('./components/DashBoard/Dashboard'));
 const HistoryPage = lazy(() => import('./components/HistoryPage'));
 const StatsPage = lazy(() => import('./pages/StatsPage'));
+const LandingPage = lazy(() => import('./pages/LandingPage'));
 
-// Inline fallback SettingsPage to avoid missing module errors
-function SettingsPage() {
+function SettingsPage({ authSession, onSignOut }) {
   return (
-    <div className="settings-page">
-      <h1>Settings</h1>
-      <p>Settings page coming soon.</p>
+    <div className="settings-page-shell">
+      <NavBar authSession={authSession} onSignOut={onSignOut} />
+      <main className="settings-page">
+        <div className="settings-page__card">
+          <p className="settings-page__eyebrow">Account</p>
+          <h1>Keep your forecasting workspace organized.</h1>
+          <p>
+            Your recent forecasts stay tied to this email on this device, so you can return to
+            the dashboard, review history, and pick up where you left off.
+          </p>
+          <p>
+            When you are finished, sign out to clear the active session and start fresh the next
+            time you open the app.
+          </p>
+        </div>
+      </main>
     </div>
   );
 }
 
-// Simple 404 page component for unknown routes
-function NotFoundPage() {
+function NotFoundPage({ isSignedIn }) {
   return (
     <div className="not-found-page">
-      <h1>404 - Page Not Found</h1>
-      <p>The page you're looking for doesn't exist.</p>
+      <h1>404</h1>
+      <p>The page you requested does not exist in this app shell.</p>
+      <a href={isSignedIn ? '/app' : '/'}>{isSignedIn ? 'Return to dashboard' : 'Return to landing'}</a>
     </div>
   );
 }
 
-// Main App Component with centralized context and error handling
-function App() {
-  const [health, setHealth] = useState(null);
-
-  useEffect(() => {
-    let active = true;
-    (async () => {
-      try {
-        const overview = await getStatusOverview();
-        if (!active) return;
-        setHealth(overview?.health ?? null);
-      } catch {
-        if (!active) return;
-        setHealth(null);
-      }
-    })();
-    return () => {
-      active = false;
-    };
-  }, []);
+function PredictionAppRoutes({ authSession, onSignOut }) {
+  const predictionState = usePredictionState(authSession);
+  const {
+    schedule,
+    week,
+    predictions,
+    loading,
+    errors,
+    current,
+    history,
+    health,
+    seasonContext,
+    loadScheduleForWeek,
+    setPrediction,
+    setLoading,
+    setError,
+    pushHistory,
+    resetHistory,
+    count,
+  } = predictionState;
 
   return (
-    <Router>
-      <NavBar health={health} />
-      <div className="app-container">
-        <Suspense fallback={<div role="status" aria-live="polite">Loading…</div>}>
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/history" element={<HistoryPage />} />
-            <Route path="/stats" element={<StatsPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-            <Route path="*" element={<NotFoundPage />} />
-          </Routes>
-        </Suspense>
-      </div>
-    </Router>
+    <Routes>
+      <Route
+        path="app"
+        element={(
+            <Dashboard
+              authSession={authSession}
+              onSignOut={onSignOut}
+              schedule={schedule}
+              week={week}
+              predictions={predictions}
+              loading={loading}
+              errors={errors}
+              current={current}
+              history={history}
+              health={health}
+              loadScheduleForWeek={loadScheduleForWeek}
+              setPrediction={setPrediction}
+            setLoading={setLoading}
+            setError={setError}
+            pushHistory={pushHistory}
+            seasonContext={seasonContext}
+          />
+        )}
+      />
+      <Route
+        path="history"
+        element={(
+          <HistoryPage
+            authSession={authSession}
+            onSignOut={onSignOut}
+            history={history}
+            health={health}
+            onClearHistory={resetHistory}
+            historyCount={count}
+          />
+        )}
+      />
+      <Route
+        path="stats"
+        element={<StatsPage authSession={authSession} onSignOut={onSignOut} />}
+      />
+      <Route
+        path="settings"
+        element={<SettingsPage authSession={authSession} onSignOut={onSignOut} />}
+      />
+      <Route path="*" element={<NotFoundPage isSignedIn />} />
+    </Routes>
+  );
+}
+
+function ProtectedAppShell({ authSession, onSignOut }) {
+  const location = useLocation();
+
+  // Redirect anonymous visitors back to the landing page while preserving the intent.
+  if (!authSession.isAuthenticated) {
+    return <Navigate to="/" replace state={{ from: location.pathname }} />;
+  }
+
+  return <PredictionAppRoutes authSession={authSession} onSignOut={onSignOut} />;
+}
+
+function App() {
+  const authSession = useAuthSession();
+
+  return (
+    <ErrorBoundary>
+      <Router>
+        <div className="app-container">
+          <Suspense fallback={<div role="status" aria-live="polite">Loading...</div>}>
+            <Routes>
+              <Route
+                path="/"
+                element={(
+                  <LandingPage
+                    authSession={authSession}
+                    onSignIn={authSession.signIn}
+                    onSignOut={authSession.signOut}
+                  />
+                )}
+              />
+              <Route
+                path="/*"
+                element={(
+                  <ProtectedAppShell
+                    authSession={authSession}
+                    onSignOut={authSession.signOut}
+                  />
+                )}
+              />
+            </Routes>
+          </Suspense>
+        </div>
+      </Router>
+    </ErrorBoundary>
   );
 }
 

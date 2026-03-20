@@ -110,13 +110,13 @@ POSTSEASON_ROUND_TO_TYPE = {
     "Super Bowl": "SB",
 }
 # Name of the output CSV file for the generated dataset.
-<<<<<<< HEAD:backend/build_csv_datasetsv3.py
+<<<<<<<< HEAD:backend/build_csv_datasetsv3.py
 OUTPUT_DATASET_NAME = f"game_features_{datetime.now().strftime('%Y%m%d')}.csv"
-=======
+========
 # Includes current date in YYYYMMDD format for traceability/versioning.
 OUTPUT_DATASET_NAME = f"game_features_{datetime.now().strftime('%Y%m%d')}.csv"
 DATA_SAVE = f"game_features_{datetime.now().strftime('%Y%m%d')}.csv"
->>>>>>> 5b8cc7f5c1568b3524a11eb6b0b53c2955a79aff:backend/build_csv_datasets_v3.py
+>>>>>>>> 5b8cc7f5c1568b3524a11eb6b0b53c2955a79aff:backend/build_csv_datasets_v3.py
 
 # Pairwise dominance helpers
 HAS_winner_BOOL = True  # if you only have scores, set False

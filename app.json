@@ -22,24 +22,24 @@
       "value": "INFO",
       "required": false
     },
-    "PORT": {
-      "description": "Port for the web server",
-      "value": "8000",
+    "ENABLE_ADMIN": {
+      "description": "Expose admin-only endpoints like /admin/reload (disable in production)",
+      "value": "false",
       "required": false
     },
-    "HOST": {
-      "description": "Host address for the web server",
-      "value": "0.0.0.0",
+    "DATA_DIR": {
+      "description": "Directory containing game_features_*.csv datasets (relative to backend/)",
+      "value": "data/datasets",
       "required": false
     },
     "DATASET_PATH": {
       "description": "Path to NFL dataset CSV file",
-      "value": "backend/data/Nfl_data_sorted.csv",
+      "value": "game_features_20260109_clean.csv",
       "required": false
     },
     "SCHEDULE_PATH": {
       "description": "Path to NFL schedule CSV file", 
-      "value": "backend/data/Nfl_schedule_2025_2026.csv",
+      "value": "Nfl_schedule_2025.csv",
       "required": false
     }
   },

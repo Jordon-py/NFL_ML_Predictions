@@ -1,6 +1,6 @@
-<<<<<<< HEAD:backend/scripts/build_csv_datasets.py
+<<<<<<<< HEAD:backend/scripts/build_csv_datasets.py
 #!/usr/bin/env python3
-=======
+========
 # ==========================================
 # File: backend/scripts/build_csv_datasets.py
 # Role: Backend utility script.
@@ -15,7 +15,7 @@
 
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
->>>>>>> 5b8cc7f5c1568b3524a11eb6b0b53c2955a79aff:archive/backend/scripts/build_csv_datasets.py
+>>>>>>>> 5b8cc7f5c1568b3524a11eb6b0b53c2955a79aff:archive/backend/scripts/build_csv_datasets.py
 """
 File: backend/scripts/build_csv_datasets.py
 Purpose: Production entrypoint for dataset builds with validation and versioning outputs.
@@ -35,11 +35,11 @@ import logging
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-<<<<<<< HEAD:backend/scripts/build_csv_datasets.py
+<<<<<<<< HEAD:backend/scripts/build_csv_datasets.py
 from typing import Any, Dict, List
-=======
+========
 import re
->>>>>>> 5b8cc7f5c1568b3524a11eb6b0b53c2955a79aff:archive/backend/scripts/build_csv_datasets.py
+>>>>>>>> 5b8cc7f5c1568b3524a11eb6b0b53c2955a79aff:archive/backend/scripts/build_csv_datasets.py
 
 import numpy as np
 import pandas as pd
@@ -68,7 +68,7 @@ REQUIRED_COLUMNS: List[str] = [
 ]
 
 
-<<<<<<< HEAD:backend/scripts/build_csv_datasets.py
+<<<<<<<< HEAD:backend/scripts/build_csv_datasets.py
 def parse_args() -> argparse.Namespace:
     current_year = datetime.now(timezone.utc).year
     parser = argparse.ArgumentParser(
@@ -147,7 +147,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def _setup_logging(out_dir: Path) -> Path:
-=======
+========
 
 # ---------------------------------------------------------------------
 # Logging
@@ -155,17 +155,17 @@ def _setup_logging(out_dir: Path) -> Path:
 def setup_logger(out_dir: Path) -> None:
     """Initialize both file and console logging so CLI users get progress feedback."""
     
->>>>>>> 5b8cc7f5c1568b3524a11eb6b0b53c2955a79aff:archive/backend/scripts/build_csv_datasets.py
+>>>>>>>> 5b8cc7f5c1568b3524a11eb6b0b53c2955a79aff:archive/backend/scripts/build_csv_datasets.py
     out_dir.mkdir(parents=True, exist_ok=True)
     log_path = out_dir / "build_csv_datasets_entry.log"
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(message)s",
-<<<<<<< HEAD:backend/scripts/build_csv_datasets.py
+<<<<<<<< HEAD:backend/scripts/build_csv_datasets.py
         handlers=[
             logging.FileHandler(log_path, mode="w", encoding="utf-8"),
             logging.StreamHandler(sys.stdout),
-=======
+========
         handlers=[logging.FileHandler(log_file, mode="w"), logging.StreamHandler()],
     )
     logging.info("Logger initialized → %s", log_file)
@@ -2215,7 +2215,7 @@ def load_team_game_metrics(pbp_path: Path) -> pd.DataFrame:
             "off_total_plays",
             "off_pass_rate",
             "off_expected_pass_rate",
->>>>>>> 5b8cc7f5c1568b3524a11eb6b0b53c2955a79aff:archive/backend/scripts/build_csv_datasets.py
+>>>>>>>> 5b8cc7f5c1568b3524a11eb6b0b53c2955a79aff:archive/backend/scripts/build_csv_datasets.py
         ],
     )
     return log_path

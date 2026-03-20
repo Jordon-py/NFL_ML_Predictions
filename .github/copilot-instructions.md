@@ -3,72 +3,221 @@
 Big Picture
 - FastAPI serves ML predictions; models/datasets live under backend/data/prod-models; Vite/React frontend consumes REST.
 
-<<<<<<< HEAD
-### Role
-- Quickly orient AI coding agents to the NFL_ML_Predictions repository so they can make safe, small, high-value edits without breaking builds or deployments.
-ALWAYS CHECK AND UPDATE: 'NFL_ML_Predictions\alfred.log.md'
-=======
 Dev Quickstart
 - Backend: cd backend; .\.venv\Scripts\Activate.ps1; python -m pip install -r requirements.txt; uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000
 - Frontend: cd frontend; npm install; npm run dev
 - Deploy: git push heroku rollback/heroku-endpoint-restore:main
->>>>>>> cd97fecacdc0a2f3d4ee6cd29effaa9619489d75
 
 Conventions
 - React via hooks/Context only; custom CSS (no frameworks). Logging via warnings/errors; raise HTTPException on API errors. Tests: pytest (backend/tests), vitest (frontend).
 - Maintain alfred.log.md tasks; update docs/report.md “Active Enhancements Under Development.”
 
-<<<<<<< HEAD
-### Primary Directives
-1. **Holistic Code Awareness:** Always scan full repository context, including backend, frontend, configuration, and documentation files. Infer architectural intent.
-
-2. **Logic Simplification:** Identify and simplify overly complex logic without changing external behavior. Prioritize clarity and maintainability.
-
-3. **Documentation & Commenting:** Add/update top-level documentation in every file touched. Summarize purpose, key logic flow, and dependencies. Add concise inline comments where logic might confuse maintainers.
-
-4. **README Management:** Make only minimal, context-accurate adjustments. Keep professional, clear, informative tone. Ensure reflects current deployment architecture.
-
-5. **Professional Tone Enforcement:** Maintain consistent professional tone in code comments, docs, and commit suggestions. Avoid casual phrasing.
-
-6. **Change Discipline:** Make focused changes. Do not perform large refactors unless complexity/redundancy/errors detected. Focus on incremental improvements.
-
-7. **Self-Awareness & Reflexion:** Before completing changes, self-check: "Is this clearer? Simpler? Would a new contributor understand without explanation?, DOES IT WORK!!"
-
-### Dev Quickstart
-- Start backend (local): `cd backend && python -m venv .venv && .\.venv\Scripts\Activate.ps1 && python -m pip install -r requirements.txt && python -m uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000`
-- Start frontend (local): `cd frontend && npm install && npm run dev`
-- Build frontend for production: `cd frontend && npm run build`
-- Deploy backend to Heroku: `heroku create --stack=container <app> && git push heroku master` (set env vars via `heroku config:set`)
-
-### Conventions
-- React: Functional components, hooks, local state + Context + custom hooks. No Redux/RTK.
-- Styling: Custom CSS only, centralized, accessible, LCH-based palette.
-- Code: Modular, readable, educational comments. Avoid data leakage and anti-patterns.
-- Logging/Error Style: Use logging.config.dictConfig with console+file handlers. Errors use HTTPException.
-- Test Layout: pytest for Python, vitest for JS. Tests in backend/tests/, frontend uses npm test.
-
-```python
-# backend/main.py:L85-L90
-def get_current_nfl_context() -> Dict[str, Any]:
-    """Determine current NFL season context for prediction/reporting."""
-    now = datetime.now()
-    cur_season = now.year if now.month >= 8 else now.year - 1
-    # ...implementation
-=======
-Snippet (CORS defaults) [backend/main.py](backend/main.py#L75-L111)
+Snippet (CORS defaults) [backend/main.py](../backend/main.py#L75-L111)
 ```
 def _parse_allowed_origins(raw: str) -> List[str]:
     ...
->>>>>>> cd97fecacdc0a2f3d4ee6cd29effaa9619489d75
 ```
+<!--
+COPILOT INSTRUCTIONS (IMMUTABLE)
+Owner: Christopher
+Rule: DO NOT MODIFY THIS FILE. DO NOT REWRITE IT. DO NOT “IMPROVE” IT.
+If changes are needed, request explicit approval from Christopher FIRST.
+-->
+
+# Copilot Collaboration Instructions (Production-First)
+
+## 0) Prime Directive (Non-Negotiable)
+Your #1 job is to keep this repository **production-ready** at all times.
+
+**You must:**
+- keep the API stable and working
+- prevent endpoint drift
+- prevent hardcoded-value mismatches
+- keep imports, modules, and routing correct
+- simplify code only when it improves clarity without reducing quality
+- keep top-level docs accurate (**README + MEMORY.md**) after every meaningful change
+
+**You must NOT:**
+- change this file
+- delete guardrails, validations, or error handling “to make it work”
+- introduce breaking changes without documenting them and updating MEMORY.md
+- add Redux/Redux Toolkit (explicitly avoided)
+- add CSS frameworks (Tailwind/MUI/Bootstrap/etc.) unless Christopher requests it
+
+---
+
+## 1) Working Style (How to Collaborate With Christopher)
+Christopher prefers:
+- **diff-first** changes (minimal, safe patches)
+- **contract-first** development (schemas + examples before implementation)
+- **production realism** (correct env vars, clean imports, correct routing, CORS sanity)
+- **clarity + maintainability** over cleverness
+- **step-by-step** reasoning for non-trivial logic
+- **dry-run before destructive cleanup** (branches/deps/files)
+
+### Required Response Format (Every Time)
+When proposing work, output in this exact structure:
+
+1) **Intent**: one sentence describing the goal  
+2) **Risk Level**: Low / Medium / High  
+3) **Patch**: minimal diffs + file list  
+4) **API Impact**: endpoints affected + contract changes  
+5) **Smoke Tests**: exact commands to verify  
+6) **Docs Update**: what to update in README + MEMORY.md  
+7) **Follow-ups**: 1–3 improvements (optional)
+
+---
+
+## 2) Production Readiness Checklist (Run Every Time)
+Before you consider any change “done,” verify:
+
+### ✅ API Health (FastAPI or Backend)
+- All endpoints boot without errors (import paths correct)
+- No missing environment variables in production
+- CORS configured appropriately (explicit origins in prod)
+- Pydantic validation passes (NaN handling, Optional fields when needed)
+- Response payloads match documented schemas
+- Errors return consistent structured messages (not stack traces)
+
+### ✅ Drift Prevention (Critical)
+- If any endpoint accepts JSON payloads → schema must be explicit and stable  
+- If any model/features contract exists → schema validation must match raw feature columns  
+- If any schedule or dataset pipeline exists → ensure postseason/game types are supported as intended  
+- If any “fallback inference” exists → confirm it does not silently regress predictions
+
+### ✅ Imports & File Mapping
+- No broken relative imports
+- Avoid ambiguous module names (`utils.py` conflicts, missing `__init__.py`)
+- Prefer stable package imports (`backend.utils...`) over fragile relative chains
+- If moving files: update every import + update docs + update MEMORY.md
+
+### ✅ Hardcoded Value Audit
+Hardcoded values must be:
+- centralized (constants/config)
+- documented (MEMORY.md)
+- mapped correctly (env, URL base, file paths, endpoints)
+
+Absolutely flag and fix:
+- hardcoded API base URLs
+- hardcoded model/data paths
+- magic strings for endpoint routing
+- hidden defaults that break deployment
+
+---
+
+## 3) API Contract Rules (No Surprises)
+If you touch any endpoint:
+- define request/response schema in docs
+- add at least one example payload
+- add a smoke test command (curl/httpie) and include expected output shape
+- ensure consistent status codes
+
+### Stability Rules
+- never rename fields silently
+- never change meaning of a field without versioning/documenting
+- prefer additive changes (new optional fields) over breaking changes
+
+---
+
+## 4) Simplification Rules (Quality Without Regression)
+You SHOULD simplify when:
+- repeated logic can be centralized safely
+- complexity is accidental, not essential
+- you reduce cognitive load and improve readability
+
+You MUST NOT simplify by:
+- removing validation
+- removing logging/observability
+- removing error handling
+- weakening schema guarantees
+- merging layers that reduce clarity (e.g., mixing routing + business logic + IO)
+
+---
+
+## 5) Documentation Rules (Always Current)
+After meaningful work, you must update:
+- **README.md** (how to run, env vars, endpoints, key flows)
+- **MEMORY.md** (current repo truth, contracts, decisions)
+
+Docs must include:
+- how to run backend + frontend
+- base URL + env var rules
+- endpoint list + schema examples
+- deployment notes (CORS, env vars, build commands)
+
+---
+
+## 6) Security Standards (Strict)
+- Never hardcode credentials/API keys
+- Validate all user inputs
+- Use safe parsing for JSON and file paths
+- Do not log secrets
+- If an endpoint accepts user-controlled filenames/paths → sanitize
+
+---
+
+## 7) Testing & Smoke Checks (Minimum Standard)
+Required minimum checks after backend changes:
+- start server locally
+- hit `/status` or equivalent health endpoint
+- hit at least 1 core endpoint end-to-end
+
+Required minimum checks after frontend changes:
+- page loads
+- API calls do not fail due to wrong base URL joining
+- error states render cleanly
+
+---
+
+## 8) Memory Protocol (MANDATORY)
+You must treat `MEMORY.md` as the repo’s living source of truth.
+
+### Every time you make a meaningful change, you MUST:
+- update MEMORY.md with:
+  - what changed
+  - why it changed
+  - what contracts/endpoints were affected
+  - what was verified (smoke tests)
+  - any new risks/tech debt introduced
+
+### Structure Rules
+- Do NOT rewrite the MEMORY.md schema
+- Append changes under the **Changelog** section
+- Keep keys stable and machine-extractable (YAML blocks)
+
+Pointer:
+➡ Always update `MEMORY.md` after implementing changes.
+
+---
+
+## 9) Code Review Standards (Baseline)
+### Code Quality Essentials
+- Functions should be focused and appropriately sized
+- Use clear, descriptive naming conventions
+- Ensure proper error handling throughout
+
+### Documentation Expectations
+- All public functions must include doc comments
+- Complex algorithms should have explanatory comments
+- README files must be kept up to date
+
+---
+
+## 10) Definition of Done (Strict)
+A change is DONE only when:
+- API works
+- contracts are stable
+- smoke tests pass
+- docs updated (README + MEMORY.md)
+- drift risks are acknowledged or eliminated
 
 Services & Integrations
 - Models and metadata in backend/data/prod-models/models; dataset default backend/data/prod-models/game_features_20251210.csv; env overrides MODELS_DIR/DATASET_PATH.
-- CORS allow list ALLOWED_ORIGINS + regex r"https://.*\.vercel\.app"; catch-all OPTIONS avoids 400 preflights [backend/main.py](backend/main.py#L563-L571). No DB/cache.
+- CORS allow list ALLOWED_ORIGINS + regex r"https://.*\.vercel\.app"; catch-all OPTIONS avoids 400 preflights [backend/main.py](../backend/main.py#L563-L571). No DB/cache.
 - FastAPI on 8000; Vite dev proxy; Heroku deploy via Procfile.
 
 Cross-Component Communication
-- POST /predict {home_team, away_team, season, week} → PredictionResponse (scores, win probabilities, prediction_source, win_classifier_used) [backend/main.py](backend/main.py#L1310-L1525).
+- POST /predict {home_team, away_team, season, week} → PredictionResponse (scores, win probabilities, prediction_source, win_classifier_used) [backend/main.py](../backend/main.py#L1310-L1525).
 
 Where to Look
 - backend/main.py, backend/requirements.txt, frontend/package.json, vite.config.js, Procfile/heroku.yml/vercel.json, docs/report.md, alfred.log.md.
@@ -78,89 +227,7 @@ Ambiguities to Confirm
 - Should /history be implemented or stubbed for UI callers?
 - When win_model is absent, should sigmoid fallback remain allowed?
 
-<<<<<<< HEAD
-### Changed since last run
-- Fixed double-wrapping of PredictionProvider and ErrorBoundary in index.jsx/App.jsx.
-- Created missing ErrorBoundary.css file.
-- Fixed HistoryChart.jsx to properly handle history array instead of stringifying state.
-- Cleaned up malformed comments in PredictionResult.jsx.
-- Added leading slash to /schedule/next-week endpoint in backend/main.py.
-- Updated Vite proxy to target localhost:8000 for dev API calls.
-- Modified sanity check to handle unfitted preprocessor during startup.
-- Updated API_BASE in frontend/src/api/client.js to use empty string in dev (enables Vite proxy) and Heroku URL in prod.
-- Verified CORS config in backend/main.py includes localhost:3000 for dev testing.
-- Tested /schedule/next-week endpoint returns 13 games for Week 8.
-- Deployed to Heroku v183 after local validation.
-- Enhanced TeamGrid matchup cards with team logos, improved visual layout, fade-in animations, outline glows, and enhanced standout effects for predicted cards.
-- Implemented responsive flexbox layout for TeamGrid cards and structured card content with proper spacing and no overlapping stats.
-- Fixed kickoff time display to use user's local timezone instead of Pacific Time.
-- Resolved merge conflict in `backend/models/metadata.json`; backend `/health` now returns healthy with models loaded.
-
-
-
-Keep this file concise: update only with repository-discoverable facts. After edits, ask maintainers for a quick smoke test (start backend, call /predict, run frontend dev server).* Operate as an **intelligent repo custodian**, not a blind editor.
-
-* Prioritize *structural awareness* and *contextual refinement*.
-* Balance **clean code**, **useful documentation**, and **minimal noise**.
-* Treat the entire codebase as a unified ecosystem with architectural intent.
-
----
-
-### 📘 Example Behavior Patterns
-
-**When Copilot reviews a file:**
-
-* Detects nested conditionals → replaces with clearer logic + short rationale comment.
-* Finds undocumented functions → adds purpose docstring and parameter explanation.
-* Notices outdated README build steps → updates only affected parts (e.g., “Yarn → npm”).
-* Finds verbose imports or unused components → cleans quietly, preserving readability.
-
----
-
-### 🧭 Operating Parameters
-
-* **Always Active:** Apply these directives in all completions across the repo.
-* **Context Priority:** Treat `.env`, `requirements.txt`, `package.json`, and config files as primary context sources for reasoning.
-* **Documentation Format:**
-
-  * Use Markdown for READMEs and top-level documentation.
-  * Use consistent docstring format (`"""Triple-quoted in Python"""`, `/** ... */` in JS).
-* **Output Style:**
-
-  * Professional tone
-  * No excessive verbosity
-  * No unnecessary “AI-like” commentary
-
----
-
-### ✅ Copilot End Goal
-
-Ensure the repository is always:
-
-* **Logically clean**
-* **Well-documented**
-* **Deployment-ready**
-* **Professionally presented**
-
----
-
-Deep Cognitive Exploration (DCE): Explore and contrast alternative design patterns before finalizing.
-
-Dynamic Tree of Thought (D-ToT): Decompose the pipeline into logical subsystems:
-Ingestion → Validation → Feature Engineering → Output.
-Inspect, refactor, and reintegrate each branch independently.
-
-Reflexion Protocol: Use a built-in review-refine loop for self-correction before output.
-
-
-Educator Mindset: Each major section should include an explanatory note guiding a reader on “why this works.” 
-Iterative Refinement: After initial output, review and refine based on self-assessment and your own self critique 
-to ensure clarity, correctness, and educational value.
-
-End each phase with a small yet helpful and detailed logging of changes and their intended benefits. in the code comments. in the docs folder there should be a md file called report.md that documents the changes made and why they were made which file and line of any changes made there should be a professional report like structure with updates graphs and images A list of all the very names being used A list of all functions they should be all grouped into what files that they are with or coming and who they interact with Just a folder full of metrics that I want you to take as you analyze the folder that should help me be more productive Just helpful in general and educational in this full file is something that every time you know you make some changes for me you will document and also document the time and the day, estimate of app completiong percentage and a section where you always update with a enhancement i could impiment
-=======
 Changed since last run
-- Fixed constant predictions by sending raw columns into model pipelines [backend/main.py](backend/main.py#L1375-L1495).
-- Parsed ALLOWED_ORIGINS properly and added catch-all OPTIONS handler to stop 400 preflights [backend/main.py](backend/main.py#L75-L111, backend/main.py#L563-L571).
+- Fixed constant predictions by sending raw columns into model pipelines [backend/main.py](../backend/main.py#L1375-L1495).
+- Parsed ALLOWED_ORIGINS properly and added catch-all OPTIONS handler to stop 400 preflights [backend/main.py](../backend/main.py#L75-L111, ../backend/main.py#L563-L571).
 - Pending verification: frontend logos render correctly; /history still missing.
->>>>>>> cd97fecacdc0a2f3d4ee6cd29effaa9619489d75

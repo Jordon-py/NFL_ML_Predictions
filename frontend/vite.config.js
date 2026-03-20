@@ -1,3 +1,12 @@
+// ==========================================
+// File: frontend/vite.config.js
+// Role: Vite build configuration.
+// Input Data: Build environment variables.
+// Output Data: Vite config object.
+// Dependencies: @vitejs/plugin-react-swc, vite
+// Notes: Used by Vite CLI.
+// ==========================================
+
 import react from '@vitejs/plugin-react-swc';
 import { defineConfig } from 'vite';
 
