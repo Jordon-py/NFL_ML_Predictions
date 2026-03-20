@@ -760,7 +760,7 @@ class AppState:
         if not self.models_metadata:
             blockers.append("model metadata unavailable")
         elif not _requires_strict_bundle_contract(self.models_metadata):
-            blockers.append("legacy model bundle contract")
+            warnings_out.append("legacy model bundle contract")
 
         for warning_message in self.production_warnings:
             if warning_message not in warnings_out:

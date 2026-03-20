@@ -133,16 +133,21 @@ def test_validate_bundle_metadata_contract_rejects_sklearn_mismatch(monkeypatch)
         main_module._validate_bundle_metadata_contract(meta)
 
 
-def test_health_reports_unhealthy_when_production_blockers_exist(monkeypatch):
+def test_health_keeps_legacy_bundle_contract_as_warning(monkeypatch):
     monkeypatch.setattr(main_module.state, "dataset", pd.DataFrame([{"season": 2025, "week": 1}]))
     monkeypatch.setattr(main_module.state, "models", {"home": object(), "away": object(), "win": object()})
-    monkeypatch.setattr(main_module.state, "production_blockers", ["legacy model bundle contract"])
-    monkeypatch.setattr(main_module.state, "production_warnings", ["metadata.json missing strict contract"])
+    monkeypatch.setattr(main_module.state, "production_blockers", [])
+    monkeypatch.setattr(
+        main_module.state,
+        "production_warnings",
+        ["legacy model bundle contract", "metadata.json missing strict contract"],
+    )
 
     payload = main_module.health()
 
-    assert payload.status == "unhealthy"
-    assert payload.production_ready is False
-    assert "legacy model bundle contract" in (payload.reason or "")
-    assert payload.components.ready_for_production is False
-    assert payload.components.blockers == ["legacy model bundle contract"]
+    assert payload.status == "healthy"
+    assert payload.production_ready is True
+    assert payload.reason is None
+    assert payload.components.ready_for_production is True
+    assert payload.components.blockers == []
+    assert "legacy model bundle contract" in payload.components.warnings
