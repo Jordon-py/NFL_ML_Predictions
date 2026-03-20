@@ -52,6 +52,12 @@ class InferenceBundle:
     def raw_feature_columns(self) -> List[str]:
         cols = self.meta.get("raw_feature_columns", {}) or {}
         if isinstance(cols, dict):
+            for key in ("score", "scores", "win"):
+                selected = cols.get(key)
+                if isinstance(selected, dict):
+                    num = selected.get("numeric", []) or []
+                    cat = selected.get("categorical", []) or []
+                    return [*list(num), *list(cat)]
             num = cols.get("numeric", []) or []
             cat = cols.get("categorical", []) or []
             return [*list(num), *list(cat)]

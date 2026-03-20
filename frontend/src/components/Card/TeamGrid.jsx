@@ -1,139 +1,131 @@
-/**
- * NFL Prediction App — TeamGrid Component (Expert v2.0)
- * ====================================================
- * 
- * Orchestrates the display of NFL matchups for a specific week.
- * This component acts as a smart container that maps raw game data
- * to highly-interactive Card components, managing prediction state 
- * and user interactions with optimized render cycles.
- */
+// File: frontend/src/components/Card/TeamGrid.jsx
+// Renders the weekly schedule grid and delegates prediction actions to its parent.
 
-import { buildGameKey } from '../../utils/predictionContextUtils';
-import Card from './Card';
-import cardStyles from './Card.module.css';
+import Card from './Card.jsx';
+import {
+  buildMatchupKey,
+  getGameWeek,
+  normalizeMatchup,
+} from '../../utils/gameUtils.js';
 import './TeamGrid.css';
 
 /**
- * TeamGrid Component
- * 
- * @param {Object} props
- * @param {number} props.week - Current NFL week being displayed.
- * @param {Array} props.games - List of matchups for the week.
- * @param {Object} props.predictions - Map of processed predictions keyed by game ID.
- * @param {Object} props.loading - Map of loading states keyed by game ID.
- * @param {Object} props.errors - Map of error messages keyed by game ID.
- * @param {Function} props.onPredict - Callback to trigger a new prediction.
- * @param {Function} props.onReset - Callback to clear a prediction.
- * @param {Object} props.features - Feature toggles (queueAware, confidenceDisplay, etc).
- * @param {number} [props.season] - Season label used when no slate is present.
+ * TeamGrid component
+ *
+ * @param {Object} [props]
+ * @param {number} [props.week]
+ * @param {Array<any>} [props.games]
+ * @param {boolean} [props.isLoading]
+ * @param {Record<string, any>} [props.predictions]
+ * @param {Record<string, boolean>} [props.loading]
+ * @param {Record<string, any>} [props.errors]
+ * @param {(game: any) => void} [props.onPredict]
+ * @param {(game: any) => void} [props.onReset]
+ * @param {() => Promise<void> | void} [props.onPredictAll]
+ * @param {boolean} [props.isBulkLoading]
  */
 export default function TeamGrid({
-  week,
-  season = null,
+  week = 10,
   games = [],
+  isLoading = false,
   predictions = {},
   loading = {},
   errors = {},
   onPredict,
   onReset,
-  features = {},
-  actualScores = {},
-}) {
-  const gameItems = (games || []).map((game, index) => {
-    const gkey = buildGameKey(game);
+  onPredictAll,
+  isBulkLoading = false,
+} = {}) {
+  const safeGames = Array.isArray(games) ? games : [];
 
-    const homeTeam = game.home_abbr || game.home_team;
-    const awayTeam = game.away_abbr || game.away_team;
+  // Prefer explicit week; fall back to first game; default to 10 as safe placeholder.
+  const safeWeek = week ?? getGameWeek(safeGames[0]) ?? 10;
 
-      return {
-        key: gkey,
-        index,
-        matchup: {
-          game_id: gkey,
-          home_team: homeTeam,
-          away_team: awayTeam,
-          home_name: game.home_name,
-          away_name: game.away_name,
-          kickoff: game.kickoff,
-          home_logo: game.home_logo,
-          away_logo: game.away_logo,
-          home_color: game.home_color,
-          away_color: game.away_color,
-          home_color2: game.home_color2,
-          away_color2: game.away_color2,
-          home_wordmark: game.home_wordmark,
-          away_wordmark: game.away_wordmark,
-          season: game.season,
-          week: game.week,
-          game_type: game.game_type,
-        },
-        prediction: predictions[gkey],
-        isLoading: !!loading[gkey],
-        error: errors[gkey],
-        actualScore: actualScores[gkey],
-      };
-  });
-
-  // Empty State Handling
-  if (!games || games.length === 0) {
+  // 1. Global "isLoading" state: show skeleton/spinner and skip the grid entirely.
+  if (isLoading) {
     return (
-      <div className="team-grid__empty">
-        <div className="team-grid__empty-text">
-          <h3>No matchups are available right now.</h3>
-          <p>
-            Try another week or season from the controls above, and the grid will refresh with more
-            matchups for Season {season ?? new Date().getFullYear()}.
-          </p>
+      <section className="team-grid" aria-busy="true">
+        <header className="team-grid__header">
+          <h2 className="team-grid__title">Week {safeWeek} Games</h2>
+          <p className="team-grid__subtitle">Loading schedule...</p>
+        </header>
+        <div className="team-grid__empty">
+          <div className="team-grid__spinner" />
         </div>
-      </div>
+      </section>
     );
   }
 
-  const isPostseason = games.some(g => g.game_type && g.game_type !== 'REG');
-  const gridTitle = isPostseason ? "Postseason Matchups" : `Week ${week} Matchups`;
+  // 2. Empty schedule state: show a helpful message instead of an empty grid.
+  if (safeGames.length === 0) {
+    return (
+      <section className="team-grid">
+        <header className="team-grid__header">
+          <h2 className="team-grid__title">Week {safeWeek} Games</h2>
+          <p className="team-grid__subtitle">
+            No games found for Week {safeWeek}. Try refreshing or checking your API.
+          </p>
+        </header>
+        <div className="team-grid__empty">
+          <p className="team-grid__empty-text">
+            Once the schedule loads, all Week {safeWeek} matchups will appear here.
+          </p>
+        </div>
+      </section>
+    );
+  }
 
+  // 3. Normal, "loaded" path: render the header and the card grid.
   return (
-    <section className="team-grid" aria-label='NFL Matchups'>
+    <section
+      className="team-grid"
+      aria-label={`NFL Week ${safeWeek}`}
+      data-week={safeWeek}
+    >
       <header className="team-grid__header">
-        <h2 className="team-grid__title">{gridTitle}</h2>
-        {features.queueAware && (
-          <div className="team-grid__status-bar">
-            <span>{gameItems.filter(g => g.prediction).length} / {gameItems.length} forecasts ready</span>
-          </div>
-        )}
+        <div className="team-grid__heading">
+          <span className="team-grid__badge">Week {safeWeek}</span>
+          <h2 className="team-grid__title">Week {safeWeek}</h2>
+        </div>
+        <div className="team-grid__actions">
+          <button
+            type="button"
+            className="team-grid__btn"
+            onClick={typeof onPredictAll === 'function' ? onPredictAll : undefined}
+            disabled={isLoading || isBulkLoading || typeof onPredictAll !== 'function'}
+            aria-busy={isBulkLoading ? 'true' : 'false'}
+          >
+            {isBulkLoading ? 'Predicting...' : 'Predict All Games'}
+          </button>
+        </div>
+        <p className="team-grid__subtitle">
+          Showing <strong>{safeGames.length}</strong> games scheduled.
+        </p>
       </header>
 
-      <div className={`team-grid__grid ${cardStyles.cardGrid}`}>
-        {gameItems.map((item) => (
-        <Card
-          key={item.key}
-          index={item.index}
-          matchup={item.matchup}
-          prediction={item.prediction}
-          loading={item.isLoading}
-          error={item.error}
-          onClick={() => onPredict && onPredict(item.matchup)}
-          onReset={() => onReset && onReset(item.matchup)}
-          // Enhanced features
-          status={
-            item.isLoading
-              ? "Crunching data..."
-              : item.actualScore?.status
-                ? item.actualScore.status
-                : item.prediction
-                  ? "Forecast ready"
-                  : "Pending prediction"
-          }
-          progress={item.isLoading || item.prediction ? 100 : 0}
-        />
-        ))}
-      </div>
+      <div className="team-grid__grid">
+        {safeGames.map((game, index) => {
+          // Keep this key aligned with Dashboard's prediction-state keys.
+          const key = buildMatchupKey(game) || String(index);
+          const prediction = predictions?.[key];
+          const isGameLoading = Boolean(loading?.[key]);
+          const errorMessage = errors?.[key] ?? null;
+          const matchup = normalizeMatchup(game);
 
-      <footer className="team-grid__footer">
-        <p className="footer-note">
-          Select any matchup to generate a forecast and open the detailed breakdown below.
-        </p>
-      </footer>
+          return (
+            <Card
+              key={key}
+              matchup={matchup}
+              prediction={prediction}
+              loading={isGameLoading}
+              error={errorMessage}
+              index={index}
+              onClick={typeof onPredict === 'function' ? () => onPredict(game) : undefined}
+              onReset={typeof onReset === 'function' ? () => onReset(game) : undefined}
+            />
+          );
+        })}
+      </div>
     </section>
   );
 }

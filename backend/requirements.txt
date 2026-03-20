@@ -1,10 +1,9 @@
 # Production dependencies - optimized for Heroku deployment
 
 # Core web framework
-fastapi==0.124.2
+fastapi>=0.104.0,<0.110.0
 uvicorn[standard]>=0.23.0,<0.25.0
 gunicorn>=21.2.0,<22.0.0
-httpx>=0.27.0,<1.0.0
 
 # Data science stack (carefully version-coordinated)
 # Updated to support NumPy 2.x and scikit-learn 1.7.x for model compatibility
@@ -17,18 +16,18 @@ joblib>=1.2.0,<1.5.0
 lightgbm>=4.0.0,<4.2.0
 
 # API and data validation
-pydantic>=2.0.0
+# nflreadpy requires Pydantic v2+, and FastAPI 0.104+ supports it.
+pydantic>=2.7.0,<3.0.0
+pydantic-settings>=2.3.0,<3.0.0
+httpx>=0.27.0,<0.28.0
 
 # Environment variables
-python-dotenv
+python-dotenv>=1.0.0,<1.1.0
 
 # NFL data (may need specific version for compatibility)
 nflreadpy
-# pyarrow is required for polars->pandas conversion (nflreadpy uses polars internally)
-pyarrow
-ollama
+
 # Explicit CORS middleware (Starlette provides CORSMiddleware used by FastAPI)
 # FastAPI already depends on Starlette, but pinning here makes CORS explicit
 # and helps Heroku/Pipfiles resolve compatible versions during deployments.
 starlette>=0.27.0,<2.0.0
-apscheduler>=3.10.0

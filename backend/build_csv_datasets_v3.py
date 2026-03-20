@@ -110,9 +110,13 @@ POSTSEASON_ROUND_TO_TYPE = {
     "Super Bowl": "SB",
 }
 # Name of the output CSV file for the generated dataset.
+<<<<<<<< HEAD:backend/build_csv_datasetsv3.py
+OUTPUT_DATASET_NAME = f"game_features_{datetime.now().strftime('%Y%m%d')}.csv"
+========
 # Includes current date in YYYYMMDD format for traceability/versioning.
 OUTPUT_DATASET_NAME = f"game_features_{datetime.now().strftime('%Y%m%d')}.csv"
 DATA_SAVE = f"game_features_{datetime.now().strftime('%Y%m%d')}.csv"
+>>>>>>>> 5b8cc7f5c1568b3524a11eb6b0b53c2955a79aff:backend/build_csv_datasets_v3.py
 
 # Pairwise dominance helpers
 HAS_winner_BOOL = True  # if you only have scores, set False
@@ -217,6 +221,33 @@ def to_pandas_safe(obj) -> pd.DataFrame:
         except TypeError:
             return obj.to_pandas()
     raise TypeError(f"Unsupported table type for to_pandas_safe: {type(obj)}")
+
+
+def to_pandas_safe(obj: Any) -> pd.DataFrame:
+    """Convert pandas/polars-like tables to pandas DataFrame safely."""
+    if obj is None:
+        return pd.DataFrame()
+    if isinstance(obj, pd.DataFrame):
+        return obj
+    if hasattr(obj, "collect"):
+        try:
+            obj = obj.collect()
+        except Exception:
+            pass
+    if hasattr(obj, "to_pandas"):
+        try:
+            return obj.to_pandas(use_pyarrow_extension_array=False)
+        except TypeError:
+            return obj.to_pandas()
+    if hasattr(obj, "to_dicts"):
+        try:
+            return pd.DataFrame(obj.to_dicts())
+        except Exception:
+            pass
+    try:
+        return pd.DataFrame(obj)
+    except Exception:
+        return pd.DataFrame()
 
 
 def _normalize_codes(df: pd.DataFrame, cols: List[str]) -> pd.DataFrame:
