@@ -327,6 +327,21 @@ def _fit_classifier_base(
     }
 
 
+def _clone_classifier_for_fit(
+    base_clf: BaseEstimator,
+    y_fit: np.ndarray,
+    *,
+    disable_early_stopping: bool = False,
+) -> BaseEstimator:
+    """Disable MLP early stopping when a small fold cannot support stratified splitting."""
+    fitted = clone(base_clf)
+    if isinstance(fitted, MLPClassifier):
+        class_counts = np.bincount(np.asarray(y_fit, dtype=int), minlength=2)
+        if disable_early_stopping or len(y_fit) < 25 or int(class_counts.min()) < 2:
+            fitted.set_params(early_stopping=False)
+    return fitted
+
+
 def _make_calibrator(
     estimator: BaseEstimator,
     *,
@@ -354,7 +369,14 @@ def _calibrate_classifier(
         and len(np.unique(y_train[-calib_size:])) == 2
     ):
         fit_end = len(y_train) - calib_size
-        prefitted = clone(base_clf).fit(X_train[:fit_end], y_train[:fit_end])
+        prefitted = _clone_classifier_for_fit(
+            base_clf,
+            y_train[:fit_end],
+            disable_early_stopping=True,
+        ).fit(
+            X_train[:fit_end],
+            y_train[:fit_end],
+        )
         calibrated = _make_calibrator(prefitted, cv="prefit")
         calibrated.fit(X_train[fit_end:], y_train[fit_end:])
         return calibrated, {
@@ -373,7 +395,11 @@ def _calibrate_classifier(
         cv = None
 
     if cv is None:
-        fitted = clone(base_clf).fit(X_train, y_train)
+        fitted = _clone_classifier_for_fit(
+            base_clf,
+            y_train,
+            disable_early_stopping=True,
+        ).fit(X_train, y_train)
         return fitted, {
             "mode": "uncalibrated",
             "reason": "insufficient_minority_class_examples",
@@ -381,7 +407,14 @@ def _calibrate_classifier(
             "algorithm": type(base_clf).__name__,
         }
 
-    calibrated = _make_calibrator(clone(base_clf), cv=cv)
+    calibrated = _make_calibrator(
+        _clone_classifier_for_fit(
+            base_clf,
+            y_train,
+            disable_early_stopping=True,
+        ),
+        cv=cv,
+    )
     calibrated.fit(X_train, y_train)
     return calibrated, {
         "mode": "cv",
@@ -444,7 +477,7 @@ def _generate_stacked_train_probabilities(
     tscv = _safe_time_split(len(y_win), cv_splits)
     if tscv is None:
         return probs, {
-            "mode": "prior_only",
+            "mode": "fallback_only",
             "coverage": 0.0,
             "predicted_rows": 0,
             "total_rows": int(len(y_win)),

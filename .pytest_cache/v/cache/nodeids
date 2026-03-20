@@ -10,8 +10,16 @@
   "backend/tests/test_endpoints.py::test_status_overview_and_history",
   "backend/tests/test_feature_leak_guard.py::test_build_dataset_filters_leakage",
   "backend/tests/test_feature_leak_guard.py::test_is_leak_feature_rules",
+  "backend/tests/test_leakage.py::test_build_dataset_excludes_outcome_columns",
+  "backend/tests/test_predict_two_stage.py::test_predict_feeds_raw_win_probability_into_score_models",
+  "backend/tests/test_routes_smoke.py::test_public_routes_smoke",
   "backend/tests/test_simple.py::test_addition",
   "backend/tests/test_startup_checks.py::test_sanity_predict_success_with_minimal_engineered_row",
   "backend/tests/test_startup_checks.py::test_validate_dataset_schema_fails_when_missing",
+  "backend/tests/test_train_models_stack.py::test_augment_score_features_appends_nn_probability_column",
+  "backend/tests/test_train_models_stack.py::test_fallback_home_win_probabilities_use_moneyline_then_neutral",
+  "backend/tests/test_train_models_stack.py::test_generate_stacked_train_probabilities_is_chronology_safe",
+  "backend/tests/test_train_models_stack.py::test_prior_home_win_probabilities_use_only_prior_labels",
+  "backend/tests/test_train_models_stack.py::test_training_main_writes_two_stage_metadata_and_report",
   "scripts/api_test.py::test_api_endpoint"
 ]

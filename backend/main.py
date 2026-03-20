@@ -422,8 +422,6 @@ def _calculate_win_probability(
     win_model: Any,
     full_df: pd.DataFrame,
     numeric_df: pd.DataFrame,
-    h_score: float,
-    a_score: float,
     preprocessor: Optional[Any] = None,
 ) -> Tuple[float, bool]:
     """Compute home-team win probability with sensible fallbacks.
@@ -432,11 +430,21 @@ def _calculate_win_probability(
       1) Use a fitted sklearn Pipeline (win_pipe.joblib) on the *raw* DataFrame.
       2) Use a calibrated classifier (win_clf_calibrated.joblib) on *preprocessed* features
          via the standalone preprocessor.joblib, if present.
-      3) As a last resort, use a simple logistic transform of the predicted point diff.
+      3) As a last resort, fall back to `home_moneyline_prob`, else `0.5`.
 
     Returns:
       (home_win_probability, win_classifier_used)
     """
+    def _fallback_probability() -> float:
+        try:
+            if full_df is not None and not full_df.empty and "home_moneyline_prob" in full_df.columns:
+                raw = pd.to_numeric(full_df.iloc[0].get("home_moneyline_prob"), errors="coerce")
+                if pd.notna(raw):
+                    return float(np.clip(float(raw), 1e-6, 1 - 1e-6))
+        except Exception:
+            pass
+        return 0.5
+
     if win_model is not None and hasattr(win_model, "predict_proba"):
         is_pipeline = bool(getattr(win_model, "steps", None) is not None or getattr(win_model, "named_steps", None) is not None)
 
@@ -444,16 +452,16 @@ def _calculate_win_probability(
         if is_pipeline:
             try:
                 win_prob = float(win_model.predict_proba(full_df)[0][1])
-                return win_prob, True
+                return float(np.clip(win_prob, 1e-6, 1 - 1e-6)), True
             except Exception as e:
-                logging.warning("[Predict] win_pipe predict_proba failed; falling back to logistic: %s", e)
+                logging.warning("[Predict] win_pipe predict_proba failed; falling back to priors: %s", e)
 
         # B) Classifier-only case: transform then predict_proba
         if (not is_pipeline) and (preprocessor is not None):
             try:
                 X_proc = preprocessor.transform(full_df)
                 win_prob = float(win_model.predict_proba(X_proc)[0][1])
-                return win_prob, True
+                return float(np.clip(win_prob, 1e-6, 1 - 1e-6)), True
             except Exception as e:
                 logging.warning("[Predict] win_clf predict_proba failed after preprocessor.transform; falling back: %s", e)
 
@@ -462,14 +470,11 @@ def _calculate_win_probability(
             try:
                 if numeric_df is not None and not numeric_df.empty:
                     win_prob = float(win_model.predict_proba(numeric_df)[0][1])
-                    return win_prob, True
+                    return float(np.clip(win_prob, 1e-6, 1 - 1e-6)), True
             except Exception as e:
                 logging.warning("[Predict] win_clf predict_proba failed on numeric_df; falling back: %s", e)
 
-    # D) Fallback: logistic on predicted point differential
-    diff = float(h_score - a_score)
-    win_prob = float(1.0 / (1.0 + np.exp(-0.3 * diff)))
-    return win_prob, False
+    return _fallback_probability(), False
 
 
 def _augment_with_win_probability_feature(
@@ -1715,48 +1720,65 @@ def _promote_staged_bundle(job_id: str) -> Path:
 
 def _feature_manifest(model_key: str = "scores") -> List[str]:
     """Derive expected raw feature columns from metadata/preprocessor."""
-    if model_key == "scores" and getattr(state, "feature_manifest", None):
+    normalized_key = "score" if model_key == "scores" else model_key
+    if normalized_key == "score" and getattr(state, "feature_manifest", None):
         return [str(x) for x in state.feature_manifest]
 
     meta = state.models_metadata if isinstance(state.models_metadata, dict) else {}
+    manifest_keys = [normalized_key]
+    if normalized_key == "score":
+        manifest_keys.append("scores")
 
     manifests = meta.get("feature_manifests")
     if isinstance(manifests, dict):
-        selected = manifests.get(model_key)
-        if isinstance(selected, dict):
-            num = selected.get("numeric") or []
-            cat = selected.get("categorical") or []
-            manifest = [str(x) for x in (list(num) + list(cat))]
-            if model_key == "scores":
-                state.feature_manifest = manifest
-            return manifest
+        for key in manifest_keys:
+            selected = manifests.get(key)
+            if isinstance(selected, dict):
+                num = selected.get("numeric") or []
+                cat = selected.get("categorical") or []
+                manifest = [str(x) for x in (list(num) + list(cat))]
+                if normalized_key == "score":
+                    state.feature_manifest = manifest
+                return manifest
 
     # Preferred metadata shape in existing bundles.
-    if isinstance(meta.get("feature_names"), list):
+    if normalized_key == "score" and isinstance(meta.get("feature_names"), list):
         manifest = [str(x) for x in meta["feature_names"]]
-        if model_key == "scores":
+        if normalized_key == "score":
             state.feature_manifest = manifest
         return manifest
+    if normalized_key == "win" and isinstance(meta.get("feature_names_win"), list):
+        return [str(x) for x in meta["feature_names_win"]]
     raw_cols = meta.get("raw_feature_columns")
     if isinstance(raw_cols, dict):
+        for key in manifest_keys:
+            selected = raw_cols.get(key)
+            if isinstance(selected, dict):
+                num = selected.get("numeric") or []
+                cat = selected.get("categorical") or []
+                manifest = [str(x) for x in (list(num) + list(cat))]
+                if normalized_key == "score":
+                    state.feature_manifest = manifest
+                return manifest
+
         num = raw_cols.get("numeric") or []
         cat = raw_cols.get("categorical") or []
         manifest = [str(x) for x in (list(num) + list(cat))]
-        if model_key == "scores":
+        if normalized_key == "score":
             state.feature_manifest = manifest
         return manifest
 
     # Fallback to fitted preprocessor if present.
-    preprocessor = state.score_preprocessor if model_key == "scores" else state.win_preprocessor
+    preprocessor = state.score_preprocessor if normalized_key == "score" else state.win_preprocessor
     if preprocessor is None:
         preprocessor = state.preprocessor
     if preprocessor is not None and hasattr(preprocessor, "feature_names_in_"):
         manifest = [str(x) for x in list(getattr(preprocessor, "feature_names_in_", []))]
-        if model_key == "scores":
+        if normalized_key == "score":
             state.feature_manifest = manifest
         return manifest
 
-    if model_key == "scores":
+    if normalized_key == "score":
         state.feature_manifest = []
     return []
 
@@ -1875,17 +1897,27 @@ def debug_predict_input(request: PredictRequest) -> DebugPredictInputResponse:
         week=week,
     )
 
-    full_df, _ = _prepare_inputs(row_df)
-    feature_cols = _feature_manifest()
+    full_df, numeric_df = _prepare_inputs(row_df)
+    try:
+        debug_win_prob, _ = _calculate_win_probability(
+            state.models.get("win"),
+            full_df,
+            numeric_df,
+            preprocessor=state.win_preprocessor or state.preprocessor,
+        )
+    except Exception:
+        debug_win_prob = 0.5
+    score_full_df, _ = _augment_with_win_probability_feature(full_df, numeric_df, debug_win_prob)
+    feature_cols = _feature_manifest("scores")
 
     if feature_cols:
-        view = full_df.reindex(columns=feature_cols)
+        view = score_full_df.reindex(columns=feature_cols)
     else:
-        view = full_df.copy()
+        view = score_full_df.copy()
 
     missing_before = [
         c for c in view.columns
-        if c not in full_df.columns or pd.isna(view.iloc[0][c])
+        if c not in score_full_df.columns or pd.isna(view.iloc[0][c])
     ]
 
     # Median-impute numeric columns for diagnostics only.
@@ -2425,6 +2457,13 @@ def get_schedule() -> List[ScheduleGameResponse]:
     return results
 
 
+@app.get("/api/predict/next-week")
+@app.get("/predict/next-week")
+def predict_next_week() -> Dict[str, Any]:
+    """Backward-compatible wrapper around the next-week schedule route."""
+    return {"games": get_schedule()}
+
+
 # -------------------------------------------------------------------
 # Prediction History
 # -------------------------------------------------------------------
@@ -2557,8 +2596,6 @@ async def predict(request: PredictRequest) -> Dict[str, Any]:
             win_model,
             full_df,
             numeric_df,
-            0.0,
-            0.0,
             preprocessor=state.win_preprocessor or state.preprocessor,
         )
     except Exception as win_err:
