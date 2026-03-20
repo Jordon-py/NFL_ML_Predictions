@@ -283,8 +283,8 @@ Recommended checks after pipeline or API changes:
 
 ```bash
 python -m compileall backend frontend/src
-pytest
-cd frontend && npm run build
+python -m pytest backend/tests -q
+cd frontend && npm test -- --run && npm run build
 ```
 
 Runtime smoke checks:

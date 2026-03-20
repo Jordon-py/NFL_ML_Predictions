@@ -59,6 +59,7 @@ from backend.utils.ops_reporting import (
     collect_performance_drift,
     resolve_latest_dataset,
     file_sha256,
+    load_latest_dataset_manifest,
 )
 
 _add_kickoff_utc_datetime = fn_main._add_kickoff_utc_datetime
@@ -118,6 +119,13 @@ logging.getLogger().setLevel(getattr(logging, str(SETTINGS.log_level).upper(), l
 
 DATA_DIR = BASE_DIR / "data"
 REPORTS_DIR = BASE_DIR / "reports"
+
+try:
+    import sklearn
+except Exception:  # pragma: no cover - optional runtime guard
+    sklearn = None
+
+SKLEARN_RUNTIME_VERSION = getattr(sklearn, "__version__", None)
 JOBS_DIR = DATA_DIR / "jobs"
 STAGING_MODELS_DIR = DATA_DIR / "models" / "staging"
 CURRENT_MODELS_DIR = DATA_DIR / "models" / "current"
@@ -435,6 +443,29 @@ def _calculate_win_probability(
     Returns:
       (home_win_probability, win_classifier_used)
     """
+    def _predict_positive_class_probability(model: Any, features: Any) -> float:
+        raw = np.asarray(model.predict_proba(features), dtype=float)
+        if raw.ndim != 2 or raw.shape[0] == 0:
+            raise ValueError("predict_proba did not return a 2D probability matrix.")
+        if raw.shape[1] == 1:
+            return float(raw[0][0])
+
+        classes = getattr(model, "classes_", None)
+        if classes is None and hasattr(model, "named_steps"):
+            for step in reversed(list(getattr(model, "named_steps", {}).values())):
+                classes = getattr(step, "classes_", None)
+                if classes is not None:
+                    break
+
+        if classes is not None:
+            classes_arr = np.asarray(classes)
+            positive_matches = np.where(classes_arr == 1)[0]
+            positive_idx = int(positive_matches[0]) if len(positive_matches) else int(len(classes_arr) - 1)
+        else:
+            positive_idx = 1
+
+        return float(raw[0][positive_idx])
+
     def _fallback_probability() -> float:
         try:
             if full_df is not None and not full_df.empty and "home_moneyline_prob" in full_df.columns:
@@ -451,7 +482,7 @@ def _calculate_win_probability(
         # A) Pipeline case: pass raw DataFrame
         if is_pipeline:
             try:
-                win_prob = float(win_model.predict_proba(full_df)[0][1])
+                win_prob = _predict_positive_class_probability(win_model, full_df)
                 return float(np.clip(win_prob, 1e-6, 1 - 1e-6)), True
             except Exception as e:
                 logging.warning("[Predict] win_pipe predict_proba failed; falling back to priors: %s", e)
@@ -460,7 +491,7 @@ def _calculate_win_probability(
         if (not is_pipeline) and (preprocessor is not None):
             try:
                 X_proc = preprocessor.transform(full_df)
-                win_prob = float(win_model.predict_proba(X_proc)[0][1])
+                win_prob = _predict_positive_class_probability(win_model, X_proc)
                 return float(np.clip(win_prob, 1e-6, 1 - 1e-6)), True
             except Exception as e:
                 logging.warning("[Predict] win_clf predict_proba failed after preprocessor.transform; falling back: %s", e)
@@ -469,7 +500,7 @@ def _calculate_win_probability(
         if not is_pipeline:
             try:
                 if numeric_df is not None and not numeric_df.empty:
-                    win_prob = float(win_model.predict_proba(numeric_df)[0][1])
+                    win_prob = _predict_positive_class_probability(win_model, numeric_df)
                     return float(np.clip(win_prob, 1e-6, 1 - 1e-6)), True
             except Exception as e:
                 logging.warning("[Predict] win_clf predict_proba failed on numeric_df; falling back: %s", e)
@@ -543,6 +574,57 @@ def _patch_imputer_compat(obj: Any) -> int:
     return patched
 
 
+def _bundle_timestamp(meta: Dict[str, Any]) -> Optional[str]:
+    for key in ("bundle_timestamp_utc", "timestamp", "training_timestamp_utc"):
+        value = meta.get(key)
+        if value:
+            return str(value)
+    return None
+
+
+def _requires_strict_bundle_contract(meta: Dict[str, Any]) -> bool:
+    if not isinstance(meta, dict) or not meta:
+        return False
+    if meta.get("serving_mode") == "pipeline_primary":
+        return True
+    if meta.get("bundle_contract_version"):
+        return True
+    return False
+
+
+def _validate_bundle_metadata_contract(meta: Dict[str, Any]) -> Dict[str, Any]:
+    if not isinstance(meta, dict) or not meta:
+        raise RuntimeError("Model metadata is missing or invalid.")
+
+    if not _requires_strict_bundle_contract(meta):
+        return meta
+
+    required_keys = [
+        "serving_mode",
+        "feature_manifests",
+        "generated_features",
+        "dataset_hash",
+        "sklearn_version",
+    ]
+    missing = [key for key in required_keys if not meta.get(key)]
+    if not _bundle_timestamp(meta):
+        missing.append("bundle_timestamp_utc")
+    if missing:
+        raise RuntimeError(
+            "Model bundle metadata is missing required contract fields: "
+            + ", ".join(sorted(set(missing)))
+        )
+
+    runtime_version = SKLEARN_RUNTIME_VERSION
+    declared_version = str(meta.get("sklearn_version") or "").strip()
+    if runtime_version and declared_version and runtime_version != declared_version:
+        raise RuntimeError(
+            f"Model bundle requires scikit-learn {declared_version}, but runtime has {runtime_version}."
+        )
+
+    return meta
+
+
 # -------------------------------------------------------------------
 # App State
 # -------------------------------------------------------------------
@@ -565,6 +647,8 @@ class AppState:
         self.dataset_mtime: Optional[float] = None
         self.models: Dict[str, Any] = {}
         self.models_metadata: Dict[str, Any] = {}
+        self.dataset_manifest: Dict[str, Any] = {}
+        self.dataset_metadata: Dict[str, Any] = {}
         self.feature_manifest: List[str] = []
         # Optional shared preprocessor artifact (may be saved separately from models)
         self.preprocessor: Optional[Any] = None
@@ -580,6 +664,7 @@ class AppState:
         # Cached numeric medians from the loaded dataset (used for stable imputation).
         # Set during _load_dataset().
         self.numeric_medians: Optional[pd.Series] = None
+        self.prior_baseline_medians: Optional[pd.Series] = None
 
 
     # -------------------------
@@ -663,6 +748,9 @@ class AppState:
         """Load DATASET_PATH or the most recent game_features*.csv into memory."""
         try:
             explicit = SETTINGS.dataset_path
+            self.dataset_manifest = load_latest_dataset_manifest(DATA_DIR)
+            self.dataset_metadata = {}
+            self.prior_baseline_medians = None
             try:
                 path = resolve_latest_dataset(DATA_DIR, explicit_path=explicit)
             except FileNotFoundError:
@@ -682,42 +770,75 @@ class AppState:
                 return
 
             logging.info("[Dataset] Loading dataset from: %s", path)
-            df = pd.read_csv(path)
+            df = pd.read_csv(path, low_memory=False)
+            resolved_path = path.resolve()
+
+            if self.dataset_manifest:
+                manifest_paths: List[Path] = []
+                for key in ("clean_dataset_path", "raw_dataset_path"):
+                    raw_manifest_path = self.dataset_manifest.get(key)
+                    if not raw_manifest_path:
+                        continue
+                    try:
+                        manifest_paths.append(Path(str(raw_manifest_path)).expanduser().resolve())
+                    except Exception:
+                        continue
+                if manifest_paths and resolved_path not in manifest_paths:
+                    self.dataset_manifest = {}
 
             # Normalize key columns for consistent lookups
             df = _coerce_season_week(df)
             df = _normalize_team_columns(df, cols=["home_team", "away_team", "home_abbr", "away_abbr"])
 
             self.dataset = df
-            self.dataset_path = path
+            self.dataset_path = resolved_path
             try:
-                self.dataset_hash = file_sha256(path)
+                self.dataset_hash = file_sha256(resolved_path)
             except Exception:
-                self.dataset_hash = hashlib.sha256(path.read_bytes()).hexdigest()
-            self.dataset_mtime = float(path.stat().st_mtime)
-
-
-            # Cache numeric medians once so prediction-time imputations are stable
-
-
-            # even when the matched row contains many missing values (future games).
-
+                self.dataset_hash = hashlib.sha256(resolved_path.read_bytes()).hexdigest()
+            self.dataset_mtime = float(resolved_path.stat().st_mtime)
 
             try:
-
-
                 self.numeric_medians = df.select_dtypes(include=[np.number]).median(numeric_only=True)
-
-
             except Exception:
-
-
                 self.numeric_medians = None
+
+            metadata_candidates: List[Path] = []
+            manifest_metadata_path = self.dataset_manifest.get("metadata_path")
+            if manifest_metadata_path:
+                metadata_candidates.append(Path(str(manifest_metadata_path)).expanduser())
+            metadata_candidates.append(resolved_path.parent / "game_features_metadata.json")
+            metadata_candidates.append(DATA_DIR / "datasets" / "game_features_metadata.json")
+
+            for metadata_path in metadata_candidates:
+                try:
+                    if metadata_path.exists():
+                        self.dataset_metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+                        break
+                except Exception as exc:
+                    logging.warning("[Dataset] Failed to load dataset metadata from %s: %s", metadata_path, exc)
+
+            priors_meta = self.dataset_metadata.get("priors_imputation", {}) if isinstance(self.dataset_metadata, dict) else {}
+            baseline_medians = priors_meta.get("baseline_medians", {}) if isinstance(priors_meta, dict) else {}
+            if baseline_medians:
+                try:
+                    prior_series = pd.to_numeric(pd.Series(baseline_medians), errors="coerce").dropna()
+                    if not prior_series.empty:
+                        self.prior_baseline_medians = prior_series
+                        if self.numeric_medians is None or self.numeric_medians.empty:
+                            self.numeric_medians = prior_series
+                        else:
+                            combined = self.numeric_medians.copy()
+                            for column, value in prior_series.items():
+                                combined.loc[column] = float(value)
+                            self.numeric_medians = combined
+                except Exception as exc:
+                    logging.warning("[Dataset] Failed to apply prior baseline medians: %s", exc)
 
             logging.info(
                 "[Dataset] Loaded %d rows from %s (sha256=%s)",
                 len(df),
-                path.name,
+                resolved_path.name,
                 self.dataset_hash,
             )
         except Exception as e:  # pragma: no cover - defensive
@@ -726,6 +847,9 @@ class AppState:
             self.dataset_path = None
             self.dataset_hash = None
             self.dataset_mtime = None
+            self.dataset_manifest = {}
+            self.dataset_metadata = {}
+            self.prior_baseline_medians = None
 
     def _load_models(self) -> None:
         """Load each required model independently."""
@@ -786,10 +910,15 @@ class AppState:
         metadata_path = MODELS_DIR / "metadata.json"
         if metadata_path.exists():
             try:
-                self.models_metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+                loaded_meta = json.loads(metadata_path.read_text(encoding="utf-8"))
+                self.models_metadata = _validate_bundle_metadata_contract(loaded_meta)
+                if not _requires_strict_bundle_contract(self.models_metadata):
+                    logging.warning(
+                        "[Model] Loaded legacy bundle metadata from %s without strict contract fields. Retrain to enable strict startup validation.",
+                        metadata_path,
+                    )
             except Exception as e:
-                logging.warning("[Model] Failed to parse metadata.json at %s: %s", metadata_path, e)
-                self.models_metadata = {}
+                raise RuntimeError(f"Failed to validate metadata.json at {metadata_path}: {e}") from e
         else:
             self.models_metadata = {}
 
@@ -2658,8 +2787,10 @@ async def predict(request: PredictRequest) -> Dict[str, Any]:
 
     point_diff = float(h_score - a_score)
 
-    # Smooth probability (no retraining)
-    win_prob = _smooth_win_probability(win_prob_raw, point_diff, clf_used=clf_used)
+    if clf_used:
+        win_prob = float(np.clip(win_prob_raw, 1e-6, 1 - 1e-6))
+    else:
+        win_prob = float(np.clip(1.0 / (1.0 + np.exp(-0.28 * point_diff)), 0.02, 0.98))
 
     # ----- Build response -----
     game_id = f"{season}_{week}_{home_team}_{away_team}"

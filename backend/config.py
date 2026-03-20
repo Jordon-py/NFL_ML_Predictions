@@ -32,7 +32,7 @@ DEFAULT_ALLOWED_ORIGINS = [
     "https://nfl-predict-christopher-jordons-projects.vercel.app",
     "https://nfl-predict-git-main-christopher-jordons-projects.vercel.app",
 ]
-DEFAULT_ORIGIN_REGEX = r"https://.*\.vercel\.app$"
+DEFAULT_ORIGIN_REGEX = r"https://.*\\.vercel\\.app$"
 
 
 # Relative paths for portability (Heroku/Vercel/Local)

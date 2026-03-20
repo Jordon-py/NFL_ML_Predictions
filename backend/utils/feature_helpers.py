@@ -39,7 +39,7 @@ from pathlib import Path
 from typing import Any, List, Optional, Sequence, Union
 import numpy as np
 import pandas as pd
-from config import MODELS_DIR
+from backend.config import MODELS_DIR
 
 log = logging.getLogger(__name__)
 
@@ -263,9 +263,12 @@ def _ffill_prior_features(wide: pd.DataFrame) -> pd.DataFrame:
     return out.sort_values(["time_key", "game_id"]).reset_index(drop=True)
 
 
-def _impute_remaining_prior_nans(wide: pd.DataFrame) -> pd.DataFrame:
+def _impute_remaining_prior_nans(
+    wide: pd.DataFrame,
+    baseline_medians: Optional[Union[pd.Series, dict[str, float]]] = None,
+) -> pd.DataFrame:
     """
-    Fill remaining prior_* NaNs with neutral values (0.0; medians for QB pct).
+    Fill remaining prior_* NaNs with neutral medians derived from completed rows.
 
     Args:
         wide: DataFrame with prior_* columns
@@ -275,20 +278,46 @@ def _impute_remaining_prior_nans(wide: pd.DataFrame) -> pd.DataFrame:
     """
     out = wide.copy()
     prior_cols = [c for c in out.columns if c.startswith(("home_prior_", "away_prior_"))]
-    qb_cols = [c for c in prior_cols if "qb_completion_pct" in c]
+    if not prior_cols:
+        return out
 
-    median_map = {}
-    for c in qb_cols:
-        if c in out.columns:
-            median_val = out[c].median(skipna=True)
-            if not pd.isna(median_val):
-                median_map[c] = float(median_val)
+    numeric_priors = out[prior_cols].apply(pd.to_numeric, errors="coerce")
+    out[prior_cols] = numeric_priors
 
-    if prior_cols:
-        out[prior_cols] = out[prior_cols].fillna(0.0)
+    if baseline_medians is None:
+        if {"home_points_for", "away_points_for"}.issubset(out.columns):
+            completed_mask = (
+                pd.to_numeric(out["home_points_for"], errors="coerce").notna()
+                & pd.to_numeric(out["away_points_for"], errors="coerce").notna()
+            )
+        else:
+            completed_mask = pd.Series(True, index=out.index)
 
-    for c, med in median_map.items():
-        out[c] = out[c].where(out[c].notna(), med)
+        baseline = numeric_priors.loc[completed_mask].median(numeric_only=True)
+        if baseline.dropna().empty:
+            baseline = numeric_priors.median(numeric_only=True)
+    elif isinstance(baseline_medians, pd.Series):
+        baseline = pd.to_numeric(baseline_medians, errors="coerce")
+    else:
+        baseline = pd.to_numeric(pd.Series(baseline_medians), errors="coerce")
+
+    baseline = baseline.reindex(prior_cols)
+    if baseline.dropna().empty:
+        baseline = pd.Series(
+            {
+                col: (0.5 if ("win_pct" in col or "completion_pct" in col) else 0.0)
+                for col in prior_cols
+            }
+        )
+
+    out[prior_cols] = out[prior_cols].fillna(baseline)
+
+    for col in prior_cols:
+        if out[col].isna().any():
+            fallback = baseline.get(col)
+            if pd.isna(fallback):
+                fallback = 0.5 if ("win_pct" in col or "completion_pct" in col) else 0.0
+            out[col] = out[col].fillna(float(fallback))
 
     return out
 

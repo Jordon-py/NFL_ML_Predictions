@@ -23,8 +23,7 @@ jobs:
 
       - name: Run backend tests
         run: |
-          cd backend
-          pytest -q
+          python -m pytest backend/tests -q
 
   frontend-build:
     runs-on: ubuntu-latest
@@ -37,10 +36,11 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install & build frontend
+      - name: Install, test, and build frontend
         run: |
           cd frontend
           npm ci
+          npm test -- --run
           npm run build
 
   verify-cors:

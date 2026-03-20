@@ -62,30 +62,78 @@ def file_sha256(path: Path) -> str:
     return h.hexdigest()
 
 
+def load_latest_dataset_manifest(data_dir: Path) -> Dict[str, Any]:
+    candidates = [
+        data_dir / "latest_dataset.json",
+        data_dir / "datasets" / "latest_dataset.json",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            payload = _read_json(candidate)
+            if isinstance(payload, dict) and payload:
+                payload["_manifest_path"] = str(candidate)
+                return payload
+    return {}
+
+
+def _dataset_search_roots(data_dir: Path) -> List[Path]:
+    roots = [data_dir, data_dir / "datasets"]
+    seen: set[Path] = set()
+    out: List[Path] = []
+    for root in roots:
+        resolved = root.resolve()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        out.append(resolved)
+    return out
+
+
+def _dataset_csv_candidates(data_dir: Path) -> List[Path]:
+    candidates: List[Path] = []
+    for root in _dataset_search_roots(data_dir):
+        if not root.exists():
+            continue
+        candidates.extend(root.glob("game_features*.csv"))
+    deduped: Dict[str, Path] = {}
+    for candidate in candidates:
+        deduped[str(candidate.resolve())] = candidate.resolve()
+    return list(deduped.values())
+
+
 def resolve_latest_dataset(data_dir: Path, explicit_path: Optional[str] = None) -> Path:
     if explicit_path:
         raw = Path(explicit_path).expanduser()
         candidates = [raw]
         if not raw.is_absolute():
             candidates.append((data_dir / raw).resolve())
+            candidates.append((data_dir / "datasets" / raw).resolve())
             candidates.append((data_dir.parent / raw).resolve())
         for p in candidates:
             if p.exists():
                 return p
         raise FileNotFoundError(f"DATASET_PATH does not exist: {raw}")
 
-    candidates = sorted(
-        data_dir.glob("game_features*.csv"),
-        key=lambda p: p.stat().st_mtime,
-        reverse=True,
-    )
+    latest_manifest = load_latest_dataset_manifest(data_dir)
+    manifest_candidates = [
+        latest_manifest.get("clean_dataset_path"),
+        latest_manifest.get("raw_dataset_path"),
+    ]
+    for raw_path in manifest_candidates:
+        if not raw_path:
+            continue
+        path = Path(str(raw_path)).expanduser()
+        if path.exists():
+            return path.resolve()
+
+    candidates = sorted(_dataset_csv_candidates(data_dir), key=lambda p: p.stat().st_mtime, reverse=True)
     if not candidates:
         raise FileNotFoundError(f"No game_features*.csv found in {data_dir}")
     return candidates[0]
 
 
 def collect_dataset_versions(data_dir: Path, limit: int = 12) -> List[Dict[str, Any]]:
-    files = sorted(data_dir.glob("game_features*.csv"), key=lambda p: p.stat().st_mtime)
+    files = sorted(_dataset_csv_candidates(data_dir), key=lambda p: p.stat().st_mtime)
     if limit > 0:
         files = files[-limit:]
 

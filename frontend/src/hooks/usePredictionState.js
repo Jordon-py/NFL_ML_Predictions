@@ -30,7 +30,6 @@ import {
 } from "../api/client.js";
 import {
   buildGameKey,
-  dedupeGamesByKey,
   loadPredictionHistoryFromStorage,
   MAX_HISTORY_ENTRIES,
   PREDICTION_HISTORY_KEY,
@@ -56,6 +55,19 @@ const toNumberOrNull = (value) => {
 
 const normalizeTeamCode = (value) =>
   (value ?? "").toString().trim().toUpperCase();
+
+function dedupeGamesByKey(rows) {
+  if (!Array.isArray(rows)) return [];
+  const seen = new Set();
+  const out = [];
+  for (const row of rows) {
+    const key = buildGameKey(row);
+    if (key && seen.has(key)) continue;
+    if (key) seen.add(key);
+    out.push(row);
+  }
+  return out;
+}
 
 /**
  * Normalize schedule rows to a consistent shape so downstream components
@@ -198,11 +210,10 @@ export function usePredictionState(authSession = null) {
     let active = true;
 
     const init = async () => {
-      const [scheduleRes, historyRes, logosRes, seasonContextRes] = await Promise.allSettled([
+      const [scheduleRes, historyRes, logosRes] = await Promise.allSettled([
         getNextWeekSchedule(),
         getPredictionHistory(MAX_HISTORY_ENTRIES, userId),
         getTeamLogos(),
-        getSeasonContext(),
       ]);
 
       if (!active) return;
@@ -215,10 +226,7 @@ export function usePredictionState(authSession = null) {
           : {};
       const enriched = applyTeamMeta(normalized, teamMeta);
       setSchedule(enriched);
-      const nextSeasonContext =
-        seasonContextRes.status === "fulfilled" && seasonContextRes.value
-          ? seasonContextRes.value
-          : INITIAL_SEASON_CONTEXT;
+      const nextSeasonContext = await getSeasonContext(scheduleRows);
       setSeasonContext(nextSeasonContext);
       setWeek(toNumberOrNull(enriched?.[0]?.week) ?? toNumberOrNull(nextSeasonContext?.display_week));
       setTeamMeta(teamMeta);
@@ -265,7 +273,7 @@ export function usePredictionState(authSession = null) {
 
   const loadScheduleForWeek = useCallback(
     async (seasonOverride, weekOverride) => {
-      const rows = await getScheduleForWeek(seasonOverride, weekOverride);
+      const rows = await getScheduleForWeek(seasonOverride, weekOverride, { fallbackRows: schedule });
       const normalized = normalizeSchedule(rows);
       const enriched = applyTeamMeta(normalized, teamMeta);
       const derivedWeek = toNumberOrNull(weekOverride ?? normalized?.[0]?.week);
@@ -280,7 +288,7 @@ export function usePredictionState(authSession = null) {
       }));
       return enriched;
     },
-    [seasonContext?.current_season, teamMeta]
+    [schedule, seasonContext?.current_season, teamMeta]
   );
 
   const setLoading = useCallback((key, value) => {

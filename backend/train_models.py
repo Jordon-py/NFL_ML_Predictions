@@ -42,6 +42,7 @@ from sklearn.model_selection import RandomizedSearchCV, TimeSeriesSplit
 from sklearn.neural_network import MLPClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
+import sklearn
 
 BASE_DIR = Path(__file__).resolve().parent
 REPO_ROOT = BASE_DIR.parent
@@ -238,36 +239,165 @@ def _infer_feature_columns(df: pd.DataFrame) -> Tuple[List[str], List[str]]:
     return numeric_cols, categorical_cols
 
 
-def _safe_time_split(n_samples: int, requested_splits: int) -> Optional[TimeSeriesSplit]:
-    if n_samples < 12:
-        return None
-    max_splits = min(requested_splits, n_samples - 1)
+def _make_group_labels(df: pd.DataFrame) -> np.ndarray:
+    seasons = pd.to_numeric(df["season"], errors="coerce").astype("Int64")
+    weeks = pd.to_numeric(df["week"], errors="coerce").astype("Int64")
+    return np.asarray(
+        [
+            f"{int(season)}-{int(week)}" if pd.notna(season) and pd.notna(week) else f"row-{idx}"
+            for idx, (season, week) in enumerate(zip(seasons, weeks))
+        ],
+        dtype=object,
+    )
+
+
+def _ordered_unique_groups(group_labels: Sequence[Any]) -> List[Any]:
+    ordered: List[Any] = []
+    seen: set[Any] = set()
+    for label in group_labels:
+        if label in seen:
+            continue
+        seen.add(label)
+        ordered.append(label)
+    return ordered
+
+
+def _group_time_series_splits(
+    group_labels: Sequence[Any],
+    requested_splits: int,
+    *,
+    embargo_groups: int = 1,
+    min_train_groups: int = 2,
+) -> List[Tuple[np.ndarray, np.ndarray]]:
+    labels = np.asarray(list(group_labels), dtype=object)
+    ordered_groups = _ordered_unique_groups(labels)
+    if len(ordered_groups) < (min_train_groups + max(0, embargo_groups) + 1):
+        return []
+
+    max_splits = min(int(requested_splits), len(ordered_groups) - 1)
     if max_splits < 2:
-        return None
-    return TimeSeriesSplit(n_splits=max_splits)
+        return []
+
+    group_index = np.arange(len(ordered_groups), dtype=int)
+    splitter = TimeSeriesSplit(n_splits=max_splits)
+    ordered_arr = np.asarray(ordered_groups, dtype=object)
+    splits: List[Tuple[np.ndarray, np.ndarray]] = []
+    for train_group_idx, val_group_idx in splitter.split(group_index):
+        if embargo_groups > 0:
+            if len(train_group_idx) <= embargo_groups:
+                continue
+            train_group_idx = train_group_idx[:-embargo_groups]
+        if len(train_group_idx) < min_train_groups or len(val_group_idx) == 0:
+            continue
+
+        train_groups = ordered_arr[train_group_idx]
+        val_groups = ordered_arr[val_group_idx]
+        train_idx = np.flatnonzero(np.isin(labels, train_groups))
+        val_idx = np.flatnonzero(np.isin(labels, val_groups))
+        if train_idx.size == 0 or val_idx.size == 0:
+            continue
+        splits.append((train_idx, val_idx))
+    return splits
+
+
+def _split_train_holdout_indices(
+    group_labels: Sequence[Any],
+    *,
+    holdout_ratio: float,
+    embargo_groups: int = 1,
+    min_train_groups: int = 4,
+) -> Tuple[np.ndarray, np.ndarray, Dict[str, Any]]:
+    labels = np.asarray(list(group_labels), dtype=object)
+    ordered_groups = _ordered_unique_groups(labels)
+    required_groups = min_train_groups + max(0, embargo_groups) + 1
+    if len(ordered_groups) < required_groups:
+        raise RuntimeError(
+            f"Not enough (season, week) groups for grouped holdout splitting: {len(ordered_groups)} < {required_groups}."
+        )
+
+    target_holdout_rows = max(20, int(len(labels) * float(holdout_ratio)))
+    group_counts = {group: int(np.sum(labels == group)) for group in ordered_groups}
+
+    holdout_groups: List[Any] = []
+    holdout_rows = 0
+    for idx in range(len(ordered_groups) - 1, -1, -1):
+        if idx < (min_train_groups + max(0, embargo_groups)):
+            break
+        group = ordered_groups[idx]
+        holdout_groups.append(group)
+        holdout_rows += group_counts[group]
+        if holdout_rows >= target_holdout_rows:
+            break
+
+    holdout_groups = list(reversed(holdout_groups))
+    if not holdout_groups:
+        holdout_groups = [ordered_groups[-1]]
+
+    holdout_start = ordered_groups.index(holdout_groups[0])
+    train_group_end = holdout_start - max(0, embargo_groups)
+    if train_group_end < min_train_groups:
+        raise RuntimeError("Grouped holdout split would leave too few training groups after embargo.")
+
+    train_groups = ordered_groups[:train_group_end]
+    holdout_groups = ordered_groups[holdout_start:]
+    embargo_slice = ordered_groups[train_group_end:holdout_start]
+
+    train_idx = np.flatnonzero(np.isin(labels, np.asarray(train_groups, dtype=object)))
+    holdout_idx = np.flatnonzero(np.isin(labels, np.asarray(holdout_groups, dtype=object)))
+    if train_idx.size == 0 or holdout_idx.size == 0:
+        raise RuntimeError("Grouped holdout split produced an empty train or holdout partition.")
+
+    info = {
+        "group_key_columns": list(TIME_KEYS),
+        "train_groups": [str(group) for group in train_groups],
+        "holdout_groups": [str(group) for group in holdout_groups],
+        "embargo_groups": [str(group) for group in embargo_slice],
+        "requested_holdout_ratio": float(holdout_ratio),
+    }
+    return train_idx, holdout_idx, info
 
 
 def _fit_regressor(
-    X: np.ndarray,
+    X: pd.DataFrame,
     y: np.ndarray,
     *,
+    numeric_cols: List[str],
+    categorical_cols: List[str],
+    group_labels: Sequence[Any],
     random_seed: int,
     hp_n_iter: int,
     cv_splits: int,
+    embargo_groups: int,
     n_jobs: int,
     fast_dev: bool,
 ) -> Tuple[HistGradientBoostingRegressor, Dict[str, Any]]:
     base = HistGradientBoostingRegressor(random_state=random_seed)
-    tscv = _safe_time_split(len(y), cv_splits)
-    if fast_dev or tscv is None:
-        model = clone(base).fit(X, y)
-        return model, {"mode": "single_fit", "random_state": random_seed}
+    grouped_splits = _group_time_series_splits(
+        group_labels,
+        cv_splits,
+        embargo_groups=embargo_groups,
+    )
+    if fast_dev or len(grouped_splits) < 2:
+        return clone(base), {
+            "mode": "single_fit",
+            "random_state": random_seed,
+            "cv_strategy": "group_time_series",
+            "cv_folds": int(len(grouped_splits)),
+            "embargo_groups": int(embargo_groups),
+        }
+
+    search_pipeline = Pipeline(
+        steps=[
+            ("pre", _make_preprocessor(numeric_cols, categorical_cols)),
+            ("reg", base),
+        ]
+    )
 
     rs = RandomizedSearchCV(
-        estimator=base,
-        param_distributions=REG_PARAM_DISTS,
+        estimator=search_pipeline,
+        param_distributions={f"reg__{key}": values for key, values in REG_PARAM_DISTS.items()},
         n_iter=max(1, int(hp_n_iter)),
-        cv=tscv,
+        cv=grouped_splits,
         scoring="neg_mean_absolute_error",
         n_jobs=n_jobs,
         random_state=random_seed,
@@ -276,16 +406,30 @@ def _fit_regressor(
         error_score="raise",
     )
     rs.fit(X, y)
-    return rs.best_estimator_, {"mode": "search", "best_params": rs.best_params_}
+    best_regressor = clone(rs.best_estimator_.named_steps["reg"])
+    best_params = {
+        key.replace("reg__", "", 1): value for key, value in dict(rs.best_params_).items()
+    }
+    return best_regressor, {
+        "mode": "search",
+        "best_params": best_params,
+        "cv_strategy": "group_time_series",
+        "cv_folds": int(len(grouped_splits)),
+        "embargo_groups": int(embargo_groups),
+    }
 
 
 def _fit_classifier_base(
-    X: np.ndarray,
+    X: pd.DataFrame,
     y: np.ndarray,
     *,
+    numeric_cols: List[str],
+    categorical_cols: List[str],
+    group_labels: Sequence[Any],
     random_seed: int,
     hp_n_iter: int,
     cv_splits: int,
+    embargo_groups: int,
     n_jobs: int,
     fast_dev: bool,
 ) -> Tuple[BaseEstimator, Dict[str, Any]]:
@@ -302,20 +446,32 @@ def _fit_classifier_base(
         n_iter_no_change=20,
         max_iter=500,
     )
-    tscv = _safe_time_split(len(y), cv_splits)
-    if fast_dev or tscv is None:
-        model = clone(base).fit(X, y)
-        return model, {
+    grouped_splits = _group_time_series_splits(
+        group_labels,
+        cv_splits,
+        embargo_groups=embargo_groups,
+    )
+    if fast_dev or len(grouped_splits) < 2:
+        return clone(base), {
             "mode": "single_fit",
             "random_state": random_seed,
             "algorithm": "mlp",
+            "cv_strategy": "group_time_series",
+            "cv_folds": int(len(grouped_splits)),
+            "embargo_groups": int(embargo_groups),
         }
+    search_pipeline = Pipeline(
+        steps=[
+            ("pre", _make_preprocessor(numeric_cols, categorical_cols)),
+            ("clf", base),
+        ]
+    )
 
     rs = RandomizedSearchCV(
-        estimator=base,
-        param_distributions=CLF_PARAM_DISTS,
+        estimator=search_pipeline,
+        param_distributions={f"clf__{key}": values for key, values in CLF_PARAM_DISTS.items()},
         n_iter=max(1, int(hp_n_iter)),
-        cv=tscv,
+        cv=grouped_splits,
         scoring="neg_log_loss",
         n_jobs=n_jobs,
         random_state=random_seed,
@@ -324,10 +480,14 @@ def _fit_classifier_base(
         error_score="raise",
     )
     rs.fit(X, y)
-    return rs.best_estimator_, {
+    best_classifier = clone(rs.best_estimator_.named_steps["clf"])
+    return best_classifier, {
         "mode": "search",
-        "best_params": rs.best_params_,
+        "best_params": {key.replace("clf__", "", 1): value for key, value in dict(rs.best_params_).items()},
         "algorithm": "mlp",
+        "cv_strategy": "group_time_series",
+        "cv_folds": int(len(grouped_splits)),
+        "embargo_groups": int(embargo_groups),
     }
 
 
@@ -438,6 +598,24 @@ def _calibrate_classifier(
     }
 
 
+def _predict_positive_class_proba(model: BaseEstimator, X: np.ndarray) -> np.ndarray:
+    raw = np.asarray(model.predict_proba(X), dtype=float)
+    if raw.ndim != 2:
+        raise ValueError("predict_proba must return a 2D matrix.")
+    if raw.shape[1] == 1:
+        return np.clip(raw[:, 0].astype(float), 1e-6, 1 - 1e-6)
+
+    classes = getattr(model, "classes_", None)
+    if classes is not None:
+        class_arr = np.asarray(classes)
+        positive_matches = np.where(class_arr == 1)[0]
+        positive_idx = int(positive_matches[0]) if len(positive_matches) else int(len(class_arr) - 1)
+    else:
+        positive_idx = 1
+
+    return np.clip(raw[:, positive_idx].astype(float), 1e-6, 1 - 1e-6)
+
+
 def _prior_home_win_probabilities(y_win: np.ndarray, neutral_prob: float = 0.5) -> np.ndarray:
     """Baseline chronology-safe probabilities using only prior outcomes."""
     y = np.asarray(y_win, dtype=float)
@@ -472,11 +650,15 @@ def _fallback_home_win_probabilities(
 
 
 def _generate_stacked_train_probabilities(
-    X_proc: np.ndarray,
+    X: pd.DataFrame,
     y_win: np.ndarray,
     *,
     tuned_estimator: BaseEstimator,
+    numeric_cols: List[str],
+    categorical_cols: List[str],
+    group_labels: Sequence[Any],
     cv_splits: int,
+    embargo_groups: int,
     fallback_probabilities: Optional[np.ndarray] = None,
 ) -> Tuple[np.ndarray, Dict[str, Any]]:
     """Generate chronology-safe win probabilities for score-model training."""
@@ -488,19 +670,26 @@ def _generate_stacked_train_probabilities(
         if len(probs) != len(y_win):
             raise ValueError("Fallback probability length must match y_win.")
         fallback_mode = "home_moneyline_prob_or_neutral"
-    tscv = _safe_time_split(len(y_win), cv_splits)
-    if tscv is None:
+    grouped_splits = _group_time_series_splits(
+        group_labels,
+        cv_splits,
+        embargo_groups=embargo_groups,
+    )
+    if not grouped_splits:
         return probs, {
             "mode": "fallback_only",
             "coverage": 0.0,
             "predicted_rows": 0,
             "total_rows": int(len(y_win)),
             "fallback_mode": fallback_mode,
+            "cv_strategy": "group_time_series",
+            "cv_folds": 0,
+            "embargo_groups": int(embargo_groups),
         }
 
     predicted_rows = 0
     fold_summaries: List[Dict[str, Any]] = []
-    for fold_idx, (train_idx, val_idx) in enumerate(tscv.split(X_proc), start=1):
+    for fold_idx, (train_idx, val_idx) in enumerate(grouped_splits, start=1):
         y_fold = y_win[train_idx]
         if len(np.unique(y_fold)) < 2:
             fold_summaries.append(
@@ -513,13 +702,18 @@ def _generate_stacked_train_probabilities(
             )
             continue
 
+        fold_preprocessor = _make_preprocessor(numeric_cols, categorical_cols)
+        X_fold_train = X.iloc[train_idx].reset_index(drop=True)
+        X_fold_val = X.iloc[val_idx].reset_index(drop=True)
+        X_fold_train_proc = np.asarray(fold_preprocessor.fit_transform(X_fold_train))
+        X_fold_val_proc = np.asarray(fold_preprocessor.transform(X_fold_val))
         fold_clf, fold_calibration = _calibrate_classifier(
             clone(tuned_estimator),
-            X_proc[train_idx],
+            X_fold_train_proc,
             y_fold,
         )
-        fold_probs = fold_clf.predict_proba(X_proc[val_idx])[:, 1]
-        probs[val_idx] = np.clip(fold_probs.astype(float), 1e-6, 1 - 1e-6)
+        fold_probs = _predict_positive_class_proba(fold_clf, X_fold_val_proc)
+        probs[val_idx] = fold_probs
         predicted_rows += len(val_idx)
         fold_summaries.append(
             {
@@ -536,6 +730,9 @@ def _generate_stacked_train_probabilities(
         "predicted_rows": int(predicted_rows),
         "total_rows": int(len(y_win)),
         "fallback_mode": fallback_mode,
+        "cv_strategy": "group_time_series",
+        "cv_folds": int(len(grouped_splits)),
+        "embargo_groups": int(embargo_groups),
         "folds": fold_summaries,
     }
 
@@ -764,13 +961,13 @@ def parse_args() -> argparse.Namespace:
         "--splits",
         type=int,
         default=_safe_int_env("CV_SPLITS", 5),
-        help="TimeSeriesSplit folds for randomized search.",
+        help="Expanding grouped (season, week) folds for randomized search.",
     )
     parser.add_argument(
         "--embargo",
         type=int,
         default=_safe_int_env("EMBARGO_GROUPS", 1),
-        help="Compatibility arg (reserved for future purged CV).",
+        help="Number of trailing (season, week) groups excluded between train and validation windows.",
     )
     parser.add_argument(
         "--random-seed",
@@ -878,44 +1075,53 @@ def main() -> int:
         raise RuntimeError("No usable feature columns were inferred after leak filtering.")
 
     X = feature_df[feature_cols].copy()
+    group_labels = _make_group_labels(df.loc[:, list(TIME_KEYS)])
     holdout_ratio = float(np.clip(args.holdout_ratio, 0.05, 0.4))
-    holdout_size = max(20, int(len(X) * holdout_ratio))
-    holdout_size = min(holdout_size, len(X) - 20)
-    split_idx = len(X) - holdout_size
-    if split_idx <= 0:
-        raise RuntimeError("Invalid holdout split; adjust --holdout-ratio.")
+    train_idx, holdout_idx, holdout_split_info = _split_train_holdout_indices(
+        group_labels,
+        holdout_ratio=holdout_ratio,
+        embargo_groups=int(args.embargo),
+    )
 
-    X_train = X.iloc[:split_idx].reset_index(drop=True)
-    X_holdout = X.iloc[split_idx:].reset_index(drop=True)
-    y_home_train = y_home.iloc[:split_idx].to_numpy()
-    y_home_hold = y_home.iloc[split_idx:].to_numpy()
-    y_away_train = y_away.iloc[:split_idx].to_numpy()
-    y_away_hold = y_away.iloc[split_idx:].to_numpy()
-    y_win_train = y_win.iloc[:split_idx].to_numpy()
-    y_win_hold = y_win.iloc[split_idx:].to_numpy()
+    X_train = X.iloc[train_idx].reset_index(drop=True)
+    X_holdout = X.iloc[holdout_idx].reset_index(drop=True)
+    y_home_train = y_home.iloc[train_idx].to_numpy()
+    y_home_hold = y_home.iloc[holdout_idx].to_numpy()
+    y_away_train = y_away.iloc[train_idx].to_numpy()
+    y_away_hold = y_away.iloc[holdout_idx].to_numpy()
+    y_win_train = y_win.iloc[train_idx].to_numpy()
+    y_win_hold = y_win.iloc[holdout_idx].to_numpy()
+    train_group_labels = group_labels[train_idx]
+    holdout_group_labels = group_labels[holdout_idx]
 
     log.info(
-        "Rows total=%d train=%d holdout=%d features=%d",
+        "Rows total=%d train=%d holdout=%d features=%d train_groups=%d holdout_groups=%d embargo_groups=%d",
         len(X),
         len(X_train),
         len(X_holdout),
         len(feature_cols),
+        len(_ordered_unique_groups(train_group_labels)),
+        len(_ordered_unique_groups(holdout_group_labels)),
+        int(args.embargo),
     )
 
+    win_base, win_train_info = _fit_classifier_base(
+        X_train,
+        y_win_train,
+        numeric_cols=numeric_cols,
+        categorical_cols=categorical_cols,
+        group_labels=train_group_labels,
+        random_seed=args.random_seed,
+        hp_n_iter=args.hp_niter,
+        cv_splits=max(2, int(args.splits)),
+        embargo_groups=int(args.embargo),
+        n_jobs=int(args.n_jobs),
+        fast_dev=bool(args.fast_dev),
+    )
     win_preprocessor = _make_preprocessor(numeric_cols, categorical_cols)
     win_preprocessor.fit(X_train)
     X_train_proc = np.asarray(win_preprocessor.transform(X_train))
     X_hold_proc = np.asarray(win_preprocessor.transform(X_holdout))
-
-    win_base, win_train_info = _fit_classifier_base(
-        X_train_proc,
-        y_win_train,
-        random_seed=args.random_seed,
-        hp_n_iter=args.hp_niter,
-        cv_splits=max(2, int(args.splits)),
-        n_jobs=int(args.n_jobs),
-        fast_dev=bool(args.fast_dev),
-    )
     win_clf, win_calibration_info = _calibrate_classifier(
         win_base,
         X_train_proc,
@@ -924,42 +1130,55 @@ def main() -> int:
 
     fallback_train_win_prob = _fallback_home_win_probabilities(X_train)
     train_win_prob, train_stack_info = _generate_stacked_train_probabilities(
-        X_train_proc,
+        X_train,
         y_win_train,
         tuned_estimator=win_base,
+        numeric_cols=numeric_cols,
+        categorical_cols=categorical_cols,
+        group_labels=train_group_labels,
         cv_splits=max(2, int(args.splits)),
+        embargo_groups=int(args.embargo),
         fallback_probabilities=fallback_train_win_prob,
     )
-    holdout_win_prob = np.clip(win_clf.predict_proba(X_hold_proc)[:, 1], 1e-6, 1 - 1e-6)
+    holdout_win_prob = _predict_positive_class_proba(win_clf, X_hold_proc)
 
     X_train_score = _augment_score_features(X_train, train_win_prob)
     X_holdout_score = _augment_score_features(X_holdout, holdout_win_prob)
     score_numeric_cols = numeric_cols + [WIN_PROBA_FEATURE]
     score_feature_cols = score_numeric_cols + categorical_cols
 
-    score_preprocessor = _make_preprocessor(score_numeric_cols, categorical_cols)
-    score_preprocessor.fit(X_train_score)
-    X_train_score_proc = np.asarray(score_preprocessor.transform(X_train_score))
-    X_hold_score_proc = np.asarray(score_preprocessor.transform(X_holdout_score))
-
     home_reg, home_train_info = _fit_regressor(
-        X_train_score_proc,
+        X_train_score,
         y_home_train,
+        numeric_cols=score_numeric_cols,
+        categorical_cols=categorical_cols,
+        group_labels=train_group_labels,
         random_seed=args.random_seed,
         hp_n_iter=args.hp_niter,
         cv_splits=max(2, int(args.splits)),
+        embargo_groups=int(args.embargo),
         n_jobs=int(args.n_jobs),
         fast_dev=bool(args.fast_dev),
     )
     away_reg, away_train_info = _fit_regressor(
-        X_train_score_proc,
+        X_train_score,
         y_away_train,
+        numeric_cols=score_numeric_cols,
+        categorical_cols=categorical_cols,
+        group_labels=train_group_labels,
         random_seed=args.random_seed,
         hp_n_iter=args.hp_niter,
         cv_splits=max(2, int(args.splits)),
+        embargo_groups=int(args.embargo),
         n_jobs=int(args.n_jobs),
         fast_dev=bool(args.fast_dev),
     )
+    score_preprocessor = _make_preprocessor(score_numeric_cols, categorical_cols)
+    score_preprocessor.fit(X_train_score)
+    X_train_score_proc = np.asarray(score_preprocessor.transform(X_train_score))
+    X_hold_score_proc = np.asarray(score_preprocessor.transform(X_holdout_score))
+    home_reg = clone(home_reg).fit(X_train_score_proc, y_home_train)
+    away_reg = clone(away_reg).fit(X_train_score_proc, y_away_train)
 
     home_pred = home_reg.predict(X_hold_score_proc)
     away_pred = away_reg.predict(X_hold_score_proc)
@@ -978,6 +1197,7 @@ def main() -> int:
             "total": int(len(X)),
             "train": int(len(X_train)),
             "holdout": int(len(X_holdout)),
+            "embargo_excluded": int(len(X) - len(X_train) - len(X_holdout)),
         },
         "features": {
             "win": {
@@ -1006,6 +1226,7 @@ def main() -> int:
             "win_base": win_train_info,
             "win_calibration": win_calibration_info,
             "score_stack": train_stack_info,
+            "holdout_split": holdout_split_info,
             "cv_splits": int(args.splits),
             "embargo_groups": int(args.embargo),
             "hp_niter": int(args.hp_niter),
@@ -1019,18 +1240,21 @@ def main() -> int:
         win_preprocessor = _make_preprocessor(numeric_cols, categorical_cols)
         win_preprocessor.fit(X)
         X_full_proc = np.asarray(win_preprocessor.transform(X))
-        win_base_full = clone(win_base).fit(X_full_proc, y_win.to_numpy())
         win_clf, win_calibration_info = _calibrate_classifier(
-            win_base_full,
+            clone(win_base),
             X_full_proc,
             y_win.to_numpy(),
         )
         fallback_full_win_prob = _fallback_home_win_probabilities(X)
         full_train_win_prob, full_stack_info = _generate_stacked_train_probabilities(
-            X_full_proc,
+            X,
             y_win.to_numpy(),
             tuned_estimator=win_base,
+            numeric_cols=numeric_cols,
+            categorical_cols=categorical_cols,
+            group_labels=group_labels,
             cv_splits=max(2, int(args.splits)),
+            embargo_groups=int(args.embargo),
             fallback_probabilities=fallback_full_win_prob,
         )
         X_full_score = _augment_score_features(X, full_train_win_prob)
@@ -1051,10 +1275,14 @@ def main() -> int:
         disable_gate=bool(args.disable_gate),
     )
 
+    bundle_timestamp = datetime.now(timezone.utc).isoformat()
     metadata: Dict[str, Any] = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "training_timestamp_utc": datetime.now(timezone.utc).isoformat(),
+        "timestamp": bundle_timestamp,
+        "training_timestamp_utc": bundle_timestamp,
+        "bundle_timestamp_utc": bundle_timestamp,
         "bundle_version": str(args.bundle_version),
+        "bundle_contract_version": 2,
+        "sklearn_version": sklearn.__version__,
         "training_script": "backend/train_models.py",
         "dataset_path": str(dataset_path),
         "dataset_hash": report["dataset_hash"],
@@ -1121,6 +1349,11 @@ def main() -> int:
         },
         "bundle_contract": {
             "serving_mode": "pipeline_primary",
+            "bundle_timestamp_utc": "bundle_timestamp_utc",
+            "dataset_hash": "dataset_hash",
+            "sklearn_version": "sklearn_version",
+            "feature_manifests": "feature_manifests",
+            "generated_features": "generated_features",
             "preprocessor": "score_preprocessor.joblib",
             "score_preprocessor": "score_preprocessor.joblib",
             "win_preprocessor": "win_preprocessor.joblib",

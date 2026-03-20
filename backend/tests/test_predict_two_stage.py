@@ -11,6 +11,7 @@ class _DummyWinPipeline:
     def __init__(self, calls):
         self.calls = calls
         self.steps = [("pre", object()), ("clf", object())]
+        self.classes_ = np.asarray([0, 1], dtype=int)
 
     def predict_proba(self, full_df):
         self.calls.append("win")
@@ -138,12 +139,32 @@ def test_predict_feeds_raw_win_probability_into_score_models(monkeypatch):
     payload = response.json()
 
     assert calls == ["win", "home", "away"]
-    expected_smoothed = main_module._smooth_win_probability(0.9, 3.0, clf_used=True)
     assert np.isclose(payload["home_score"], 20.0)
     assert np.isclose(payload["away_score"], 17.0)
-    assert np.isclose(payload["home_win_probability"], expected_smoothed)
-    assert not np.isclose(payload["home_win_probability"], 0.9)
-    assert np.isclose(payload["away_win_probability"], 1.0 - expected_smoothed)
+    assert np.isclose(payload["home_win_probability"], 0.9)
+    assert np.isclose(payload["away_win_probability"], 0.1)
     assert payload["explanation_fields"]["dataset_hash"] == "unit-test-dataset"
     assert payload["win_classifier_used"] is True
     assert score_manifest == main_module._feature_manifest("scores")
+
+
+def test_calculate_win_probability_uses_positive_class_label(monkeypatch):
+    class _ReversedClassesWinModel:
+        def __init__(self):
+            self.classes_ = np.asarray([1, 0], dtype=int)
+
+        def predict_proba(self, features):
+            return np.asarray([[0.83, 0.17]], dtype=float)
+
+    full_df = pd.DataFrame([{"home_moneyline_prob": 0.55}])
+    numeric_df = pd.DataFrame([{"home_moneyline_prob": 0.55}])
+
+    win_prob, clf_used = main_module._calculate_win_probability(
+        _ReversedClassesWinModel(),
+        full_df,
+        numeric_df,
+        preprocessor=None,
+    )
+
+    assert clf_used is True
+    assert np.isclose(win_prob, 0.83)

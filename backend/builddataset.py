@@ -77,15 +77,24 @@ def _clean_dataset(df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, Any]]:
 
     duplicate_game_ids_removed = 0
     if "game_id" in out.columns:
+        label_cols = [c for c in ("home_points_for", "away_points_for", "home_win", "winner") if c in out.columns]
+        if label_cols:
+            out["_label_priority"] = out[label_cols].notna().sum(axis=1)
+        else:
+            out["_label_priority"] = 0
         out["_completeness"] = out.notna().sum(axis=1)
-        out = out.sort_values(["_completeness", "game_id"], ascending=[False, True], kind="stable")
+        out = out.sort_values(
+            ["_label_priority", "_completeness", "game_id"],
+            ascending=[False, False, True],
+            kind="stable",
+        )
         valid_game_ids = out["game_id"].fillna("").astype(str).str.strip().ne("")
         if valid_game_ids.any():
             before_dedupe = int(valid_game_ids.sum())
             deduped = out.loc[valid_game_ids].drop_duplicates(subset=["game_id"], keep="first")
             duplicate_game_ids_removed = before_dedupe - len(deduped)
             out = pd.concat([deduped, out.loc[~valid_game_ids]], axis=0, ignore_index=True)
-        out = out.drop(columns=["_completeness"], errors="ignore")
+        out = out.drop(columns=["_label_priority", "_completeness"], errors="ignore")
 
     sort_columns = [column for column in ("season", "week", "game_id") if column in out.columns]
     if sort_columns:
@@ -146,9 +155,8 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
-    from backend import build_csv_datasets_v3 as dataset_builder
-
     args = parse_args()
+    from backend import build_csv_datasets_v3 as dataset_builder
     config = DatasetBuildConfig(
         start_season=args.start,
         end_season=args.end,
