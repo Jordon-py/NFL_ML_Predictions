@@ -24,6 +24,10 @@ from sklearn.base import BaseEstimator, clone
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import HistGradientBoostingRegressor
+try:
+    from sklearn.frozen import FrozenEstimator
+except Exception:  # pragma: no cover - sklearn < 1.6
+    FrozenEstimator = None
 from sklearn.impute import SimpleImputer
 from sklearn.metrics import (
     accuracy_score,
@@ -347,6 +351,16 @@ def _make_calibrator(
     *,
     cv: Any,
 ) -> CalibratedClassifierCV:
+    if cv == "prefit":
+        if FrozenEstimator is not None:
+            return CalibratedClassifierCV(
+                estimator=FrozenEstimator(estimator),
+                method="sigmoid",
+            )
+        try:
+            return CalibratedClassifierCV(estimator=estimator, method="sigmoid", cv=cv)
+        except TypeError:
+            return CalibratedClassifierCV(base_estimator=estimator, method="sigmoid", cv=cv)
     try:
         return CalibratedClassifierCV(estimator=estimator, method="sigmoid", cv=cv)
     except TypeError:
