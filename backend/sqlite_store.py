@@ -47,6 +47,7 @@ def _ensure_db() -> None:
                 predicted_away_score REAL,
                 confidence REAL,
                 prediction_source TEXT,
+                win_classifier_used INTEGER DEFAULT 0,
                 ts TEXT,
                 final_home_score INTEGER,
                 final_away_score INTEGER,
@@ -55,6 +56,14 @@ def _ensure_db() -> None:
             );
             """
         )
+        columns = {
+            row["name"]
+            for row in conn.execute("PRAGMA table_info(user_predictions)").fetchall()
+        }
+        if "win_classifier_used" not in columns:
+            conn.execute(
+                "ALTER TABLE user_predictions ADD COLUMN win_classifier_used INTEGER DEFAULT 0"
+            )
         conn.execute("CREATE INDEX IF NOT EXISTS idx_user_predictions_storage_key ON user_predictions(storage_key);")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_user_predictions_game_id ON user_predictions(game_id);")
 
@@ -111,11 +120,12 @@ def persist_prediction(context: PredictionUserContext, payload: Dict[str, object
                 predicted_away_score,
                 confidence,
                 prediction_source,
+                win_classifier_used,
                 ts,
                 final_home_score,
                 final_away_score,
                 updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 context.user_id,
@@ -131,6 +141,7 @@ def persist_prediction(context: PredictionUserContext, payload: Dict[str, object
                 payload.get("away_score"),
                 max(payload.get("home_win_probability", 0), payload.get("away_win_probability", 0)),
                 payload.get("prediction_source"),
+                1 if bool(payload.get("win_classifier_used")) else 0,
                 ts,
                 final_home_score,
                 final_away_score,
@@ -239,6 +250,7 @@ def get_user_history(
             "home_win_probability": row["home_win_probability"],
             "away_win_probability": row["away_win_probability"],
             "prediction_source": row["prediction_source"],
+            "win_classifier_used": bool(row["win_classifier_used"]) if row["win_classifier_used"] is not None else False,
             "final_home_score": row["final_home_score"],
             "final_away_score": row["final_away_score"],
             "game_status": row["game_status"],

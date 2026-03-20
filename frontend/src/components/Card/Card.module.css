@@ -331,6 +331,78 @@
   border-color: color-mix(in oklab, #7cd3ff 45%, transparent);
 }
 
+.probabilityPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.7rem 0.8rem;
+  border-radius: 14px;
+  border: 1px solid color-mix(in oklab, var(--c-brand-1, #54ade8) 16%, transparent);
+  background:
+    linear-gradient(180deg, oklch(100% 0 0 / 0.05), oklch(100% 0 0 / 0.01)),
+    oklch(0% 0 0 / 0.14);
+}
+
+.probabilityHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.8rem;
+  color: var(--lch-muted);
+}
+
+.probabilityHeader strong {
+  color: var(--lch-text);
+  font-family: var(--font-tech);
+  font-size: 0.86rem;
+}
+
+.probabilityTrack {
+  position: relative;
+  height: 10px;
+  border-radius: 999px;
+  overflow: hidden;
+  background:
+    linear-gradient(90deg, oklch(100% 0 0 / 0.08), oklch(100% 0 0 / 0.03));
+}
+
+.probabilityFill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+}
+
+.probabilityFillAway {
+  background: linear-gradient(90deg, color-mix(in oklab, var(--away-color) 82%, white 8%), color-mix(in oklab, var(--away-color-2) 60%, black 10%));
+}
+
+.probabilityFillHome {
+  inset: 0 0 0 auto;
+  background: linear-gradient(90deg, color-mix(in oklab, var(--home-color-2) 60%, black 10%), color-mix(in oklab, var(--home-color) 82%, white 8%));
+}
+
+.probabilityScale {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+  align-items: center;
+  font-size: 0.72rem;
+  color: var(--lch-muted);
+}
+
+.probabilityScale span:nth-child(2) {
+  text-align: center;
+  color: var(--lch-text);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.probabilityScale span:last-child {
+  text-align: right;
+}
+
 .predScore {
   display: flex;
   flex-direction: column;

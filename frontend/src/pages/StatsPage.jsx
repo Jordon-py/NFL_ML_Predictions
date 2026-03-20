@@ -71,7 +71,7 @@ function formatWinProbability(probability) {
   return typeof probability === "number" ? `${Math.round(probability * 100)}%` : "n/a";
 }
 
-export default function StatsPage() {
+export default function StatsPage({ authSession = null }) {
   // Remote payloads from the backend
   const [schedule, setSchedule] = useState(/** @type {any[]} */([]));
   const [history, setHistory] = useState(/** @type {any[]} */([]));
@@ -80,6 +80,7 @@ export default function StatsPage() {
   // Local UI state
   const [isPageLoading, setIsPageLoading] = useState(true);
   const [pageError, setPageError] = useState(/** @type {string | null} */(null));
+  const userId = authSession?.userId || null;
 
   /**
    * Initial hydration:
@@ -95,8 +96,8 @@ export default function StatsPage() {
         setIsPageLoading(true);
         const [scheduleData, historyResponse, overviewData] = await Promise.all([
           getNextWeekSchedule(),
-          getPredictionHistory(50),
-          getStatusOverview(),
+          getPredictionHistory(50, userId),
+          getStatusOverview(userId),
         ]);
 
         if (!active) return;
@@ -119,7 +120,7 @@ export default function StatsPage() {
       // guard so we don't update state on an unmounted component
       active = false;
     };
-  }, []);
+  }, [userId]);
 
   const historyMap = buildHistoryLookup(history);
 

@@ -41,6 +41,7 @@ import warnings
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from contextlib import asynccontextmanager
+from functools import lru_cache
 from typing import List, Dict, Any, Optional, Tuple, Literal
 import nflreadpy as nfl
 from dotenv import load_dotenv
@@ -54,6 +55,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from backend.app.core.settings import get_settings
+from backend.prediction_store import (
+    append_prediction_record,
+    build_prediction_user_context,
+    get_prediction_history as load_prediction_history,
+    get_prediction_history_count,
+)
+from backend.schemas import PredictionRequest as StoredPredictionRequest
 from backend.utils import functions_for_main as fn_main
 from backend.utils.ops_reporting import (
     collect_dataset_versions,
@@ -312,23 +320,11 @@ def _find_models_dir() -> Path:
 MODELS_DIR: Path = _find_models_dir()
 
 
-def _load_team_logo_map() -> Dict[str, str]:
-    """Load a {TEAM_ABBR: logo_url} mapping if available.
-
-    Why:
-      - Your schedule CSV typically contains team abbreviations (PHI, DAL, ...),
-        but does NOT include logo URLs.
-      - The frontend can only render logos if we attach a URL per game.
-
-    Expected shapes:
-      - CSV (recommended): `team_logos.csv` with columns `team_abbr` + `team_logo_espn`
-      - JSON: {"KC": "https://...", ...}
-    """
+def _resolve_team_metadata_path() -> Optional[Path]:
     def _resolve_path(p: Path) -> Optional[Path]:
         if p.exists():
             return p
         if not p.is_absolute():
-            # Allow relative paths from either repo root or backend/ dir
             for base in (BASE_DIR.parent, BASE_DIR):
                 candidate = (base / p).resolve()
                 if candidate.exists():
@@ -340,7 +336,6 @@ def _load_team_logo_map() -> Dict[str, str]:
     if env:
         candidates.append(Path(env).expanduser())
 
-    # Prefer explicit data dir, then local backend/frontend fallbacks used in this repo.
     candidates.extend(
         [
             DATA_DIR / "team_logos.csv",
@@ -355,81 +350,112 @@ def _load_team_logo_map() -> Dict[str, str]:
     )
 
     for raw_path in candidates:
-        p = _resolve_path(raw_path)
-        if not p:
-            continue
+        resolved = _resolve_path(raw_path)
+        if resolved:
+            return resolved
+    return None
 
-        try:
-            # JSON map support: {"KC": "https://..."}
-            if p.suffix.lower() == ".json":
-                with open(p, "r", encoding="utf-8") as fh:
-                    obj = json.load(fh)
-                if not isinstance(obj, dict):
+
+@lru_cache(maxsize=1)
+def _load_team_metadata_map() -> Dict[str, Dict[str, Any]]:
+    """Load team branding metadata once and reuse it across schedule + logo endpoints."""
+    path = _resolve_team_metadata_path()
+    if not path:
+        logging.info("[Logos] No team metadata source found; returning empty map.")
+        return {}
+
+    try:
+        if path.suffix.lower() == ".json":
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(payload, dict):
+                return {}
+            out: Dict[str, Dict[str, Any]] = {}
+            for key, value in payload.items():
+                team_key = str(key).strip().upper()
+                if not team_key:
                     continue
-                out: Dict[str, str] = {}
-                for k, v in obj.items():
-                    key = str(k).strip().upper()
-                    val = str(v).strip()
-                    if not key or not val or val.lower() == "nan":
-                        continue
-                    out[key] = val
-                    # Also store canonical alias (e.g., LA->LAR) for lookups.
-                    if TEAM_ABBR_MAP and key in TEAM_ABBR_MAP:
-                        out.setdefault(TEAM_ABBR_MAP[key], val)
-                if out:
-                    logging.info("[Logos] Loaded %d team logos from %s", len(out), p)
-                    return out
-                continue
-
-            # CSV support (flexible schema)
-            df = pd.read_csv(p)
-            cols = {c.lower(): c for c in df.columns}
-
-            key_col = None
-            for k in ("abbr", "team", "team_abbr", "team_code"):
-                if k in cols:
-                    key_col = cols[k]
-                    break
-
-            # Prefer ESPN logos, per request.
-            val_col = None
-            for v in (
-                "team_logo_espn",
-                # fallbacks
-                "team_logo_squared",
-                "team_logo_wikipedia",
-                "team_wordmark",
-                "logo_url",
-                "logo",
-                "url",
-                "image_url",
-                "image",
-            ):
-                if v in cols:
-                    val_col = cols[v]
-                    break
-
-            if not key_col or not val_col:
-                continue
-
-            out: Dict[str, str] = {}
-            for _, r in df.iterrows():
-                key = str(r.get(key_col, "")).strip().upper()
-                val = str(r.get(val_col, "")).strip()
-                if not key or not val or val.lower() == "nan":
-                    continue
-                out[key] = val
-                if TEAM_ABBR_MAP and key in TEAM_ABBR_MAP:
-                    out.setdefault(TEAM_ABBR_MAP[key], val)
-
+                meta = value if isinstance(value, dict) else {"logoUrl": value}
+                normalized = {
+                    "name": str(meta.get("name") or team_key).strip() or team_key,
+                    "logoUrl": str(meta.get("logoUrl") or meta.get("logo_url") or "").strip() or None,
+                    "primaryColor": str(meta.get("primaryColor") or meta.get("primary_color") or "").strip() or None,
+                    "secondaryColor": str(meta.get("secondaryColor") or meta.get("secondary_color") or "").strip() or None,
+                    "wordmark": str(meta.get("wordmark") or meta.get("word_mark") or "").strip() or None,
+                }
+                out[team_key] = normalized
+                if TEAM_ABBR_MAP and team_key in TEAM_ABBR_MAP:
+                    out.setdefault(TEAM_ABBR_MAP[team_key], dict(normalized))
             if out:
-                logging.info("[Logos] Loaded %d team logos from %s (col=%s)", len(out), p, val_col)
-                return out
-        except Exception as e:
-            logging.warning("[Logos] Failed reading %s: %s", raw_path, e)
+                logging.info("[Logos] Loaded %d team metadata rows from %s", len(out), path)
+            return out
 
-    logging.info("[Logos] No team logo map found; schedule will return null logos.")
-    return {}
+        df = pd.read_csv(path)
+        cols = {c.lower(): c for c in df.columns}
+
+        key_col = next((cols[k] for k in ("abbr", "team", "team_abbr", "team_code") if k in cols), None)
+        if not key_col:
+            return {}
+
+        name_col = next((cols[k] for k in ("team_name", "name", "team") if k in cols), None)
+        logo_col = next(
+            (
+                cols[k]
+                for k in (
+                    "team_logo_espn",
+                    "team_logo_squared",
+                    "team_logo_wikipedia",
+                    "team_wordmark",
+                    "logo_url",
+                    "logo",
+                    "url",
+                    "image_url",
+                    "image",
+                )
+                if k in cols
+            ),
+            None,
+        )
+        primary_col = next((cols[k] for k in ("team_color", "primary_color", "primarycolor") if k in cols), None)
+        secondary_col = next((cols[k] for k in ("team_color2", "secondary_color", "secondarycolor") if k in cols), None)
+        wordmark_col = next((cols[k] for k in ("team_wordmark", "wordmark") if k in cols), None)
+
+        out: Dict[str, Dict[str, Any]] = {}
+        for _, row in df.iterrows():
+            team_key = str(row.get(key_col, "")).strip().upper()
+            if not team_key:
+                continue
+            meta = {
+                "name": str(row.get(name_col, "")).strip() or team_key,
+                "logoUrl": str(row.get(logo_col, "")).strip() if logo_col else "",
+                "primaryColor": str(row.get(primary_col, "")).strip() if primary_col else "",
+                "secondaryColor": str(row.get(secondary_col, "")).strip() if secondary_col else "",
+                "wordmark": str(row.get(wordmark_col, "")).strip() if wordmark_col else "",
+            }
+            normalized = {
+                "name": meta["name"],
+                "logoUrl": meta["logoUrl"] or None,
+                "primaryColor": meta["primaryColor"] or None,
+                "secondaryColor": meta["secondaryColor"] or None,
+                "wordmark": meta["wordmark"] or None,
+            }
+            out[team_key] = normalized
+            if TEAM_ABBR_MAP and team_key in TEAM_ABBR_MAP:
+                out.setdefault(TEAM_ABBR_MAP[team_key], dict(normalized))
+
+        if out:
+            logging.info("[Logos] Loaded %d team metadata rows from %s", len(out), path)
+        return out
+    except Exception as exc:
+        logging.warning("[Logos] Failed reading %s: %s", path, exc)
+        return {}
+
+
+def _load_team_logo_map() -> Dict[str, str]:
+    return {
+        team_code: str(meta.get("logoUrl") or "").strip()
+        for team_code, meta in _load_team_metadata_map().items()
+        if str(meta.get("logoUrl") or "").strip()
+    }
 
 
 def _calculate_win_probability(
@@ -1243,6 +1269,8 @@ class PredictionResponse(BaseModel):
     week: int
     home_team: str
     away_team: str
+    home_name: Optional[str] = None
+    away_name: Optional[str] = None
     game_id: str
     home_score: float
     away_score: float
@@ -1253,12 +1281,24 @@ class PredictionResponse(BaseModel):
     predicted_away_points: Optional[float] = None
     predicted_total: Optional[float] = None
     home_win_prob: Optional[float] = None
+    prediction_source: str = "pipeline_primary"
     explanation_fields: Dict[str, Any] = Field(default_factory=dict)
     generated_at: datetime
     mode: str = Field(..., description="Mode of prediction, e.g., 'production'")
     win_classifier_used: bool = Field(
         ..., description="Whether the win probability classifier was used"
     )
+
+
+class HistoryEntryResponse(PredictionResponse):
+    generated_at: Optional[datetime] = None
+    mode: Optional[str] = None
+    ts: Optional[str] = None
+    user_id: Optional[str] = None
+    storage_key: Optional[str] = None
+    final_home_score: Optional[int] = None
+    final_away_score: Optional[int] = None
+    game_status: Optional[str] = None
 
 
 class DebugPredictInputResponse(BaseModel):
@@ -1411,11 +1451,31 @@ class ScheduleGameResponse(BaseModel):
     week: int
     home_team: str
     away_team: str
+    home_name: Optional[str] = None
+    away_name: Optional[str] = None
     home_abbr: Optional[str] = None
     away_abbr: Optional[str] = None
     home_logo: Optional[str] = None
     away_logo: Optional[str] = None
+    home_color: Optional[str] = None
+    away_color: Optional[str] = None
+    home_color2: Optional[str] = None
+    away_color2: Optional[str] = None
+    home_wordmark: Optional[str] = None
+    away_wordmark: Optional[str] = None
     kickoff: Optional[str] = None
+
+
+class TeamLogoMetadataResponse(BaseModel):
+    name: str
+    logoUrl: Optional[str] = None
+    primaryColor: Optional[str] = None
+    secondaryColor: Optional[str] = None
+    wordmark: Optional[str] = None
+
+
+class TeamLogosResponse(BaseModel):
+    teams: Dict[str, TeamLogoMetadataResponse] = Field(default_factory=dict)
 
 
 def _json_safe_value(v: Any) -> Any:
@@ -1544,6 +1604,45 @@ def _parse_ts_to_iso(raw: Any) -> Optional[str]:
         return dt.to_pydatetime().isoformat()
     except Exception:
         return None
+
+
+def _prediction_user_context_from_request(request: Optional[Request]):
+    user_id = None
+    if request is not None:
+        user_id = request.headers.get("X-User-Id")
+    return build_prediction_user_context(user_id)
+
+
+def _history_total_for_request(request: Optional[Request]) -> int:
+    try:
+        return int(get_prediction_history_count(_prediction_user_context_from_request(request)))
+    except Exception:
+        logging.exception("[History] Failed to count persistent history; falling back to memory.")
+        return len(state.history)
+
+
+def _persist_prediction_for_request(
+    request: Optional[Request],
+    payload: PredictRequest,
+    prediction_payload: Dict[str, Any],
+) -> None:
+    if request is None:
+        return
+
+    try:
+        context = _prediction_user_context_from_request(request)
+        append_prediction_record(
+            context,
+            StoredPredictionRequest(
+                home_team=str(payload.home_team).strip(),
+                away_team=str(payload.away_team).strip(),
+                season=int(payload.season),
+                week=int(payload.week),
+            ),
+            prediction_payload,
+        )
+    except Exception as exc:
+        logging.warning("[Predict] Failed to persist prediction history: %s", exc)
 
 
 def _load_json(path: Path) -> Dict[str, Any]:
@@ -2251,7 +2350,7 @@ def debug_dataset_view(
 
 
 @app.get("/status/overview", response_model=StatusOverviewResponse)
-def status_overview() -> StatusOverviewResponse:
+def status_overview(request: Request) -> StatusOverviewResponse:
     """
     Summary endpoint used by StatsPage.jsx.
 
@@ -2274,7 +2373,7 @@ def status_overview() -> StatusOverviewResponse:
         "dataset": dataset_stats,
         "history": {
             "metrics": {
-                "total_predictions": len(state.history),
+                "total_predictions": _history_total_for_request(request),
                 "win_rate": 0.0,  # Placeholder until outcomes are tracked
             }
         },
@@ -2298,6 +2397,8 @@ def status_models() -> Dict[str, Any]:
         "away_model": (MODELS_DIR / "away_model.joblib").exists(),
         "win_model": (MODELS_DIR / "win_clf_calibrated.joblib").exists(),
         "preprocessor": (MODELS_DIR / "preprocessor.joblib").exists(),
+        "score_preprocessor": (MODELS_DIR / "score_preprocessor.joblib").exists(),
+        "win_preprocessor": (MODELS_DIR / "win_preprocessor.joblib").exists(),
         "metadata": (MODELS_DIR / "metadata.json").exists(),
     }
 
@@ -2595,8 +2696,8 @@ def get_schedule() -> List[ScheduleGameResponse]:
     df = _normalize_team_columns(
         df, cols=["home_abbr", "away_abbr", "home_team", "away_team"]
     )
-    # Attach logos if we have a mapping file. This is optional; missing logo
-    logo_map = _load_team_logo_map()
+    # Attach branding metadata if available; missing data is allowed.
+    team_meta_map = _load_team_metadata_map()
     df = _add_kickoff_utc_datetime(df)  # uses 'gameday' column if present
 
     # Decide which (season, week) is "next"
@@ -2625,19 +2726,29 @@ def get_schedule() -> List[ScheduleGameResponse]:
         away_team = row.get("away_team")
         home_abbr = row.get("home_abbr", home_team)
         away_abbr = row.get("away_abbr", away_team)
+        home_code = str(home_abbr or home_team or "").upper()
+        away_code = str(away_abbr or away_team or "").upper()
+        home_meta = (
+            team_meta_map.get(home_code)
+            or team_meta_map.get(str(home_team or "").upper())
+            or {}
+        )
+        away_meta = (
+            team_meta_map.get(away_code)
+            or team_meta_map.get(str(away_team or "").upper())
+            or {}
+        )
 
         # Logos: prefer explicit schedule columns, else use logo_map keyed by team abbr
         home_logo = (
             row.get("home_logo")
             or row.get("home_logo_url")
-            or logo_map.get(str(home_abbr).upper())
-            or logo_map.get(str(home_team).upper())
+            or home_meta.get("logoUrl")
         )
         away_logo = (
             row.get("away_logo")
             or row.get("away_logo_url")
-            or logo_map.get(str(away_abbr).upper())
-            or logo_map.get(str(away_team).upper())
+            or away_meta.get("logoUrl")
         )
 
         kickoff_val: Optional[str] = None
@@ -2654,10 +2765,18 @@ def get_schedule() -> List[ScheduleGameResponse]:
                 "week": int(target_w),
                 "home_team": home_team,
                 "away_team": away_team,
+                "home_name": home_meta.get("name"),
+                "away_name": away_meta.get("name"),
                 "home_abbr": home_abbr,
                 "away_abbr": away_abbr,
                 "home_logo": home_logo,
                 "away_logo": away_logo,
+                "home_color": home_meta.get("primaryColor"),
+                "away_color": away_meta.get("primaryColor"),
+                "home_color2": home_meta.get("secondaryColor"),
+                "away_color2": away_meta.get("secondaryColor"),
+                "home_wordmark": home_meta.get("wordmark"),
+                "away_wordmark": away_meta.get("wordmark"),
                 "kickoff": kickoff_val,
             }
         )
@@ -2678,23 +2797,43 @@ def predict_next_week() -> Dict[str, Any]:
     return {"games": get_schedule()}
 
 
+@app.get("/api/teams/logos", response_model=TeamLogosResponse)
+@app.get("/teams/logos", response_model=TeamLogosResponse)
+def get_team_logos() -> TeamLogosResponse:
+    """Return cached team branding metadata for frontend enrichment."""
+    return TeamLogosResponse(teams=_load_team_metadata_map())
+
+
 # -------------------------------------------------------------------
 # Prediction History
 # -------------------------------------------------------------------
 
 
-@app.get("/history", response_model=List[PredictionResponse])
+@app.get("/history", response_model=List[HistoryEntryResponse])
 def get_prediction_history(
+    request: Request,
     limit: int = Query(100, ge=1, le=1000)
 ) -> List[Dict[str, Any]]:
     """
-    Return the last N prediction results recorded in memory.
+    Return the last N prediction results for the active user context.
 
     Used by StatsPage/PredictionContext as a history source.
     """
     if limit <= 0:
         return []
-    return state.history[-limit:]
+    try:
+        response = load_prediction_history(
+            _prediction_user_context_from_request(request),
+            limit=limit,
+        )
+        entries = response.entries if hasattr(response, "entries") else []
+        return [
+            entry.model_dump(mode="json") if hasattr(entry, "model_dump") else dict(entry)
+            for entry in entries
+        ]
+    except Exception:
+        logging.exception("[History] Persistent history lookup failed; falling back to memory.")
+        return state.history[-limit:]
 
 
 # -------------------------------------------------------------------
@@ -2702,7 +2841,7 @@ def get_prediction_history(
 # -------------------------------------------------------------------
 @app.post("/api/predict", response_model=PredictionResponse)
 @app.post("/predict", response_model=PredictionResponse)
-async def predict(request: PredictRequest) -> Dict[str, Any]:
+async def predict(payload: PredictRequest, request: Request) -> Dict[str, Any]:
     """
     Predict home/away score and win probability for a single game.
 
@@ -2721,18 +2860,18 @@ async def predict(request: PredictRequest) -> Dict[str, Any]:
         raise HTTPException(status_code=503, detail=f"Not ready: missing models {missing}")
 
     # ----- Validate request -----
-    season = int(request.season)
-    week = int(request.week)
+    season = int(payload.season)
+    week = int(payload.week)
 
     if week < 1 or week > 30:
         raise HTTPException(status_code=400, detail="Invalid week. Expected 1..30.")
     if season < 1990 or season > 2100:
         raise HTTPException(status_code=400, detail="Invalid season. Expected a realistic year.")
-    if not request.home_team or not request.away_team:
+    if not payload.home_team or not payload.away_team:
         raise HTTPException(status_code=400, detail="home_team and away_team are required.")
 
-    home_team = _normalize_team_code(request.home_team)
-    away_team = _normalize_team_code(request.away_team)
+    home_team = _normalize_team_code(payload.home_team)
+    away_team = _normalize_team_code(payload.away_team)
     if home_team == away_team:
         raise HTTPException(status_code=400, detail="home_team and away_team must be different.")
 
@@ -2745,6 +2884,7 @@ async def predict(request: PredictRequest) -> Dict[str, Any]:
     cached = state.get_cached_prediction(cache_key)
     if cached is not None:
         state.last_prediction_at = datetime.now(timezone.utc)
+        _persist_prediction_for_request(request, payload, cached)
         state.history.append(cached)
         state.history = state.history[-500:]
         logging.info(
@@ -2881,12 +3021,22 @@ async def predict(request: PredictRequest) -> Dict[str, Any]:
     game_id = f"{season}_{week}_{home_team}_{away_team}"
     predicted_total = float(h_score + a_score)
     generated_at = datetime.now(timezone.utc)
+    team_meta_map = _load_team_metadata_map()
+    home_meta = team_meta_map.get(home_team) or {}
+    away_meta = team_meta_map.get(away_team) or {}
+    prediction_source = str(
+        state.models_metadata.get("serving_mode")
+        or state.models_metadata.get("bundle_version")
+        or "pipeline_primary"
+    )
 
     result: Dict[str, Any] = {
         "season": season,
         "week": week,
         "home_team": home_team,
         "away_team": away_team,
+        "home_name": home_meta.get("name"),
+        "away_name": away_meta.get("name"),
         "game_id": game_id,
         "home_score": float(h_score),
         "away_score": float(a_score),
@@ -2897,6 +3047,7 @@ async def predict(request: PredictRequest) -> Dict[str, Any]:
         "predicted_away_points": float(a_score),
         "predicted_total": predicted_total,
         "home_win_prob": float(win_prob),
+        "prediction_source": prediction_source,
         "explanation_fields": {
             "selected_row_source": selected_row_source,
             "row_quality_score": quality["row_quality_score"],
@@ -2913,6 +3064,7 @@ async def predict(request: PredictRequest) -> Dict[str, Any]:
 
     state.last_prediction_at = generated_at
     state.store_cached_prediction(cache_key, result)
+    _persist_prediction_for_request(request, payload, result)
 
     # ----- History (bounded) -----
     state.history.append(result)

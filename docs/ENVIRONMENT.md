@@ -18,17 +18,25 @@ Frontend API base resolution is centralized in `frontend/src/api/client.js`.
 | `DATASET_PATH` | Explicit dataset CSV path | auto-select latest `game_features*.csv` | No | `backend/data/game_features_latest.csv` |
 | `SCHEDULE_PATH` | Explicit schedule CSV path | `backend/data/Nfl_schedule_2025.csv` | No | `backend/data/Nfl_schedule_2025.csv` |
 | `MODELS_DIR` | Explicit model bundle directory | auto-discovery | No | `backend/models` |
+| `TEAM_LOGOS_PATH` | Optional CSV/JSON branding catalog for team names, logos, and colors | auto-detect `backend/data/team_logos.csv` | No | `backend/data/team_logos.csv` |
 | `PREDICT_CACHE_TTL_SEC` | Prediction cache TTL seconds | `900` | No | `900` |
 | `PREDICT_CACHE_MAX_ITEMS` | Prediction cache max entries | `1000` | No | `1000` |
 | `ENABLE_ADMIN` | Enable `/admin/*` routes | `false` | No | `true` |
 | `ADMIN_TOKEN` | Bearer or `x-admin-token` for admin routes | empty | Required if admin exposed outside localhost | `<secret>` |
+
+## Model Bundle Compatibility
+
+- The active model bundle currently declares `scikit-learn 1.7.2` in `backend/models/metadata.json`.
+- Use the root `requirements.txt` or `backend/requirements.txt` as written so local, Heroku, and CI runtimes stay aligned with that bundle.
+- If you intentionally upgrade scikit-learn beyond `1.7.2`, retrain and republish the bundle before deploying.
 
 ## Frontend Variables
 
 | Name | Purpose | Default | Required in Prod | Example |
 | --- | --- | --- | --- | --- |
 | `VITE_API_BASE_URL` | Backend origin for API calls | `http://127.0.0.1:8000` in dev fallback | Yes | `https://nfl-predict-ecf5a5bd34fe.herokuapp.com` |
-| `VITE_API_BASE_PATH` | Optional API prefix | empty | No | `/api` |
+| `VITE_API_DEV` | Explicit local backend target for `npm run dev` | empty | No | `http://127.0.0.1:8000` |
+| `VITE_DEV_ENV` | Legacy dev alias still read by older local builds | empty | No | `http://127.0.0.1:8000` |
 
 ## Local Setup
 
@@ -39,7 +47,7 @@ cp backend/.env.example backend/.env
 
 2. Frontend:
 ```bash
-cp frontend/.env.local.example frontend/.env.local
+cp frontend/.env frontend/.env.local
 ```
 
 ## Production Setup
@@ -49,13 +57,15 @@ cp frontend/.env.local.example frontend/.env.local
 heroku config:set APP_ENV=production -a nfl-predict
 heroku config:set RESTRICT_CORS=true -a nfl-predict
 heroku config:set ALLOWED_ORIGINS=https://new-nfl-predict.vercel.app -a nfl-predict
+heroku config:set MODELS_DIR=backend/models -a nfl-predict
+heroku config:set TEAM_LOGOS_PATH=backend/data/team_logos.csv -a nfl-predict
 heroku config:set CORS_ORIGINS_REGEX='^https://.*\.vercel\.app$' -a nfl-predict
 ```
 
 2. Vercel (frontend):
 ```bash
 vercel env add VITE_API_BASE_URL production
-vercel env add VITE_API_BASE_PATH production
+vercel env add VITE_API_DEV preview
 ```
 
 ## Dataset Freshness

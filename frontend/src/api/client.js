@@ -197,6 +197,10 @@ function normalizeHistoryResponse(payload) {
   return { entries: [], total: 0 };
 }
 
+function buildUserHeaders(userId) {
+  return userId ? { "X-User-Id": String(userId) } : undefined;
+}
+
 /**
  * fetchJson(path, options)
  * - path: "/health" | "/predict" | "/schedule/next-week" ...
@@ -242,10 +246,11 @@ export async function fetchJson(path, options = {}) {
 // Health / Debug
 // -------------------------
 
-export async function getStatusOverview() {
+export async function getStatusOverview(userId = null) {
   // This endpoint is optional. If it fails, return a safe fallback object.
   try {
-    const res = await fetchJson("/status/overview");
+    const headers = buildUserHeaders(userId);
+    const res = await fetchJson("/status/overview", headers ? { headers } : {});
 
     if (res && typeof res === "object") {
       const dataset = res.dataset ?? { rows: 0 };
@@ -366,7 +371,7 @@ export async function getSeasonContext(scheduleRows = null, statusOverview = nul
 // Cognitive endpoints (compute)
 // -------------------------
 
-export async function predictGame(payload) {
+export async function predictGame(payload, userId = null) {
   // Reuse the same normalization rules that the dashboard uses before it stores keys.
   const body = buildGamePredictPayload(payload);
 
@@ -383,13 +388,14 @@ export async function predictGame(payload) {
   return fetchJson("/predict", {
     method: "POST",
     body: JSON.stringify(body),
+    ...(buildUserHeaders(userId) ? { headers: buildUserHeaders(userId) } : {}),
   });
 }
 
 export async function getPredictionHistory(limit = 100, userId = null) {
   try {
     const safeLimit = Number.isFinite(Number(limit)) ? Number(limit) : 100;
-    const headers = userId ? { "X-User-Id": String(userId) } : undefined;
+    const headers = buildUserHeaders(userId);
     const res = await fetchJson(`/history?limit=${safeLimit}`, headers ? { headers } : {});
     return normalizeHistoryResponse(res);
   } catch {

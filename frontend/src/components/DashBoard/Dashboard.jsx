@@ -1,23 +1,13 @@
-// File: frontend/src/components/DashBoard/Dashboard.jsx
-/**
- * Dashboard
- * ---------
- * Loads the next-week schedule and owns prediction state for the grid.
- *
- * Design choices:
- * - No context or custom hooks: plain `useState` + `useEffect`.
- * - No batch endpoint dependency: "Predict All" calls `/predict` per game
- *   with a small concurrency limit.
- */
-
 import { useEffect, useState } from "react";
 import TeamGrid from "../Card/TeamGrid.jsx";
+import NavBar from "../NavBar/NavBar.jsx";
 import { getNextWeekSchedule, predictGame } from "../../api/client.js";
 import {
   buildMatchupKey,
   buildPredictPayload,
   getGameWeek,
 } from "../../utils/gameUtils.js";
+import "./Dashboard.css";
 
 function removeKey(map, key) {
   if (!key || !Object.prototype.hasOwnProperty.call(map, key)) return map;
@@ -26,23 +16,46 @@ function removeKey(map, key) {
   return next;
 }
 
-// -------------------------
-// Dashboard component
-// -------------------------
+function formatKickoff(value) {
+  if (!value) return "TBD";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "TBD";
+  return date.toLocaleString([], {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
 
-export default function Dashboard() {
+function DashboardStat({ label, value, detail, tone = "default" }) {
+  return (
+    <article className={`dashboard__stat dashboard__stat--${tone}`}>
+      <span className="dashboard__statLabel">{label}</span>
+      <strong className="dashboard__statValue">{value}</strong>
+      <span className="dashboard__statDetail">{detail}</span>
+    </article>
+  );
+}
+
+export default function Dashboard({
+  authSession = null,
+  onSignOut,
+  pushHistory,
+  health = { status: "unknown", reason: null },
+  seasonContext = null,
+}) {
   const [games, setGames] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-
-  // These maps all share the same canonical matchup key so the grid can look up
-  // prediction, loading, and error state with one identifier.
   const [predictions, setPredictions] = useState({});
   const [loadingMap, setLoadingMap] = useState({});
   const [errorsMap, setErrorsMap] = useState({});
   const [isBulkLoading, setIsBulkLoading] = useState(false);
 
   const safeGames = Array.isArray(games) ? games : [];
+  const userId = authSession?.userId || null;
 
   const loadSchedule = async () => {
     setIsLoading(true);
@@ -62,26 +75,27 @@ export default function Dashboard() {
     loadSchedule();
   }, []);
 
-  /**
-   * Called when the user clicks a card.
-   * This is the "fix": we call predictGame(), then store the result so <Card /> can render it.
-   */
   const onPredict = async (game) => {
     const key = buildMatchupKey(game);
     if (!key || loadingMap[key]) return;
 
     setErrorsMap((prev) => removeKey(prev, key));
-
     setLoadingMap((prev) => ({ ...prev, [key]: true }));
+
     try {
       const payload = buildPredictPayload(game);
-      const prediction = await predictGame(payload);
+      const prediction = await predictGame(payload, userId);
       const predictionKey = buildMatchupKey(prediction);
+
       setPredictions((prev) => ({
         ...prev,
         [key]: prediction,
         ...(predictionKey && predictionKey !== key ? { [predictionKey]: prediction } : {}),
       }));
+
+      if (typeof pushHistory === "function") {
+        pushHistory(prediction);
+      }
     } catch (e) {
       setErrorsMap((prev) => ({
         ...prev,
@@ -118,10 +132,6 @@ export default function Dashboard() {
     }
   };
 
-  /**
-   * Reset handler called by Card's "Reset" button.
-   * Removes prediction + per-game error/loading for that game key.
-   */
   const onReset = (gameOrMatchup) => {
     const key = buildMatchupKey(gameOrMatchup);
     if (!key) return;
@@ -131,58 +141,99 @@ export default function Dashboard() {
     setLoadingMap((prev) => removeKey(prev, key));
   };
 
-  const weekValue = getGameWeek(safeGames[0]);
-  const weekLabel = weekValue != null ? `Week ${weekValue}` : "Next Week";
+  const weekValue = getGameWeek(safeGames[0]) ?? seasonContext?.display_week ?? null;
+  const weekLabel = weekValue != null ? `Week ${weekValue}` : seasonContext?.label || "Next Slate";
+  const nextKickoff = safeGames[0]?.kickoff || seasonContext?.next_kickoff || null;
+  const healthyService = health?.status === "healthy";
+  const predictionCount = Object.keys(predictions).length;
 
   return (
-    <main className="dashboard" aria-label="NFL Predict Dashboard">
-      {/* Header / Controls */}
-      <header className="dashboard__header">
-        <div className="dashboard__titleWrap">
-          <h2 className="dashboard__title">Dashboard</h2>
-          <p className="dashboard__subtitle">
-            Schedule: <strong>{weekLabel}</strong>
-          </p>
-        </div>
-
-        <div className="dashboard__actions">
-          <button
-            type="button"
-            className="dashboard__btn"
-            onClick={loadSchedule}
-            disabled={isLoading}
-            aria-busy={isLoading ? "true" : "false"}
-          >
-            {isLoading ? "Refreshing..." : "Refresh Schedule"}
-          </button>
-        </div>
-      </header>
-
-      {/* Global error from schedule/logos hook */}
-      {error && (
-        <section className="dashboard__notice dashboard__notice--error" role="alert">
-          <p>
-            <strong>Schedule load failed:</strong> {error}
-          </p>
-          <button type="button" className="dashboard__btn" onClick={loadSchedule}>
-            Try again
-          </button>
-        </section>
-      )}
-
-      {/* Main grid */}
-      <TeamGrid
-        week={weekValue ?? undefined}
-        games={safeGames}
-        isLoading={Boolean(isLoading)}
-        predictions={predictions}
-        loading={loadingMap}
-        errors={errorsMap}
-        onPredict={onPredict}
-        onReset={onReset}
-        onPredictAll={onPredictAll}
-        isBulkLoading={isBulkLoading}
+    <>
+      <NavBar
+        authSession={authSession}
+        onSignOut={onSignOut}
+        state={{
+          health,
+          title: "Prediction Dashboard",
+          heroSubtitle: seasonContext?.message || "Forecast the current NFL slate and compare every matchup.",
+          subtitle: `${safeGames.length} matchup${safeGames.length === 1 ? "" : "s"} ready to forecast`,
+          healthLabel: healthyService ? "Service: Live" : `Service: ${health?.status ?? "unknown"}`,
+          weekLabel,
+        }}
       />
-    </main>
+
+      <main className="dashboard" aria-label="NFL Predict Dashboard">
+        <section className="dashboard__hero">
+          <div className="dashboard__titleWrap">
+            <p className="dashboard__eyebrow">Forecast workspace</p>
+            <h1 className="dashboard__title">Forecast the slate with cleaner context and faster feedback.</h1>
+            <p className="dashboard__subtitle">
+              {seasonContext?.message || "Run predictions one game at a time or fan out across the full board."}
+            </p>
+          </div>
+
+          <div className="dashboard__actions">
+            <button
+              type="button"
+              className="dashboard__btn"
+              onClick={loadSchedule}
+              disabled={isLoading}
+              aria-busy={isLoading ? "true" : "false"}
+            >
+              {isLoading ? "Refreshing..." : "Refresh Schedule"}
+            </button>
+          </div>
+        </section>
+
+        <section className="dashboard__summaryGrid" aria-label="Slate summary">
+          <DashboardStat
+            label="Active slate"
+            value={weekLabel}
+            detail={seasonContext?.phase === "offseason" ? "Offseason mode" : "Upcoming matchups ready"}
+            tone="accent"
+          />
+          <DashboardStat
+            label="Games loaded"
+            value={safeGames.length}
+            detail={safeGames.length ? "Cards ready for prediction" : "No matchups returned yet"}
+          />
+          <DashboardStat
+            label="Next kickoff"
+            value={formatKickoff(nextKickoff)}
+            detail="Local browser time"
+          />
+          <DashboardStat
+            label="Predictions this session"
+            value={predictionCount}
+            detail={healthyService ? "Saved to your signed-in history" : "Backend status needs attention"}
+            tone={healthyService ? "success" : "warning"}
+          />
+        </section>
+
+        {error && (
+          <section className="dashboard__notice dashboard__notice--error" role="alert">
+            <p>
+              <strong>Schedule load failed:</strong> {error}
+            </p>
+            <button type="button" className="dashboard__btn" onClick={loadSchedule}>
+              Try again
+            </button>
+          </section>
+        )}
+
+        <TeamGrid
+          week={weekValue ?? undefined}
+          games={safeGames}
+          isLoading={Boolean(isLoading)}
+          predictions={predictions}
+          loading={loadingMap}
+          errors={errorsMap}
+          onPredict={onPredict}
+          onReset={onReset}
+          onPredictAll={onPredictAll}
+          isBulkLoading={isBulkLoading}
+        />
+      </main>
+    </>
   );
 }
