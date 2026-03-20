@@ -1,0 +1,98 @@
+INFO:     Will watch for changes in these directories: ['C:\\Users\\goku\\Documents\\NFL_ML_Predictions']
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [29812] using WatchFiles
+INFO:     Started server process [38992]
+INFO:     Waiting for application startup.
+INFO:backend.main:Starting up: Loading model bundle and dataset...
+INFO:backend.main:Startup complete: Models and dataset ready.
+INFO:     Application startup complete.
+C:\Users\goku\Documents\NFL_ML_Predictions\backend\services\inference_row.py:417: FutureWarning: Downcasting object dtype arrays on .fillna, .ffill, .bfill is deprecated and will change in a future version. Call result.infer_objects(copy=False) instead. To opt-in to the future behavior, set `pd.set_option('future.no_silent_downcasting', True)`
+  row_df = row_df.reindex(columns=expected).fillna(0) # Basic safety fill for exact matches
+C:\Users\goku\Documents\NFL_ML_Predictions\nflenv\Lib\site-packages\sklearn\impute\_base.py:653: UserWarning: Skipping features without any observed values: ['neutral_site' 'kickoff_hour_utc' 'travel_distance_km']. At least one non-missing value is needed for imputation with strategy='median'.
+  warnings.warn(
+C:\Users\goku\Documents\NFL_ML_Predictions\nflenv\Lib\site-packages\sklearn\impute\_base.py:653: UserWarning: Skipping features without any observed values: ['kickoff']. At least one non-missing value is needed for imputation with strategy='most_frequent'.
+  warnings.warn(
+C:\Users\goku\Documents\NFL_ML_Predictions\nflenv\Lib\site-packages\sklearn\impute\_base.py:653: UserWarning: Skipping features without any observed values: ['neutral_site' 'kickoff_hour_utc' 'travel_distance_km']. At least one non-missing value is needed for imputation with strategy='median'.
+  warnings.warn(
+C:\Users\goku\Documents\NFL_ML_Predictions\nflenv\Lib\site-packages\sklearn\impute\_base.py:653: UserWarning: Skipping features without any observed values: ['kickoff']. At least one non-missing value is needed for imputation with strategy='most_frequent'.
+  warnings.warn(
+C:\Users\goku\Documents\NFL_ML_Predictions\nflenv\Lib\site-packages\sklearn\impute\_base.py:653: UserWarning: Skipping features without any observed values: ['neutral_site' 'kickoff_hour_utc' 'travel_distance_km']. At least one non-missing value is needed for imputation with strategy='median'.
+  warnings.warn(
+C:\Users\goku\Documents\NFL_ML_Predictions\nflenv\Lib\site-packages\sklearn\impute\_base.py:653: UserWarning: Skipping features without any observed values: ['kickoff']. At least one non-missing value is needed for imputation with strategy='most_frequent'.
+  warnings.warn(
+C:\Users\goku\Documents\NFL_ML_Predictions\nflenv\Lib\site-packages\sklearn\impute\_base.py:653: UserWarning: Skipping features without any observed values: ['neutral_site' 'kickoff_hour_utc' 'travel_distance_km']. At least one non-missing value is needed for imputation with strategy='median'.
+  warnings.warn(
+C:\Users\goku\Documents\NFL_ML_Predictions\nflenv\Lib\site-packages\sklearn\impute\_base.py:653: UserWarning: Skipping features without any observed values: ['kickoff']. At least one non-missing value is needed for imputation with strategy='most_frequent'.
+  warnings.warn(
+C:\Users\goku\Documents\NFL_ML_Predictions\nflenv\Lib\site-packages\sklearn\impute\_base.py:653: UserWarning: Skipping features without any observed values: ['neutral_site' 'kickoff_hour_utc' 'travel_distance_km']. At least one non-missing value is needed for imputation with strategy='median'.
+  warnings.warn(
+C:\Users\goku\Documents\NFL_ML_Predictions\nflenv\Lib\site-packages\sklearn\impute\_base.py:653: UserWarning: Skipping features without any observed values: ['kickoff']. At least one non-missing value is needed for imputation with strategy='most_frequent'.
+  warnings.warn(
+C:\Users\goku\Documents\NFL_ML_Predictions\nflenv\Lib\site-packages\sklearn\impute\_base.py:653: UserWarning: Skipping features without any observed values: ['neutral_site' 'kickoff_hour_utc' 'travel_distance_km']. At least one non-missing value is needed for imputation with strategy='median'.
+  warnings.warn(
+C:\Users\goku\Documents\NFL_ML_Predictions\nflenv\Lib\site-packages\sklearn\impute\_base.py:653: UserWarning: Skipping features without any observed values: ['kickoff']. At least one non-missing value is needed for imputation with strategy='most_frequent'.
+  warnings.warn(
+C:\Users\goku\Documents\NFL_ML_Predictions\nflenv\Lib\site-packages\sklearn\impute\_base.py:653: UserWarning: Skipping features without any observed values: ['neutral_site' 'kickoff_hour_utc' 'travel_distance_km']. At least one non-missing value is needed for imputation with strategy='median'.
+  warnings.warn(
+C:\Users\goku\Documents\NFL_ML_Predictions\nflenv\Lib\site-packages\sklearn\impute\_base.py:653: UserWarning: Skipping features without any observed values: ['kickoff']. At least one non-missing value is needed for imputation with strategy='most_frequent'.
+  warnings.warn(
+C:\Users\goku\Documents\NFL_ML_Predictions\backend\services\inference_row.py:417: FutureWarning: Downcasting object dtype arrays on .fillna, .ffill, .bfill is deprecated and will change in a future version. Call result.infer_objects(copy=False) instead. To opt-in to the future behavior, set `pd.set_option('future.no_silent_downcasting', True)`
+  row_df = row_df.reindex(columns=expected).fillna(0) # Basic safety fill for exact matches
+C:\Users\goku\Documents\NFL_ML_Predictions\nflenv\Lib\site-packages\sklearn\impute\_base.py:653: UserWarning: Skipping features without any observed values: ['neutral_site' 'kickoff_hour_utc' 'travel_distance_km']. At least one non-missing value is needed for imputation with strategy='median'.
+  warnings.warn(
+C:\Users\goku\Documents\NFL_ML_Predictions\nflenv\Lib\site-packages\sklearn\impute\_base.py:653: UserWarning: Skipping features without any observed values: ['kickoff']. At least one non-missing value is needed for imputation with strategy='most_frequent'.
+  warnings.warn(
+C:\Users\goku\Documents\NFL_ML_Predictions\nflenv\Lib\site-packages\sklearn\impute\_base.py:653: UserWarning: Skipping features without any observed values: ['neutral_site' 'kickoff_hour_utc' 'travel_distance_km']. At least one non-missing value is needed for imputation with strategy='median'.
+  warnings.warn(
+C:\Users\goku\Documents\NFL_ML_Predictions\nflenv\Lib\site-packages\sklearn\impute\_base.py:653: UserWarning: Skipping features without any observed values: ['kickoff']. At least one non-missing value is needed for imputation with strategy='most_frequent'.
+  warnings.warn(
+C:\Users\goku\Documents\NFL_ML_Predictions\nflenv\Lib\site-packages\sklearn\impute\_base.py:653: UserWarning: Skipping features without any observed values: ['neutral_site' 'kickoff_hour_utc' 'travel_distance_km']. At least one non-missing value is needed for imputation with strategy='median'.
+  warnings.warn(
+C:\Users\goku\Documents\NFL_ML_Predictions\nflenv\Lib\site-packages\sklearn\impute\_base.py:653: UserWarning: Skipping features without any observed values: ['kickoff']. At least one non-missing value is needed for imputation with strategy='most_frequent'.
+  warnings.warn(
+C:\Users\goku\Documents\NFL_ML_Predictions\nflenv\Lib\site-packages\sklearn\impute\_base.py:653: UserWarning: Skipping features without any observed values: ['neutral_site' 'kickoff_hour_utc' 'travel_distance_km']. At least one non-missing value is needed for imputation with strategy='median'.
+  warnings.warn(
+C:\Users\goku\Documents\NFL_ML_Predictions\nflenv\Lib\site-packages\sklearn\impute\_base.py:653: UserWarning: Skipping features without any observed values: ['kickoff']. At least one non-missing value is needed for imputation with strategy='most_frequent'.
+  warnings.warn(
+C:\Users\goku\Documents\NFL_ML_Predictions\nflenv\Lib\site-packages\sklearn\impute\_base.py:653: UserWarning: Skipping features without any observed values: ['neutral_site' 'kickoff_hour_utc' 'travel_distance_km']. At least one non-missing value is needed for imputation with strategy='median'.
+  warnings.warn(
+C:\Users\goku\Documents\NFL_ML_Predictions\nflenv\Lib\site-packages\sklearn\impute\_base.py:653: UserWarning: Skipping features without any observed values: ['kickoff']. At least one non-missing value is needed for imputation with strategy='most_frequent'.
+  warnings.warn(
+C:\Users\goku\Documents\NFL_ML_Predictions\nflenv\Lib\site-packages\sklearn\impute\_base.py:653: UserWarning: Skipping features without any observed values: ['neutral_site' 'kickoff_hour_utc' 'travel_distance_km']. At least one non-missing value is needed for imputation with strategy='median'.
+  warnings.warn(
+C:\Users\goku\Documents\NFL_ML_Predictions\nflenv\Lib\site-packages\sklearn\impute\_base.py:653: UserWarning: Skipping features without any observed values: ['kickoff']. At least one non-missing value is needed for imputation with strategy='most_frequent'.
+  warnings.warn(
+C:\Users\goku\Documents\NFL_ML_Predictions\nflenv\Lib\site-packages\sklearn\impute\_base.py:653: UserWarning: Skipping features without any observed values: ['neutral_site' 'kickoff_hour_utc' 'travel_distance_km']. At least one non-missing value is needed for imputation with strategy='median'.
+  warnings.warn(
+C:\Users\goku\Documents\NFL_ML_Predictions\nflenv\Lib\site-packages\sklearn\impute\_base.py:653: UserWarning: Skipping features without any observed values: ['kickoff']. At least one non-missing value is needed for imputation with strategy='most_frequent'.
+  warnings.warn(
+C:\Users\goku\Documents\NFL_ML_Predictions\backend\services\inference_row.py:417: FutureWarning: Downcasting object dtype arrays on .fillna, .ffill, .bfill is deprecated and will change in a future version. Call result.infer_objects(copy=False) instead. To opt-in to the future behavior, set `pd.set_option('future.no_silent_downcasting', True)`
+  row_df = row_df.reindex(columns=expected).fillna(0) # Basic safety fill for exact matches
+C:\Users\goku\Documents\NFL_ML_Predictions\nflenv\Lib\site-packages\sklearn\impute\_base.py:653: UserWarning: Skipping features without any observed values: ['neutral_site' 'kickoff_hour_utc' 'travel_distance_km']. At least one non-missing value is needed for imputation with strategy='median'.
+  warnings.warn(
+C:\Users\goku\Documents\NFL_ML_Predictions\nflenv\Lib\site-packages\sklearn\impute\_base.py:653: UserWarning: Skipping features without any observed values: ['kickoff']. At least one non-missing value is needed for imputation with strategy='most_frequent'.
+  warnings.warn(
+C:\Users\goku\Documents\NFL_ML_Predictions\nflenv\Lib\site-packages\sklearn\impute\_base.py:653: UserWarning: Skipping features without any observed values: ['neutral_site' 'kickoff_hour_utc' 'travel_distance_km']. At least one non-missing value is needed for imputation with strategy='median'.
+  warnings.warn(
+C:\Users\goku\Documents\NFL_ML_Predictions\nflenv\Lib\site-packages\sklearn\impute\_base.py:653: UserWarning: Skipping features without any observed values: ['kickoff']. At least one non-missing value is needed for imputation with strategy='most_frequent'.
+  warnings.warn(
+C:\Users\goku\Documents\NFL_ML_Predictions\nflenv\Lib\site-packages\sklearn\impute\_base.py:653: UserWarning: Skipping features without any observed values: ['neutral_site' 'kickoff_hour_utc' 'travel_distance_km']. At least one non-missing value is needed for imputation with strategy='median'.
+  warnings.warn(
+C:\Users\goku\Documents\NFL_ML_Predictions\nflenv\Lib\site-packages\sklearn\impute\_base.py:653: UserWarning: Skipping features without any observed values: ['kickoff']. At least one non-missing value is needed for imputation with strategy='most_frequent'.
+  warnings.warn(
+C:\Users\goku\Documents\NFL_ML_Predictions\nflenv\Lib\site-packages\sklearn\impute\_base.py:653: UserWarning: Skipping features without any observed values: ['neutral_site' 'kickoff_hour_utc' 'travel_distance_km']. At least one non-missing value is needed for imputation with strategy='median'.
+  warnings.warn(
+C:\Users\goku\Documents\NFL_ML_Predictions\nflenv\Lib\site-packages\sklearn\impute\_base.py:653: UserWarning: Skipping features without any observed values: ['kickoff']. At least one non-missing value is needed for imputation with strategy='most_frequent'.
+  warnings.warn(
+C:\Users\goku\Documents\NFL_ML_Predictions\nflenv\Lib\site-packages\sklearn\impute\_base.py:653: UserWarning: Skipping features without any observed values: ['neutral_site' 'kickoff_hour_utc' 'travel_distance_km']. At least one non-missing value is needed for imputation with strategy='median'.
+  warnings.warn(
+C:\Users\goku\Documents\NFL_ML_Predictions\nflenv\Lib\site-packages\sklearn\impute\_base.py:653: UserWarning: Skipping features without any observed values: ['kickoff']. At least one non-missing value is needed for imputation with strategy='most_frequent'.
+  warnings.warn(
+C:\Users\goku\Documents\NFL_ML_Predictions\nflenv\Lib\site-packages\sklearn\impute\_base.py:653: UserWarning: Skipping features without any observed values: ['neutral_site' 'kickoff_hour_utc' 'travel_distance_km']. At least one non-missing value is needed for imputation with strategy='median'.
+  warnings.warn(
+C:\Users\goku\Documents\NFL_ML_Predictions\nflenv\Lib\site-packages\sklearn\impute\_base.py:653: UserWarning: Skipping features without any observed values: ['kickoff']. At least one non-missing value is needed for imputation with strategy='most_frequent'.
+  warnings.warn(
+C:\Users\goku\Documents\NFL_ML_Predictions\nflenv\Lib\site-packages\sklearn\impute\_base.py:653: UserWarning: Skipping features without any observed values: ['neutral_site' 'kickoff_hour_utc' 'travel_distance_km']. At least one non-missing value is needed for imputation with strategy='median'.
+  warnings.warn(
+C:\Users\goku\Documents\NFL_ML_Predictions\nflenv\Lib\site-packages\sklearn\impute\_base.py:653: UserWarning: Skipping features without any observed values: ['kickoff']. At least one non-missing value is needed for imputation with strategy='most_frequent'.
+  warnings.warn(

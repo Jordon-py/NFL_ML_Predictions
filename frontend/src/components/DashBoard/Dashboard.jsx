@@ -13,39 +13,17 @@
 import { useEffect, useState } from "react";
 import TeamGrid from "../Card/TeamGrid.jsx";
 import { getNextWeekSchedule, predictGame } from "../../api/client.js";
+import {
+  buildMatchupKey,
+  buildPredictPayload,
+  getGameWeek,
+} from "../../utils/gameUtils.js";
 
-// -------------------------
-// Small pure helpers (no React)
-// -------------------------
-
-/** Normalise a team identifier into an uppercase abbreviation string. */
-function normalizeAbbr(value) {
-  return (value ?? "").toString().trim().toUpperCase();
-}
-
-/**
- * Build a stable key for a game.
- * Must match TeamGrid's key strategy so our predictions map lines up with its lookups.
- */
-function toGameKey(game) {
-  const season = game?.season ?? game?.season_num ?? "";
-  const week = game?.week ?? game?.week_num ?? "";
-  const home = normalizeAbbr(game?.home_abbr ?? game?.home_team);
-  const away = normalizeAbbr(game?.away_abbr ?? game?.away_team);
-  return [season, week, home, away].filter(Boolean).join("-");
-}
-
-/** Build the payload expected by the predictGame backend API. */
-function buildPredictPayload(game) {
-  const homeAbbr = normalizeAbbr(game?.home_abbr ?? game?.home_team);
-  const awayAbbr = normalizeAbbr(game?.away_abbr ?? game?.away_team);
-
-  return {
-    home_team: homeAbbr,
-    away_team: awayAbbr,
-    season: game?.season ?? game?.season_num ?? null,
-    week: game?.week ?? game?.week_num ?? null,
-  };
+function removeKey(map, key) {
+  if (!key || !Object.prototype.hasOwnProperty.call(map, key)) return map;
+  const next = { ...map };
+  delete next[key];
+  return next;
 }
 
 // -------------------------
@@ -57,11 +35,14 @@ export default function Dashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // 2) Prediction state: these maps are keyed by the same `toGameKey(game)` used by TeamGrid
+  // These maps all share the same canonical matchup key so the grid can look up
+  // prediction, loading, and error state with one identifier.
   const [predictions, setPredictions] = useState({});
   const [loadingMap, setLoadingMap] = useState({});
   const [errorsMap, setErrorsMap] = useState({});
   const [isBulkLoading, setIsBulkLoading] = useState(false);
+
+  const safeGames = Array.isArray(games) ? games : [];
 
   const loadSchedule = async () => {
     setIsLoading(true);
@@ -86,21 +67,16 @@ export default function Dashboard() {
    * This is the "fix": we call predictGame(), then store the result so <Card /> can render it.
    */
   const onPredict = async (game) => {
-    const key = toGameKey(game);
+    const key = buildMatchupKey(game);
     if (!key || loadingMap[key]) return;
 
-    setErrorsMap((prev) => {
-      if (!prev[key]) return prev;
-      const copy = { ...prev };
-      delete copy[key];
-      return copy;
-    });
+    setErrorsMap((prev) => removeKey(prev, key));
 
     setLoadingMap((prev) => ({ ...prev, [key]: true }));
     try {
       const payload = buildPredictPayload(game);
       const prediction = await predictGame(payload);
-      const predictionKey = toGameKey(prediction);
+      const predictionKey = buildMatchupKey(prediction);
       setPredictions((prev) => ({
         ...prev,
         [key]: prediction,
@@ -112,11 +88,7 @@ export default function Dashboard() {
         [key]: e?.message ?? "Prediction failed",
       }));
     } finally {
-      setLoadingMap((prev) => {
-        const copy = { ...prev };
-        delete copy[key];
-        return copy;
-      });
+      setLoadingMap((prev) => removeKey(prev, key));
     }
   };
 
@@ -136,8 +108,8 @@ export default function Dashboard() {
     if (isBulkLoading) return;
     setIsBulkLoading(true);
     try {
-      const targets = (Array.isArray(games) ? games : []).filter((g) => {
-        const key = toGameKey(g);
+      const targets = safeGames.filter((g) => {
+        const key = buildMatchupKey(g);
         return key && !predictions[key] && !loadingMap[key];
       });
       await runWithLimit(targets, 4, onPredict);
@@ -151,31 +123,15 @@ export default function Dashboard() {
    * Removes prediction + per-game error/loading for that game key.
    */
   const onReset = (gameOrMatchup) => {
-    const key = toGameKey(gameOrMatchup);
+    const key = buildMatchupKey(gameOrMatchup);
     if (!key) return;
 
-    setPredictions((prev) => {
-      if (!prev[key]) return prev;
-      const copy = { ...prev };
-      delete copy[key];
-      return copy;
-    });
-    setErrorsMap((prev) => {
-      if (!prev[key]) return prev;
-      const copy = { ...prev };
-      delete copy[key];
-      return copy;
-    });
-    setLoadingMap((prev) => {
-      if (!prev[key]) return prev;
-      const copy = { ...prev };
-      delete copy[key];
-      return copy;
-    });
+    setPredictions((prev) => removeKey(prev, key));
+    setErrorsMap((prev) => removeKey(prev, key));
+    setLoadingMap((prev) => removeKey(prev, key));
   };
 
-  const weekValue =
-    games?.[0]?.week ?? games?.[0]?.week_num ?? games?.[0]?.week_number ?? null;
+  const weekValue = getGameWeek(safeGames[0]);
   const weekLabel = weekValue != null ? `Week ${weekValue}` : "Next Week";
 
   return (
@@ -216,8 +172,8 @@ export default function Dashboard() {
 
       {/* Main grid */}
       <TeamGrid
-        week={games?.[0]?.week ?? games?.[0]?.week_num ?? undefined}
-        games={Array.isArray(games) ? games : []}
+        week={weekValue ?? undefined}
+        games={safeGames}
         isLoading={Boolean(isLoading)}
         predictions={predictions}
         loading={loadingMap}

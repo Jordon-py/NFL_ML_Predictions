@@ -2,17 +2,12 @@
 // Renders the weekly schedule grid and delegates prediction actions to its parent.
 
 import Card from './Card.jsx';
+import {
+  buildMatchupKey,
+  getGameWeek,
+  normalizeMatchup,
+} from '../../utils/gameUtils.js';
 import './TeamGrid.css';
-
-const normalizeAbbr = (value) => (value ?? '').toString().trim().toUpperCase();
-
-const toGameKey = (game) => {
-  const season = game?.season ?? game?.season_num ?? '';
-  const week = game?.week ?? game?.week_num ?? '';
-  const home = normalizeAbbr(game?.home_abbr ?? game?.home_team);
-  const away = normalizeAbbr(game?.away_abbr ?? game?.away_team);
-  return [season, week, home, away].filter(Boolean).join('-');
-};
 
 /**
  * TeamGrid component
@@ -41,8 +36,10 @@ export default function TeamGrid({
   onPredictAll,
   isBulkLoading = false,
 } = {}) {
+  const safeGames = Array.isArray(games) ? games : [];
+
   // Prefer explicit week; fall back to first game; default to 10 as safe placeholder.
-  const safeWeek = week ?? games?.[0]?.week ?? games?.[0]?.week_num ?? 10;
+  const safeWeek = week ?? getGameWeek(safeGames[0]) ?? 10;
 
   // 1. Global "isLoading" state: show skeleton/spinner and skip the grid entirely.
   if (isLoading) {
@@ -60,7 +57,7 @@ export default function TeamGrid({
   }
 
   // 2. Empty schedule state: show a helpful message instead of an empty grid.
-  if (!games || games.length === 0) {
+  if (safeGames.length === 0) {
     return (
       <section className="team-grid">
         <header className="team-grid__header">
@@ -102,30 +99,18 @@ export default function TeamGrid({
           </button>
         </div>
         <p className="team-grid__subtitle">
-          Showing <strong>{games.length}</strong> games scheduled.
+          Showing <strong>{safeGames.length}</strong> games scheduled.
         </p>
       </header>
 
       <div className="team-grid__grid">
-        {games.map((game, index) => {
-          // Stable key for React + lookup maps
-          const key = toGameKey(game) || String(index);
+        {safeGames.map((game, index) => {
+          // Keep this key aligned with Dashboard's prediction-state keys.
+          const key = buildMatchupKey(game) || String(index);
           const prediction = predictions?.[key];
           const isGameLoading = Boolean(loading?.[key]);
           const errorMessage = errors?.[key] ?? null;
-
-          const homeAbbr = normalizeAbbr(game.home_abbr ?? game.home_team);
-          const awayAbbr = normalizeAbbr(game.away_abbr ?? game.away_team);
-          const matchup = {
-            ...game,
-            season: game?.season ?? game?.season_num,
-            week: game?.week ?? game?.week_num,
-            home_team: homeAbbr,
-            away_team: awayAbbr,
-            home_logo: game?.home_logo ?? null,
-            away_logo: game?.away_logo ?? null,
-            kickoff: game?.kickoff ?? null,
-          };
+          const matchup = normalizeMatchup(game);
 
           return (
             <Card

@@ -1,7 +1,6 @@
 // File: frontend/src/pages/StatsPage.jsx
 // Purpose: Status and history dashboard showing backend health, dataset stats, schedule, and recent predictions.
-// Functions: toGameKey(28), LoadingSpinner(33), SummaryCard(53), StatsPage(63)
-// Variables: historyMap(139), overviewData(165)
+// Key helpers: buildHistoryLookup(), formatWinProbability(), renderScheduleList()
 // Interacts With: api/client for health/status/history/schedule.
 // StatsPage.jsx - Status + History dashboard
 // -----------------------------------------
@@ -16,17 +15,9 @@ import {
   getPredictionHistory,
   getStatusOverview,
 } from "../api/client";
+import { buildMatchupKey } from "../utils/gameUtils.js";
 // @ts-ignore - CSS module import for JS/JSX file
 import styles from "./StatsPage.module.css";
-
-/**
- * Builds a stable "game key" from either a schedule row or a prediction entry.
- * We intentionally support both schedule objects and prediction objects here.
- */
-const toGameKey = (game) =>
-  [game?.season, game?.week, game?.home_abbr || game?.home_team, game?.away_abbr || game?.away_team]
-    .filter(Boolean)
-    .join("-");
 
 function LoadingSpinner({ label = "Loading" }) {
   return (
@@ -56,6 +47,28 @@ function SummaryCard({ title, value, subtext, intent = "default" }) {
       {subtext && <small className={styles.summarySubtext}>{subtext}</small>}
     </article>
   );
+}
+
+/**
+ * Build a lookup table that can resolve predictions by either canonical game_id
+ * or by the fallback season-week-home-away composite key.
+ */
+function buildHistoryLookup(entries) {
+  const lookup = new Map();
+
+  for (const entry of Array.isArray(entries) ? entries : []) {
+    if (!entry) continue;
+    if (entry.game_id) lookup.set(entry.game_id, entry);
+
+    const compositeKey = buildMatchupKey(entry);
+    if (compositeKey) lookup.set(compositeKey, entry);
+  }
+
+  return lookup;
+}
+
+function formatWinProbability(probability) {
+  return typeof probability === "number" ? `${Math.round(probability * 100)}%` : "n/a";
 }
 
 export default function StatsPage() {
@@ -108,13 +121,7 @@ export default function StatsPage() {
     };
   }, []);
 
-  const historyMap = new Map();
-  history.forEach((entry) => {
-    if (!entry) return;
-    if (entry.game_id) historyMap.set(entry.game_id, entry);
-    const compositeKey = toGameKey(entry);
-    if (compositeKey) historyMap.set(compositeKey, entry);
-  });
+  const historyMap = buildHistoryLookup(history);
 
   const overviewData = overview || {};
   const health = overviewData.health || { status: "unknown" };
@@ -142,13 +149,13 @@ export default function StatsPage() {
     }
 
     return (
-      <ul className={styles.scheduleList}>
-        {scheduleList.map((game) => {
-          const idKey = game?.game_id ?? game?.id;
-          const compositeKey = toGameKey(game);
+        <ul className={styles.scheduleList}>
+          {scheduleList.map((game) => {
+            const idKey = game?.game_id ?? game?.id;
+            const compositeKey = buildMatchupKey(game);
 
-          // Try to resolve the prediction by canonical ID first, then by composite key
-          const prediction =
+            // Try to resolve the prediction by canonical ID first, then by composite key
+            const prediction =
             (idKey && historyMap.get(idKey)) ||
             (compositeKey && historyMap.get(compositeKey));
 
@@ -169,20 +176,8 @@ export default function StatsPage() {
 
               {prediction ? (
                 <div className={styles.predictionDetails}>
-                  <p>
-                    Home win:{" "}
-                    {Math.round(
-                      (prediction.home_win_probability ?? 0) * 100
-                    )}
-                    %
-                  </p>
-                  <p>
-                    Away win:{" "}
-                    {Math.round(
-                      (prediction.away_win_probability ?? 0) * 100
-                    )}
-                    %
-                  </p>
+                  <p>Home win: {formatWinProbability(prediction.home_win_probability)}</p>
+                  <p>Away win: {formatWinProbability(prediction.away_win_probability)}</p>
                   <p className={styles.pointDiff}>
                     Diff:{" "}
                     {prediction.point_diff?.toFixed?.(1) ??

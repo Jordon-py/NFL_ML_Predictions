@@ -1,0 +1,253 @@
+# ==========================================
+# File: backend/services/prediction_service.py
+# Role: Prediction service orchestrating model inference.
+# Input Data: PredictionRequest + model artifacts.
+# Output Data: PredictionResponse instances.
+# Dependencies: logging, typing, numpy, pandas
+# Notes: Delegates to feature builders and models.
+# ==========================================
+
+# backend/services/prediction_service.py
+import logging
+import numpy as np
+import pandas as pd
+from typing import Any, Optional
+from backend.schemas import (
+    PredictionRequest,
+    PredictionResponse,
+    ScorePrediction,
+    WinnerPrediction,
+    SimulationMetrics,
+)
+from backend.services.inference_row import (
+    build_model_input_row,
+    build_team_history_cache,
+    build_exact_match_index,
+    compute_impute_medians,
+)
+from backend.config import load_schedule_data_safe
+
+logger = logging.getLogger(__name__)
+
+def _pipeline_has_transform_step(model: Any) -> bool:
+    """Best-effort check for sklearn Pipeline-like objects that transform raw features."""
+    steps = getattr(model, "steps", None)
+    if not isinstance(steps, list) or not steps:
+        return False
+    for step in steps:
+        if not (isinstance(step, tuple) and len(step) >= 2):
+            continue
+        transformer = step[1]
+        if transformer is None:
+            continue
+        if callable(getattr(transformer, "transform", None)):
+            return True
+    return False
+
+def _accepts_raw_dataframe(model: Any) -> bool:
+    """Return True if the estimator likely expects the raw DataFrame (i.e. includes preprocessing)."""
+    if model is None:
+        return False
+    if _pipeline_has_transform_step(model):
+        return True
+
+    # CalibratedClassifierCV and similar wrappers may wrap a Pipeline.
+    for attr in ("estimator", "base_estimator"):
+        inner = getattr(model, attr, None)
+        if inner is not None and _pipeline_has_transform_step(inner):
+            return True
+
+    return False
+
+def _align_to_preprocessor_input(frame: pd.DataFrame, preprocessor: Any) -> pd.DataFrame:
+    """Match the exact column contract saved on a fitted sklearn preprocessor."""
+
+    if frame is None or preprocessor is None:
+        return frame
+    feature_names_in = getattr(preprocessor, "feature_names_in_", None)
+    if feature_names_in is None:
+        return frame
+    return frame.reindex(columns=list(feature_names_in))
+
+def _sigmoid(x: float) -> float:
+    return 1.0 / (1.0 + np.exp(-x))
+
+def _extract_home_proba(win_clf: Any, proba_row: np.ndarray) -> Optional[float]:
+    """
+    Try hard to map classifier probabilities -> P(home wins).
+    Handles common class encodings: ['home','away'], ['HOME','AWAY'], [0,1], [False,True]
+    """
+    classes = getattr(win_clf, "classes_", None)
+    if classes is None:
+        return None
+
+    classes_list = list(classes)
+
+    # String labels
+    lowered = [str(c).strip().lower() for c in classes_list]
+    if "home" in lowered:
+        return float(proba_row[lowered.index("home")])
+    if "away" in lowered and "home" not in lowered and len(lowered) == 2:
+        # If only away/home style and home not found, can't safely infer
+        return None
+    if "true" in lowered:
+        return float(proba_row[lowered.index("true")])
+
+    # Numeric labels: assume 1 == home-win
+    for key in (1, True):
+        if key in classes_list:
+            return float(proba_row[classes_list.index(key)])
+
+    return None
+
+class PredictionService:
+    """
+    Single responsibility: orchestrate inference for /predict.
+    """
+
+    def __init__(self, bundle: Any, dataset: pd.DataFrame):
+        self.bundle = bundle
+        self.dataset = dataset
+
+        # Expected attributes (match your bundle loader)
+        self.home_reg = getattr(bundle, "home_model", None) or getattr(bundle, "home_reg", None)
+        self.away_reg = getattr(bundle, "away_model", None) or getattr(bundle, "away_reg", None)
+        self.win_clf = getattr(bundle, "hist_win_clf", None) or getattr(bundle, "win_clf", None)
+
+        self.preprocessor = getattr(bundle, "preprocessor", None)
+        self.raw_feature_columns = getattr(bundle, "raw_feature_columns", None)
+
+        # Cache schedule per season (lazy-loaded)
+        self._schedule_cache: dict[int, pd.DataFrame] = {}
+        # Cache team history once to avoid re-scanning the full dataset each call.
+        self._team_history_cache = build_team_history_cache(dataset)
+        # Cache exact-match lookup + numeric medians for inference-time imputation.
+        self._exact_match_index = build_exact_match_index(dataset)
+        self._impute_medians = compute_impute_medians(dataset)
+
+    def _get_schedule_df(self, season: int) -> Optional[pd.DataFrame]:
+
+        if season in self._schedule_cache:
+            return self._schedule_cache[season]
+        df = load_schedule_data_safe(season)
+        if isinstance(df, pd.DataFrame):
+            self._schedule_cache[season] = df
+        return df
+
+    def predict(self, req: PredictionRequest) -> PredictionResponse:
+        """
+        Execute the full inference pipeline for a single game.
+        
+        Steps:
+        1. Resolve Schedule Context (Vegas lines, etc.) if available.
+        2. Build Feature Row (Enrich with history, roll-forward stats, impute).
+        3. Preprocess (Scale/Encode).
+        4. Regress Scores (Home/Away).
+        5. classify Winner (Probability).
+        6. Return unified response.
+        """
+
+        if self.home_reg is None or self.away_reg is None:
+            raise RuntimeError("Models not loaded: home_reg/away_reg missing")
+
+        schedule_df = self._get_schedule_df(req.season)
+
+        # Helper returns (row_df, source) when debug=False
+        row_df, source = build_model_input_row(
+            dataset_df=self.dataset,
+            preprocessor=self.preprocessor,
+            season=req.season,
+            week=req.week,
+            home_team=req.home_team,
+            away_team=req.away_team,
+            schedule_df=schedule_df,
+            raw_feature_columns=self.raw_feature_columns,
+            team_history_cache=self._team_history_cache,
+            exact_match_index=self._exact_match_index,
+            impute_medians=self._impute_medians,
+            debug=False,
+        )
+
+        X_transformed = None
+
+        def _get_transformed() -> Any:
+            nonlocal X_transformed
+            if X_transformed is None:
+                if self.preprocessor is None:
+                    raise RuntimeError("preprocessor missing but transformed features requested")
+                X_transformed = self.preprocessor.transform(
+                    _align_to_preprocessor_input(row_df, self.preprocessor)
+                )
+            return X_transformed
+
+        def _predict_regressor(model: Any) -> float:
+            errors: list[Exception] = []
+
+            if _accepts_raw_dataframe(model):
+                try:
+                    return float(model.predict(row_df)[0])
+                except Exception as e:
+                    errors.append(e)
+
+            if self.preprocessor is not None:
+                try:
+                    return float(model.predict(_get_transformed())[0])
+                except Exception as e:
+                    errors.append(e)
+
+            if errors:
+                raise errors[-1]
+            return float(model.predict(row_df)[0])
+
+        def _predict_proba_home(model: Any) -> tuple[Optional[float], bool]:
+            if model is None or not hasattr(model, "predict_proba"):
+                return None, False
+
+            probs = None
+            if _accepts_raw_dataframe(model):
+                try:
+                    probs = np.asarray(model.predict_proba(row_df)[0], dtype=float)
+                except Exception:
+                    probs = None
+
+            if probs is None and self.preprocessor is not None:
+                probs = np.asarray(model.predict_proba(_get_transformed())[0], dtype=float)
+
+            mapped = _extract_home_proba(model, probs) if probs is not None else None
+            if mapped is None or not np.isfinite(mapped):
+                return None, False
+            return float(mapped), True
+
+        # Score regressors
+        p_home = _predict_regressor(self.home_reg)
+        p_away = _predict_regressor(self.away_reg)
+        point_diff = p_home - p_away
+
+        # Winner probabilities
+        proba_home, win_classifier_used = _predict_proba_home(self.win_clf)
+
+        # Fallback probability from point diff (simple + stable)
+        if proba_home is None:
+            # scale 7 ~= one touchdown; keeps logits reasonable
+            proba_home = float(_sigmoid(point_diff / 7.0))
+
+        proba_away = float(1.0 - proba_home)
+
+        # Winner label should be TEAM ABBR for your API payload
+        home_code = str(req.home_team).strip().upper()
+        away_code = str(req.away_team).strip().upper()
+        winner_team = home_code if proba_home >= 0.5 else away_code
+
+        return PredictionResponse(
+            scores=ScorePrediction(home_score=p_home, away_score=p_away),
+            winner=WinnerPrediction(
+                winner=winner_team,
+                proba_home=proba_home,
+                proba_away=proba_away,
+                proba_draw=None,
+            ),
+            # Optional: keep it None to stay “prediction-only”
+            simulation_metrics=None,  # SimulationMetrics(...) if you ever re-add MC
+            prediction_source=source,
+            win_classifier_used=win_classifier_used,
+        )

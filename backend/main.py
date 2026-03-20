@@ -131,6 +131,7 @@ SCHEDULE_PATH = schedule_env_path if schedule_env_path else (DATA_DIR / "Nfl_sch
 
 # Required model keys for /predict to be "ready"
 REQUIRED_MODELS: Tuple[str, ...] = ("home", "away", "win")
+WIN_PROBA_FEATURE = "nn_home_win_proba"
 PREDICT_CACHE_TTL_SEC = max(0, int(SETTINGS.predict_cache_ttl_sec))
 PREDICT_CACHE_MAX_ITEMS = max(50, int(SETTINGS.predict_cache_max_items))
 # Models directory is resolved at runtime by _find_models_dir().
@@ -471,6 +472,20 @@ def _calculate_win_probability(
     return win_prob, False
 
 
+def _augment_with_win_probability_feature(
+    full_df: pd.DataFrame,
+    numeric_df: pd.DataFrame,
+    win_prob: float,
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """Append the raw home-win probability used by stacked score models."""
+    prob = float(np.clip(float(win_prob), 1e-6, 1 - 1e-6))
+    full_aug = full_df.copy()
+    numeric_aug = numeric_df.copy()
+    full_aug[WIN_PROBA_FEATURE] = prob
+    numeric_aug[WIN_PROBA_FEATURE] = prob
+    return full_aug, numeric_aug
+
+
 def _patch_imputer_compat(obj: Any) -> int:
     """
     Patch sklearn 1.7->1.8 SimpleImputer compatibility (`_fill_dtype`).
@@ -548,6 +563,8 @@ class AppState:
         self.feature_manifest: List[str] = []
         # Optional shared preprocessor artifact (may be saved separately from models)
         self.preprocessor: Optional[Any] = None
+        self.score_preprocessor: Optional[Any] = None
+        self.win_preprocessor: Optional[Any] = None
         self.history: List[Dict[str, Any]] = []
         self.predict_cache: Dict[str, Dict[str, Any]] = {}
         self.predict_cache_hits: int = 0
@@ -709,6 +726,9 @@ class AppState:
         """Load each required model independently."""
         self.models = {}
         self.models_metadata = {}
+        self.preprocessor = None
+        self.score_preprocessor = None
+        self.win_preprocessor = None
         logging.info("[Model] Using models directory: %s", MODELS_DIR)
         # Default model filenames (non-pipeline artifacts)
         model_files: Dict[str, str] = {
@@ -723,8 +743,7 @@ class AppState:
             pipe_path = MODELS_DIR / pipe_filename
             model_path = MODELS_DIR / filename
 
-            prefer_pipeline = _env_flag("PREFER_PIPELINE_MODELS", "false")
-            if prefer_pipeline and pipe_path.exists():
+            if pipe_path.exists():
                 path = pipe_path
                 logging.info("[Model] Using pipeline artifact for '%s': %s", name, path)
             elif model_path.exists():
@@ -769,24 +788,39 @@ class AppState:
         else:
             self.models_metadata = {}
 
-        # Attempt to load a standalone preprocessor artifact if present. Some
-        # training runs save the fitted ColumnTransformer / preprocessor as
-        # `preprocessor.joblib` under the same models directory. If available,
-        # load it so the serving code can use it to impute / transform raw
-        # DataFrame rows prior to calling models that expect preprocessed arrays.
-        prep_path = MODELS_DIR / "preprocessor.joblib"
-        if prep_path.exists():
-            try:
-                self.preprocessor = joblib.load(prep_path)
-                patched = _patch_imputer_compat(self.preprocessor)
-                if patched:
-                    logging.info("[Model] Applied %d sklearn-imputer compatibility patches for preprocessor", patched)
-                logging.info("[Model] Loaded standalone preprocessor from %s", prep_path)
-            except Exception as e:  # pragma: no cover - defensive
-                logging.exception("[Model] Failed to load preprocessor %s: %s", prep_path, e)
-                self.preprocessor = None
-        else:
-            logging.info("[Model] No standalone preprocessor found at %s", prep_path)
+        def _load_preprocessor_artifact(primary_name: str, fallback_names: Tuple[str, ...]) -> Optional[Any]:
+            for filename in (primary_name, *fallback_names):
+                prep_path = MODELS_DIR / filename
+                if not prep_path.exists():
+                    continue
+                try:
+                    loaded = joblib.load(prep_path)
+                    patched = _patch_imputer_compat(loaded)
+                    if patched:
+                        logging.info(
+                            "[Model] Applied %d sklearn-imputer compatibility patches for %s",
+                            patched,
+                            filename,
+                        )
+                    logging.info("[Model] Loaded preprocessor artifact from %s", prep_path)
+                    return loaded
+                except Exception as e:  # pragma: no cover - defensive
+                    logging.exception("[Model] Failed to load preprocessor %s: %s", prep_path, e)
+            return None
+
+        self.score_preprocessor = _load_preprocessor_artifact(
+            "score_preprocessor.joblib",
+            ("preprocessor.joblib",),
+        )
+        self.win_preprocessor = _load_preprocessor_artifact(
+            "win_preprocessor.joblib",
+            ("preprocessor.joblib",),
+        )
+        self.preprocessor = self.score_preprocessor
+
+        if self.score_preprocessor is None and self.win_preprocessor is None:
+            logging.info("[Model] No standalone preprocessors found in %s", MODELS_DIR)
+
         # If we loaded a standalone preprocessor and some models are Pipelines
         # that contain an unfitted preprocessor step (ColumnTransformer), try
         # to patch the pipeline to use the standalone preprocessor. This can
@@ -808,6 +842,9 @@ class AppState:
                         if isinstance(model, Pipeline):
                             steps = list(model.steps)
                             replaced = False
+                            replacement_preprocessor = (
+                                self.win_preprocessor if mname == "win" else self.score_preprocessor
+                            ) or self.preprocessor
                             for i, (step_name, step_est) in enumerate(steps):
                                 lname = (step_name or "").lower()
                                 if lname in ("pre", "prep", "preprocessor", "preprocess"):
@@ -818,8 +855,9 @@ class AppState:
                                         ColumnTransformer is not None
                                         and isinstance(step_est, ColumnTransformer)
                                         and not hasattr(step_est, "transformers_")
+                                        and replacement_preprocessor is not None
                                     ):
-                                        steps[i] = (step_name, self.preprocessor)
+                                        steps[i] = (step_name, replacement_preprocessor)
                                         replaced = True
                                         logging.info(
                                             "[Model] Replacing unfitted preprocessor step '%s' in pipeline '%s' with standalone preprocessor",
@@ -1675,29 +1713,51 @@ def _promote_staged_bundle(job_id: str) -> Path:
     return CURRENT_MODELS_DIR
 
 
-def _feature_manifest() -> List[str]:
+def _feature_manifest(model_key: str = "scores") -> List[str]:
     """Derive expected raw feature columns from metadata/preprocessor."""
-    if getattr(state, "feature_manifest", None):
+    if model_key == "scores" and getattr(state, "feature_manifest", None):
         return [str(x) for x in state.feature_manifest]
 
     meta = state.models_metadata if isinstance(state.models_metadata, dict) else {}
 
+    manifests = meta.get("feature_manifests")
+    if isinstance(manifests, dict):
+        selected = manifests.get(model_key)
+        if isinstance(selected, dict):
+            num = selected.get("numeric") or []
+            cat = selected.get("categorical") or []
+            manifest = [str(x) for x in (list(num) + list(cat))]
+            if model_key == "scores":
+                state.feature_manifest = manifest
+            return manifest
+
     # Preferred metadata shape in existing bundles.
     if isinstance(meta.get("feature_names"), list):
-        return [str(x) for x in meta["feature_names"]]
+        manifest = [str(x) for x in meta["feature_names"]]
+        if model_key == "scores":
+            state.feature_manifest = manifest
+        return manifest
     raw_cols = meta.get("raw_feature_columns")
     if isinstance(raw_cols, dict):
         num = raw_cols.get("numeric") or []
         cat = raw_cols.get("categorical") or []
-        return [str(x) for x in (list(num) + list(cat))]
-
-    # Fallback to fitted preprocessor if present.
-    if state.preprocessor is not None and hasattr(state.preprocessor, "feature_names_in_"):
-        manifest = [str(x) for x in list(getattr(state.preprocessor, "feature_names_in_", []))]
-        state.feature_manifest = manifest
+        manifest = [str(x) for x in (list(num) + list(cat))]
+        if model_key == "scores":
+            state.feature_manifest = manifest
         return manifest
 
-    state.feature_manifest = []
+    # Fallback to fitted preprocessor if present.
+    preprocessor = state.score_preprocessor if model_key == "scores" else state.win_preprocessor
+    if preprocessor is None:
+        preprocessor = state.preprocessor
+    if preprocessor is not None and hasattr(preprocessor, "feature_names_in_"):
+        manifest = [str(x) for x in list(getattr(preprocessor, "feature_names_in_", []))]
+        if model_key == "scores":
+            state.feature_manifest = manifest
+        return manifest
+
+    if model_key == "scores":
+        state.feature_manifest = []
     return []
 
 
@@ -2487,9 +2547,32 @@ async def predict(request: PredictRequest) -> Dict[str, Any]:
 
     # ----- Prepare model inputs -----
     full_df, numeric_df = _prepare_inputs(row)
-    feature_cols = _feature_manifest()
+    home_model = state.models["home"]
+    away_model = state.models["away"]
+    win_model = state.models.get("win")
 
-    view_for_quality = full_df.reindex(columns=feature_cols) if feature_cols else full_df.copy()
+    # ----- Predict win probability first -----
+    try:
+        win_prob_raw, clf_used = _calculate_win_probability(
+            win_model,
+            full_df,
+            numeric_df,
+            0.0,
+            0.0,
+            preprocessor=state.win_preprocessor or state.preprocessor,
+        )
+    except Exception as win_err:
+        logging.warning("[Predict] Win probability calc failed; defaulting to 0.5: %s", str(win_err).splitlines()[0])
+        win_prob_raw, clf_used = 0.5, False
+
+    score_full_df, score_numeric_df = _augment_with_win_probability_feature(
+        full_df,
+        numeric_df,
+        win_prob_raw,
+    )
+
+    feature_cols = _feature_manifest("scores")
+    view_for_quality = score_full_df.reindex(columns=feature_cols) if feature_cols else score_full_df.copy()
     quality_imputed = view_for_quality.copy()
     medians = getattr(state, "numeric_medians", None)
     if medians is not None and not quality_imputed.empty:
@@ -2509,25 +2592,21 @@ async def predict(request: PredictRequest) -> Dict[str, Any]:
         total_cols=max(1, len(quality_imputed.columns)),
     )
 
-    # ----- Predict scores -----
-    home_model = state.models["home"]
-    away_model = state.models["away"]
-    win_model = state.models.get("win")
-
+    # ----- Predict scores using the raw win probability as an input feature -----
     try:
         h_score = _predict_score(
             home_model,
-            full_df,
-            numeric_df,
-            preprocessor=state.preprocessor,
+            score_full_df,
+            score_numeric_df,
+            preprocessor=state.score_preprocessor or state.preprocessor,
             numeric_medians=getattr(state, "numeric_medians", None),
             model_name="home_model",
         )
         a_score = _predict_score(
             away_model,
-            full_df,
-            numeric_df,
-            preprocessor=state.preprocessor,
+            score_full_df,
+            score_numeric_df,
+            preprocessor=state.score_preprocessor or state.preprocessor,
             numeric_medians=getattr(state, "numeric_medians", None),
             model_name="away_model",
         )
@@ -2539,20 +2618,6 @@ async def predict(request: PredictRequest) -> Dict[str, Any]:
     # Clamp to sane ranges
     h_score = _clamp_score(h_score)
     a_score = _clamp_score(a_score)
-
-    # ----- Predict win probability -----
-    try:
-        win_prob_raw, clf_used = _calculate_win_probability(
-            win_model,
-            full_df,
-            numeric_df,
-            h_score,
-            a_score,
-            preprocessor=state.preprocessor,
-        )
-    except Exception as win_err:
-        logging.warning("[Predict] Win probability calc failed; defaulting to 0.5: %s", str(win_err).splitlines()[0])
-        win_prob_raw, clf_used = 0.5, False
 
     point_diff = float(h_score - a_score)
 

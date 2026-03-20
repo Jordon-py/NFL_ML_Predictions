@@ -25,7 +25,6 @@ from sklearn.calibration import CalibratedClassifierCV
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import HistGradientBoostingRegressor
 from sklearn.impute import SimpleImputer
-from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
     accuracy_score,
     brier_score_loss,
@@ -36,6 +35,7 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 from sklearn.model_selection import RandomizedSearchCV, TimeSeriesSplit
+from sklearn.neural_network import MLPClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
@@ -55,6 +55,7 @@ load_dotenv(BASE_DIR / ".env")
 TARGET_HOME = "home_points_for"
 TARGET_AWAY = "away_points_for"
 TARGET_WIN = "home_win"
+WIN_PROBA_FEATURE = "nn_home_win_proba"
 TIME_KEYS: Tuple[str, str] = ("season", "week")
 REQUIRED_COLUMNS: Tuple[str, ...] = (
     "season",
@@ -99,8 +100,11 @@ REG_PARAM_DISTS: Dict[str, Sequence[Any]] = {
     "min_samples_leaf": [10, 20, 30],
 }
 CLF_PARAM_DISTS: Dict[str, Sequence[Any]] = {
-    "C": [0.03, 0.1, 0.3, 1.0, 3.0],
-    "class_weight": [None, "balanced"],
+    "hidden_layer_sizes": [(64,), (96,), (128,), (64, 32), (128, 64)],
+    "activation": ["relu", "tanh"],
+    "alpha": [1e-5, 1e-4, 1e-3, 1e-2],
+    "learning_rate_init": [3e-4, 1e-3, 3e-3],
+    "batch_size": [32, 64, 128],
 }
 
 
@@ -280,16 +284,28 @@ def _fit_classifier_base(
     cv_splits: int,
     n_jobs: int,
     fast_dev: bool,
-) -> Tuple[LogisticRegression, Dict[str, Any]]:
-    base = LogisticRegression(
+) -> Tuple[BaseEstimator, Dict[str, Any]]:
+    base = MLPClassifier(
         random_state=random_seed,
-        max_iter=2000,
-        solver="lbfgs",
+        hidden_layer_sizes=(128, 64),
+        activation="relu",
+        alpha=1e-4,
+        learning_rate_init=1e-3,
+        batch_size=64,
+        solver="adam",
+        early_stopping=True,
+        validation_fraction=0.15,
+        n_iter_no_change=20,
+        max_iter=500,
     )
     tscv = _safe_time_split(len(y), cv_splits)
     if fast_dev or tscv is None:
         model = clone(base).fit(X, y)
-        return model, {"mode": "single_fit", "random_state": random_seed}
+        return model, {
+            "mode": "single_fit",
+            "random_state": random_seed,
+            "algorithm": "mlp",
+        }
 
     rs = RandomizedSearchCV(
         estimator=base,
@@ -304,7 +320,11 @@ def _fit_classifier_base(
         error_score="raise",
     )
     rs.fit(X, y)
-    return rs.best_estimator_, {"mode": "search", "best_params": rs.best_params_}
+    return rs.best_estimator_, {
+        "mode": "search",
+        "best_params": rs.best_params_,
+        "algorithm": "mlp",
+    }
 
 
 def _make_calibrator(
@@ -319,7 +339,7 @@ def _make_calibrator(
 
 
 def _calibrate_classifier(
-    base_clf: LogisticRegression,
+    base_clf: BaseEstimator,
     X_train: np.ndarray,
     y_train: np.ndarray,
 ) -> Tuple[BaseEstimator, Dict[str, Any]]:
@@ -341,6 +361,7 @@ def _calibrate_classifier(
             "mode": "prefit_tail",
             "fit_rows": int(fit_end),
             "calibration_rows": int(calib_size),
+            "algorithm": type(base_clf).__name__,
         }
 
     # Fallback CV calibration when class counts support it.
@@ -357,6 +378,7 @@ def _calibrate_classifier(
             "mode": "uncalibrated",
             "reason": "insufficient_minority_class_examples",
             "class_counts": class_counts.tolist(),
+            "algorithm": type(base_clf).__name__,
         }
 
     calibrated = _make_calibrator(clone(base_clf), cv=cv)
@@ -365,7 +387,120 @@ def _calibrate_classifier(
         "mode": "cv",
         "cv_folds": int(cv),
         "class_counts": class_counts.tolist(),
+        "algorithm": type(base_clf).__name__,
     }
+
+
+def _prior_home_win_probabilities(y_win: np.ndarray, neutral_prob: float = 0.5) -> np.ndarray:
+    """Baseline chronology-safe probabilities using only prior outcomes."""
+    y = np.asarray(y_win, dtype=float)
+    if y.size == 0:
+        return np.asarray([], dtype=float)
+
+    probs = np.full(y.shape[0], float(neutral_prob), dtype=float)
+    if y.shape[0] == 1:
+        return probs
+
+    cumulative_wins = np.cumsum(y[:-1])
+    counts = np.arange(1, y.shape[0], dtype=float)
+    probs[1:] = cumulative_wins / counts
+    return np.clip(probs, 1e-6, 1 - 1e-6)
+
+
+def _fallback_home_win_probabilities(
+    X: pd.DataFrame,
+    *,
+    neutral_prob: float = 0.5,
+) -> np.ndarray:
+    """Fallback score-stack probabilities from market priors, else a neutral prior."""
+    probs = np.full(len(X), float(neutral_prob), dtype=float)
+    if "home_moneyline_prob" not in X.columns or len(X) == 0:
+        return np.clip(probs, 1e-6, 1 - 1e-6)
+
+    moneyline = pd.to_numeric(X["home_moneyline_prob"], errors="coerce").to_numpy(dtype=float)
+    valid = np.isfinite(moneyline)
+    if np.any(valid):
+        probs[valid] = moneyline[valid]
+    return np.clip(probs, 1e-6, 1 - 1e-6)
+
+
+def _generate_stacked_train_probabilities(
+    X_proc: np.ndarray,
+    y_win: np.ndarray,
+    *,
+    tuned_estimator: BaseEstimator,
+    cv_splits: int,
+    fallback_probabilities: Optional[np.ndarray] = None,
+) -> Tuple[np.ndarray, Dict[str, Any]]:
+    """Generate chronology-safe win probabilities for score-model training."""
+    if fallback_probabilities is None:
+        probs = np.full(len(y_win), 0.5, dtype=float)
+        fallback_mode = "neutral"
+    else:
+        probs = np.clip(np.asarray(fallback_probabilities, dtype=float), 1e-6, 1 - 1e-6)
+        if len(probs) != len(y_win):
+            raise ValueError("Fallback probability length must match y_win.")
+        fallback_mode = "home_moneyline_prob_or_neutral"
+    tscv = _safe_time_split(len(y_win), cv_splits)
+    if tscv is None:
+        return probs, {
+            "mode": "prior_only",
+            "coverage": 0.0,
+            "predicted_rows": 0,
+            "total_rows": int(len(y_win)),
+            "fallback_mode": fallback_mode,
+        }
+
+    predicted_rows = 0
+    fold_summaries: List[Dict[str, Any]] = []
+    for fold_idx, (train_idx, val_idx) in enumerate(tscv.split(X_proc), start=1):
+        y_fold = y_win[train_idx]
+        if len(np.unique(y_fold)) < 2:
+            fold_summaries.append(
+                {
+                    "fold": fold_idx,
+                    "train_rows": int(len(train_idx)),
+                    "val_rows": int(len(val_idx)),
+                    "mode": "prior_fallback",
+                }
+            )
+            continue
+
+        fold_clf, fold_calibration = _calibrate_classifier(
+            clone(tuned_estimator),
+            X_proc[train_idx],
+            y_fold,
+        )
+        fold_probs = fold_clf.predict_proba(X_proc[val_idx])[:, 1]
+        probs[val_idx] = np.clip(fold_probs.astype(float), 1e-6, 1 - 1e-6)
+        predicted_rows += len(val_idx)
+        fold_summaries.append(
+            {
+                "fold": fold_idx,
+                "train_rows": int(len(train_idx)),
+                "val_rows": int(len(val_idx)),
+                "mode": str(fold_calibration.get("mode", "unknown")),
+            }
+        )
+
+    return probs, {
+        "mode": "time_series_oof",
+        "coverage": float(predicted_rows / max(1, len(y_win))),
+        "predicted_rows": int(predicted_rows),
+        "total_rows": int(len(y_win)),
+        "fallback_mode": fallback_mode,
+        "folds": fold_summaries,
+    }
+
+
+def _augment_score_features(X: pd.DataFrame, win_prob: np.ndarray) -> pd.DataFrame:
+    """Append the raw home-win probability feature used by score regressors."""
+    X_aug = X.copy()
+    clipped = np.clip(np.asarray(win_prob, dtype=float), 1e-6, 1 - 1e-6)
+    if len(X_aug) != len(clipped):
+        raise ValueError("Score feature augmentation length mismatch.")
+    X_aug[WIN_PROBA_FEATURE] = clipped
+    return X_aug
 
 
 def _compute_regression_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> RegressionMetrics:
@@ -483,7 +618,8 @@ def _write_json(path: Path, payload: Dict[str, Any]) -> None:
 def _stage_bundle(
     *,
     stage_dir: Path,
-    preprocessor: ColumnTransformer,
+    score_preprocessor: ColumnTransformer,
+    win_preprocessor: ColumnTransformer,
     home_reg: HistGradientBoostingRegressor,
     away_reg: HistGradientBoostingRegressor,
     win_clf: BaseEstimator,
@@ -492,11 +628,13 @@ def _stage_bundle(
 ) -> List[str]:
     stage_dir.mkdir(parents=True, exist_ok=True)
 
-    home_pipe = Pipeline([("pre", preprocessor), ("reg", home_reg)])
-    away_pipe = Pipeline([("pre", preprocessor), ("reg", away_reg)])
-    win_pipe = Pipeline([("pre", preprocessor), ("clf", win_clf)])
+    home_pipe = Pipeline([("pre", score_preprocessor), ("reg", home_reg)])
+    away_pipe = Pipeline([("pre", score_preprocessor), ("reg", away_reg)])
+    win_pipe = Pipeline([("pre", win_preprocessor), ("clf", win_clf)])
 
-    dump(preprocessor, stage_dir / "preprocessor.joblib")
+    dump(score_preprocessor, stage_dir / "preprocessor.joblib")
+    dump(score_preprocessor, stage_dir / "score_preprocessor.joblib")
+    dump(win_preprocessor, stage_dir / "win_preprocessor.joblib")
     dump(home_reg, stage_dir / "home_model.joblib")
     dump(away_reg, stage_dir / "away_model.joblib")
     dump(win_clf, stage_dir / "win_clf_calibrated.joblib")
@@ -509,6 +647,8 @@ def _stage_bundle(
 
     return [
         "preprocessor.joblib",
+        "score_preprocessor.joblib",
+        "win_preprocessor.joblib",
         "home_model.joblib",
         "away_model.joblib",
         "win_clf_calibrated.joblib",
@@ -715,29 +855,11 @@ def main() -> int:
         len(feature_cols),
     )
 
-    preprocessor = _make_preprocessor(numeric_cols, categorical_cols)
-    preprocessor.fit(X_train)
-    X_train_proc = np.asarray(preprocessor.transform(X_train))
-    X_hold_proc = np.asarray(preprocessor.transform(X_holdout))
+    win_preprocessor = _make_preprocessor(numeric_cols, categorical_cols)
+    win_preprocessor.fit(X_train)
+    X_train_proc = np.asarray(win_preprocessor.transform(X_train))
+    X_hold_proc = np.asarray(win_preprocessor.transform(X_holdout))
 
-    home_reg, home_train_info = _fit_regressor(
-        X_train_proc,
-        y_home_train,
-        random_seed=args.random_seed,
-        hp_n_iter=args.hp_niter,
-        cv_splits=max(2, int(args.splits)),
-        n_jobs=int(args.n_jobs),
-        fast_dev=bool(args.fast_dev),
-    )
-    away_reg, away_train_info = _fit_regressor(
-        X_train_proc,
-        y_away_train,
-        random_seed=args.random_seed,
-        hp_n_iter=args.hp_niter,
-        cv_splits=max(2, int(args.splits)),
-        n_jobs=int(args.n_jobs),
-        fast_dev=bool(args.fast_dev),
-    )
     win_base, win_train_info = _fit_classifier_base(
         X_train_proc,
         y_win_train,
@@ -753,9 +875,48 @@ def main() -> int:
         y_win_train,
     )
 
-    home_pred = home_reg.predict(X_hold_proc)
-    away_pred = away_reg.predict(X_hold_proc)
-    win_prob = win_clf.predict_proba(X_hold_proc)[:, 1]
+    fallback_train_win_prob = _fallback_home_win_probabilities(X_train)
+    train_win_prob, train_stack_info = _generate_stacked_train_probabilities(
+        X_train_proc,
+        y_win_train,
+        tuned_estimator=win_base,
+        cv_splits=max(2, int(args.splits)),
+        fallback_probabilities=fallback_train_win_prob,
+    )
+    holdout_win_prob = np.clip(win_clf.predict_proba(X_hold_proc)[:, 1], 1e-6, 1 - 1e-6)
+
+    X_train_score = _augment_score_features(X_train, train_win_prob)
+    X_holdout_score = _augment_score_features(X_holdout, holdout_win_prob)
+    score_numeric_cols = numeric_cols + [WIN_PROBA_FEATURE]
+    score_feature_cols = score_numeric_cols + categorical_cols
+
+    score_preprocessor = _make_preprocessor(score_numeric_cols, categorical_cols)
+    score_preprocessor.fit(X_train_score)
+    X_train_score_proc = np.asarray(score_preprocessor.transform(X_train_score))
+    X_hold_score_proc = np.asarray(score_preprocessor.transform(X_holdout_score))
+
+    home_reg, home_train_info = _fit_regressor(
+        X_train_score_proc,
+        y_home_train,
+        random_seed=args.random_seed,
+        hp_n_iter=args.hp_niter,
+        cv_splits=max(2, int(args.splits)),
+        n_jobs=int(args.n_jobs),
+        fast_dev=bool(args.fast_dev),
+    )
+    away_reg, away_train_info = _fit_regressor(
+        X_train_score_proc,
+        y_away_train,
+        random_seed=args.random_seed,
+        hp_n_iter=args.hp_niter,
+        cv_splits=max(2, int(args.splits)),
+        n_jobs=int(args.n_jobs),
+        fast_dev=bool(args.fast_dev),
+    )
+
+    home_pred = home_reg.predict(X_hold_score_proc)
+    away_pred = away_reg.predict(X_hold_score_proc)
+    win_prob = holdout_win_prob
 
     home_metrics = _compute_regression_metrics(y_home_hold, home_pred)
     away_metrics = _compute_regression_metrics(y_away_hold, away_pred)
@@ -772,9 +933,17 @@ def main() -> int:
             "holdout": int(len(X_holdout)),
         },
         "features": {
-            "numeric": numeric_cols,
-            "categorical": categorical_cols,
-            "count": int(len(feature_cols)),
+            "win": {
+                "numeric": numeric_cols,
+                "categorical": categorical_cols,
+                "count": int(len(feature_cols)),
+            },
+            "score": {
+                "numeric": score_numeric_cols,
+                "categorical": categorical_cols,
+                "count": int(len(score_feature_cols)),
+            },
+            "generated": [WIN_PROBA_FEATURE],
         },
         "metrics": {
             "regression": {
@@ -789,6 +958,7 @@ def main() -> int:
             "away": away_train_info,
             "win_base": win_train_info,
             "win_calibration": win_calibration_info,
+            "score_stack": train_stack_info,
             "cv_splits": int(args.splits),
             "embargo_groups": int(args.embargo),
             "hp_niter": int(args.hp_niter),
@@ -799,18 +969,31 @@ def main() -> int:
     # Optional production refit on full labeled data after quality evaluation.
     if args.production:
         log.info("Production mode enabled: refitting selected models on full labeled dataset.")
-        preprocessor = _make_preprocessor(numeric_cols, categorical_cols)
-        preprocessor.fit(X)
-        X_full_proc = np.asarray(preprocessor.transform(X))
-        home_reg = clone(home_reg).fit(X_full_proc, y_home.to_numpy())
-        away_reg = clone(away_reg).fit(X_full_proc, y_away.to_numpy())
+        win_preprocessor = _make_preprocessor(numeric_cols, categorical_cols)
+        win_preprocessor.fit(X)
+        X_full_proc = np.asarray(win_preprocessor.transform(X))
         win_base_full = clone(win_base).fit(X_full_proc, y_win.to_numpy())
         win_clf, win_calibration_info = _calibrate_classifier(
             win_base_full,
             X_full_proc,
             y_win.to_numpy(),
         )
+        fallback_full_win_prob = _fallback_home_win_probabilities(X)
+        full_train_win_prob, full_stack_info = _generate_stacked_train_probabilities(
+            X_full_proc,
+            y_win.to_numpy(),
+            tuned_estimator=win_base,
+            cv_splits=max(2, int(args.splits)),
+            fallback_probabilities=fallback_full_win_prob,
+        )
+        X_full_score = _augment_score_features(X, full_train_win_prob)
+        score_preprocessor = _make_preprocessor(score_numeric_cols, categorical_cols)
+        score_preprocessor.fit(X_full_score)
+        X_full_score_proc = np.asarray(score_preprocessor.transform(X_full_score))
+        home_reg = clone(home_reg).fit(X_full_score_proc, y_home.to_numpy())
+        away_reg = clone(away_reg).fit(X_full_score_proc, y_away.to_numpy())
         report["train_info"]["win_calibration_full"] = win_calibration_info
+        report["train_info"]["score_stack_full"] = full_stack_info
 
     previous_report = _load_previous_report(out_dir)
     gate = _gate_result(
@@ -832,28 +1015,81 @@ def main() -> int:
         "rows_train": int(len(X_train)),
         "rows_holdout": int(len(X_holdout)),
         "raw_feature_columns": {
-            "numeric": numeric_cols,
-            "categorical": categorical_cols,
+            "win": {
+                "numeric": numeric_cols,
+                "categorical": categorical_cols,
+            },
+            "score": {
+                "numeric": score_numeric_cols,
+                "categorical": categorical_cols,
+            },
         },
-        "feature_names": feature_cols,
+        "feature_names": score_feature_cols,
+        "feature_names_win": feature_cols,
+        "feature_manifests": {
+            "win": {
+                "numeric": numeric_cols,
+                "categorical": categorical_cols,
+            },
+            "score": {
+                "numeric": score_numeric_cols,
+                "categorical": categorical_cols,
+            },
+            "scores": {
+                "numeric": score_numeric_cols,
+                "categorical": categorical_cols,
+            },
+        },
+        "generated_features": {
+            WIN_PROBA_FEATURE: {
+                "source": "winner_model_predict_proba",
+                "fallback_column": "home_moneyline_prob",
+                "default": 0.5,
+                "used_by": ["home", "away"],
+            }
+        },
+        "serving_mode": "pipeline_primary",
         "targets": {
             "home": TARGET_HOME,
             "away": TARGET_AWAY,
             "win": TARGET_WIN,
         },
+        "stacking": {
+            "win_probability_feature": WIN_PROBA_FEATURE,
+            "score_models_use_win_probability": True,
+            "winner_model_algorithm": "calibrated_mlp",
+        },
         "metrics": report["metrics"],
         "gate": gate,
+        "artifacts": {
+            "preprocessor": "score_preprocessor.joblib",
+            "score_preprocessor": "score_preprocessor.joblib",
+            "win_preprocessor": "win_preprocessor.joblib",
+            "home_model": "home_pipe.joblib",
+            "away_model": "away_pipe.joblib",
+            "win_model": "win_pipe.joblib",
+            "home_estimator": "home_model.joblib",
+            "away_estimator": "away_model.joblib",
+            "win_estimator": "win_clf_calibrated.joblib",
+        },
         "bundle_contract": {
-            "preprocessor": "preprocessor.joblib",
-            "reg_home": "home_model.joblib",
-            "reg_away": "away_model.joblib",
-            "clf_home_win": "win_clf_calibrated.joblib",
+            "serving_mode": "pipeline_primary",
+            "preprocessor": "score_preprocessor.joblib",
+            "score_preprocessor": "score_preprocessor.joblib",
+            "win_preprocessor": "win_preprocessor.joblib",
+            "reg_home": "home_pipe.joblib",
+            "reg_away": "away_pipe.joblib",
+            "clf_home_win": "win_pipe.joblib",
+            "legacy_reg_home": "home_model.joblib",
+            "legacy_reg_away": "away_model.joblib",
+            "legacy_clf_home_win": "win_clf_calibrated.joblib",
         },
     }
 
     promoted_files = _stage_bundle(
         stage_dir=stage_dir,
-        preprocessor=preprocessor,
+        score_preprocessor=score_preprocessor,
+        win_preprocessor=win_preprocessor,
         home_reg=home_reg,
         away_reg=away_reg,
         win_clf=win_clf,

@@ -1,0 +1,76 @@
+/* Button skeleton — wire these to your LCH tokens */
+.btn {
+  --btn-bg: var(--surface-accent);
+  /* set via your theme */
+  --btn-fg: var(--text-on-accent);
+  --btn-bg-disabled: color-mix(in lch, var(--btn-bg) 80%, white 20%);
+  --btn-fg-disabled: color-mix(in lch, var(--btn-fg) 65%, gray 35%);
+
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1rem;
+  border: 0;
+  border-radius: 10px;
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  cursor: pointer;
+  font: inherit;
+  line-height: 1;
+}
+
+/* Focus visibility (keyboard-friendly) */
+.btn:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+/* Disabled styles (native disabled + loading) */
+.btn:disabled,
+.btn[aria-disabled="true"] {
+  cursor: not-allowed;
+  background: var(--btn-bg-disabled);
+  color: var(--btn-fg-disabled);
+}
+
+/* Optional subtle hint when loading */
+.is-loading {
+  opacity: 0.9;
+}
+.predict-button {
+  display: block;
+  height: 1rem;
+  width: 2rem;
+}
+
+/* Spinner — uses currentColor so it auto-matches any variant */
+.btn__spinner {
+  inline-size: 1em;
+  block-size: 1em;
+  border: 2px solid transparent;
+  border-top-color: currentColor;
+  border-right-color: currentColor;
+  border-radius: 50%;
+  display: inline-block;
+  /* Slight vertical alignment so it sits nicely next to text */
+  vertical-align: -0.125em;
+  animation: btn-spin cubic-bezier(0.175, 0.885, 0.32, 1.275) linear infinite;
+}
+
+/* Users who prefer reduced motion get a non-animated spinner */
+@media (prefers-reduced-motion: reduce) {
+  .btn__spinner {
+    animation: none;
+  }
+}
+
+@keyframes btn-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Content wrapper for predictable spacing (esp. when spinner present) */
+.btn__content {
+  display: inline-block;
+}

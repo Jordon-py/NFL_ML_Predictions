@@ -16,6 +16,7 @@ This directory contains comprehensive documentation for the NFL ML Predictions p
 | [report.md](report.md) | Comprehensive change log with function reference | Understanding project history |
 | [DATA_FLOW.md](DATA_FLOW.md) | Data and control flow across backend/frontend | Orientation & onboarding |
 | [ARCH_MAP.md](ARCH_MAP.md) | Architecture map and responsibilities | High-level design reference |
+| [FRONTEND_PREDICTION_FLOW.md](FRONTEND_PREDICTION_FLOW.md) | Focused guide to the React prediction request flow | Frontend onboarding |
 | [RUNBOOK.md](RUNBOOK.md) | Operational runbook and quick commands | Day-to-day operations |
 | [session_completion_report.md](session_completion_report.md) | Session completion summaries | Project status tracking |
 

@@ -17,14 +17,14 @@
  *   - Errors are thrown as HttpError(status, url, body) so UI can display useful info.
  */
 
+import { buildPredictPayload as buildGamePredictPayload } from "../utils/gameUtils.js";
+
 export class HttpError extends Error {
   constructor(message, { status, url, body } = {}) {
     super(message);
     this.name = "HttpError";
-    this.name = "HttpError";
     this.status = status;
     this.url = url;
-    this.body = body;
     this.body = body;
   }
 }
@@ -58,6 +58,43 @@ async function safeReadJson(res) {
   } catch {
     return null; // some endpoints (or errors) can return empty bodies
   }
+}
+
+function extractArrayPayload(payload, keys = []) {
+  if (Array.isArray(payload)) return payload;
+
+  for (const key of keys) {
+    if (Array.isArray(payload?.[key])) {
+      return payload[key];
+    }
+  }
+
+  return [];
+}
+
+function createStatusOverviewFallback(totalPredictions = 0) {
+  return {
+    health: { status: "unknown" },
+    dataset: { rows: 0 },
+    history: { metrics: { total_predictions: totalPredictions } },
+  };
+}
+
+function normalizeHistoryResponse(payload) {
+  if (Array.isArray(payload)) {
+    return { entries: payload, total: payload.length };
+  }
+
+  if (payload && Array.isArray(payload.entries)) {
+    return {
+      entries: payload.entries,
+      total: Number.isFinite(Number(payload.total))
+        ? Number(payload.total)
+        : payload.entries.length,
+    };
+  }
+
+  return { entries: [], total: 0 };
 }
 
 /**
@@ -124,20 +161,24 @@ export async function getStatusOverview() {
       };
     }
 
-    return {
-      health: { status: "unknown" },
-      dataset: { rows: 0 },
-      history: { metrics: { total_predictions: 0 } },
-    };
+    return createStatusOverviewFallback();
   } catch {
     console.warn("[client] Status overview unavailable; using fallback");
-    return {
-      health: { status: "unknown" },
-      dataset: { rows: 0 },
-      history: { metrics: { total_predictions: 0 } },
-    };
+    return createStatusOverviewFallback();
   }
 }
+
+export async function getHealthStatus() {
+  try {
+    return await fetchJson("/health");
+  } catch {
+    console.warn("[client] Health endpoint unavailable; using fallback");
+    return { status: "unknown", reason: "unavailable" };
+  }
+}
+
+// Legacy alias kept for older wrappers that still import `health`.
+export const health = getHealthStatus;
 
 // -------------------------
 // Context endpoints (cheap, cacheable)
@@ -148,14 +189,7 @@ export async function getNextWeekSchedule() {
   // - { games: [...] } (recommended)
   // - [...] (older)
   const res = await fetchJson("/schedule/next-week");
-
-  if (Array.isArray(res)) return res;
-  if (res && Array.isArray(res.games)) return res.games;
-
-  // very old compatibility shape (keep until you can delete it)
-  if (res && Array.isArray(res.ScheduleGame)) return res.ScheduleGame;
-
-  return [];
+  return extractArrayPayload(res, ["games", "ScheduleGame"]);
 }
 
 // -------------------------
@@ -163,17 +197,8 @@ export async function getNextWeekSchedule() {
 // -------------------------
 
 export async function predictGame(payload) {
-  // Normalize the payload so backend matching is stable (uppercased abbreviations).
-  const body = {
-    home_team: String(payload?.home_team ?? payload?.homeTeam ?? "")
-      .trim()
-      .toUpperCase(),
-    away_team: String(payload?.away_team ?? payload?.awayTeam ?? "")
-      .trim()
-      .toUpperCase(),
-    season: Number(payload?.season ?? payload?.season_num ?? payload?.seasonNum),
-    week: Number(payload?.week ?? payload?.week_num ?? payload?.weekNum),
-  };
+  // Reuse the same normalization rules that the dashboard uses before it stores keys.
+  const body = buildGamePredictPayload(payload);
 
   // Simple contract check: better to fail here than send junk to the API.
   if (
@@ -195,24 +220,9 @@ export async function getPredictionHistory(limit = 100) {
   try {
     const safeLimit = Number.isFinite(Number(limit)) ? Number(limit) : 100;
     const res = await fetchJson(`/history?limit=${safeLimit}`);
-
-    // Backend currently returns a raw list; normalize for dashboard callers.
-    if (Array.isArray(res)) {
-      return { entries: res, total: res.length };
-    }
-
-    if (res && Array.isArray(res.entries)) {
-      return {
-        entries: res.entries,
-        total: Number.isFinite(Number(res.total))
-          ? Number(res.total)
-          : res.entries.length,
-      };
-    }
-
-    return { entries: [], total: 0 };
+    return normalizeHistoryResponse(res);
   } catch {
     console.warn("[client] History endpoint unavailable; using empty list");
-    return { entries: [], total: 0 };
+    return normalizeHistoryResponse(null);
   }
 }

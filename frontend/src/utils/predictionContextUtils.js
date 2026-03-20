@@ -1,4 +1,11 @@
-// Shared helpers for PredictionContext
+// Shared helpers for prediction history/state layers.
+//
+// Note:
+// The active dashboard flow now centralizes matchup normalization in
+// `gameUtils.js`. This file reuses the same key/team helpers so the alternate
+// history/state utilities cannot drift away from the live UI behavior.
+
+import { buildMatchupKey, normalizeTeamCode } from "./gameUtils.js";
 
 export const PREDICTION_HISTORY_KEY = "prediction_history";
 export const MAX_HISTORY_ENTRIES = 100;
@@ -18,17 +25,10 @@ export function getMetaEnv() {
  * @returns {string}
  */
 export function buildGameKey(gameLike) {
-  if (!gameLike) return "";
-  if (typeof gameLike.game_id === "string" && gameLike.game_id.trim()) {
-    return gameLike.game_id;
+  if (typeof gameLike?.game_id === "string" && gameLike.game_id.trim()) {
+    return gameLike.game_id.trim();
   }
-  const parts = [
-    gameLike.season,
-    gameLike.week,
-    gameLike.home_abbr || gameLike.home_team,
-    gameLike.away_abbr || gameLike.away_team,
-  ].filter(Boolean);
-  return parts.join("-");
+  return buildMatchupKey(gameLike);
 }
 
 /**
@@ -63,7 +63,7 @@ export function parseTeamsCsv(text) {
     const parts = line.split(",");
     if (parts.length < 3) continue;
     const [teamName, abbr, logoUrl] = parts;
-    const code = (abbr || "").trim().toUpperCase();
+    const code = normalizeTeamCode(abbr);
     if (!code) continue;
     out[code] = {
       name: (teamName || code).trim(),

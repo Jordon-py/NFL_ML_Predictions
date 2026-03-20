@@ -1,0 +1,59 @@
+.scoreboard-summary {
+  margin-top: 0.4rem;
+  padding: 0.65rem 0.9rem;
+  border-radius: var(--r-md, 12px);
+  border: 1px solid color-mix(in oklab, var(--c-accent, #54ade8) 40%, transparent 30%);
+  background: color-mix(in oklab, var(--glass, #111628) 80%, var(--c-card, #121a2b) 50%);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.9rem;
+  color: var(--lch-text, #f6f6f6);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+}
+
+.scoreboard-summary--waiting {
+  border-color: color-mix(in oklab, var(--c-ink-muted, #2a4158) 40%, transparent 50%);
+  background: color-mix(in oklab, var(--c-ink, #0f0f0f) 60%, var(--lch-card, #2c3a50) 30%);
+}
+
+.scoreboard-summary__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.scoreboard-summary__body strong {
+  font-size: 0.95rem;
+}
+
+.scoreboard-summary__body span {
+  font-size: 0.78rem;
+  color: var(--lch-muted, #c9d3e0);
+}
+
+.scoreboard-summary__cta {
+  font-size: 0.85rem;
+  color: var(--lch-accent, #85d6ff);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.schedule-hint {
+  margin-top: 1rem;
+  padding: 0.9rem 1rem;
+  border-radius: var(--r-sm, 8px);
+  border: 1px solid color-mix(in oklab, var(--c-border-subtle, #1e293b) 90%, transparent 50%);
+  background: color-mix(in oklab, var(--c-surface-soft, #020617) 70%, var(--glass, #111628) 30%);
+  color: var(--lch-muted, #c9d3e0);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.schedule-hint__note {
+  margin-top: 0.35rem;
+  font-size: 0.82rem;
+  color: var(--lch-muted, #c9d3e0);
+}
+
