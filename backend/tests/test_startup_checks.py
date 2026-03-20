@@ -131,3 +131,18 @@ def test_validate_bundle_metadata_contract_rejects_sklearn_mismatch(monkeypatch)
 
     with pytest.raises(RuntimeError, match="scikit-learn 1.7.2"):
         main_module._validate_bundle_metadata_contract(meta)
+
+
+def test_health_reports_unhealthy_when_production_blockers_exist(monkeypatch):
+    monkeypatch.setattr(main_module.state, "dataset", pd.DataFrame([{"season": 2025, "week": 1}]))
+    monkeypatch.setattr(main_module.state, "models", {"home": object(), "away": object(), "win": object()})
+    monkeypatch.setattr(main_module.state, "production_blockers", ["legacy model bundle contract"])
+    monkeypatch.setattr(main_module.state, "production_warnings", ["metadata.json missing strict contract"])
+
+    payload = main_module.health()
+
+    assert payload.status == "unhealthy"
+    assert payload.production_ready is False
+    assert "legacy model bundle contract" in (payload.reason or "")
+    assert payload.components.ready_for_production is False
+    assert payload.components.blockers == ["legacy model bundle contract"]

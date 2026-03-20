@@ -296,7 +296,7 @@ curl http://127.0.0.1:8000/status/overview -H "X-User-Id: analyst@example.com"
 
 ## Known Runtime Note
 
-If `/health` reports an unhealthy preprocessing smoke test with a scikit-learn artifact mismatch, the server can still boot but model inference may be unreliable until:
+If `/health` reports `production_ready: false` because of a legacy bundle contract or a scikit-learn artifact mismatch, the server can still boot for diagnostics but the deployment should not be treated as production-ready until:
 
 - the environment is aligned to the artifact version in `requirements.txt`, or
 - models are retrained in the current environment

@@ -37,6 +37,7 @@ import shutil
 import subprocess
 import csv
 import uuid
+import warnings
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from contextlib import asynccontextmanager
@@ -126,6 +127,11 @@ except Exception:  # pragma: no cover - optional runtime guard
     sklearn = None
 
 SKLEARN_RUNTIME_VERSION = getattr(sklearn, "__version__", None)
+
+try:
+    from sklearn.exceptions import InconsistentVersionWarning
+except Exception:  # pragma: no cover - sklearn import already guarded above
+    InconsistentVersionWarning = None  # type: ignore[assignment]
 JOBS_DIR = DATA_DIR / "jobs"
 STAGING_MODELS_DIR = DATA_DIR / "models" / "staging"
 CURRENT_MODELS_DIR = DATA_DIR / "models" / "current"
@@ -625,6 +631,20 @@ def _validate_bundle_metadata_contract(meta: Dict[str, Any]) -> Dict[str, Any]:
     return meta
 
 
+def _collect_model_load_warnings(caught: List[warnings.WarningMessage], path: Path) -> List[str]:
+    messages: List[str] = []
+    for warning_item in caught:
+        warning_message = warning_item.message
+        text = str(warning_message)
+        is_version_warning = bool(
+            InconsistentVersionWarning is not None
+            and isinstance(warning_message, InconsistentVersionWarning)
+        )
+        if is_version_warning or "Trying to unpickle estimator" in text:
+            messages.append(f"{path.name}: {text}")
+    return messages
+
+
 # -------------------------------------------------------------------
 # App State
 # -------------------------------------------------------------------
@@ -660,6 +680,8 @@ class AppState:
         self.predict_cache_misses: int = 0
         self.retrain_jobs: Dict[str, Dict[str, Any]] = {}
         self.retrain_lock = threading.Lock()
+        self.production_blockers: List[str] = []
+        self.production_warnings: List[str] = []
 
         # Cached numeric medians from the loaded dataset (used for stable imputation).
         # Set during _load_dataset().
@@ -704,6 +726,24 @@ class AppState:
 
     def _prediction_cache_key(self, *, season: int, week: int, home_team: str, away_team: str) -> str:
         return f"{season}:{week}:{home_team}:{away_team}"
+
+    def _refresh_runtime_readiness(self) -> None:
+        blockers: List[str] = []
+        warnings_out: List[str] = []
+
+        if not self.models_metadata:
+            blockers.append("model metadata unavailable")
+        elif not _requires_strict_bundle_contract(self.models_metadata):
+            blockers.append("legacy model bundle contract")
+
+        for warning_message in self.production_warnings:
+            if warning_message not in warnings_out:
+                warnings_out.append(warning_message)
+        if any("Trying to unpickle estimator" in warning or "version" in warning.lower() for warning in warnings_out):
+            blockers.append("scikit-learn artifact version mismatch")
+
+        self.production_blockers = sorted(set(blockers))
+        self.production_warnings = sorted(set(warnings_out))
 
     def get_cached_prediction(self, key: str) -> Optional[Dict[str, Any]]:
         if PREDICT_CACHE_TTL_SEC <= 0:
@@ -858,6 +898,8 @@ class AppState:
         self.preprocessor = None
         self.score_preprocessor = None
         self.win_preprocessor = None
+        self.production_blockers = []
+        self.production_warnings = []
         logging.info("[Model] Using models directory: %s", MODELS_DIR)
         # Default model filenames (non-pipeline artifacts)
         model_files: Dict[str, str] = {
@@ -887,7 +929,12 @@ class AppState:
                 continue
 
             try:
-                loaded = joblib.load(path)
+                with warnings.catch_warnings(record=True) as caught:
+                    warnings.simplefilter("always")
+                    loaded = joblib.load(path)
+                for warning_message in _collect_model_load_warnings(caught, path):
+                    if warning_message not in self.production_warnings:
+                        self.production_warnings.append(warning_message)
                 patched = _patch_imputer_compat(loaded)
                 if patched:
                     logging.info("[Model] Applied %d sklearn-imputer compatibility patches for '%s'", patched, name)
@@ -913,6 +960,10 @@ class AppState:
                 loaded_meta = json.loads(metadata_path.read_text(encoding="utf-8"))
                 self.models_metadata = _validate_bundle_metadata_contract(loaded_meta)
                 if not _requires_strict_bundle_contract(self.models_metadata):
+                    legacy_message = (
+                        f"legacy bundle metadata contract: {metadata_path.name} lacks strict serving metadata"
+                    )
+                    self.production_warnings.append(legacy_message)
                     logging.warning(
                         "[Model] Loaded legacy bundle metadata from %s without strict contract fields. Retrain to enable strict startup validation.",
                         metadata_path,
@@ -921,6 +972,7 @@ class AppState:
                 raise RuntimeError(f"Failed to validate metadata.json at {metadata_path}: {e}") from e
         else:
             self.models_metadata = {}
+            self.production_warnings.append("metadata.json missing from active models directory")
 
         def _load_preprocessor_artifact(primary_name: str, fallback_names: Tuple[str, ...]) -> Optional[Any]:
             for filename in (primary_name, *fallback_names):
@@ -928,7 +980,12 @@ class AppState:
                 if not prep_path.exists():
                     continue
                 try:
-                    loaded = joblib.load(prep_path)
+                    with warnings.catch_warnings(record=True) as caught:
+                        warnings.simplefilter("always")
+                        loaded = joblib.load(prep_path)
+                    for warning_message in _collect_model_load_warnings(caught, prep_path):
+                        if warning_message not in self.production_warnings:
+                            self.production_warnings.append(warning_message)
                     patched = _patch_imputer_compat(loaded)
                     if patched:
                         logging.info(
@@ -1016,6 +1073,8 @@ class AppState:
             self.feature_manifest = _feature_manifest()
         except Exception:
             self.feature_manifest = []
+
+        self._refresh_runtime_readiness()
 
 
 state = AppState()
@@ -1129,6 +1188,9 @@ class HealthComponents(BaseModel):
     dataset: bool
     models: bool
     loaded_models: List[str] = Field(default_factory=list)
+    ready_for_production: bool = False
+    blockers: List[str] = Field(default_factory=list)
+    warnings: List[str] = Field(default_factory=list)
 
 
 class HealthResponse(BaseModel):
@@ -1146,6 +1208,7 @@ class HealthResponse(BaseModel):
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     mode: str = "production"
     reason: Optional[str] = None
+    production_ready: bool = False
     components: HealthComponents
 
 
@@ -1297,6 +1360,9 @@ class RuntimeStatusResponse(BaseModel):
     dataset_age_seconds: Optional[int] = None
     last_prediction_at: Optional[str] = None
     history_size: int
+    production_ready: bool = False
+    blockers: List[str] = Field(default_factory=list)
+    warnings: List[str] = Field(default_factory=list)
     predict_cache: PredictCacheStatusResponse
 
 
@@ -1336,6 +1402,7 @@ class StatusResponse(BaseModel):
     dataset_hash: Optional[str] = None
     dataset_path: Optional[str] = None
     model_keys: List[str] = Field(default_factory=list)
+    production_ready: bool = False
 
 
 class ScheduleGameResponse(BaseModel):
@@ -1926,9 +1993,10 @@ def health() -> HealthResponse:
     """
     has_dataset = state.dataset is not None
     models_ok = all(m in state.models for m in REQUIRED_MODELS)
+    production_ready = has_dataset and models_ok and not state.production_blockers
 
     status: Literal["healthy", "unhealthy"]
-    status = "healthy" if has_dataset and models_ok else "unhealthy"
+    status = "healthy" if production_ready else "unhealthy"
 
     reasons: List[str] = []
     if not has_dataset:
@@ -1936,16 +2004,24 @@ def health() -> HealthResponse:
     if not models_ok:
         missing = [m for m in REQUIRED_MODELS if m not in state.models]
         reasons.append(f"missing models: {', '.join(missing)}")
+    reasons.extend(state.production_blockers)
+    warning_sample = list(state.production_warnings[:5])
+    if len(state.production_warnings) > 5:
+        warning_sample.append(f"... {len(state.production_warnings) - 5} additional startup warnings")
 
     reason_str = ", ".join(reasons) if reasons else None
 
     return HealthResponse(
         status=status,
         reason=reason_str,
+        production_ready=production_ready,
         components=HealthComponents(
             dataset=has_dataset,
             models=models_ok,
             loaded_models=list(state.models.keys()),
+            ready_for_production=production_ready,
+            blockers=list(state.production_blockers),
+            warnings=warning_sample,
         ),
     )
 
@@ -1963,6 +2039,7 @@ def status() -> StatusResponse:
         dataset_hash=state.dataset_hash,
         dataset_path=str(state.dataset_path) if state.dataset_path else None,
         model_keys=sorted(state.models.keys()),
+        production_ready=health_payload.production_ready,
     )
 
 
@@ -1976,6 +2053,9 @@ def debug() -> Dict[str, Any]:
         "dataset_rows": int(len(state.dataset)) if state.dataset is not None else 0,
         "models_dir": str(MODELS_DIR),
         "loaded_models": sorted(state.models.keys()),
+        "production_ready": not state.production_blockers,
+        "startup_blockers": list(state.production_blockers),
+        "startup_warnings": list(state.production_warnings),
         "cors_origins": ALLOWED_ORIGINS,
         "allow_origin_regex": ALLOW_ORIGIN_REGEX,
         "restrict_cors": SETTINGS.restrict_cors,
@@ -2229,11 +2309,13 @@ def status_models() -> Dict[str, Any]:
             dataset_hash = None
 
     return {
-        "ready": len(missing_required) == 0,
+        "ready": len(missing_required) == 0 and not state.production_blockers,
         "models_dir": str(MODELS_DIR),
         "current_models_dir": str(CURRENT_MODELS_DIR) if CURRENT_MODELS_DIR.exists() else None,
         "loaded_models": loaded_models,
         "missing_required": missing_required,
+        "blockers": list(state.production_blockers),
+        "warnings": list(state.production_warnings),
         "feature_manifest_size": len(state.feature_manifest),
         "artifacts": artifacts,
         "provenance": {
@@ -2276,6 +2358,9 @@ def status_runtime() -> RuntimeStatusResponse:
         "dataset_age_seconds": dataset_age_seconds,
         "last_prediction_at": state.last_prediction_at.isoformat() if state.last_prediction_at else None,
         "history_size": len(state.history),
+        "production_ready": len(state.production_blockers) == 0,
+        "blockers": list(state.production_blockers),
+        "warnings": list(state.production_warnings),
         "predict_cache": {
             "enabled": PREDICT_CACHE_TTL_SEC > 0,
             "ttl_seconds": PREDICT_CACHE_TTL_SEC,
