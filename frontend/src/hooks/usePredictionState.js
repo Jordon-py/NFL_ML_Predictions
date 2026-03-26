@@ -1,26 +1,15 @@
-// ==========================================
-// File: frontend/src/hooks/usePredictionState.js
-// Role: React hook for UI state management.
-// Input Data: Hook params and state.
-// Output Data: State values and actions.
-// Dependencies: react
-// Notes: Consumed by components.
-// ==========================================
-
 /**
- * FILE: frontend/src/hooks/usePredictionState.js
- * PURPOSE: Centralized state for NFL predictions, polling, and history.
- * INPUTS / DATA SHAPES:
- *   - Fetches from: getNextWeekSchedule, getHealthStatus, getPredictionHistory.
- *   - State: { schedule, week, predictions, history, health, loading, errors, current }.
- * OUTPUT / SIDE EFFECTS: Polling for health; localStorage sync for history.
- * KEY FUNCTIONS:
- *   - usePredictionState(): Returns unified state object.
- * DEPENDENCIES: React, client.js
+ * Central route-level state for the protected app shell.
+ *
+ * The hook owns the shared schedule, prediction maps, history, summary, logos,
+ * and health state used by Dashboard and HistoryPage so those screens cannot
+ * drift apart by maintaining duplicate copies.
  */
 
 import { useEffect, useState, useCallback } from "react";
 import {
+  getHistorySummary,
+  getLatestArchivedSchedule,
   getNextWeekSchedule,
   getHealthStatus as fetchHealth,
   getPredictionHistory,
@@ -30,7 +19,6 @@ import {
 } from "../api/client.js";
 import {
   buildGameKey,
-  dedupeGamesByKey,
   loadPredictionHistoryFromStorage,
   MAX_HISTORY_ENTRIES,
   PREDICTION_HISTORY_KEY,
@@ -48,6 +36,15 @@ const INITIAL_SEASON_CONTEXT = {
   next_kickoff: null,
   generated_at: new Date().toISOString(),
 };
+const INITIAL_HISTORY_SUMMARY = {
+  total_predictions: 0,
+  resolved_games: 0,
+  win_rate: null,
+  avg_abs_spread_error: null,
+  avg_confidence: null,
+  latest_prediction_at: null,
+  last_score_sync_at: null,
+};
 
 const toNumberOrNull = (value) => {
   const n = Number(value);
@@ -56,6 +53,19 @@ const toNumberOrNull = (value) => {
 
 const normalizeTeamCode = (value) =>
   (value ?? "").toString().trim().toUpperCase();
+
+function dedupeGamesByKey(rows) {
+  if (!Array.isArray(rows)) return [];
+  const seen = new Set();
+  const out = [];
+  for (const row of rows) {
+    const key = buildGameKey(row);
+    if (key && seen.has(key)) continue;
+    if (key) seen.add(key);
+    out.push(row);
+  }
+  return out;
+}
 
 /**
  * Normalize schedule rows to a consistent shape so downstream components
@@ -156,6 +166,25 @@ function ensureHistoryEntry(entry) {
     point_diff: pick(pred.point_diff, pred.metrics?.point_diff),
     home_win_probability: pick(pred.home_win_probability, pred.winner?.proba_home, pred.probs?.home),
     away_win_probability: pick(pred.away_win_probability, pred.winner?.proba_away, pred.probs?.away),
+    final_home_score: toNumberOrNull(
+      pick(entry.final_home_score, pred.final_home_score, entry.actual_home_score, pred.actual_home_score)
+    ),
+    final_away_score: toNumberOrNull(
+      pick(entry.final_away_score, pred.final_away_score, entry.actual_away_score, pred.actual_away_score)
+    ),
+    actual_home_score: toNumberOrNull(
+      pick(entry.actual_home_score, pred.actual_home_score, entry.final_home_score, pred.final_home_score)
+    ),
+    actual_away_score: toNumberOrNull(
+      pick(entry.actual_away_score, pred.actual_away_score, entry.final_away_score, pred.final_away_score)
+    ),
+    game_status: pick(entry.game_status, pred.game_status, entry.status, pred.status) || null,
+    score_updated_at: pick(
+      entry.score_updated_at,
+      pred.score_updated_at,
+      entry.last_score_sync_at,
+      pred.last_score_sync_at
+    ) || null,
   };
 
   // Build game_id if missing
@@ -163,6 +192,25 @@ function ensureHistoryEntry(entry) {
   base.game_id = pred.game_id || (canBuildKey ? buildGameKey(base) : "");
 
   return base;
+}
+
+function buildArchivedSeasonContext(rows, baseContext = INITIAL_SEASON_CONTEXT) {
+  const firstGame = Array.isArray(rows) ? rows[0] : null;
+  const archivedSeason = toNumberOrNull(firstGame?.season) ?? baseContext?.current_season ?? new Date().getFullYear();
+  const archivedWeek = toNumberOrNull(firstGame?.week) ?? baseContext?.display_week ?? null;
+
+  return {
+    ...baseContext,
+    phase: "offseason",
+    label: archivedWeek != null ? `Week ${archivedWeek}` : baseContext?.label || "Offseason",
+    message: "No live weekly slate is available right now. Showing the most recent archived slate.",
+    current_season: archivedSeason,
+    display_week: archivedWeek,
+    games_in_next_window: Array.isArray(rows) ? rows.length : 0,
+    next_kickoff: firstGame?.kickoff || baseContext?.next_kickoff || null,
+    generated_at: new Date().toISOString(),
+    archive_fallback: true,
+  };
 }
 
 export function usePredictionState(authSession = null) {
@@ -175,10 +223,13 @@ export function usePredictionState(authSession = null) {
     const stored = loadPredictionHistoryFromStorage(historyStorageKey);
     return Array.isArray(stored) ? stored.map(ensureHistoryEntry) : [];
   });
+  const [historySummary, setHistorySummary] = useState(INITIAL_HISTORY_SUMMARY);
   const [current, setCurrent] = useState(null);
   const [currentKey, setCurrentKey] = useState("");
   const [health, setHealth] = useState(INITIAL_HEALTH);
   const [seasonContext, setSeasonContext] = useState(INITIAL_SEASON_CONTEXT);
+  const [scheduleLoading, setScheduleLoading] = useState(true);
+  const [scheduleError, setScheduleError] = useState(null);
   const [loadingByKey, setLoadingByKey] = useState({});
   const [errorsByKey, setErrorsByKey] = useState({});
   const [teamMeta, setTeamMeta] = useState({});
@@ -191,23 +242,51 @@ export function usePredictionState(authSession = null) {
     setLoadingByKey({});
     setCurrent(null);
     setCurrentKey("");
+    setHistorySummary(INITIAL_HISTORY_SUMMARY);
+    setScheduleError(null);
   }, [historyStorageKey]);
+
+  const refreshHistory = useCallback(
+    async (limit = MAX_HISTORY_ENTRIES) => {
+      const [historyRes, summaryRes] = await Promise.all([
+        getPredictionHistory(limit, userId),
+        getHistorySummary(userId),
+      ]);
+
+      const entries = Array.isArray(historyRes?.entries) ? historyRes.entries : [];
+      setHistory(entries.map(ensureHistoryEntry));
+      setHistorySummary(summaryRes || INITIAL_HISTORY_SUMMARY);
+      return entries;
+    },
+    [userId]
+  );
 
   // 1. Initial Load: Schedule & History
   useEffect(() => {
     let active = true;
 
     const init = async () => {
-      const [scheduleRes, historyRes, logosRes, seasonContextRes] = await Promise.allSettled([
+      setScheduleLoading(true);
+      setScheduleError(null);
+      const [scheduleRes, historyRes, logosRes, summaryRes] = await Promise.allSettled([
         getNextWeekSchedule(),
         getPredictionHistory(MAX_HISTORY_ENTRIES, userId),
         getTeamLogos(),
-        getSeasonContext(),
+        getHistorySummary(userId),
       ]);
 
       if (!active) return;
 
-      const scheduleRows = scheduleRes.status === "fulfilled" ? scheduleRes.value : [];
+      let scheduleRows = scheduleRes.status === "fulfilled" ? scheduleRes.value : [];
+      let nextSeasonContext = await getSeasonContext(scheduleRows);
+      if ((!Array.isArray(scheduleRows) || scheduleRows.length === 0) && scheduleRes.status === "fulfilled") {
+        const archivedRows = await getLatestArchivedSchedule();
+        if (archivedRows.length > 0) {
+          scheduleRows = archivedRows;
+          nextSeasonContext = buildArchivedSeasonContext(archivedRows, nextSeasonContext);
+        }
+      }
+
       const normalized = normalizeSchedule(scheduleRows);
       const teamMeta =
         logosRes.status === "fulfilled" && logosRes.value && typeof logosRes.value === "object"
@@ -215,13 +294,12 @@ export function usePredictionState(authSession = null) {
           : {};
       const enriched = applyTeamMeta(normalized, teamMeta);
       setSchedule(enriched);
-      const nextSeasonContext =
-        seasonContextRes.status === "fulfilled" && seasonContextRes.value
-          ? seasonContextRes.value
-          : INITIAL_SEASON_CONTEXT;
       setSeasonContext(nextSeasonContext);
       setWeek(toNumberOrNull(enriched?.[0]?.week) ?? toNumberOrNull(nextSeasonContext?.display_week));
       setTeamMeta(teamMeta);
+      setScheduleError(
+        scheduleRes.status === "rejected" ? scheduleRes.reason?.message ?? "Failed to load schedule" : null
+      );
 
       if (historyRes.status === "fulfilled") {
         const entries = Array.isArray(historyRes.value?.entries)
@@ -229,6 +307,10 @@ export function usePredictionState(authSession = null) {
           : [];
         setHistory(entries.map(ensureHistoryEntry));
       }
+      if (summaryRes.status === "fulfilled") {
+        setHistorySummary(summaryRes.value || INITIAL_HISTORY_SUMMARY);
+      }
+      setScheduleLoading(false);
     };
 
     init();
@@ -265,22 +347,53 @@ export function usePredictionState(authSession = null) {
 
   const loadScheduleForWeek = useCallback(
     async (seasonOverride, weekOverride) => {
-      const rows = await getScheduleForWeek(seasonOverride, weekOverride);
-      const normalized = normalizeSchedule(rows);
-      const enriched = applyTeamMeta(normalized, teamMeta);
-      const derivedWeek = toNumberOrNull(weekOverride ?? normalized?.[0]?.week);
-      const derivedSeason =
-        toNumberOrNull(seasonOverride ?? normalized?.[0]?.season) || seasonOverride || seasonContext?.current_season;
-      setSchedule(enriched);
-      setWeek(derivedWeek);
-      setSeasonContext((prev) => ({
-        ...prev,
-        current_season: derivedSeason || prev.current_season,
-        display_week: derivedWeek ?? prev.display_week,
-      }));
-      return enriched;
+      setScheduleLoading(true);
+      setScheduleError(null);
+      try {
+        const isDefaultSlateRequest = seasonOverride == null && weekOverride == null;
+        let rows = await getScheduleForWeek(seasonOverride, weekOverride, { fallbackRows: schedule });
+        let nextSeasonContext = null;
+
+        if (isDefaultSlateRequest) {
+          nextSeasonContext = await getSeasonContext(rows);
+          if ((!Array.isArray(rows) || rows.length === 0)) {
+            const archivedRows = await getLatestArchivedSchedule();
+            if (archivedRows.length > 0) {
+              rows = archivedRows;
+              nextSeasonContext = buildArchivedSeasonContext(archivedRows, nextSeasonContext);
+            }
+          }
+        }
+
+        const normalized = normalizeSchedule(rows);
+        const enriched = applyTeamMeta(normalized, teamMeta);
+        const derivedWeek = toNumberOrNull(
+          weekOverride ?? normalized?.[0]?.week ?? nextSeasonContext?.display_week
+        );
+        const derivedSeason =
+          toNumberOrNull(seasonOverride ?? normalized?.[0]?.season ?? nextSeasonContext?.current_season) ||
+          seasonOverride ||
+          seasonContext?.current_season;
+        setSchedule(enriched);
+        setWeek(derivedWeek);
+        if (nextSeasonContext) {
+          setSeasonContext(nextSeasonContext);
+        } else {
+          setSeasonContext((prev) => ({
+            ...prev,
+            current_season: derivedSeason || prev.current_season,
+            display_week: derivedWeek ?? prev.display_week,
+          }));
+        }
+        return enriched;
+      } catch (error) {
+        setScheduleError(error?.message ?? "Failed to load schedule");
+        return Array.isArray(schedule) ? schedule : [];
+      } finally {
+        setScheduleLoading(false);
+      }
     },
-    [seasonContext?.current_season, teamMeta]
+    [schedule, seasonContext?.current_season, teamMeta]
   );
 
   const setLoading = useCallback((key, value) => {
@@ -329,6 +442,11 @@ export function usePredictionState(authSession = null) {
     const normalized = ensureHistoryEntry(entry);
     const entryKey = normalized?.game_id || buildGameKey(normalized?.game || normalized);
     setHistory((prev) => [normalized, ...prev].slice(0, MAX_HISTORY_ENTRIES));
+    setHistorySummary((prev) => ({
+      ...prev,
+      total_predictions: Number(prev?.total_predictions || 0) + 1,
+      latest_prediction_at: normalized?.ts || prev?.latest_prediction_at || null,
+    }));
     setCurrent(normalized);
     if (entryKey) setCurrentKey(entryKey);
   }, []);
@@ -347,12 +465,16 @@ export function usePredictionState(authSession = null) {
     errors: errorsByKey,
     current,
     history,
+    historySummary,
     health,
     seasonContext,
+    scheduleLoading,
+    scheduleError,
     setPrediction,
     setLoading,
     setError,
     pushHistory,
+    refreshHistory,
     resetHistory,
     count: history.length,
     loadScheduleForWeek,
