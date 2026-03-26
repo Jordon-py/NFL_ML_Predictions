@@ -11,6 +11,7 @@
 import { useEffect, useState } from "react";
 import HistoryChart from "../components/HistoryChart.jsx";
 import {
+  getHistorySummary,
   getNextWeekSchedule,
   getPredictionHistory,
   getStatusOverview,
@@ -71,15 +72,17 @@ function formatWinProbability(probability) {
   return typeof probability === "number" ? `${Math.round(probability * 100)}%` : "n/a";
 }
 
-export default function StatsPage() {
+export default function StatsPage({ authSession = null }) {
   // Remote payloads from the backend
   const [schedule, setSchedule] = useState(/** @type {any[]} */([]));
   const [history, setHistory] = useState(/** @type {any[]} */([]));
   const [overview, setOverview] = useState(/** @type {any | null} */(null));
+  const [historySummary, setHistorySummary] = useState(/** @type {any | null} */(null));
 
   // Local UI state
   const [isPageLoading, setIsPageLoading] = useState(true);
   const [pageError, setPageError] = useState(/** @type {string | null} */(null));
+  const userId = authSession?.userId || null;
 
   /**
    * Initial hydration:
@@ -93,10 +96,11 @@ export default function StatsPage() {
     const hydrate = async () => {
       try {
         setIsPageLoading(true);
-        const [scheduleData, historyResponse, overviewData] = await Promise.all([
+        const [scheduleData, historyResponse, overviewData, summaryData] = await Promise.all([
           getNextWeekSchedule(),
-          getPredictionHistory(50),
-          getStatusOverview(),
+          getPredictionHistory(50, userId),
+          getStatusOverview(userId),
+          getHistorySummary(userId),
         ]);
 
         if (!active) return;
@@ -104,6 +108,7 @@ export default function StatsPage() {
         setSchedule(Array.isArray(scheduleData) ? scheduleData : []);
         setHistory(Array.isArray(historyResponse?.entries) ? historyResponse.entries : []);
         setOverview(overviewData || null);
+        setHistorySummary(summaryData || null);
         setPageError(null);
       } catch (err) {
         if (!active) return;
@@ -119,18 +124,22 @@ export default function StatsPage() {
       // guard so we don't update state on an unmounted component
       active = false;
     };
-  }, []);
+  }, [userId]);
 
   const historyMap = buildHistoryLookup(history);
 
   const overviewData = overview || {};
   const health = overviewData.health || { status: "unknown" };
   const datasetStatistics = overviewData.dataset || {};
-  const historyMetrics = overviewData.history?.metrics || { total_predictions: history.length };
+  const historyMetrics = historySummary || overviewData.history?.metrics || { total_predictions: history.length };
   /** @type {any[]} */
   const scheduleList = Array.isArray(schedule) ? schedule : [];
 
   const predictionWinRate = typeof historyMetrics?.win_rate === "number" ? `${Math.round(historyMetrics.win_rate * 100)}%` : "n/a";
+  const spreadError =
+    typeof historyMetrics?.avg_abs_spread_error === "number"
+      ? `${historyMetrics.avg_abs_spread_error.toFixed(1)} pts`
+      : "n/a";
 
   /**
    * Renders "Next Week Schedule" list:
@@ -230,6 +239,11 @@ export default function StatsPage() {
             value={historyMetrics?.total_predictions ?? history.length}
             subtext={`Win rate: ${predictionWinRate}`}
           />
+          <SummaryCard
+            title="Resolved games"
+            value={historyMetrics?.resolved_games ?? 0}
+            subtext={`Avg spread error: ${spreadError}`}
+          />
         </section>
 
         <section className={styles.scheduleSection}>
@@ -239,8 +253,7 @@ export default function StatsPage() {
 
         <section className={styles.historySection}>
           <h2 className={styles.h2}>Historical Predictions</h2>
-          {/* HistoryChart still receives the raw history array plus context state */}
-          <HistoryChart history={history} />
+          <HistoryChart history={history} summary={historyMetrics} />
         </section>
       </div>
     </>

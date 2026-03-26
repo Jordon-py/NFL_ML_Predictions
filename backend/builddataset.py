@@ -23,6 +23,7 @@ if __name__ == "__main__" and __package__ is None:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from backend.pipeline_models import DatasetArtifactManifest, DatasetBuildConfig
+from backend.score_sync import extract_score_entries_from_dataframe, write_score_snapshot
 
 
 def _utc_now() -> datetime:
@@ -213,7 +214,11 @@ def main() -> None:
 
     metadata_path = run_dir / "game_features_metadata.json"
     quality_report_path = run_dir / "game_features_quality_report.json"
+    score_snapshot_path = run_dir / "game_scores.json"
     log_path = run_dir / "build_csv_datasets.log"
+    score_entries = extract_score_entries_from_dataframe(clean_df, updated_at=_utc_now().isoformat())
+    write_score_snapshot(score_snapshot_path, score_entries)
+    write_score_snapshot(out_root / "latest_scores.json", score_entries)
 
     manifest = DatasetArtifactManifest(
         run_id=run_id,
@@ -235,6 +240,7 @@ def main() -> None:
         run_dir=str(run_dir),
         metadata_path=str(metadata_path) if metadata_path.exists() else None,
         quality_report_path=str(quality_report_path) if quality_report_path.exists() else None,
+        score_snapshot_path=str(score_snapshot_path),
         log_path=str(log_path) if log_path.exists() else None,
         cleaning_stats={key: int(value) for key, value in clean_stats.items()},
     )
@@ -253,6 +259,7 @@ def main() -> None:
     )
     dataset_builder.logging.info("Promoted clean dataset to %s", promoted_clean_path)
     dataset_builder.logging.info("Wrote dataset manifest to %s", run_dir / "dataset_manifest.json")
+    dataset_builder.logging.info("Wrote %d completed game scores to %s", len(score_entries), score_snapshot_path)
 
 
 if __name__ == "__main__":

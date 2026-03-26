@@ -20,7 +20,12 @@ from typing import Iterable
 from .pipeline_models import PredictionStorageProfile, PredictionUserContext
 from .schemas import HistoryEntry, HistoryResponse, PredictionRequest, StoredPredictionRecord
 
-from .sqlite_store import get_user_history, persist_prediction
+from .sqlite_store import (
+    get_user_history,
+    get_user_history_count,
+    get_user_history_summary,
+    persist_prediction,
+)
 
 log = logging.getLogger(__name__)
 
@@ -159,6 +164,44 @@ def get_prediction_history(context: PredictionUserContext, limit: int = 100) -> 
 def get_prediction_history_count(context: PredictionUserContext) -> int:
     """Count stored predictions for one user without exposing the whole ledger."""
 
+    try:
+        return int(get_user_history_count(context))
+    except Exception:
+        log.exception("Failed to count SQLite-backed prediction history; falling back to JSON.")
+
     history_path = _user_history_path(context)
     with _prediction_store_lock:
         return len(_read_history_records(history_path))
+
+
+def get_prediction_history_summary(context: PredictionUserContext) -> dict[str, object]:
+    """Return per-user prediction metrics with SQLite as the primary source."""
+
+    try:
+        return get_user_history_summary(context)
+    except Exception:
+        log.exception("Failed to summarize SQLite-backed prediction history; falling back to JSON.")
+
+    with _prediction_store_lock:
+        records = _read_history_records(_user_history_path(context))
+
+    latest_prediction_at = records[0].ts if records else None
+    confidences = []
+    for record in records:
+        try:
+            confidences.append(
+                max(float(record.home_win_probability), float(record.away_win_probability))
+            )
+        except Exception:
+            continue
+
+    avg_confidence = (sum(confidences) / len(confidences)) if confidences else None
+    return {
+        "total_predictions": len(records),
+        "resolved_games": 0,
+        "win_rate": None,
+        "avg_abs_spread_error": None,
+        "avg_confidence": avg_confidence,
+        "latest_prediction_at": latest_prediction_at,
+        "last_score_sync_at": None,
+    }

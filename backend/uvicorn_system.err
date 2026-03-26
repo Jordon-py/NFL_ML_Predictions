@@ -1,0 +1,28 @@
+C:\Users\goku\Documents\NFL_ML_Predictions\backend\.venv\Lib\site-packages\polars\meta\build.py:5: UserWarning: Polars binary is missing!
+  from polars._utils.polars_version import get_polars_version
+[2026-03-20 03:44:30,439] [INFO] [App] CORS allowed origins: ['*']
+INFO:     Started server process [11156]
+INFO:     Waiting for application startup.
+[2026-03-20 03:44:30,482] [INFO] [App] Starting up; loading dataset and models...
+[2026-03-20 03:44:30,484] [INFO] [Dataset] Loading dataset from: C:\Users\goku\Documents\NFL_ML_Predictions\backend\data\datasets\game_features_20260320_clean.csv
+[2026-03-20 03:44:30,618] [INFO] [Dataset] Loaded 2228 rows from game_features_20260320_clean.csv (sha256=76b08e81a432d7026cd005aa348340298803282cd29e53b685943797798cefe6)
+[2026-03-20 03:44:30,618] [INFO] [Model] Using models directory: C:\Users\goku\Documents\NFL_ML_Predictions\backend\models
+[2026-03-20 03:44:30,618] [INFO] [Model] Using pipeline artifact for 'home': C:\Users\goku\Documents\NFL_ML_Predictions\backend\models\home_pipe.joblib
+[2026-03-20 03:44:30,935] [INFO] [Model] Applied 2 sklearn-imputer compatibility patches for 'home'
+[2026-03-20 03:44:30,935] [INFO] [Model] Loaded 'home' successfully from C:\Users\goku\Documents\NFL_ML_Predictions\backend\models\home_pipe.joblib
+[2026-03-20 03:44:30,935] [INFO] [Model] Pipeline 'home' steps: ['pre', 'reg']
+[2026-03-20 03:44:30,935] [INFO] [Model] Using pipeline artifact for 'away': C:\Users\goku\Documents\NFL_ML_Predictions\backend\models\away_pipe.joblib
+[2026-03-20 03:44:30,996] [INFO] [Model] Applied 2 sklearn-imputer compatibility patches for 'away'
+[2026-03-20 03:44:30,997] [INFO] [Model] Loaded 'away' successfully from C:\Users\goku\Documents\NFL_ML_Predictions\backend\models\away_pipe.joblib
+[2026-03-20 03:44:30,997] [INFO] [Model] Pipeline 'away' steps: ['pre', 'reg']
+[2026-03-20 03:44:30,997] [INFO] [Model] Using pipeline artifact for 'win': C:\Users\goku\Documents\NFL_ML_Predictions\backend\models\win_pipe.joblib
+[2026-03-20 03:44:31,019] [INFO] [Model] Applied 2 sklearn-imputer compatibility patches for 'win'
+[2026-03-20 03:44:31,019] [INFO] [Model] Loaded 'win' successfully from C:\Users\goku\Documents\NFL_ML_Predictions\backend\models\win_pipe.joblib
+[2026-03-20 03:44:31,020] [INFO] [Model] Pipeline 'win' steps: ['pre', 'clf']
+[2026-03-20 03:44:31,020] [INFO] [Model] Loaded model keys: ['home', 'away', 'win']
+[2026-03-20 03:44:31,023] [INFO] [Model] Applied 2 sklearn-imputer compatibility patches for score_preprocessor.joblib
+[2026-03-20 03:44:31,024] [INFO] [Model] Loaded preprocessor artifact from C:\Users\goku\Documents\NFL_ML_Predictions\backend\models\score_preprocessor.joblib
+[2026-03-20 03:44:31,026] [INFO] [Model] Applied 2 sklearn-imputer compatibility patches for win_preprocessor.joblib
+[2026-03-20 03:44:31,026] [INFO] [Model] Loaded preprocessor artifact from C:\Users\goku\Documents\NFL_ML_Predictions\backend\models\win_preprocessor.joblib
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)

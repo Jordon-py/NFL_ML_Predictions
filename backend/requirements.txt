@@ -6,10 +6,10 @@ uvicorn[standard]>=0.23.0,<0.25.0
 gunicorn>=21.2.0,<22.0.0
 
 # Data science stack (carefully version-coordinated)
-# Updated to support NumPy 2.x and scikit-learn 1.7.x for model compatibility
+# Keep scikit-learn pinned to the trained model-bundle contract to avoid startup drift.
 numpy>=2.3.0,<3.0.0
 pandas>=2.3.0,<3.0.0
-scikit-learn>=1.7.0,<2.0.0
+scikit-learn==1.7.2
 joblib>=1.2.0,<1.5.0
 
 # ML/AI libraries

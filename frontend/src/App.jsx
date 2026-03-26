@@ -67,13 +67,17 @@ function PredictionAppRoutes({ authSession, onSignOut }) {
     errors,
     current,
     history,
+    historySummary,
     health,
     seasonContext,
+    scheduleLoading,
+    scheduleError,
     loadScheduleForWeek,
     setPrediction,
     setLoading,
     setError,
     pushHistory,
+    refreshHistory,
     resetHistory,
     count,
   } = predictionState;
@@ -91,6 +95,8 @@ function PredictionAppRoutes({ authSession, onSignOut }) {
               predictions={predictions}
               loading={loading}
               errors={errors}
+              scheduleLoading={scheduleLoading}
+              scheduleError={scheduleError}
               current={current}
               history={history}
               health={health}
@@ -99,6 +105,7 @@ function PredictionAppRoutes({ authSession, onSignOut }) {
             setLoading={setLoading}
             setError={setError}
             pushHistory={pushHistory}
+            refreshHistory={refreshHistory}
             seasonContext={seasonContext}
           />
         )}
@@ -113,6 +120,7 @@ function PredictionAppRoutes({ authSession, onSignOut }) {
             health={health}
             onClearHistory={resetHistory}
             historyCount={count}
+            historySummary={historySummary}
           />
         )}
       />

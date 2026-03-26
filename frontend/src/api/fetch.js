@@ -1,14 +1,9 @@
-// ==========================================
-// File: frontend/src/api/fetch.js
-// Role: Fetch wrapper for API requests.
-// Input Data: URL path and fetch options.
-// Output Data: Parsed JSON or errors.
-// Dependencies: None
-// Notes: Centralizes timeouts and error handling.
-// ==========================================
-
 /**
- * Core fetch wrapper with timeout, error handling, and environment-aware URL resolution.
+ * Legacy fetch helper kept for older experiments.
+ *
+ * The active app shell uses `frontend/src/api/client.js`. This module remains
+ * useful as a small standalone wrapper, but changes to production API behavior
+ * should normally happen in `client.js` first.
  */
 
 function resolveApiBase() {
