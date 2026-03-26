@@ -17,9 +17,34 @@
     }
   },
   "env": {
+    "APP_ENV": {
+      "description": "Runtime environment label for the deployed backend",
+      "value": "production",
+      "required": false
+    },
     "LOG_LEVEL": {
       "description": "Logging level for the application",
       "value": "INFO",
+      "required": false
+    },
+    "RESTRICT_CORS": {
+      "description": "Enforce exact-origin CORS checks in production",
+      "value": "true",
+      "required": false
+    },
+    "ALLOWED_ORIGINS": {
+      "description": "Canonical frontend origin allowed to call the API",
+      "value": "https://new-nfl-predict.vercel.app",
+      "required": false
+    },
+    "ALLOW_VERCEL_PREVIEWS": {
+      "description": "Allow preview deployments via regex fallback",
+      "value": "true",
+      "required": false
+    },
+    "CORS_ORIGINS_REGEX": {
+      "description": "Regex used for Vercel preview deployment origins",
+      "value": "^https://.*\\.vercel\\.app$",
       "required": false
     },
     "ENABLE_ADMIN": {
@@ -32,14 +57,14 @@
       "value": "data/datasets",
       "required": false
     },
-    "DATASET_PATH": {
-      "description": "Path to NFL dataset CSV file",
-      "value": "game_features_20260109_clean.csv",
+    "SCHEDULE_PATH": {
+      "description": "Optional packaged schedule CSV override relative to backend/",
+      "value": "data/Nfl_schedule_2025.csv",
       "required": false
     },
-    "SCHEDULE_PATH": {
-      "description": "Path to NFL schedule CSV file", 
-      "value": "Nfl_schedule_2025.csv",
+    "MODELS_DIR": {
+      "description": "Path to the canonical packaged model bundle relative to backend/",
+      "value": "data/models",
       "required": false
     }
   },

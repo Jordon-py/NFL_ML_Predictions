@@ -42,7 +42,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--build-start-season",
         type=int,
-        default=max(1999, current_year - 8),
+        default=max(1999, current_year - 10),
         help="Start season for dataset rebuild.",
     )
     parser.add_argument(

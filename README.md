@@ -1,61 +1,50 @@
 # NFL ML Predictions
 
-Production-ready FastAPI backend serving NFL ML predictions with a Vite/React frontend.
+Full-stack NFL forecasting workspace with a FastAPI backend, a React/Vite frontend, a dataset build pipeline, and a model training pipeline.
 
-## Quickstart
+## Canonical Deploy Targets
 
-Backend (FastAPI):
-```
-cd backend
-python -m pip install -r requirements.txt
-uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000
-```
+- Frontend: Vercel project `nfl-ml-predictions`
+- Production frontend alias: `https://new-nfl-predict.vercel.app`
+- Backend: Heroku app `nfl-predict`
+- Canonical backend origin: `https://nfl-predict-ecf5a5bd34fe.herokuapp.com`
 
-Frontend (Vite):
-```
-Last updated: March 10, 2026
+Deploy intent:
 
-NFL ML Predictions is a full-stack forecasting workspace for NFL matchups. It includes:
+- Vercel should build from `frontend/`
+- Heroku should serve the FastAPI backend with the buildpack + `Procfile` flow
+- Production CORS should allow the canonical frontend origin plus `.vercel.app` previews
 
-- A FastAPI backend for schedule loading, model inference, health/status, history, and LLM explanation endpoints.
-- A React/Vite frontend with a premium landing page, local sign-in/sign-out, and protected dashboard routes.
-- A dataset pipeline that builds clean game-level training data.
-- A training pipeline that evaluates, calibrates, stores, and archives model artifacts.
-- Per-user prediction history storage keyed to the signed-in frontend session.
+## What This Repo Actually Does
 
-## What Changed In This Refresh
-
-- The landing page and protected app shell now support sign in and sign out.
-- Prediction history is stored per user instead of one shared global ledger.
-- The backend uses typed Pydantic contracts for API responses, chat/explain payloads, and persisted prediction records.
-- `backend/builddataset.py` is now the canonical dataset build entrypoint.
-- `backend/train_models.py` now defaults to the latest clean dataset, writes run manifests, archives model runs, and records a monthly in-season retraining cadence.
-- The README now reflects the actual working scripts and storage layout.
+- Serves NFL schedule, health, status, prediction, and history endpoints from `backend/main.py`.
+- Stores user-scoped prediction history in SQLite first, with JSON files as a fallback.
+- Builds cleaned training datasets into `backend/data/datasets/`.
+- Trains score and win-probability models and promotes bundles for serving.
+- Ships a React app with a protected dashboard, history view, and status page.
 
 ## Quick Start
 
 ### 1. Install dependencies
 
 ```bash
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 cd frontend
 npm install
 cd ..
 ```
 
-### 2. Build a clean dataset
+### 2. Build the canonical dataset
 
 ```bash
 python backend/builddataset.py --start 2018 --end 2025 --out-dir backend/data/datasets
 ```
 
-What this does:
+What this writes:
 
-- Uses the current feature engineering logic in `backend/build_csv_datasets_v3.py`
-- Writes a dated run under `backend/data/datasets/runs/<timestamp>/`
-- Promotes the latest clean dataset to `backend/data/datasets/`
-- Writes `latest_dataset.json` so training and runtime can discover the active dataset
-- Supports `--with-calibration-rows` when you need legacy compatibility rows for older workflows
+- A dated run folder in `backend/data/datasets/runs/<timestamp>/`
+- A promoted clean CSV in `backend/data/datasets/`
+- `backend/data/datasets/latest_dataset.json`
 
 ### 3. Train models
 
@@ -63,19 +52,23 @@ What this does:
 python backend/train_models.py
 ```
 
-What this does:
+What this writes by default:
 
-- Uses the latest clean dataset by default
-- Trains regression and win-probability models
-- Writes active artifacts to `backend/models/`
-- Archives the full run under `backend/models/runs/<timestamp>/`
-- Writes `latest_training_run.json` and `training_schedule.json`
-- Stores a canonical inference feature contract in `metadata.json` so runtime inference stays aligned
+- Promoted artifacts in `backend/models/`
+- A staging bundle in `backend/models/staging/<run_id>/`
+- `metadata.json`, `training_report.json`, and `run_summary.json`
+- A dated mirror in `backend/YYYYMMDD/models/` when training uses the default output directory
+
+Important runtime note:
+
+- Training still writes to `backend/models/` by default.
+- Serving prefers `MODELS_DIR` when set, then `backend/data/models/current`, then `backend/data/models`, then packaged fallbacks, and finally `backend/models`.
+- That split is intentional so deployments can serve a promoted bundle while local training experiments stay isolated.
 
 ### 4. Start the backend
 
 ```bash
-uvicorn backend.main:app --reload --port 8000
+uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
 ### 5. Start the frontend
@@ -87,202 +80,107 @@ npm run dev
 
 Open `http://localhost:3000`.
 
-## User Guide
+## Runtime Behavior That Matters
 
-### Sign in
+### Prediction readiness is allowed to degrade
 
-- Sign in with your email and a password (six characters or more). The identity stays local to this device so you can return to the dashboard instantly.
-- Your email is the key for per-user prediction history—everything you forecast is tied to that identity.
+The backend now boots even if models are missing or incompatible.
 
-### Browse slates
+- `/health`, `/status/models`, `/schedule`, and `/history` still come up.
+- `/predict` returns `503` with structured blockers when the active bundle is not ready.
+- This makes deployments diagnosable instead of failing hard during startup.
 
-- Use the week/season controls on the dashboard to pivot between the next live slate, archived weeks, or past seasons. The grid updates to match the slate you pick so there is always something to explore.
-- Final scores sync automatically every Sunday, Monday, and Thursday night, so the matchup cards and History page always include the latest official results.
+### Schedule loading is queryable and postseason-safe
 
-### Forecast & compare
+- `GET /schedule?season=<year>&week=<week>` returns a specific slate.
+- `GET /schedule/next-week` remains the compatibility route for "next slate".
+- When no future regular-season game exists, the backend falls back to the latest available slate, including postseason weeks.
 
-- Tap any matchup, run the prediction, and the system saves your forecast in the backend (via the SQLite ledger under `backend/predictions.db`) and in your browser cache for fast access.
-- Once final scores arrive, the cards and History chart compare your prediction to the actual outcome so you can see how each call landed.
+### History is user-scoped
 
-## Developer Guide
+The frontend sends `X-User-Id`, and the backend uses that to isolate prediction history.
 
-## Canonical Entry Points
+- Primary store: SQLite-backed history and summary metrics
+- Fallback: JSON ledgers under `backend/Predictions/users/<user-storage-key>/`
 
-Use these scripts and endpoints as the source of truth:
+## Frontend Architecture In One Minute
 
-- Dataset build: `python backend/builddataset.py`
-- Model training: `python backend/train_models.py`
-- Backend runtime: `uvicorn backend.main:app --reload --port 8000`
-- Frontend runtime: `cd frontend && npm run dev`
+- `frontend/src/App.jsx` creates the auth session and shared prediction state once.
+- `frontend/src/hooks/usePredictionState.js` owns schedule, health, history, summary, logos, and prediction maps.
+- `frontend/src/components/DashBoard/Dashboard.jsx` consumes that shared state instead of shadowing it locally.
+- `frontend/src/api/client.js` is the active transport and compatibility layer.
+- `frontend/src/api/fetch.js` is a legacy helper kept for older experiments and is not the main app path.
 
-Avoid older README references to `backend/build_csv_datasets.py`. The active builder is wrapped by `backend/builddataset.py`.
+## Key Endpoints
 
-## Operator Endpoints
-
-When `ENABLE_ADMIN=true`, the backend also exposes:
-
-- `POST /admin/reload` to reload the active dataset and model artifacts without restarting the server
-- `POST /admin/retrain` to run `backend/train_models.py` against the active dataset and hot-reload the result
-
-`POST /admin/retrain` respects the monthly in-season freshness window by default. Pass `force: true` if you need to retrain immediately during the same freshness window.
-
-## Repository Layout
-
-```text
-backend/
-  builddataset.py              Canonical dataset build entrypoint
-  build_csv_datasets_v3.py     Core feature engineering builder
-  train_models.py              Model training + archiving entrypoint
-  main.py                      FastAPI application
-  schemas.py                   API Pydantic models
-  pipeline_models.py           Pipeline/storage Pydantic models
-  prediction_store.py          Per-user prediction history storage
-  data/
-    datasets/
-      latest_dataset.json
-      game_features_*_clean.csv
-      runs/<timestamp>/
-  models/
-    metadata.json
-    training_report.json
-    training_schedule.json
-    latest_training_run.json
-    runs/<timestamp>/
-  Predictions/
-    users/<user-storage-key>/
-      profile.json
-      predictions.json
-
-frontend/
-  src/
-    App.jsx
-    hooks/useAuthSession.js
-    hooks/usePredictionState.js
-    pages/LandingPage.jsx
-    components/DashBoard/Dashboard.jsx
-```
-
-## Backend API
-
-### Core endpoints
+### Health and status
 
 - `GET /health`
 - `GET /status/overview`
 - `GET /status/models`
+- `GET /status/runtime`
+
+### Schedule and prediction
+
+- `GET /schedule`
 - `GET /schedule/next-week`
 - `GET /teams/logos`
-- `GET /history?limit=N`
 - `POST /predict`
 - `POST /predict/explain`
 - `POST /llm/chat`
 
-### User-scoped history
+### History
 
-Prediction history is keyed by the `X-User-Id` request header.
+- `GET /history?limit=N`
+- `GET /history/summary`
 
-- The frontend sends this automatically for prediction/history/status calls.
-- If the header is missing, the backend falls back to an `anonymous` ledger.
+### Admin
 
-### Example prediction request
+When `ENABLE_ADMIN=true`:
 
-```json
-{
-  "home_team": "KC",
-  "away_team": "BUF",
-  "season": 2025,
-  "week": 15
-}
-```
+- `POST /admin/reload`
+- `POST /admin/retrain`
+- `POST /admin/promote/{job_id}`
 
-## Data Pipeline
-
-### Dataset outputs
-
-Every `builddataset.py` run creates:
-
-- A raw dated dataset inside a run directory
-- A cleaned promoted dataset in `backend/data/datasets/`
-- `dataset_manifest.json` in the run directory
-- `latest_dataset.json` in `backend/data/datasets/`
-- `build_csv_datasets.log` in the run directory
-- Builder logs and metadata files generated by the underlying builder
-
-### Cleaning rules added by the wrapper
-
-- Strip BOM and whitespace from headers
-- Drop fully blank rows
-- Ensure `game_id` exists when enough schedule context is present
-- Deduplicate by `game_id` using row completeness
-- Sort the final dataset consistently by `season`, `week`, and `game_id`
-
-## Training Pipeline
-
-### Training outputs
-
-Every `train_models.py` run now writes:
-
-- Active model artifacts in `backend/models/`
-- `training_report.json`
-- `metadata.json`
-- `training_schedule.json`
-- `latest_training_run.json`
-- `train_models_<timestamp>.log`
-- `run_manifest.json` in the archived run folder
-- Archived copies in `backend/models/runs/<timestamp>/`
-
-### Retraining cadence
-
-The training pipeline records a monthly in-season policy:
-
-- In season: August through February
-- Cadence: monthly
-- Output: `training_schedule.json` contains the last train time and next recommended refresh
-
-This does not yet start an OS scheduler automatically. It makes the schedule explicit and machine-readable for operators, tasks, or CI.
-
-## Prediction Storage
-
-### Backend
-
-Per-user predictions are stored under:
+## Repository Map
 
 ```text
-backend/Predictions/users/<user-storage-key>/predictions.json
+backend/
+  main.py                      FastAPI app and runtime orchestration
+  builddataset.py              Canonical dataset build entrypoint
+  train_models.py              Canonical training entrypoint
+  prediction_store.py          User-scoped history persistence
+  sqlite_store.py              SQLite-backed prediction history
+  app/core/settings.py         Environment settings and path resolution
+  data/
+    datasets/
+      latest_dataset.json
+      runs/<timestamp>/
+    models/
+      current/
+
+frontend/
+  src/
+    App.jsx
+    api/client.js
+    hooks/usePredictionState.js
+    components/DashBoard/Dashboard.jsx
+    components/HistoryPage.jsx
+    pages/StatsPage.jsx
+  public/
+    schedules/
 ```
 
-Each record is validated by Pydantic before it is written.
+## Useful Docs
 
-### Frontend
-
-Local browser cache is stored per user:
-
-```text
-prediction_history:<email>
-```
-
-This prevents one signed-in user from inheriting another user's cached history in the same browser.
-
-## Pydantic Usage
-
-Pydantic is now used across more than the HTTP API:
-
-- API request and response schemas in `backend/schemas.py`
-- Persisted prediction records in `backend/schemas.py`
-- Dataset and training run manifests in `backend/pipeline_models.py`
-
-This keeps runtime contracts, disk artifacts, and operator-facing metadata consistent.
-
-The training metadata now records both:
-
-- Canonical artifact names (`home_model`, `away_model`, `win_clf_calibrated`)
-- A union `feature_names` contract used by runtime inference to keep score models and the win classifier aligned
+- [Environment configuration](docs/ENVIRONMENT.md)
+- [Frontend prediction flow](docs/FRONTEND_PREDICTION_FLOW.md)
 
 ## Verification
 
-Recommended checks after pipeline or API changes:
+Recommended checks after backend or frontend changes:
 
 ```bash
-python -m compileall backend frontend/src
 python -m pytest backend/tests -q
 cd frontend && npm test -- --run && npm run build
 ```
@@ -292,45 +190,35 @@ Runtime smoke checks:
 ```bash
 curl http://127.0.0.1:8000/health
 curl http://127.0.0.1:8000/status/overview -H "X-User-Id: analyst@example.com"
+curl -X POST http://127.0.0.1:8000/predict ^
+  -H "Content-Type: application/json" ^
+  -d "{\"home_team\":\"KC\",\"away_team\":\"BUF\",\"season\":2025,\"week\":15}"
 ```
-
-## Known Runtime Note
-
-If `/health` reports `production_ready: false` because of a legacy bundle contract or a scikit-learn artifact mismatch, the server can still boot for diagnostics but the deployment should not be treated as production-ready until:
-
-- the environment is aligned to the artifact version in `requirements.txt`, or
-- models are retrained in the current environment
 
 ## Troubleshooting
 
-### Frontend shows CORS errors
+### `/predict` returns `503`
 
-- Run the frontend on `http://localhost:3000` or `http://localhost:5173`
-- Confirm backend CORS settings in `backend/config.py`
+- Check `/status/models` for readiness blockers.
+- Confirm `MODELS_DIR` points at a complete bundle.
+- If the bundle was trained under a different scikit-learn version, retrain or align the runtime environment.
 
-### History appears empty after sign-in
+### The frontend loads but some pages look empty
 
-- Make sure the frontend is signed in with an email
-- Confirm the backend receives `X-User-Id`
-- Check `backend/Predictions/users/` for the user ledger
+- Confirm Vercel `VITE_API_BASE_URL` points at the canonical Heroku backend URL.
+- In local dev, prefer `VITE_API_DEV=http://127.0.0.1:8000`.
+- Older deployments may not expose `/history/summary` or queryable `/schedule`; the frontend now falls back, but a backend redeploy is still the clean fix.
 
-### Training uses the wrong dataset
+### Training seems to use the wrong dataset
 
-- Inspect `backend/data/datasets/latest_dataset.json`
-- Override the dataset manually:
+- Inspect `backend/data/datasets/latest_dataset.json`.
+- Override explicitly when needed:
 
 ```bash
-python backend/train_models.py --data backend/data/datasets/game_features_20260310_clean.csv
+python backend/train_models.py --data backend/data/datasets/<your_clean_dataset>.csv
 ```
 
-### Admin retrain reports that the active model is still current
+### Local schedule lookups return nothing
 
-- This is expected during the monthly in-season freshness window
-- Use `python backend/train_models.py --force` or send `{"force": true}` to `POST /admin/retrain` when you intentionally want to retrain early
-
-## Next Recommended Improvements
-
-- Add real authentication instead of local-only sessions
-- Add an automated scheduled job for monthly in-season retraining
-- Add evaluation dashboards for archived model runs
-- Add migration logic for old shared history files if they need to be preserved
+- Make sure `backend/data/Nfl_schedule_2025.csv` exists, or set `SCHEDULE_PATH`.
+- The frontend also ships fallback CSVs under `frontend/public/schedules/` for compatibility with older backends.

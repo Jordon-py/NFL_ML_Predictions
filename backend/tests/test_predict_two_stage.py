@@ -128,6 +128,9 @@ def test_predict_feeds_raw_win_probability_into_score_models(monkeypatch):
     monkeypatch.setattr(main_module.state, "predict_cache", {})
     monkeypatch.setattr(main_module.state, "predict_cache_hits", 0)
     monkeypatch.setattr(main_module.state, "predict_cache_misses", 0)
+    monkeypatch.setattr(main_module.state, "model_load_errors", {})
+    monkeypatch.setattr(main_module.state, "production_warnings", [])
+    monkeypatch.setattr(main_module.state, "production_blockers", [])
 
     with TestClient(main_module.app) as client:
         response = client.post(

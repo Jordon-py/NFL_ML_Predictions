@@ -60,8 +60,11 @@ from backend.prediction_store import (
     build_prediction_user_context,
     get_prediction_history as load_prediction_history,
     get_prediction_history_count,
+    get_prediction_history_summary as load_prediction_history_summary,
 )
+from backend.score_sync import extract_score_entries_from_dataframe
 from backend.schemas import PredictionRequest as StoredPredictionRequest
+from backend.sqlite_store import upsert_game_scores
 from backend.utils import functions_for_main as fn_main
 from backend.utils.ops_reporting import (
     collect_dataset_versions,
@@ -156,6 +159,7 @@ REQUIRED_MODELS: Tuple[str, ...] = ("home", "away", "win")
 WIN_PROBA_FEATURE = "nn_home_win_proba"
 PREDICT_CACHE_TTL_SEC = max(0, int(SETTINGS.predict_cache_ttl_sec))
 PREDICT_CACHE_MAX_ITEMS = max(50, int(SETTINGS.predict_cache_max_items))
+GAME_SCORE_SYNC_TTL_SEC = 900
 # Models directory is resolved at runtime by _find_models_dir().
 # Override in production with: MODELS_DIR=/absolute/or/repo-relative/path
 
@@ -264,8 +268,10 @@ def _find_models_dir() -> Path:
 
     Priority order:
       1) Env override (recommended for Heroku): MODELS_DIR / MODELS_PATH / MODEL_DIR
-      2) A complete bundle in common repo locations (prod-models/models, dated runs, etc.)
-      3) Fallback: backend/models (even if incomplete, so errors are visible in logs)
+      2) The promoted runtime bundle under backend/data/models/current
+      3) A complete bundle under backend/data/models
+      4) Other complete bundles in common repo locations (prod-models/models, dated runs, etc.)
+      5) Fallback: backend/models (even if incomplete, so errors are visible in logs)
 
     Tip:
       - On Heroku, always set MODELS_DIR to a path that exists *in the slug*.
@@ -289,6 +295,16 @@ def _find_models_dir() -> Path:
 
     candidates: List[Path] = []
 
+    # Promoted runtime bundle produced by admin/retrain flows.
+    promoted_current = CURRENT_MODELS_DIR
+    if _models_dir_has_required_artifacts(promoted_current):
+        candidates.append(promoted_current)
+
+    # Repository-local shared bundle used by deployment packaging.
+    packaged_data_models = DATA_DIR / "models"
+    if _models_dir_has_required_artifacts(packaged_data_models):
+        candidates.append(packaged_data_models)
+
     # Common packaged pattern: backend/data/prod-models/models
     direct = BASE_DIR / "data" / "prod-models" / "models"
     if _models_dir_has_required_artifacts(direct):
@@ -300,18 +316,17 @@ def _find_models_dir() -> Path:
         candidates.append(local_default)
 
     # Date-stamped training runs: backend/20251215/models (most recent wins)
-    for p in BASE_DIR.glob("20*/models"):
+    for p in sorted(BASE_DIR.glob("20*/models"), key=lambda item: item.stat().st_mtime, reverse=True):
         if _models_dir_has_required_artifacts(p):
             candidates.append(p)
 
     # Any nested prod-models/models in the repo
-    for p in BASE_DIR.glob("**/prod-models/models"):
+    for p in sorted(BASE_DIR.glob("**/prod-models/models"), key=lambda item: item.stat().st_mtime, reverse=True):
         if _models_dir_has_required_artifacts(p):
             candidates.append(p)
 
     if candidates:
-        # Prefer the most recently modified bundle
-        return sorted(candidates, key=lambda p: p.stat().st_mtime, reverse=True)[0]
+        return candidates[0]
 
     return local_default
 
@@ -708,6 +723,9 @@ class AppState:
         self.retrain_lock = threading.Lock()
         self.production_blockers: List[str] = []
         self.production_warnings: List[str] = []
+        self.model_load_errors: Dict[str, str] = {}
+        self.last_game_score_sync_at: Optional[datetime] = None
+        self.last_game_score_sync_count: int = 0
 
         # Cached numeric medians from the loaded dataset (used for stable imputation).
         # Set during _load_dataset().
@@ -722,6 +740,7 @@ class AppState:
         """Load dataset + models at startup with defensive logging."""
         self.started_at = datetime.now(timezone.utc)
         self._load_dataset()
+        self.sync_game_scores(force=True)
         self._load_models()
 
     def refresh_dataset_if_changed(self) -> bool:
@@ -741,14 +760,66 @@ class AppState:
 
         if self.dataset_path is None:
             self._load_dataset()
+            self.sync_game_scores(force=True)
             return True
         if self.dataset_path.resolve() != target_path.resolve():
             self._load_dataset()
+            self.sync_game_scores(force=True)
             return True
         if self.dataset_mtime is None or target_mtime > float(self.dataset_mtime):
             self._load_dataset()
+            self.sync_game_scores(force=True)
             return True
         return False
+
+    def sync_game_scores(
+        self,
+        *,
+        force: bool = False,
+        schedule_df: Optional[pd.DataFrame] = None,
+    ) -> int:
+        """Sync completed game scores into SQLite and backfill stored predictions."""
+
+        now = datetime.now(timezone.utc)
+        if (
+            not force
+            and schedule_df is None
+            and self.last_game_score_sync_at is not None
+            and (now - self.last_game_score_sync_at).total_seconds() < GAME_SCORE_SYNC_TTL_SEC
+        ):
+            return 0
+
+        entries: List[Dict[str, object]] = []
+        if self.dataset is not None:
+            entries.extend(
+                extract_score_entries_from_dataframe(
+                    self.dataset,
+                    updated_at=now.isoformat(),
+                )
+            )
+        if schedule_df is not None:
+            entries.extend(
+                extract_score_entries_from_dataframe(
+                    schedule_df,
+                    updated_at=now.isoformat(),
+                )
+            )
+
+        if not entries:
+            self.last_game_score_sync_at = now
+            self.last_game_score_sync_count = 0
+            return 0
+
+        try:
+            upsert_game_scores(entries)
+        except Exception as exc:
+            logging.warning("[Scores] Failed to sync completed game scores: %s", exc)
+            return 0
+
+        self.last_game_score_sync_at = now
+        self.last_game_score_sync_count = len(entries)
+        logging.info("[Scores] Synced %d completed game score rows into SQLite.", len(entries))
+        return len(entries)
 
     def _prediction_cache_key(self, *, season: int, week: int, home_team: str, away_team: str) -> str:
         return f"{season}:{week}:{home_team}:{away_team}"
@@ -757,16 +828,29 @@ class AppState:
         blockers: List[str] = []
         warnings_out: List[str] = []
 
+        if self.dataset is None:
+            blockers.append("dataset not loaded")
+
+        missing_models = [name for name in REQUIRED_MODELS if name not in self.models]
+        if missing_models:
+            blockers.append(f"missing models: {', '.join(sorted(missing_models))}")
+
         if not self.models_metadata:
-            blockers.append("model metadata unavailable")
+            warnings_out.append("model metadata unavailable")
         elif not _requires_strict_bundle_contract(self.models_metadata):
             warnings_out.append("legacy model bundle contract")
+
+        for key, message in self.model_load_errors.items():
+            formatted = f"{key}: {message}"
+            warnings_out.append(formatted)
+            if key in REQUIRED_MODELS or key == "metadata":
+                blockers.append(formatted)
 
         for warning_message in self.production_warnings:
             if warning_message not in warnings_out:
                 warnings_out.append(warning_message)
         if any("Trying to unpickle estimator" in warning or "version" in warning.lower() for warning in warnings_out):
-            blockers.append("scikit-learn artifact version mismatch")
+            warnings_out.append("scikit-learn artifact version mismatch")
 
         self.production_blockers = sorted(set(blockers))
         self.production_warnings = sorted(set(warnings_out))
@@ -926,6 +1010,7 @@ class AppState:
         self.win_preprocessor = None
         self.production_blockers = []
         self.production_warnings = []
+        self.model_load_errors = {}
         logging.info("[Model] Using models directory: %s", MODELS_DIR)
         # Default model filenames (non-pipeline artifacts)
         model_files: Dict[str, str] = {
@@ -951,6 +1036,7 @@ class AppState:
                 logging.info("[Model] Estimator missing for '%s'; falling back to pipeline path: %s", name, path)
 
             if not path.exists():
+                self.model_load_errors[name] = f"missing artifact {path.name}"
                 logging.warning("[Model] Missing model file for '%s': %s", name, path)
                 continue
 
@@ -977,6 +1063,7 @@ class AppState:
                     # sklearn may not be available in some analysis contexts; ignore
                     pass
             except Exception as e:  # pragma: no cover - defensive
+                self.model_load_errors[name] = str(e).splitlines()[0]
                 logging.exception("[Model] Error loading '%s' from %s: %s", name, path, e)
 
         logging.info("[Model] Loaded model keys: %s", list(self.models.keys()))
@@ -984,8 +1071,10 @@ class AppState:
         if metadata_path.exists():
             try:
                 loaded_meta = json.loads(metadata_path.read_text(encoding="utf-8"))
-                self.models_metadata = _validate_bundle_metadata_contract(loaded_meta)
-                if not _requires_strict_bundle_contract(self.models_metadata):
+                self.models_metadata = loaded_meta if isinstance(loaded_meta, dict) else {}
+                validated_meta = _validate_bundle_metadata_contract(self.models_metadata)
+                self.models_metadata = validated_meta
+                if not _requires_strict_bundle_contract(validated_meta):
                     legacy_message = (
                         f"legacy bundle metadata contract: {metadata_path.name} lacks strict serving metadata"
                     )
@@ -995,7 +1084,11 @@ class AppState:
                         metadata_path,
                     )
             except Exception as e:
-                raise RuntimeError(f"Failed to validate metadata.json at {metadata_path}: {e}") from e
+                self.model_load_errors["metadata"] = str(e).splitlines()[0]
+                self.production_warnings.append(
+                    f"metadata validation failed: {self.model_load_errors['metadata']}"
+                )
+                logging.exception("[Model] Failed to validate metadata.json at %s: %s", metadata_path, e)
         else:
             self.models_metadata = {}
             self.production_warnings.append("metadata.json missing from active models directory")
@@ -1130,13 +1223,13 @@ app = FastAPI(lifespan=lifespan)
 # CORS configuration
 # ------------------
 # The browser will send an `Origin` header that looks like:
-#   https://nfl-ml-predictions.vercel.app
+#   https://new-nfl-predict.vercel.app
 #
 # On Heroku we control CORS via config vars (recommended):
 #   - RESTRICT_CORS     : "true" | "false" (default: true)
 #   - ALLOWED_ORIGINS   : comma-separated list of exact origins (scheme + host)
 #                         Example:
-#                           https://nfl-ml-predictions.vercel.app,http://localhost:5173
+#                           https://new-nfl-predict.vercel.app,http://localhost:5173
 #                         (We also accept bare hostnames and normalize them to https://...)
 #   - ALLOW_ORIGIN_REGEX: regex for dynamic preview origins (e.g., Vercel preview URLs)
 #                         Example (recommended):
@@ -1299,6 +1392,7 @@ class HistoryEntryResponse(PredictionResponse):
     final_home_score: Optional[int] = None
     final_away_score: Optional[int] = None
     game_status: Optional[str] = None
+    score_updated_at: Optional[str] = None
 
 
 class DebugPredictInputResponse(BaseModel):
@@ -1367,7 +1461,16 @@ class DatasetStatsResponse(BaseModel):
 
 class HistoryMetricsResponse(BaseModel):
     total_predictions: int
-    win_rate: float = 0.0
+    resolved_games: int = 0
+    win_rate: Optional[float] = None
+    avg_abs_spread_error: Optional[float] = None
+    avg_confidence: Optional[float] = None
+    latest_prediction_at: Optional[str] = None
+    last_score_sync_at: Optional[str] = None
+
+
+class HistorySummaryResponse(HistoryMetricsResponse):
+    user_id: Optional[str] = None
 
 
 class HistoryStatsResponse(BaseModel):
@@ -1607,6 +1710,12 @@ def _parse_ts_to_iso(raw: Any) -> Optional[str]:
 
 
 def _prediction_user_context_from_request(request: Optional[Request]):
+    """Resolve the lightweight user identity used for history isolation.
+
+    The app does not use full auth tokens yet. Instead, the frontend sends a
+    stable `X-User-Id` header, and both SQLite and JSON history stores key off
+    that derived context.
+    """
     user_id = None
     if request is not None:
         user_id = request.headers.get("X-User-Id")
@@ -1619,6 +1728,58 @@ def _history_total_for_request(request: Optional[Request]) -> int:
     except Exception:
         logging.exception("[History] Failed to count persistent history; falling back to memory.")
         return len(state.history)
+
+
+def _history_summary_for_request(request: Optional[Request]) -> Dict[str, Any]:
+    """Return normalized per-user history metrics.
+
+    SQLite is the primary source of truth. If persistent summary lookup fails,
+    the route still responds with a safe fallback shape so status endpoints stay
+    available during degraded boots.
+    """
+    context = _prediction_user_context_from_request(request)
+    try:
+        summary = load_prediction_history_summary(context)
+        if isinstance(summary, dict):
+            return {
+                "total_predictions": int(summary.get("total_predictions") or 0),
+                "resolved_games": int(summary.get("resolved_games") or 0),
+                "win_rate": summary.get("win_rate"),
+                "avg_abs_spread_error": summary.get("avg_abs_spread_error"),
+                "avg_confidence": summary.get("avg_confidence"),
+                "latest_prediction_at": summary.get("latest_prediction_at"),
+                "last_score_sync_at": summary.get("last_score_sync_at"),
+            }
+    except Exception:
+        logging.exception("[History] Failed to summarize persistent history; falling back to memory.")
+
+    return {
+        "total_predictions": len(state.history),
+        "resolved_games": 0,
+        "win_rate": None,
+        "avg_abs_spread_error": None,
+        "avg_confidence": None,
+        "latest_prediction_at": None,
+        "last_score_sync_at": None,
+    }
+
+
+def _prediction_readiness_payload() -> Dict[str, Any]:
+    state._refresh_runtime_readiness()
+    blockers = list(state.production_blockers)
+    if state.dataset is None and "dataset not loaded" not in blockers:
+        blockers.append("dataset not loaded")
+    if not blockers:
+        missing = [m for m in REQUIRED_MODELS if m not in state.models]
+        if missing:
+            blockers.append(f"missing models: {', '.join(sorted(missing))}")
+
+    return {
+        "message": "Prediction service unavailable.",
+        "blockers": sorted(set(blockers)),
+        "loaded_models": sorted(state.models.keys()),
+        "warnings": list(state.production_warnings),
+    }
 
 
 def _persist_prediction_for_request(
@@ -2108,7 +2269,7 @@ def health() -> HealthResponse:
     if len(state.production_warnings) > 5:
         warning_sample.append(f"... {len(state.production_warnings) - 5} additional startup warnings")
 
-    reason_str = ", ".join(reasons) if reasons else None
+    reason_str = ", ".join(dict.fromkeys(reasons)) if reasons else None
 
     return HealthResponse(
         status=status,
@@ -2359,6 +2520,8 @@ def status_overview(request: Request) -> StatusOverviewResponse:
       - dataset info (row count)
       - basic history metrics (prediction count placeholder)
     """
+    state.refresh_dataset_if_changed()
+    state.sync_game_scores()
     if state.dataset is not None:
         dataset_stats = {
             "rows": len(state.dataset),
@@ -2368,14 +2531,13 @@ def status_overview(request: Request) -> StatusOverviewResponse:
     else:
         dataset_stats = {"rows": 0, "path": "none", "hash": None}
 
+    history_summary = _history_summary_for_request(request)
+
     return {
         "health": health(),  # reuse typed health response
         "dataset": dataset_stats,
         "history": {
-            "metrics": {
-                "total_predictions": _history_total_for_request(request),
-                "win_rate": 0.0,  # Placeholder until outcomes are tracked
-            }
+            "metrics": history_summary
         },
     }
 
@@ -2415,6 +2577,7 @@ def status_models() -> Dict[str, Any]:
         "current_models_dir": str(CURRENT_MODELS_DIR) if CURRENT_MODELS_DIR.exists() else None,
         "loaded_models": loaded_models,
         "missing_required": missing_required,
+        "load_errors": dict(state.model_load_errors),
         "blockers": list(state.production_blockers),
         "warnings": list(state.production_warnings),
         "feature_manifest_size": len(state.feature_manifest),
@@ -2655,28 +2818,53 @@ def admin_promote(job_id: str, request: Request) -> PromoteResponse:
 
 
 # -------------------------------------------------------------------
-# Schedule: Next Week
+# Schedule
 # -------------------------------------------------------------------
 
 
-@app.get("/schedule/next-week", response_model=List[ScheduleGameResponse])
-def get_schedule() -> List[ScheduleGameResponse]:
-    """
-    Return the schedule for the "next" NFL week based on the schedule CSV.
+def _load_schedule_dataframe(requested_season: Optional[int] = None) -> pd.DataFrame:
+    """Load schedule rows from live data first, then fall back to packaged CSVs.
 
-    Logic:
-      - Resolve schedule path via _find_schedule_path().
-      - Normalize season/week + team abbreviations.
-      - If 'gameday' is present, interpret as kickoff datetime (UTC-aware).
-      - Determine the next slate using the earliest future game; fall back
-        to the latest season/week in the file if all games are in the past.
+    This keeps schedule routes usable in three modes:
+    1. normal runtime with `nflreadpy`
+    2. local or packaged deployments with bundled CSVs
+    3. degraded startup where prediction models may be unavailable but the API
+       should still serve schedule and status information
     """
-    df = pd.DataFrame()
-    try:
-        schedule_table = nfl.load_schedules(seasons=2025)
-        df = _to_pandas_schedule_safe(schedule_table)
-    except Exception as e:
-        logging.warning("[Schedule] nfl.load_schedules failed: %s", e)
+    frames: List[pd.DataFrame] = []
+    candidate_seasons: List[int] = []
+    current_year = datetime.now(timezone.utc).year
+
+    if requested_season is not None:
+        candidate_seasons.append(int(requested_season))
+    else:
+        candidate_seasons.extend([current_year - 1, current_year, current_year + 1, 2025])
+
+    seen: set[int] = set()
+    for season in candidate_seasons:
+        if season in seen:
+            continue
+        seen.add(season)
+        frame = pd.DataFrame()
+        for attempt in (
+            lambda s=season: nfl.load_schedules(seasons=[s]),
+            lambda s=season: nfl.load_schedules(seasons=s),
+            lambda s=season: nfl.load_schedules(s),
+        ):
+            try:
+                schedule_table = attempt()
+                frame = _to_pandas_schedule_safe(schedule_table)
+                if frame is not None and not frame.empty:
+                    break
+            except Exception:
+                continue
+        if frame is not None and not frame.empty:
+            frames.append(frame)
+
+    if frames:
+        df = pd.concat(frames, ignore_index=True)
+    else:
+        df = pd.DataFrame()
 
     if df is None or df.empty:
         fallback = _find_schedule_path()
@@ -2684,43 +2872,84 @@ def get_schedule() -> List[ScheduleGameResponse]:
             try:
                 df = pd.read_csv(fallback)
                 logging.info("[Schedule] Loaded fallback schedule CSV: %s", fallback)
-            except Exception as e:
-                logging.warning("[Schedule] Failed fallback schedule CSV load: %s", e)
+            except Exception as exc:
+                logging.warning("[Schedule] Failed fallback schedule CSV load: %s", exc)
+                df = pd.DataFrame()
 
     if df is None or df.empty:
-        logging.warning("[Schedule] No schedule data available; returning empty list.")
-        return []
+        return pd.DataFrame()
 
     df = _coerce_season_week(df)
     df = df.infer_objects()
     df = _normalize_team_columns(
         df, cols=["home_abbr", "away_abbr", "home_team", "away_team"]
     )
-    # Attach branding metadata if available; missing data is allowed.
-    team_meta_map = _load_team_metadata_map()
-    df = _add_kickoff_utc_datetime(df)  # uses 'gameday' column if present
+    df = _add_kickoff_utc_datetime(df)
+    return df
 
-    # Decide which (season, week) is "next"
-    now_utc = pd.Timestamp.now(tz="UTC")
-    future = df[df["dt"].notna() & (df["dt"] > now_utc)].sort_values(by=["dt", "season", "week"])
 
-    if not future.empty:
-        next_row = future.iloc[0]
-        target_s = int(next_row.get("season_num", next_row.get("season", 2024)))
-        target_w = int(next_row.get("week_num", next_row.get("week", 1)))
-    else:
-        # Fallback: last season/week in file
-        season_series = df.get("season", df.get("season_num"))
-        week_series = df.get("week", df.get("week_num"))
-        target_s = int(season_series.max()) if season_series is not None else 2025
-        target_w = int(week_series.max()) if week_series is not None else 1
+def _select_schedule_slice(
+    df: pd.DataFrame,
+    season: Optional[int] = None,
+    week: Optional[int] = None,
+) -> Tuple[pd.DataFrame, Optional[int], Optional[int]]:
+    """Choose the requested slate or the backend's best "next slate".
+
+    Rules:
+    - If `season` and `week` are provided, return that exact slice.
+    - If only `season` is provided, return the next upcoming week inside that season.
+    - If no future games remain, fall back to the latest available week, which
+      allows `/schedule/next-week` to keep serving postseason slates.
+    """
+    if df is None or df.empty:
+        return pd.DataFrame(), season, week
 
     s_col = "season_num" if "season_num" in df.columns else "season"
     w_col = "week_num" if "week_num" in df.columns else "week"
+    working = df
 
-    week_df = df[(df[s_col] == target_s) & (df[w_col] == target_w)]
+    if season is not None:
+        working = working[pd.to_numeric(working[s_col], errors="coerce") == int(season)]
+    if working.empty:
+        return pd.DataFrame(), season, week
 
+    if week is not None:
+        week_df = working[pd.to_numeric(working[w_col], errors="coerce") == int(week)]
+        return week_df, season, week
+
+    now_utc = pd.Timestamp.now(tz="UTC")
+    future = working[working["dt"].notna() & (working["dt"] > now_utc)].sort_values(
+        by=["dt", s_col, w_col]
+    )
+
+    if not future.empty:
+        next_row = future.iloc[0]
+        current_year = datetime.now(timezone.utc).year
+        target_season = int(next_row.get(s_col, next_row.get("season", current_year)))
+        target_week = int(next_row.get(w_col, next_row.get("week", 1)))
+    else:
+        target_season = int(pd.to_numeric(working[s_col], errors="coerce").max())
+        season_rows = working[pd.to_numeric(working[s_col], errors="coerce") == target_season]
+        target_week = int(pd.to_numeric(season_rows[w_col], errors="coerce").max())
+
+    week_df = working[
+        (pd.to_numeric(working[s_col], errors="coerce") == target_season)
+        & (pd.to_numeric(working[w_col], errors="coerce") == target_week)
+    ]
+    return week_df, target_season, target_week
+
+
+def _serialize_schedule_rows(
+    week_df: pd.DataFrame,
+    target_season: Optional[int],
+    target_week: Optional[int],
+) -> List[Dict[str, Any]]:
+    if week_df is None or week_df.empty or target_season is None or target_week is None:
+        return []
+
+    team_meta_map = _load_team_metadata_map()
     results: List[Dict[str, Any]] = []
+
     for _, row in week_df.iterrows():
         home_team = row.get("home_team")
         away_team = row.get("away_team")
@@ -2728,28 +2957,11 @@ def get_schedule() -> List[ScheduleGameResponse]:
         away_abbr = row.get("away_abbr", away_team)
         home_code = str(home_abbr or home_team or "").upper()
         away_code = str(away_abbr or away_team or "").upper()
-        home_meta = (
-            team_meta_map.get(home_code)
-            or team_meta_map.get(str(home_team or "").upper())
-            or {}
-        )
-        away_meta = (
-            team_meta_map.get(away_code)
-            or team_meta_map.get(str(away_team or "").upper())
-            or {}
-        )
+        if not home_code or not away_code:
+            continue
 
-        # Logos: prefer explicit schedule columns, else use logo_map keyed by team abbr
-        home_logo = (
-            row.get("home_logo")
-            or row.get("home_logo_url")
-            or home_meta.get("logoUrl")
-        )
-        away_logo = (
-            row.get("away_logo")
-            or row.get("away_logo_url")
-            or away_meta.get("logoUrl")
-        )
+        home_meta = team_meta_map.get(home_code) or team_meta_map.get(str(home_team or "").upper()) or {}
+        away_meta = team_meta_map.get(away_code) or team_meta_map.get(str(away_team or "").upper()) or {}
 
         kickoff_val: Optional[str] = None
         if ("dt" in row) and pd.notna(row["dt"]):
@@ -2760,17 +2972,17 @@ def get_schedule() -> List[ScheduleGameResponse]:
 
         results.append(
             {
-                "game_id": f"{target_s}_{target_w}_{home_team}_{away_team}",
-                "season": int(target_s),
-                "week": int(target_w),
-                "home_team": home_team,
-                "away_team": away_team,
+                "game_id": f"{int(target_season)}_{int(target_week)}_{home_code}_{away_code}",
+                "season": int(target_season),
+                "week": int(target_week),
+                "home_team": str(home_team or home_code).upper(),
+                "away_team": str(away_team or away_code).upper(),
                 "home_name": home_meta.get("name"),
                 "away_name": away_meta.get("name"),
-                "home_abbr": home_abbr,
-                "away_abbr": away_abbr,
-                "home_logo": home_logo,
-                "away_logo": away_logo,
+                "home_abbr": home_code,
+                "away_abbr": away_code,
+                "home_logo": row.get("home_logo") or row.get("home_logo_url") or home_meta.get("logoUrl"),
+                "away_logo": row.get("away_logo") or row.get("away_logo_url") or away_meta.get("logoUrl"),
                 "home_color": home_meta.get("primaryColor"),
                 "away_color": away_meta.get("primaryColor"),
                 "home_color2": home_meta.get("secondaryColor"),
@@ -2781,13 +2993,41 @@ def get_schedule() -> List[ScheduleGameResponse]:
             }
         )
 
+    return results
+
+
+def _schedule_response(season: Optional[int] = None, week: Optional[int] = None) -> List[Dict[str, Any]]:
+    """Serialize one schedule slice into the frontend-facing response shape."""
+    df = _load_schedule_dataframe(requested_season=season)
+    if df is None or df.empty:
+        logging.warning("[Schedule] No schedule data available; returning empty list.")
+        return []
+
+    state.sync_game_scores(schedule_df=df)
+    week_df, target_season, target_week = _select_schedule_slice(df, season=season, week=week)
+    results = _serialize_schedule_rows(week_df, target_season, target_week)
     logging.info(
         "[Schedule] Returning %d games for season=%s week=%s",
         len(results),
-        target_s,
-        target_w,
+        target_season,
+        target_week,
     )
     return results
+
+
+@app.get("/schedule", response_model=List[ScheduleGameResponse])
+def get_schedule_by_query(
+    season: Optional[int] = Query(None, ge=1990, le=2100),
+    week: Optional[int] = Query(None, ge=1, le=30),
+) -> List[Dict[str, Any]]:
+    if week is not None and season is None:
+        raise HTTPException(status_code=400, detail="Provide season when querying a specific week.")
+    return _schedule_response(season=season, week=week)
+
+
+@app.get("/schedule/next-week", response_model=List[ScheduleGameResponse])
+def get_schedule() -> List[Dict[str, Any]]:
+    return _schedule_response()
 
 
 @app.get("/api/predict/next-week")
@@ -2821,6 +3061,8 @@ def get_prediction_history(
     """
     if limit <= 0:
         return []
+    state.refresh_dataset_if_changed()
+    state.sync_game_scores()
     try:
         response = load_prediction_history(
             _prediction_user_context_from_request(request),
@@ -2834,6 +3076,17 @@ def get_prediction_history(
     except Exception:
         logging.exception("[History] Persistent history lookup failed; falling back to memory.")
         return state.history[-limit:]
+
+
+@app.get("/history/summary", response_model=HistorySummaryResponse)
+def get_prediction_history_summary(request: Request) -> Dict[str, Any]:
+    state.refresh_dataset_if_changed()
+    state.sync_game_scores()
+    context = _prediction_user_context_from_request(request)
+    return {
+        **_history_summary_for_request(request),
+        "user_id": context.user_id,
+    }
 
 
 # -------------------------------------------------------------------
@@ -2854,10 +3107,9 @@ async def predict(payload: PredictRequest, request: Request) -> Dict[str, Any]:
     """
     # ----- Readiness -----
     state.refresh_dataset_if_changed()
-    models_ok = all(m in state.models for m in REQUIRED_MODELS)
-    if state.dataset is None or not models_ok:
-        missing = [m for m in REQUIRED_MODELS if m not in state.models]
-        raise HTTPException(status_code=503, detail=f"Not ready: missing models {missing}")
+    readiness = _prediction_readiness_payload()
+    if readiness["blockers"]:
+        raise HTTPException(status_code=503, detail=readiness)
 
     # ----- Validate request -----
     season = int(payload.season)

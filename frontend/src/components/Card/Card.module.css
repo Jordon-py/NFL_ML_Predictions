@@ -1,26 +1,31 @@
 .cardGrid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
-  gap: clamp(1rem, 2vw, 1.25rem);
+  row-gap: 4rem;
   align-items: stretch;
   width: 100%;
 }
+
+article._card{
+  gap: 4rem;
+  }
 
 .card {
   position: relative;
   isolation: isolate;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 10rem;
   width: 100%;
-  min-width: 0;
+  min-width: 50%;
   min-height: 100%;
   padding: 1rem;
   border-radius: 16px;
   border: 1px solid color-mix(in oklab, var(--c-brand-1, #54ade8) 34%, transparent);
   background:
-    linear-gradient(180deg, lch(0% 0 0 / 0.92), lch(24% 26 270 / 0.42)),
-    lch(0% 0 0 / 0.88);
+    linear-gradient(180deg, lch(0% 0 0), lch(74.03% 40.02 271.38 / 0.403)),
+    lch(0% 0 0);
+  color: lch(95.47% 6.86 276.24);
   box-shadow: 0 18px 40px oklch(0% 0 0 / 0.42);
   backdrop-filter: blur(10px);
   color: var(--lch-text);
@@ -42,9 +47,8 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background:
-    radial-gradient(circle at top left, color-mix(in oklab, var(--away-color) 24%, transparent), transparent 45%),
-    radial-gradient(circle at top right, color-mix(in oklab, var(--home-color) 24%, transparent), transparent 50%);
+
+  color: lch(95.47% 6.86 276.24);
   opacity: 0.85;
 }
 
@@ -53,8 +57,9 @@
   position: absolute;
   inset: 0 auto auto 0;
   width: 100%;
-  height: 4px;
-  background: linear-gradient(90deg, var(--away-color-2), var(--home-color-2));
+  height: 40px;
+
+  color: lch(95.47% 6.86 276.24);
   opacity: 0.95;
   pointer-events: none;
 }
@@ -68,6 +73,7 @@
 
 .card,
 .card * {
+
   box-sizing: border-box;
   min-width: 0;
 }
@@ -75,7 +81,7 @@
 @keyframes cardPop {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(-10px);
   }
 
   to {
@@ -84,12 +90,12 @@
   }
 }
 
-.cardInner {
+div.cardInner {
   position: relative;
   z-index: 1;
   display: flex;
   flex-direction: column;
-  gap: 0.9rem;
+  gap: 1rem;
   height: 100%;
 }
 
@@ -131,7 +137,7 @@
   padding: 0.22rem 0.6rem;
   border-radius: 999px;
   border: 1px solid color-mix(in oklab, var(--c-brand-1, #54ade8) 40%, transparent);
-  background: color-mix(in oklab, var(--c-brand-1, #54ade8) 12%, transparent);
+  background: color-mix(in oklab, var(--c-brand-1, #addaf9) 12%, transparent);
   color: var(--lch-text);
   font-size: 0.72rem;
   font-weight: 700;
@@ -164,14 +170,12 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.65rem;
+  gap: .65rem;
   padding: 0.9rem 0.8rem;
   min-height: 172px;
-  border-radius: 14px;
-  border: 1px solid color-mix(in oklab, var(--team-primary, var(--c-brand-1, #54ade8)) 24%, transparent);
-  background:
-    linear-gradient(180deg, oklch(100% 0 0 / 0.06), oklch(100% 0 0 / 0.02)),
-    oklch(0% 0 0 / 0.12);
+  border-radius: 24px;
+  border: 1px solid color-mix(in oklab, var(--team-primary, var(--c-brand-1, #54ade8)) 14%, transparent);
+
   text-align: center;
 }
 
@@ -179,13 +183,20 @@
   content: "";
   position: absolute;
   inset: 0;
-  pointer-events: none;
-  background: var(--team-wordmark) center / 80% auto no-repeat;
-  opacity: 0.06;
+  pointer-events: auto;
+  background:
+    linear-gradient(180deg, lch(0% 0 0 / 0.701), lch(74.03% 40.02 271.38 / 0.216)),
+    lch(0% 0 0 / 0.697);
+  opacity: 0.4;
   filter: grayscale(100%);
 }
 
 .gameCard > * {
+  background:
+    linear-gradient(180deg, lch(1.37% 0 296.81 / 0.8), lch(74.03% 40.02 271.38 / 0.268)),
+    lch(0% 0 0 / 0.655);
+  row-gap: 2rem;
+  column-gap: 4rem;
   position: relative;
   z-index: 1;
 }
@@ -195,8 +206,8 @@
   place-items: center;
   width: 78px;
   height: 78px;
-  border-radius: 20px;
-  border: 1px solid color-mix(in oklab, var(--team-primary, var(--c-brand-1, #54ade8)) 26%, transparent);
+  border-radius: 23px;
+  border: 1.5px solid color-mix(in oklab, var(--team-primary, var(--c-brand-1, #54ade8)) 26%, transparent);
   background:
     linear-gradient(
       135deg,
@@ -210,8 +221,9 @@
 }
 
 .gameCardLogo {
-  width: 58px;
-  height: 58px;
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
   object-fit: contain;
   filter: drop-shadow(0 8px 14px oklch(0% 0 0 / 0.34));
 }
@@ -258,7 +270,7 @@
   justify-content: center;
   padding: 0.16rem 0.5rem;
   border-radius: 999px;
-  background: color-mix(in oklab, var(--team-primary, var(--c-brand-1, #54ade8)) 12%, transparent);
+  background: color-mix(in oklab, var(--team-primary, var(--c-brand-1, #54ade8)) 35%, transparent);
   border: 1px solid color-mix(in oklab, var(--team-primary, var(--c-brand-1, #54ade8)) 26%, transparent);
   color: var(--lch-text);
   font-size: 0.68rem;
@@ -281,7 +293,7 @@
   width: 42px;
   height: 42px;
   border-radius: 999px;
-  border: 1px solid color-mix(in oklab, var(--c-brand-1, #54ade8) 26%, transparent);
+  border: 1px solid color-mix(in oklab, var(--c-brand-1, #54ade8) 36%, transparent);
   background: oklch(0% 0 0 / 0.28);
   color: var(--lch-text);
   font-family: var(--font-tech);
@@ -339,8 +351,8 @@
   border-radius: 14px;
   border: 1px solid color-mix(in oklab, var(--c-brand-1, #54ade8) 16%, transparent);
   background:
-    linear-gradient(180deg, oklch(100% 0 0 / 0.05), oklch(100% 0 0 / 0.01)),
-    oklch(0% 0 0 / 0.14);
+    linear-gradient(180deg, lch(0% 0 0), lch(74.03% 40.02 271.38 / 0.403)),
+    lch(0% 0 0);
 }
 
 .probabilityHeader {
@@ -526,10 +538,13 @@
 }
 
 .hasPrediction {
-  border-color: color-mix(in oklab, var(--c-brand-1, #54ade8) 46%, white 8%);
+  border-color: color-mix(in oklab, var(--c-brand-1, #54ade84f) 46%, white 8%);
+  background:
+    linear-gradient(180deg, lch(0% 0 0), oklab(70.482% -0.03214 -0.12544 / 0.403)),
+    lch(0% 0 0);
   box-shadow:
     0 18px 40px oklch(0% 0 0 / 0.42),
-    0 0 0 1px color-mix(in oklab, var(--c-brand-1, #54ade8) 22%, transparent) inset;
+    0 0 0 1px color-mix(in oklab, var(--c-brand-1, #54ade895) 22%, transparent) inset;
 }
 
 .debugClicked {

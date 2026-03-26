@@ -102,7 +102,6 @@ class Settings(BaseSettings):
             "http://localhost:4173",
             "http://127.0.0.1:4173",
             "https://new-nfl-predict.vercel.app",
-            "https://nfl-ml-predictions.vercel.app",
         ]
         out = configured or defaults
         if not self.is_production:

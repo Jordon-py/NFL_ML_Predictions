@@ -14,7 +14,7 @@
   border-radius: 24px;
   background:
     radial-gradient(circle at top left, color-mix(in oklab, var(--c-accent, #54ade8) 20%, transparent), transparent 46%),
-    linear-gradient(135deg, oklch(14% 0.03 245 / 0.92), oklch(19% 0.07 280 / 0.78));
+    linear-gradient(185deg, oklch(0% 0 0) 35%, oklch(77.653% 0.11887 285.451 / 0.293) 40%, lch(0% 0 0) 50%);
   box-shadow: 0 24px 60px oklch(0% 0 0 / 0.32);
 }
 
@@ -51,6 +51,37 @@
   justify-content: flex-end;
 }
 
+.dashboard__controlGroup {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.dashboard__control {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 126px;
+}
+
+.dashboard__control span {
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--lch-muted, #c9d3e0);
+}
+
+.dashboard__control select {
+  min-height: 44px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in oklab, var(--c-brand-1, #54ade8) 32%, transparent);
+  background: color-mix(in oklab, var(--glass, #111628) 82%, #08111f 18%);
+  color: var(--lch-text, #f6f6f6);
+  padding: 0.75rem 0.9rem;
+}
+
 .dashboard__btn {
   padding: 0.8rem 1.15rem;
   border-radius: 999px;
@@ -75,6 +106,10 @@
   cursor: progress;
 }
 
+.dashboard__btn--ghost {
+  background: color-mix(in oklab, var(--glass, #111628) 84%, #08111f 16%);
+}
+
 .dashboard__summaryGrid {
   margin: 1.1rem 0 1.3rem;
   display: grid;
@@ -91,7 +126,7 @@
   border-radius: 18px;
   border: 1px solid color-mix(in oklab, var(--c-brand-1, #54ade8) 18%, transparent);
   background:
-    linear-gradient(180deg, oklch(100% 0 0 / 0.05), oklch(100% 0 0 / 0.02)),
+    linear-gradient(180deg, oklch(0% 0 0), oklch(24.776% 0.00003 271.152 / 0.429)),
     color-mix(in oklab, var(--glass, #111628) 82%, #08111f 18%);
   box-shadow: 0 16px 36px oklch(0% 0 0 / 0.18);
 }
@@ -160,6 +195,10 @@
     justify-content: flex-start;
   }
 
+  .dashboard__controlGroup {
+    justify-content: flex-start;
+  }
+
   .dashboard__summaryGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -173,6 +212,15 @@
   .dashboard__hero {
     padding: 1.05rem 1rem;
     border-radius: 20px;
+  }
+
+  .dashboard__controlGroup {
+    width: 100%;
+  }
+
+  .dashboard__control {
+    min-width: 0;
+    flex: 1 1 100%;
   }
 
   .dashboard__summaryGrid {
