@@ -14,10 +14,13 @@
 # Variables: ABBR_FIX(80), OUTPUT_DATASET_NAME(90), HAS_winner_BOOL(93), TIME_COLS_IN_ORDER(94), NFL_BACKEND(121)
 # Interacts With: backend/utils/feature_helpers.py, nflreadpy/nfl_data_py backends, data/pbp caches, train_models.py (consumes CSV outputs)
 
-build_csv_datasets.py
-=====================
+build_csv_datasets_v3.py
+========================
 
-Production-ready builder for NFL game-level datasets (one row per game).
+Production-ready feature builder for NFL game-level datasets (one row per game).
+
+The canonical CLI entrypoint for normal repo workflows is `backend/builddataset.py`,
+which wraps this module with cleaned output directories and manifests.
 
 **PURPOSE: DATASET BUILDING ONLY** - Model training is handled in enhanced_pipeline.py
 

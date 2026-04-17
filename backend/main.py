@@ -1233,7 +1233,7 @@ app = FastAPI(lifespan=lifespan)
 #                         (We also accept bare hostnames and normalize them to https://...)
 #   - ALLOW_ORIGIN_REGEX: regex for dynamic preview origins (e.g., Vercel preview URLs)
 #                         Example (recommended):
-#                           ^https://.*\.vercel\.app$
+#                           (?i)^https://(?:[a-z0-9-]+\.)+vercel\.app$
 #
 def _env_flag(name: str, default: str = "true") -> bool:
     """Parse boolean-ish env vars safely."""

@@ -39,11 +39,7 @@ The active frontend transport layer is:
 
 - `frontend/src/api/client.js`
 
-There is also:
-
-- `frontend/src/api/fetch.js`
-
-That second file is a legacy helper. It is kept for older experiments and reference, but the active app shell does not depend on it.
+The active app shell no longer keeps a second legacy fetch wrapper in the supported path. Transport quirks and compatibility fallbacks belong in `client.js`.
 
 ## Shared Data Contracts
 
@@ -103,6 +99,12 @@ The frontend primarily depends on:
 - `POST /predict`
 
 The main backend implementation lives in `backend/main.py`.
+
+## Auth Boundary
+
+- `useAuthSession.js` stores a local-device session in browser storage.
+- The frontend derives `X-User-Id` from that local session email.
+- This supports user-scoped history in the current app, but it is not a real authentication boundary.
 
 ## Safe Extension Rules
 

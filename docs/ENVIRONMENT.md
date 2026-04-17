@@ -14,7 +14,7 @@ The goal of this document is to explain the active configuration behavior, not e
 | `APP_ENV` | Runtime environment label | `development` locally, `production` on Heroku | `production` |
 | `LOG_LEVEL` | Backend log level | `INFO` | `DEBUG` |
 | `ALLOWED_ORIGINS` | Exact browser origins for CORS | Localhost + production defaults | `https://new-nfl-predict.vercel.app,http://localhost:3000` |
-| `CORS_ORIGINS_REGEX` | Optional regex for preview domains | `^https://.*\\.vercel\\.app$` when preview support is enabled | `^https://.*\\.vercel\\.app$` |
+| `CORS_ORIGINS_REGEX` | Optional regex for preview domains | `(?i)^https://(?:[a-z0-9-]+\\.)+vercel\\.app$` when preview support is enabled | `(?i)^https://(?:[a-z0-9-]+\\.)+vercel\\.app$` |
 | `RESTRICT_CORS` | Enforce allow-list CORS | `true` in code and in the canonical deploy setup | `true` |
 | `ALLOW_VERCEL_PREVIEWS` | Enable preview-domain regex fallback | `true` | `true` |
 | `DATASET_PATH` | Explicit dataset CSV override | Auto-discovers the promoted dataset from `backend/data/datasets/` | `backend/data/datasets/game_features_20260325_clean.csv` |
@@ -79,8 +79,7 @@ Operational rule:
 
 Important frontend note:
 
-- The main app uses `frontend/src/api/client.js`.
-- `frontend/src/api/fetch.js` still exists, but it is not the primary transport path for the active app shell.
+- The active app shell uses `frontend/src/api/client.js` as its supported transport layer.
 
 ## Local Setup
 
@@ -123,8 +122,13 @@ heroku config:set ALLOW_VERCEL_PREVIEWS=true -a nfl-predict
 heroku config:set MODELS_DIR=data/models -a nfl-predict
 heroku config:set SCHEDULE_PATH=data/Nfl_schedule_2025.csv -a nfl-predict
 heroku config:set TEAM_LOGOS_PATH=backend/data/team_logos.csv -a nfl-predict
-heroku config:set CORS_ORIGINS_REGEX='^https://.*\\.vercel\\.app$' -a nfl-predict
+heroku config:set CORS_ORIGINS_REGEX='(?i)^https://(?:[a-z0-9-]+\\.)+vercel\\.app$' -a nfl-predict
 ```
+
+Important CORS note:
+
+- The browser sends only the origin, for example `https://nflmlforcast.vercel.app`.
+- Route paths like `/app` are not part of the `Origin` header, so they should not be included in `ALLOWED_ORIGINS` or the regex.
 
 ### Vercel frontend
 
@@ -158,4 +162,10 @@ If prediction traffic matters, also verify:
 curl -X POST http://127.0.0.1:8000/predict ^
   -H "Content-Type: application/json" ^
   -d "{\"home_team\":\"KC\",\"away_team\":\"BUF\",\"season\":2025,\"week\":15}"
+```
+
+You can also run the repo-level check:
+
+```bash
+python scripts/verify_api_cors.py --backend-url https://nfl-predict-ecf5a5bd34fe.herokuapp.com
 ```

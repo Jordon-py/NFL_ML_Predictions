@@ -102,14 +102,14 @@ The frontend sends `X-User-Id`, and the backend uses that to isolate prediction 
 
 - Primary store: SQLite-backed history and summary metrics
 - Fallback: JSON ledgers under `backend/Predictions/users/<user-storage-key>/`
+- The current session is local-device convenience state, not real server-side authentication
 
 ## Frontend Architecture In One Minute
 
 - `frontend/src/App.jsx` creates the auth session and shared prediction state once.
 - `frontend/src/hooks/usePredictionState.js` owns schedule, health, history, summary, logos, and prediction maps.
 - `frontend/src/components/DashBoard/Dashboard.jsx` consumes that shared state instead of shadowing it locally.
-- `frontend/src/api/client.js` is the active transport and compatibility layer.
-- `frontend/src/api/fetch.js` is a legacy helper kept for older experiments and is not the main app path.
+- `frontend/src/api/client.js` is the supported transport and compatibility layer for the active app shell.
 
 ## Key Endpoints
 
@@ -124,10 +124,9 @@ The frontend sends `X-User-Id`, and the backend uses that to isolate prediction 
 
 - `GET /schedule`
 - `GET /schedule/next-week`
+- `GET /api/predict/next-week`
 - `GET /teams/logos`
 - `POST /predict`
-- `POST /predict/explain`
-- `POST /llm/chat`
 
 ### History
 
@@ -138,7 +137,6 @@ The frontend sends `X-User-Id`, and the backend uses that to isolate prediction 
 
 When `ENABLE_ADMIN=true`:
 
-- `POST /admin/reload`
 - `POST /admin/retrain`
 - `POST /admin/promote/{job_id}`
 
@@ -183,6 +181,7 @@ Recommended checks after backend or frontend changes:
 ```bash
 python -m pytest backend/tests -q
 cd frontend && npm test -- --run && npm run build
+python scripts/verify_api_cors.py --backend-url https://nfl-predict-ecf5a5bd34fe.herokuapp.com
 ```
 
 Runtime smoke checks:
