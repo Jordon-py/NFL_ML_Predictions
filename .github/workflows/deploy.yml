@@ -23,7 +23,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 22
 
       - name: Setup Heroku CLI (action)
         # Use an action that accepts api key via 'with' to avoid using secrets at top-level

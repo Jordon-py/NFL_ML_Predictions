@@ -4,17 +4,19 @@ __pycache__/
 *$py.class
 *.exe
 ## Virtual environments
+.env
 .venv/
 .venv*/
 venv/
 env/
-ENV/
+.env.example
 env.bak/
 backend/.venv/
 backend/venv/
 nfl_env/
 nflenv/
 
+.md
 ## Node artifacts
 node_modules/
 frontend/node_modules/
@@ -52,6 +54,8 @@ Thumbs.db
 
 ## Logs & coverage
 *.log
+*.out
+*.err
 coverage/
 .pytest_cache/
 *.coverage
@@ -85,6 +89,7 @@ MANIFEST
 /data/
 *.csv
 *.json
+*.db
 !backend/data/*.json
 !backend/data/datasets/*.json
 !backend/data/team_logos.csv
@@ -100,6 +105,7 @@ backend/data/data.ipynb
 backend/data/learning_memory.json
 backend/data/team_logo_squared_by_abbr.json
 frontend/public/data/
+frontend/playwright-*.png
 
 .bundle
 

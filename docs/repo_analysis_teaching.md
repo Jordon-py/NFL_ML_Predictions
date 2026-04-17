@@ -239,7 +239,7 @@ Critique:
 
 ### Suggestion 2: Make the backend the single authority for API base and schedule fallbacks
 
-- References: `frontend/src/api/fetch.js:14`, `frontend/src/api/fetch.js:18`, `frontend/src/api/client.js:136`, `frontend/src/api/client.js:212`, `frontend/src/api/client.js:233`, `README.md:22`, `README.md:52`
+- References: `frontend/src/api/client.js`, `README.md`, `docs/ENVIRONMENT.md`
 - Problem: the frontend ignores the documented dev/base env split and also re-parses a hard-coded `Nfl_schedule_2025.csv` as a fallback schedule source.
 - Enhancement: move schedule authority completely to the backend and make API base resolution explicitly honor `VITE_API_DEV` in development.
 - How to do it:
@@ -260,7 +260,7 @@ Critique:
 ## 6. Frontend UI Surfaces
 
 Purpose:
-- This section renders the dashboard, matchup cards, prediction details, history pages, stats pages, and the LLM chat interface.
+- This section renders the dashboard, matchup cards, history pages, and stats pages that make up the active app shell.
 
 Critique:
 - The UI is visually rich and it builds successfully, but several components still mix controller work with presentation.
@@ -284,16 +284,16 @@ Critique:
   - If a card writes to storage or dispatches global events, it is doing controller work.
   - If you need test selectors, prefer `data-testid` or another `data-*` attribute over repeated `id` values.
 
-### Suggestion 2: Reset per-game local state and align history/status DTOs across pages
+### Suggestion 2: Align history/status DTOs across pages and simplify state ownership
 
-- References: `frontend/src/components/PredictionResult.jsx:42`, `frontend/src/components/PredictionResult.jsx:66`, `frontend/src/components/LLMChat/LLMChat.jsx:64`, `frontend/src/components/LLMChat/LLMChat.jsx:86`, `frontend/src/pages/StatsPage.jsx:157`, `frontend/src/components/HistoryChart.jsx:92`, `frontend/src/utils/predictionContextUtils.js:12`, `backend/main.py:874`, `backend/schemas.py:83`
-- Problem: `PredictionResult` and `LLMChat` keep local state that can outlive the currently selected game, and `StatsPage` reads `safeOverview.history?.metrics` even though the backend exposes flat `history` metrics.
-- Enhancement: key or reset local state by `game_id`, and define one shared history/status normalization contract for all pages.
+- References: `frontend/src/pages/StatsPage.jsx`, `frontend/src/components/HistoryChart.jsx`, `frontend/src/utils/predictionContextUtils.js`, `backend/main.py`, `backend/schemas.py`
+- Problem: different pages still normalize overlapping history and status data in slightly different ways, which makes the UI harder to reason about as the API evolves.
+- Enhancement: define one shared history/status normalization contract for all pages.
 - How to do it:
-  1. Watch `entry?.game_id` or `prediction?.game_id` with `useEffect` and clear local explanation/chat state when the game changes.
-  2. Normalize history/status payloads once in the API layer instead of per-page.
-  3. Make `StatsPage` read the actual backend shape, not a guessed nested shape.
-  4. Decide whether `HistoryChart` is a chart or a list and rename or redesign it accordingly.
+  1. Normalize history and status payloads once in the API layer instead of per-page.
+  2. Make `StatsPage` read the actual backend shape, not a guessed nested shape.
+  3. Decide whether `HistoryChart` is a chart or a list and rename or redesign it accordingly.
+  4. Keep page-local state tied to route concerns instead of one-off widget behavior.
 - Syntax explanation:
   - `useEffect(() => { ... }, [entry?.game_id])` reruns the effect when the selected game changes.
   - Optional chaining like `safeOverview.history?.metrics` avoids crashes, but it can also silently hide a schema mismatch if the path is wrong.
@@ -311,7 +311,7 @@ Critique:
 3. Split `backend/main.py` into startup/state/router modules
 4. Remove frontend schedule and API-base duplication
 5. Move controller logic out of `Dashboard.jsx` and `Card.jsx`
-6. Reset per-game component state in `PredictionResult.jsx` and `LLMChat.jsx`
+6. Normalize history/status DTOs once in the API layer and simplify page-local state
 
 ## Additional Concrete Bugs Worth Fixing Soon
 
