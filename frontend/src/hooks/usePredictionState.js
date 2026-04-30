@@ -2,14 +2,31 @@
  * Central route-level state for the protected app shell.
  *
  * The hook owns the shared schedule, prediction maps, history, summary, logos,
- * and health state used by Dashboard and HistoryPage so those screens cannot
- * drift apart by maintaining duplicate copies.
+ * health, and offseason slate context used by Dashboard and HistoryPage so
+ * those screens cannot drift apart by maintaining duplicate copies.
+ *
+ * Data shapes:
+ * - Schedule state is an array of normalized game rows keyed by season/week/team.
+ * - History state is an array of flattened prediction records plus summary metrics.
+ *
+ * Important functions (line numbers last refreshed 2026-04-30):
+ * - usePredictionState: around line 224
+ * - refreshHistory: around line 258
+ * - loadScheduleForWeek: around line 361
+ *
+ * Possible bugs:
+ * - If /offseason/status points at a season/week with no rows, the dashboard can
+ *   show a valid context with an empty slate.
+ *
+ * Enhancement ideas:
+ * - Move season-context derivation into a small tested adapter.
+ * - Let StatsPage consume this same hook instead of fetching separately.
  */
 
 import { useEffect, useState, useCallback } from "react";
 import {
   getHistorySummary,
-  getLatestArchivedSchedule,
+  getOffseasonStatus,
   getNextWeekSchedule,
   getHealthStatus as fetchHealth,
   getPredictionHistory,
@@ -194,22 +211,20 @@ function ensureHistoryEntry(entry) {
   return base;
 }
 
-function buildArchivedSeasonContext(rows, baseContext = INITIAL_SEASON_CONTEXT) {
-  const firstGame = Array.isArray(rows) ? rows[0] : null;
-  const archivedSeason = toNumberOrNull(firstGame?.season) ?? baseContext?.current_season ?? new Date().getFullYear();
-  const archivedWeek = toNumberOrNull(firstGame?.week) ?? baseContext?.display_week ?? null;
+function buildOffseasonStatusContext(status = null) {
+  const currentSeason = toNumberOrNull(status?.current_season) ?? new Date().getFullYear();
+  const currentWeek = toNumberOrNull(status?.current_week) ?? 1;
 
   return {
-    ...baseContext,
     phase: "offseason",
-    label: archivedWeek != null ? `Week ${archivedWeek}` : baseContext?.label || "Offseason",
-    message: "No live weekly slate is available right now. Showing the most recent archived slate.",
-    current_season: archivedSeason,
-    display_week: archivedWeek,
-    games_in_next_window: Array.isArray(rows) ? rows.length : 0,
-    next_kickoff: firstGame?.kickoff || baseContext?.next_kickoff || null,
-    generated_at: new Date().toISOString(),
-    archive_fallback: true,
+    label: "Offseason",
+    message: "No live weekly slate is available right now. Showing the next season when it is available.",
+    current_season: currentSeason,
+    display_week: currentWeek,
+    games_in_next_window: 0,
+    next_kickoff: status?.next_known_schedule_date || null,
+    generated_at: status?.generated_at || new Date().toISOString(),
+    offseason_mode: true,
   };
 }
 
@@ -268,8 +283,13 @@ export function usePredictionState(authSession = null) {
     const init = async () => {
       setScheduleLoading(true);
       setScheduleError(null);
+      const offseasonRes = await getOffseasonStatus();
+      const offseasonMode = Boolean(offseasonRes?.offseason_mode);
+      const offseasonSeason = toNumberOrNull(offseasonRes?.current_season) ?? new Date().getFullYear();
+      const offseasonWeek = toNumberOrNull(offseasonRes?.current_week) ?? 1;
+
       const [scheduleRes, historyRes, logosRes, summaryRes] = await Promise.allSettled([
-        getNextWeekSchedule(),
+        offseasonMode ? getScheduleForWeek(offseasonSeason, offseasonWeek) : getNextWeekSchedule(),
         getPredictionHistory(MAX_HISTORY_ENTRIES, userId),
         getTeamLogos(),
         getHistorySummary(userId),
@@ -278,14 +298,9 @@ export function usePredictionState(authSession = null) {
       if (!active) return;
 
       let scheduleRows = scheduleRes.status === "fulfilled" ? scheduleRes.value : [];
-      let nextSeasonContext = await getSeasonContext(scheduleRows);
-      if ((!Array.isArray(scheduleRows) || scheduleRows.length === 0) && scheduleRes.status === "fulfilled") {
-        const archivedRows = await getLatestArchivedSchedule();
-        if (archivedRows.length > 0) {
-          scheduleRows = archivedRows;
-          nextSeasonContext = buildArchivedSeasonContext(archivedRows, nextSeasonContext);
-        }
-      }
+      let nextSeasonContext = offseasonMode
+        ? buildOffseasonStatusContext(offseasonRes)
+        : await getSeasonContext(scheduleRows);
 
       const normalized = normalizeSchedule(scheduleRows);
       const teamMeta =
@@ -351,18 +366,22 @@ export function usePredictionState(authSession = null) {
       setScheduleError(null);
       try {
         const isDefaultSlateRequest = seasonOverride == null && weekOverride == null;
-        let rows = await getScheduleForWeek(seasonOverride, weekOverride, { fallbackRows: schedule });
+        const offseasonSeason = toNumberOrNull(seasonContext?.current_season);
+        const offseasonWeek = toNumberOrNull(seasonContext?.display_week) ?? 1;
+        let rows = await getScheduleForWeek(
+          isDefaultSlateRequest && seasonContext?.phase === "offseason" && offseasonSeason != null
+            ? offseasonSeason
+            : seasonOverride,
+          isDefaultSlateRequest && seasonContext?.phase === "offseason" && offseasonSeason != null
+            ? offseasonWeek
+            : weekOverride
+        );
         let nextSeasonContext = null;
 
-        if (isDefaultSlateRequest) {
+        if (isDefaultSlateRequest && seasonContext?.phase !== "offseason") {
           nextSeasonContext = await getSeasonContext(rows);
-          if ((!Array.isArray(rows) || rows.length === 0)) {
-            const archivedRows = await getLatestArchivedSchedule();
-            if (archivedRows.length > 0) {
-              rows = archivedRows;
-              nextSeasonContext = buildArchivedSeasonContext(archivedRows, nextSeasonContext);
-            }
-          }
+        } else if (isDefaultSlateRequest && seasonContext?.phase === "offseason") {
+          nextSeasonContext = buildOffseasonStatusContext(seasonContext);
         }
 
         const normalized = normalizeSchedule(rows);
@@ -393,7 +412,7 @@ export function usePredictionState(authSession = null) {
         setScheduleLoading(false);
       }
     },
-    [schedule, seasonContext?.current_season, teamMeta]
+    [schedule, seasonContext?.current_season, seasonContext?.display_week, seasonContext?.phase, teamMeta]
   );
 
   const setLoading = useCallback((key, value) => {

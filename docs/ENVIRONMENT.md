@@ -18,7 +18,7 @@ The goal of this document is to explain the active configuration behavior, not e
 | `RESTRICT_CORS` | Enforce allow-list CORS | `true` in code and in the canonical deploy setup | `true` |
 | `ALLOW_VERCEL_PREVIEWS` | Enable preview-domain regex fallback | `true` | `true` |
 | `DATASET_PATH` | Explicit dataset CSV override | Auto-discovers the promoted dataset from `backend/data/datasets/` | `backend/data/datasets/game_features_20260325_clean.csv` |
-| `SCHEDULE_PATH` | Explicit schedule CSV override | Otherwise tries live schedule loading and then packaged CSV fallback | `data/Nfl_schedule_2025.csv` |
+| `SCHEDULE_PATH` | Preferred schedule CSV override | Also scans sibling packaged schedule CSVs so upcoming seasons can supersede stale defaults once populated | `data/Nfl_schedule_2025.csv` |
 | `MODELS_DIR` | Explicit model bundle directory | Otherwise uses runtime auto-discovery | `data/models` |
 | `TEAM_LOGOS_PATH` | Optional logos/name/color catalog | Auto-detects `backend/data/team_logos.csv` when present | `backend/data/team_logos.csv` |
 | `PREDICT_CACHE_TTL_SEC` | Prediction cache TTL seconds | `900` | `900` |
@@ -51,9 +51,15 @@ For schedule endpoints, the backend tries:
 1. Live schedule loading via `nflreadpy`
 2. An explicit `SCHEDULE_PATH` override
 3. Packaged schedule CSVs under `backend/data/`
-4. Frontend public CSVs as a last local-development fallback
+4. Frontend public schedule CSVs as a last local-development fallback
 
-This is why `/schedule/next-week` can still return data in degraded or offline scenarios.
+The backend loads all discovered non-empty packaged schedule CSVs in priority order. That matters during offseason: keep `SCHEDULE_PATH` on the latest non-empty bundled schedule, and let discovery pick up a newer season only after that schedule file has real rows.
+
+`/schedule/next-week` selection policy:
+
+- If future playoff games still exist, show that next postseason slate.
+- If no future games remain and a current/future season is available, show that upcoming season's earliest week.
+- If no current/future season is available, fall back to the latest archived slate so the app remains populated.
 
 ## Model Compatibility Notes
 

@@ -1,8 +1,34 @@
+/**
+ * File: frontend/src/hooks/usePredictionState.test.jsx
+ *
+ * What it does:
+ *   Verifies the shared prediction-state hook hydrates schedule, health, history,
+ *   and offseason schedule routing without duplicating dashboard state.
+ *
+ * Data shapes:
+ *   Mocked client calls return schedule row arrays, history `{ entries, total }`
+ *   objects, and backend-shaped summary/status payloads.
+ *
+ * Syntax notes:
+ *   Vitest hoisted mocks replace `../api/client.js` before the hook import.
+ *
+ * Important tests (line numbers last refreshed 2026-04-30):
+ *   - initializes shared state: around line 87
+ *   - loadScheduleForWeek: around line 114
+ *   - offseason explicit schedule: around line 124
+ *
+ * Possible bugs:
+ *   Empty offseason schedule responses can still look like valid season context.
+ *
+ * Enhancement ideas:
+ *   Add a regression for archived-slate fallback context, and move fixture rows
+ *   into a small test data builder.
+ */
+
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const clientMocks = vi.hoisted(() => ({
-  mockGetLatestArchivedSchedule: vi.fn(async () => ([])),
   mockGetNextWeekSchedule: vi.fn(async () => ([
     { season: 2025, week: 1, home_abbr: "buf", away_abbr: "kc", home_team: "BUF", away_team: "KC" },
     { season: 2025, week: 1, home_abbr: "BUF", away_abbr: "KC", home_team: "BUF", away_team: "KC" },
@@ -35,6 +61,16 @@ const clientMocks = vi.hoisted(() => ({
     latest_prediction_at: "2026-03-20T00:00:00.000Z",
     last_score_sync_at: "2026-03-21T00:00:00.000Z",
   })),
+  mockGetOffseasonStatus: vi.fn(async () => ({
+    offseason_mode: false,
+    current_season: 2025,
+    current_week: 1,
+    next_known_schedule_date: null,
+    days_until_next_game: null,
+    data_freshness_seconds: null,
+    dataset_hash: null,
+    last_trained_at: null,
+  })),
   mockGetScheduleForWeek: vi.fn(async (_season, _week, { fallbackRows } = {}) => fallbackRows ?? []),
   mockGetTeamLogos: vi.fn(async () => ({
     BUF: { name: "Buffalo Bills", logoUrl: "https://example.com/buf.png", primaryColor: "#00338D" },
@@ -56,8 +92,8 @@ const clientMocks = vi.hoisted(() => ({
 vi.mock("../api/client.js", () => ({
   getNextWeekSchedule: clientMocks.mockGetNextWeekSchedule,
   getHistorySummary: clientMocks.mockGetHistorySummary,
-  getLatestArchivedSchedule: clientMocks.mockGetLatestArchivedSchedule,
   getHealthStatus: clientMocks.mockGetHealthStatus,
+  getOffseasonStatus: clientMocks.mockGetOffseasonStatus,
   getPredictionHistory: clientMocks.mockGetPredictionHistory,
   getScheduleForWeek: clientMocks.mockGetScheduleForWeek,
   getTeamLogos: clientMocks.mockGetTeamLogos,
@@ -93,36 +129,29 @@ describe("usePredictionState", () => {
       await result.current.loadScheduleForWeek(2025, 1);
     });
 
-    expect(clientMocks.mockGetScheduleForWeek).toHaveBeenCalledWith(
-      2025,
-      1,
-      expect.objectContaining({
-        fallbackRows: expect.any(Array),
-      })
-    );
+    expect(clientMocks.mockGetScheduleForWeek).toHaveBeenCalledWith(2025, 1);
   });
 
-  it("falls back to the latest archived slate when no live next slate is available", async () => {
-    clientMocks.mockGetNextWeekSchedule.mockResolvedValueOnce([]);
-    clientMocks.mockGetSeasonContext.mockResolvedValueOnce({
-      phase: "offseason",
-      label: "Offseason",
-      message: "No live weekly slate is available right now.",
+  it("requests the next season explicitly when offseason mode is active", async () => {
+    clientMocks.mockGetOffseasonStatus.mockResolvedValueOnce({
+      offseason_mode: true,
       current_season: 2026,
-      display_week: null,
-      games_in_next_window: 0,
-      next_kickoff: null,
-      generated_at: "2026-03-20T00:00:00.000Z",
+      current_week: 1,
+      next_known_schedule_date: null,
+      days_until_next_game: null,
+      data_freshness_seconds: null,
+      dataset_hash: null,
+      last_trained_at: null,
     });
-    clientMocks.mockGetLatestArchivedSchedule.mockResolvedValueOnce([
+
+    clientMocks.mockGetScheduleForWeek.mockResolvedValueOnce([
       {
-        season: 2025,
-        week: 22,
-        home_abbr: "NE",
-        away_abbr: "SEA",
-        home_team: "NE",
-        away_team: "SEA",
-        kickoff: "2025-02-08T18:30:00Z",
+        season: 2026,
+        week: 1,
+        home_abbr: "BUF",
+        away_abbr: "MIA",
+        home_team: "BUF",
+        away_team: "MIA",
       },
     ]);
 
@@ -130,10 +159,10 @@ describe("usePredictionState", () => {
 
     await waitFor(() => expect(result.current.schedule).toHaveLength(1));
 
-    expect(result.current.week).toBe(22);
-    expect(result.current.schedule[0].home_team).toBe("NE");
-    expect(result.current.seasonContext.archive_fallback).toBe(true);
-    expect(result.current.seasonContext.current_season).toBe(2025);
-    expect(result.current.seasonContext.display_week).toBe(22);
+    expect(result.current.schedule).toHaveLength(1);
+    expect(result.current.seasonContext.phase).toBe("offseason");
+    expect(result.current.seasonContext.current_season).toBe(2026);
+    expect(result.current.seasonContext.display_week).toBe(1);
+    expect(clientMocks.mockGetScheduleForWeek).toHaveBeenCalledWith(2026, 1);
   });
 });
