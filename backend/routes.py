@@ -110,6 +110,17 @@ class PredictedGame(BaseModel):
 class NextWeekPredictionsResponse(BaseModel):
     games: List[PredictedGame]
 
+
+class HistoryIntelligenceResponse(BaseModel):
+    total_predictions: int
+    average_confidence: float
+    average_margin: float
+    confidence_calibration_gap: float
+    strongest_pick: Optional[Dict[str, Any]] = None
+    closest_matchup: Optional[Dict[str, Any]] = None
+    most_frequent_team: Optional[str] = None
+    generated_at: datetime
+
 # -------------------------
 # Routes
 # -------------------------
@@ -280,6 +291,80 @@ def status_overview(request: Request):
 @router.get("/history")
 def history(request: Request, limit: int = 100):
     return get_prediction_history(_resolve_user_context(request), limit=limit)
+
+
+@router.get("/history/intelligence", response_model=HistoryIntelligenceResponse)
+def history_intelligence(request: Request, limit: int = 250) -> HistoryIntelligenceResponse:
+    records = get_prediction_history(_resolve_user_context(request), limit=limit)
+    if not records:
+        return HistoryIntelligenceResponse(
+            total_predictions=0,
+            average_confidence=0.0,
+            average_margin=0.0,
+            confidence_calibration_gap=0.0,
+            generated_at=datetime.utcnow(),
+        )
+
+    total = len(records)
+    confidence_values: List[float] = []
+    margin_values: List[float] = []
+    team_counts: Dict[str, int] = {}
+    strongest_pick: Optional[Dict[str, Any]] = None
+    closest_matchup: Optional[Dict[str, Any]] = None
+
+    for item in records:
+        home = str(item.get("home_team", "")).upper()
+        away = str(item.get("away_team", "")).upper()
+        if home:
+            team_counts[home] = team_counts.get(home, 0) + 1
+        if away:
+            team_counts[away] = team_counts.get(away, 0) + 1
+
+        home_win_probability = float(item.get("home_win_probability", 0.0) or 0.0)
+        away_win_probability = float(item.get("away_win_probability", 0.0) or 0.0)
+        point_diff = float(item.get("point_diff", 0.0) or 0.0)
+        confidence = max(home_win_probability, away_win_probability)
+        margin = abs(point_diff)
+
+        confidence_values.append(confidence)
+        margin_values.append(margin)
+
+        if strongest_pick is None or confidence > strongest_pick["confidence"]:
+            strongest_pick = {
+                "season": item.get("season"),
+                "week": item.get("week"),
+                "home_team": home,
+                "away_team": away,
+                "predicted_winner": home if point_diff >= 0 else away,
+                "confidence": round(confidence, 4),
+                "predicted_margin": round(margin, 2),
+            }
+
+        if closest_matchup is None or margin < closest_matchup["predicted_margin"]:
+            closest_matchup = {
+                "season": item.get("season"),
+                "week": item.get("week"),
+                "home_team": home,
+                "away_team": away,
+                "predicted_margin": round(margin, 2),
+                "confidence": round(confidence, 4),
+            }
+
+    avg_confidence = sum(confidence_values) / total
+    avg_margin = sum(margin_values) / total
+    calibration_gap = abs(avg_confidence - 0.5) - min(avg_margin / 20.0, 0.5)
+    most_frequent_team = max(team_counts.items(), key=lambda pair: pair[1])[0] if team_counts else None
+
+    return HistoryIntelligenceResponse(
+        total_predictions=total,
+        average_confidence=round(avg_confidence, 4),
+        average_margin=round(avg_margin, 2),
+        confidence_calibration_gap=round(calibration_gap, 4),
+        strongest_pick=strongest_pick,
+        closest_matchup=closest_matchup,
+        most_frequent_team=most_frequent_team,
+        generated_at=datetime.utcnow(),
+    )
 
 @router.post("/train")
 @router.post("/retrain")

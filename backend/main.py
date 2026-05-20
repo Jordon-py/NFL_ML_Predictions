@@ -2542,6 +2542,109 @@ def status_overview(request: Request) -> StatusOverviewResponse:
     }
 
 
+def _to_number(value: Any) -> Optional[float]:
+    try:
+        num = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not np.isfinite(num):
+        return None
+    return num
+
+
+def _to_iso(value: Any) -> Optional[str]:
+    if value in (None, ""):
+        return None
+    if isinstance(value, datetime):
+        return value.astimezone(timezone.utc).isoformat()
+    try:
+        parsed = pd.to_datetime(value, utc=True, errors="coerce")
+    except Exception:
+        return None
+    if pd.isna(parsed):
+        return None
+    return parsed.isoformat()
+
+
+def _pick_latest_iso(current: Optional[str], candidate: Optional[str]) -> Optional[str]:
+    if not candidate:
+        return current
+    if not current:
+        return candidate
+    try:
+        return candidate if pd.to_datetime(candidate) > pd.to_datetime(current) else current
+    except Exception:
+        return current
+
+
+def _build_history_metrics(entries: List[Dict[str, Any]]) -> Dict[str, Any]:
+    rows = entries if isinstance(entries, list) else []
+    resolved_games = 0
+    correct_predictions = 0
+    spread_error_total = 0.0
+    spread_error_count = 0
+    confidence_total = 0.0
+    confidence_count = 0
+    latest_prediction_at = None
+    last_score_sync_at = None
+
+    for entry in rows:
+        if not isinstance(entry, dict):
+            continue
+        latest_prediction_at = _pick_latest_iso(
+            latest_prediction_at,
+            _to_iso(entry.get("ts") or entry.get("timestamp") or entry.get("created_at") or entry.get("predicted_at")),
+        )
+        home_prob = _to_number(entry.get("home_win_probability"))
+        away_prob = _to_number(entry.get("away_win_probability"))
+        if home_prob is not None or away_prob is not None:
+            confidence_total += max(home_prob or 0.0, away_prob or 0.0)
+            confidence_count += 1
+
+        actual_home = _to_number(entry.get("final_home_score", entry.get("actual_home_score")))
+        actual_away = _to_number(entry.get("final_away_score", entry.get("actual_away_score")))
+        if actual_home is None or actual_away is None:
+            continue
+        resolved_games += 1
+        last_score_sync_at = _pick_latest_iso(
+            last_score_sync_at,
+            _to_iso(entry.get("score_updated_at") or entry.get("last_score_sync_at") or entry.get("updated_at")),
+        )
+
+        predicted_home = _to_number(entry.get("home_score"))
+        predicted_away = _to_number(entry.get("away_score"))
+        predicted_diff = predicted_home - predicted_away if predicted_home is not None and predicted_away is not None else _to_number(entry.get("point_diff"))
+        actual_diff = actual_home - actual_away
+
+        if predicted_diff is not None:
+            spread_error_total += abs(predicted_diff - actual_diff)
+            spread_error_count += 1
+
+        predicted_home_wins: Optional[bool] = None
+        if predicted_diff is not None:
+            predicted_home_wins = predicted_diff >= 0
+        elif home_prob is not None or away_prob is not None:
+            predicted_home_wins = (home_prob or 0.0) >= (away_prob or 0.0)
+        if predicted_home_wins is not None and (predicted_home_wins == (actual_diff >= 0)):
+            correct_predictions += 1
+
+    return {
+        "total_predictions": len(rows),
+        "resolved_games": resolved_games,
+        "win_rate": (correct_predictions / resolved_games) if resolved_games else None,
+        "avg_abs_spread_error": (spread_error_total / spread_error_count) if spread_error_count else None,
+        "avg_confidence": (confidence_total / confidence_count) if confidence_count else None,
+        "latest_prediction_at": latest_prediction_at,
+        "last_score_sync_at": last_score_sync_at,
+    }
+
+
+@app.get("/history/summary", response_model=HistoryMetricsResponse)
+def history_summary() -> HistoryMetricsResponse:
+    """Aggregated prediction quality and recency metrics for premium dashboard UX."""
+    return _build_history_metrics(state.history)
+
+
 @app.get("/status/models")
 def status_models() -> Dict[str, Any]:
     """
