@@ -2,7 +2,7 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
-from backend.main import app
+from backend.main import app, _build_history_metrics
 
 
 def test_status_overview_and_history():
@@ -48,3 +48,22 @@ def test_predict_next_week_or_service_unavailable():
         if r.status_code == 200:
             j = r.json()
             assert "games" in j and isinstance(j["games"], list)
+
+
+def test_history_metrics_fallbacks_to_actual_scores_when_final_scores_are_null():
+    metrics = _build_history_metrics([
+        {
+            "final_home_score": None,
+            "final_away_score": None,
+            "actual_home_score": 24,
+            "actual_away_score": 17,
+            "home_score": 21,
+            "away_score": 20,
+            "home_win_probability": 0.62,
+            "away_win_probability": 0.38,
+        }
+    ])
+
+    assert metrics["resolved_games"] == 1
+    assert metrics["win_rate"] == 1.0
+    assert metrics["avg_abs_spread_error"] == pytest.approx(6.0)

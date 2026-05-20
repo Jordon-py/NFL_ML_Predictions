@@ -2135,8 +2135,10 @@ def _build_history_metrics(entries: List[Dict[str, Any]]) -> Dict[str, Any]:
             confidence_total += max(home_prob or 0.0, away_prob or 0.0)
             confidence_count += 1
 
-        actual_home = _to_number(entry.get("final_home_score", entry.get("actual_home_score")))
-        actual_away = _to_number(entry.get("final_away_score", entry.get("actual_away_score")))
+        final_home_score = entry.get("final_home_score")
+        final_away_score = entry.get("final_away_score")
+        actual_home = _to_number(final_home_score if final_home_score is not None else entry.get("actual_home_score"))
+        actual_away = _to_number(final_away_score if final_away_score is not None else entry.get("actual_away_score"))
         if actual_home is None or actual_away is None:
             continue
         resolved_games += 1
