@@ -13,6 +13,7 @@ import HistoryChart from "../components/HistoryChart.jsx";
 import {
   getNextWeekSchedule,
   getPredictionHistory,
+  getHistorySummary,
   getStatusOverview,
 } from "../api/client";
 import { buildMatchupKey } from "../utils/gameUtils.js";
@@ -76,6 +77,7 @@ export default function StatsPage() {
   const [schedule, setSchedule] = useState(/** @type {any[]} */([]));
   const [history, setHistory] = useState(/** @type {any[]} */([]));
   const [overview, setOverview] = useState(/** @type {any | null} */(null));
+  const [historySummary, setHistorySummary] = useState(/** @type {any | null} */(null));
 
   // Local UI state
   const [isPageLoading, setIsPageLoading] = useState(true);
@@ -93,10 +95,11 @@ export default function StatsPage() {
     const hydrate = async () => {
       try {
         setIsPageLoading(true);
-        const [scheduleData, historyResponse, overviewData] = await Promise.all([
+        const [scheduleData, historyResponse, overviewData, historySummaryData] = await Promise.all([
           getNextWeekSchedule(),
           getPredictionHistory(50),
           getStatusOverview(),
+          getHistorySummary(),
         ]);
 
         if (!active) return;
@@ -104,6 +107,7 @@ export default function StatsPage() {
         setSchedule(Array.isArray(scheduleData) ? scheduleData : []);
         setHistory(Array.isArray(historyResponse?.entries) ? historyResponse.entries : []);
         setOverview(overviewData || null);
+        setHistorySummary(historySummaryData || null);
         setPageError(null);
       } catch (err) {
         if (!active) return;
@@ -126,11 +130,27 @@ export default function StatsPage() {
   const overviewData = overview || {};
   const health = overviewData.health || { status: "unknown" };
   const datasetStatistics = overviewData.dataset || {};
-  const historyMetrics = overviewData.history?.metrics || { total_predictions: history.length };
+  const historyMetrics = historySummary || overviewData.history?.metrics || { total_predictions: history.length };
   /** @type {any[]} */
   const scheduleList = Array.isArray(schedule) ? schedule : [];
 
   const predictionWinRate = typeof historyMetrics?.win_rate === "number" ? `${Math.round(historyMetrics.win_rate * 100)}%` : "n/a";
+  const averageErrorLabel =
+    typeof historyMetrics?.avg_abs_spread_error === "number"
+      ? `${historyMetrics.avg_abs_spread_error.toFixed(2)} pts`
+      : "n/a";
+  const confidenceLabel =
+    typeof historyMetrics?.avg_confidence === "number"
+      ? `${Math.round(historyMetrics.avg_confidence * 100)}%`
+      : "n/a";
+  const qualityTier = (() => {
+    if (typeof historyMetrics?.win_rate !== "number" || typeof historyMetrics?.avg_abs_spread_error !== "number") {
+      return "Calibrating";
+    }
+    if (historyMetrics.win_rate >= 0.62 && historyMetrics.avg_abs_spread_error <= 6.5) return "Elite";
+    if (historyMetrics.win_rate >= 0.55 && historyMetrics.avg_abs_spread_error <= 8.5) return "Strong";
+    return "Developing";
+  })();
 
   /**
    * Renders "Next Week Schedule" list:
@@ -229,6 +249,17 @@ export default function StatsPage() {
             title="Predictions recorded"
             value={historyMetrics?.total_predictions ?? history.length}
             subtext={`Win rate: ${predictionWinRate}`}
+          />
+          <SummaryCard
+            title="Prediction quality tier"
+            value={qualityTier}
+            subtext={`Resolved: ${historyMetrics?.resolved_games ?? 0} • Avg error: ${averageErrorLabel}`}
+            intent={qualityTier === "Elite" ? "ok" : qualityTier === "Developing" ? "error" : "default"}
+          />
+          <SummaryCard
+            title="Avg confidence"
+            value={confidenceLabel}
+            subtext="Tracks model conviction (higher is not always better)"
           />
         </section>
 
