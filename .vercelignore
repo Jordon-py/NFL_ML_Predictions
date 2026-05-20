@@ -1,3 +1,13 @@
+# Vercel deploy input filter for the frontend-hosted app.
+# Data shape: gitignore-style patterns relative to the repo root.
+# Syntax: blank lines group deployment concerns; # starts comments.
+# Important behavior: root Python backend manifests are ignored so Vercel does
+# not run `uv pip install` for the Heroku/FastAPI backend during frontend deploys.
+# Possible bug: if the backend is intentionally moved to Vercel later, remove
+# the Python-manifest ignores and add a dedicated Vercel Functions contract.
+# Extensions: split frontend/backend Vercel projects, or add a root vercel.json
+# that documents the frontend root directory explicitly.
+
 .env*
 .DS_Store
 *.log
@@ -14,6 +24,13 @@ tmp_history_status_check/
 
 backend/
 data/
+requirements.txt
+pyproject.toml
+.python-version
+Procfile
+.buildpacks
+.slugignore
+.heroku/
 
 node_modules/
 **/node_modules/

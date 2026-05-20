@@ -90,6 +90,11 @@ The backend now boots even if models are missing or incompatible.
 - `/predict` returns `503` with structured blockers when the active bundle is not ready.
 - This makes deployments diagnosable instead of failing hard during startup.
 
+### Runtime Enhancements (May 2026)
+
+- Model hot-reload: the backend starts a lightweight background `model-watcher` thread that monitors the active models directory and reloads promoted bundles without requiring a full process restart. This improves promotion workflows and reduces downtime.
+- In-process LRU cache: prediction responses are cached in-memory with TTL and max-items controlled by `PREDICT_CACHE_TTL_SEC` and `PREDICT_CACHE_MAX_ITEMS` (see `backend/main.py`) to reduce repeated identical inference cost during heavy UI refreshes.
+
 ### Schedule loading is queryable and postseason-safe
 
 - `GET /schedule?season=<year>&week=<week>` returns a specific slate.

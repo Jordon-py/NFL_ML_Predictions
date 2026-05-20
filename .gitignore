@@ -60,10 +60,12 @@ coverage/
 .pytest_cache/
 *.coverage
 backend/logs/
-
+tmp_pytest/
+codex_git_objects_push/
+codex_external_push.index
 ## Notebook checkpoints
 .ipynb_checkpoints/
-
+*/*.index
 ## Packaging artifacts
 .slugignore
 *.so
