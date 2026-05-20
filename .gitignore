@@ -61,6 +61,18 @@ coverage/
 *.coverage
 backend/logs/
 
+## Local test/deployment scratch space
+.codex_tmp/
+.runtime_basetemp/
+.runtime_tmp/
+pytest_basetemp*/
+tmp_pytest/
+manual_tmp_probe/
+_codex_deploy_gitinit_test/
+codex_git_objects_push/
+codex_external_push.index
+artifacts/pytest_codex_schedule*/
+
 ## Notebook checkpoints
 .ipynb_checkpoints/
 
