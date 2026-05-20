@@ -34,7 +34,7 @@ function buildSeasonOptions(currentSeason, selectedSeason) {
   const baseSeason = Number.isFinite(Number(currentSeason))
     ? Number(currentSeason)
     : new Date().getFullYear();
-  const seasons = new Set([selectedSeason, baseSeason, baseSeason - 1, baseSeason - 2, baseSeason + 1]);
+  const seasons = new Set([selectedSeason, baseSeason, Number(baseSeason - 1), Number(baseSeason - 2), Number(baseSeason + 1)]);
   return Array.from(seasons)
     .filter((value) => Number.isFinite(Number(value)))
     .sort((a, b) => Number(b) - Number(a));

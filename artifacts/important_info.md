@@ -1,8 +1,9 @@
 # ?? Key Architectural Insights
 
-_Last Updated:_ 2026-01-02 08:27:54
+_Last Updated:_ 2026-04-29 12:00:00
 
 ## Current Focus
+
 - Unified prediction response: frontend expects flat `UnifiedPredictionResponse` fields (home_score, home_win_probability, etc.).
 - Schedule enrichment: backend supplies team names/logos per game and now reads `team_logos.csv` from repo root.
 - CORS config: backend uses `ALLOWED_ORIGINS` and `ALLOW_ORIGIN_REGEX` to allow localhost and Vercel previews.

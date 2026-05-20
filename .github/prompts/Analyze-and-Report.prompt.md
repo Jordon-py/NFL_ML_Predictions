@@ -3,6 +3,7 @@ agent: alfred-config.yml
 ---
 
 ## Primary Objective:
+
 Perform a comprehensive audit and enhancement of the codebase, focusing on both the FastAPI backend and React frontend, emphasizing:
 
 - Simplified, maintainable logic

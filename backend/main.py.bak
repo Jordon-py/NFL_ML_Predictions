@@ -1481,10 +1481,6 @@ class PredictionResponse(BaseModel):
     predicted_total: Optional[float] = None
     home_win_prob: Optional[float] = None
     prediction_source: str = "pipeline_primary"
-    row_source: Optional[str] = None
-    fallback_used: bool = False
-    fallback_reasons: List[str] = Field(default_factory=list)
-    probability_source: Optional[str] = None
     explanation_fields: Dict[str, Any] = Field(default_factory=dict)
     generated_at: datetime
     mode: str = Field(..., description="Mode of prediction, e.g., 'production'")
@@ -1723,53 +1719,6 @@ def _json_safe_records(df: pd.DataFrame) -> List[Dict[str, Any]]:
         safe_row = {str(k): _json_safe_value(v) for k, v in row.items()}
         safe_rows.append(safe_row)
     return safe_rows
-
-
-def _add_legacy_rolling_feature_aliases(row_df: pd.DataFrame) -> pd.DataFrame:
-    """Backfill legacy rolling feature names from leak-safe prior feature columns."""
-    if row_df is None or row_df.empty:
-        return row_df
-
-    out = row_df.copy()
-    stat_map = {
-        "pf": "pf_avg",
-        "pa": "pa_avg",
-        "win_pct": "win_pct",
-    }
-    window_fallbacks = {
-        3: (3, 5),
-        5: (5, 3),
-        10: (10, 5, 3),
-    }
-
-    row_idx = out.index[0]
-    for side in ("home", "away"):
-        for legacy_stat, prior_stat in stat_map.items():
-            for window, fallback_windows in window_fallbacks.items():
-                target_col = f"{side}_rolling_{legacy_stat}_{window}"
-                current_value = out.at[row_idx, target_col] if target_col in out.columns else pd.NA
-                try:
-                    if pd.notna(current_value):
-                        continue
-                except Exception:
-                    pass
-
-                fill_value = pd.NA
-                for fallback_window in fallback_windows:
-                    source_col = f"{side}_prior_{prior_stat}_{fallback_window}"
-                    if source_col not in out.columns:
-                        continue
-                    candidate = out.at[row_idx, source_col]
-                    try:
-                        if pd.notna(candidate):
-                            fill_value = candidate
-                            break
-                    except Exception:
-                        continue
-
-                out[target_col] = fill_value
-
-    return out
 
 
 def _row_quality_details(
@@ -2523,7 +2472,6 @@ def debug_predict_input(request: PredictRequest) -> DebugPredictInputResponse:
         season=season,
         week=week,
     )
-    row_df = _add_legacy_rolling_feature_aliases(row_df)
 
     full_df, numeric_df = _prepare_inputs(row_df)
     try:
@@ -3423,7 +3371,6 @@ async def predict(payload: PredictRequest, request: Request) -> Dict[str, Any]:
         season=season,
         week=week,
     )
-    row = _add_legacy_rolling_feature_aliases(row)
 
     # ----- Prepare model inputs -----
     full_df, numeric_df = _prepare_inputs(row)
@@ -3517,19 +3464,6 @@ async def predict(payload: PredictRequest, request: Request) -> Dict[str, Any]:
         or "pipeline_primary"
     )
 
-    fallback_reasons: List[str] = []
-
-    if selected_row_source != "dataset_exact":
-        fallback_reasons.append(f"row_source={selected_row_source}")
-
-    if not clf_used:
-        fallback_reasons.append("win_classifier_not_used")
-        probability_source = "logistic_point_diff"
-    else:
-        probability_source = "win_classifier"
-
-    fallback_used = bool(fallback_reasons)
-
     result: Dict[str, Any] = {
         "season": season,
         "week": week,
@@ -3548,10 +3482,6 @@ async def predict(payload: PredictRequest, request: Request) -> Dict[str, Any]:
         "predicted_total": predicted_total,
         "home_win_prob": float(win_prob),
         "prediction_source": prediction_source,
-        "row_source": selected_row_source,
-        "fallback_used": fallback_used,
-        "fallback_reasons": fallback_reasons,
-        "probability_source": probability_source,
         "explanation_fields": {
             "selected_row_source": selected_row_source,
             "row_quality_score": quality["row_quality_score"],

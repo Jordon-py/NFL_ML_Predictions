@@ -1,3 +1,34 @@
+"""
+File: backend/app/core/settings.py
+
+What it does:
+    Defines the backend Settings object for environment variables, CORS policy,
+    deploy-mode detection, and runtime path resolution.
+
+Data shapes:
+    - Raw env vars enter as strings.
+    - Settings properties expose normalized origins, regexes, booleans, and
+      resolved pathlib.Path values for datasets, schedules, models, and logos.
+
+Syntax notes:
+    - Pydantic Settings uses validation_alias so old env names keep working.
+    - get_settings() is cached because FastAPI imports this module repeatedly.
+
+Important functions (line numbers last refreshed 2026-04-30):
+    - _normalize_origin: around line 42
+    - Settings.allowed_origins: around line 102
+    - Settings.resolved_schedule_path: around line 145
+    - get_settings: around line 178
+
+Possible bugs:
+    - A too-broad CORS regex can expose the API to unintended origins.
+    - Relative paths are resolved against backend/, not the repo root.
+
+Enhancement ideas:
+    - Add an env diagnostic endpoint that returns safe resolved-path metadata.
+    - Split CORS validation into its own tested settings helper.
+"""
+
 from __future__ import annotations
 
 import os
@@ -59,7 +90,7 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("ALLOWED_ORIGINS", "CORS_ORIGINS"),
     )
     allow_origin_regex: Optional[str] = Field(
-        default=None,
+        default=VERCEL_PROJECT_ORIGIN_REGEX if IS_HEROKU else '127\\.0\\.0\\.1(:\\d+)?',
         validation_alias=AliasChoices("CORS_ORIGINS_REGEX", "ALLOW_ORIGIN_REGEX"),
     )
     restrict_cors: bool = Field(default=True, validation_alias=AliasChoices("RESTRICT_CORS"))
@@ -153,7 +184,7 @@ class Settings(BaseSettings):
         return candidates[0]
 
 
-@lru_cache(maxsize=1)
+@lru_cache(maxsize=2)
 def get_settings() -> Settings:
     return Settings()
 

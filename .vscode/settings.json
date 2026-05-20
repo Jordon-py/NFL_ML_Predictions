@@ -42,5 +42,37 @@
     "chatgpt.openOnStartup": true,
     "[javascriptreact]": {
         "editor.defaultFormatter": "vscode.typescript-language-features"
+    },
+    "chat.mcp.serverSampling": {
+        "NFL_ML_Predictions/.vscode/mcp.json: io.github.github/github-mcp-server": {
+            "allowedModels": [
+                "copilot/auto",
+                "copilotcli/claude-haiku-4.5",
+                "claude-code/claude-haiku-4.5",
+                "copilot/claude-haiku-4.5",
+                "copilotcli/gpt-4.1",
+                "copilot/gpt-4.1",
+                "copilotcli/gpt-4o",
+                "copilot/gpt-4o",
+                "copilotcli/gpt-5-mini",
+                "copilot/gpt-5-mini",
+                "copilot/oswe-vscode-prime"
+            ]
+        },
+        "NFL_ML_Predictions/.vscode/mcp.json: microsoft/playwright-mcp": {
+            "allowedModels": [
+                "copilot/auto",
+                "copilotcli/claude-haiku-4.5",
+                "claude-code/claude-haiku-4.5",
+                "copilot/claude-haiku-4.5",
+                "copilotcli/gpt-4.1",
+                "copilot/gpt-4.1",
+                "copilotcli/gpt-4o",
+                "copilot/gpt-4o",
+                "copilotcli/gpt-5-mini",
+                "copilot/gpt-5-mini",
+                "copilot/oswe-vscode-prime"
+            ]
+        }
     }
 }
