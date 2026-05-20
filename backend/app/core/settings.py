@@ -13,6 +13,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 REPO_ROOT = BACKEND_DIR.parent
 IS_HEROKU = bool(os.getenv("DYNO"))
+VERCEL_PROJECT_ORIGIN_REGEX = r"(?i)^https://(?:[a-z0-9-]+\.)+vercel\.app$"
 
 
 def _normalize_origin(raw: str) -> Optional[str]:
@@ -102,7 +103,6 @@ class Settings(BaseSettings):
             "http://localhost:4173",
             "http://127.0.0.1:4173",
             "https://new-nfl-predict.vercel.app",
-            "https://nfl-ml-predictions.vercel.app",
         ]
         out = configured or defaults
         if not self.is_production:
@@ -117,7 +117,7 @@ class Settings(BaseSettings):
         if raw:
             return raw
         if self.allow_vercel_previews:
-            return r"^https://.*\.vercel\.app$"
+            return VERCEL_PROJECT_ORIGIN_REGEX
         return None
 
     @property

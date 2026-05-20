@@ -1,0 +1,30 @@
+{
+  "run_id": "20260320T101725Z",
+  "generated_at_utc": "2026-03-20T10:18:02.171812+00:00",
+  "start_season": 2018,
+  "end_season": 2025,
+  "rows": 2228,
+  "columns": 247,
+  "completed_rows": 2227,
+  "future_rows": 1,
+  "blank_rows_removed": 0,
+  "duplicate_game_ids_removed": 0,
+  "include_future": true,
+  "encode": "onehot",
+  "no_calibration_rows": true,
+  "legacy_root_copy": false,
+  "raw_dataset_path": "C:\\Users\\goku\\Documents\\NFL_ML_Predictions\\backend\\data\\datasets\\runs\\20260320T101725Z\\game_features_20260320.csv",
+  "clean_dataset_path": "C:\\Users\\goku\\Documents\\NFL_ML_Predictions\\backend\\data\\datasets\\game_features_20260320_clean.csv",
+  "run_dir": "C:\\Users\\goku\\Documents\\NFL_ML_Predictions\\backend\\data\\datasets\\runs\\20260320T101725Z",
+  "metadata_path": "C:\\Users\\goku\\Documents\\NFL_ML_Predictions\\backend\\data\\datasets\\runs\\20260320T101725Z\\game_features_metadata.json",
+  "quality_report_path": "C:\\Users\\goku\\Documents\\NFL_ML_Predictions\\backend\\data\\datasets\\runs\\20260320T101725Z\\game_features_quality_report.json",
+  "log_path": "C:\\Users\\goku\\Documents\\NFL_ML_Predictions\\backend\\data\\datasets\\runs\\20260320T101725Z\\build_csv_datasets.log",
+  "cleaning_stats": {
+    "rows_before_cleaning": 2228,
+    "rows_after_cleaning": 2228,
+    "blank_rows_removed": 0,
+    "duplicate_game_ids_removed": 0,
+    "completed_rows": 2227,
+    "future_rows": 1
+  }
+}

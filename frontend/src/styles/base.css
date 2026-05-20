@@ -32,8 +32,8 @@
   --r-sm: 8px;
 
   /* Elevation */
-  --shadow-1: 0 1px 2px 4px lch(0, 0, 0, .28);
-  --shadow-2: 0 6px 18px 1px lch(0, 0, 0, .38);
+  --shadow-1: 0 1px 2px 4px rgb(0 0 0 / 0.28);
+  --shadow-2: 0 6px 18px 1px rgb(0 0 0 / 0.38);
 
   /* Primary gradient */
   --grad-primary: linear-gradient(90deg,
@@ -72,6 +72,7 @@ html,
 body {
   margin: 0;
   padding: 0;
+  cursor: auto;
 }
 
 body {
@@ -312,14 +313,14 @@ button:focus-visible,
     box-shadow:
       0 8px 25px lch(93.48% 35.26 176.56 / 0.766),
       0 0 20px var(--c-brand-1),
-      inset 0 0 0 1px lch(1, 124, 255, 0.285);
+      inset 0 0 0 1px rgb(1 124 255 / 0.285);
   }
 
   50% {
     box-shadow:
-      0 8px 25px lch(0, 0, 0, 0.6),
+      0 8px 25px rgb(0 0 0 / 0.6),
       0 0 30px var(--c-accent),
-      inset 0 0 0 1px lch(255, 255, 255, 0.2);
+      inset 0 0 0 1px rgb(255 255 255 / 0.2);
   }
 }
 
@@ -329,13 +330,13 @@ Float Animation — Production
 ============================ */
 
 :root {
-  /* Tuning knobs /
---float-y: 8px; / vertical travel amplitude /
---float-dur: 3.2s; / cycle duration /
---float-rot: 0.8deg; / subtle tilt at apex /
---float-scale: 1.01; / slight breathing scale /
---float-ease: cubic-bezier(.37,.01,.22,1); / natural ease /
---float-delay: 0s; / allow staggering */
+  /* Tuning knobs */
+  --float-y: 8px;
+  --float-dur: 3.2s;
+  --float-rot: 0.8deg;
+  --float-scale: 1.01;
+  --float-ease: cubic-bezier(.37, .01, .22, 1);
+  --float-delay: 0s;
   --shadow-low: 25%;
   --shadow-high: 35%;
 }

@@ -72,6 +72,10 @@ class HistoryEntry(UnifiedPredictionResponse):
     ts: str
     user_id: Optional[str] = None
     storage_key: Optional[str] = None
+    final_home_score: Optional[int] = None
+    final_away_score: Optional[int] = None
+    game_status: Optional[str] = None
+    score_updated_at: Optional[str] = None
 
 class HistoryResponse(BaseModel):
     entries: List[HistoryEntry]

@@ -14,10 +14,13 @@
 # Variables: ABBR_FIX(80), OUTPUT_DATASET_NAME(90), HAS_winner_BOOL(93), TIME_COLS_IN_ORDER(94), NFL_BACKEND(121)
 # Interacts With: backend/utils/feature_helpers.py, nflreadpy/nfl_data_py backends, data/pbp caches, train_models.py (consumes CSV outputs)
 
-build_csv_datasets.py
-=====================
+build_csv_datasets_v3.py
+========================
 
-Production-ready builder for NFL game-level datasets (one row per game).
+Production-ready feature builder for NFL game-level datasets (one row per game).
+
+The canonical CLI entrypoint for normal repo workflows is `backend/builddataset.py`,
+which wraps this module with cleaned output directories and manifests.
 
 **PURPOSE: DATASET BUILDING ONLY** - Model training is handled in enhanced_pipeline.py
 
@@ -66,6 +69,7 @@ import logging
 from pathlib import Path
 import re
 import numbers
+import sys
 try:
     import nflreadpy as nfl  
 except Exception:
@@ -73,9 +77,11 @@ except Exception:
 import numpy as np
 import pandas as pd
 
+if __name__ == "__main__" and __package__ is None:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 # Shared feature engineering utilities
-from utils.feature_helpers import (
+from backend.utils.feature_helpers import (
     make_time_key,
     _rolling_prior_stats,
     _ffill_prior_features,
@@ -109,14 +115,8 @@ POSTSEASON_ROUND_TO_TYPE = {
     "Conference Championship": "CON",
     "Super Bowl": "SB",
 }
-# Name of the output CSV file for the generated dataset.
-<<<<<<<< HEAD:backend/build_csv_datasetsv3.py
-OUTPUT_DATASET_NAME = f"game_features_{datetime.now().strftime('%Y%m%d')}.csv"
-========
 # Includes current date in YYYYMMDD format for traceability/versioning.
 OUTPUT_DATASET_NAME = f"game_features_{datetime.now().strftime('%Y%m%d')}.csv"
-DATA_SAVE = f"game_features_{datetime.now().strftime('%Y%m%d')}.csv"
->>>>>>>> 5b8cc7f5c1568b3524a11eb6b0b53c2955a79aff:backend/build_csv_datasets_v3.py
 
 # Pairwise dominance helpers
 HAS_winner_BOOL = True  # if you only have scores, set False
@@ -469,7 +469,7 @@ def load_team_game_metrics(pbp_path: Path, seasons: List[int]) -> pd.DataFrame:
     if pbp is None or pbp.empty:
         return pd.DataFrame(columns=["season", "week", "game_id", "team"])
 
-    from utils.feature_engine import calculate_team_metrics
+    from backend.utils.feature_engine import calculate_team_metrics
     metrics = calculate_team_metrics(pbp)
     metrics = _dedupe_on_keys(metrics, ["season", "week", "game_id", "team"], "team_game_metrics")
 
@@ -910,7 +910,7 @@ def add_features(
 
 
     # Use shared engine for rolling features
-    from utils.feature_engine import calculate_rolling_features
+    from backend.utils.feature_engine import calculate_rolling_features
     long = calculate_rolling_features(long, windows)
 
     # Convert any merged same-game advanced metrics into leak-safe priors (shift(1) rolling),
@@ -2059,14 +2059,6 @@ def  build_dataset(
         "Dataset build complete: %d rows, %d columns, written to %s",
         len(df),
         len(df.columns),
-        df.columns,
-        df.dtypes,
-        df.info(),
-        df.describe(include='all'),
-        production_mode,
-        include_future,
-        encode,
-        NFL_BACKEND,
         dataset_path,
     )
 

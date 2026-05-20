@@ -23,15 +23,15 @@
  *   - Page re-renders when `history` changes in App state.
  */
 import React from 'react';
-import NavBar from './NavBar/NavBar.jsx';
 import HistoryChart from './HistoryChart.jsx';
-
+import NavBar from './NavBar/NavBar.jsx';
 import D_BUTTON from './D_BUTTON.jsx';
 
 export default function HistoryPage({
   authSession,
   onSignOut,
   history = [],
+  historySummary = null,
   health,
   onClearHistory,
   historyCount = 0,
@@ -49,7 +49,7 @@ export default function HistoryPage({
         state={{
           health,
           title: 'Prediction History',
-          heroSubtitle: 'Review saved forecasts and clear older activity when needed.',
+          heroSubtitle: 'Review saved forecasts, filter resolved results, and compare your calls to final scores.',
           subtitle: `${safeCount} saved prediction${safeCount === 1 ? '' : 's'}`,
           healthLabel:
             health?.status === 'healthy'
@@ -62,7 +62,7 @@ export default function HistoryPage({
         <D_BUTTON onClear={onClearHistory} count={safeCount} />
       </section>
 
-      <HistoryChart history={safeHistory} />
+      <HistoryChart history={safeHistory} summary={historySummary} />
     </>
   );
 }

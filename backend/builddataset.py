@@ -23,6 +23,7 @@ if __name__ == "__main__" and __package__ is None:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from backend.pipeline_models import DatasetArtifactManifest, DatasetBuildConfig
+from backend.score_sync import extract_score_entries_from_dataframe, write_score_snapshot
 
 
 def _utc_now() -> datetime:
@@ -77,15 +78,24 @@ def _clean_dataset(df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, Any]]:
 
     duplicate_game_ids_removed = 0
     if "game_id" in out.columns:
+        label_cols = [c for c in ("home_points_for", "away_points_for", "home_win", "winner") if c in out.columns]
+        if label_cols:
+            out["_label_priority"] = out[label_cols].notna().sum(axis=1)
+        else:
+            out["_label_priority"] = 0
         out["_completeness"] = out.notna().sum(axis=1)
-        out = out.sort_values(["_completeness", "game_id"], ascending=[False, True], kind="stable")
+        out = out.sort_values(
+            ["_label_priority", "_completeness", "game_id"],
+            ascending=[False, False, True],
+            kind="stable",
+        )
         valid_game_ids = out["game_id"].fillna("").astype(str).str.strip().ne("")
         if valid_game_ids.any():
             before_dedupe = int(valid_game_ids.sum())
             deduped = out.loc[valid_game_ids].drop_duplicates(subset=["game_id"], keep="first")
             duplicate_game_ids_removed = before_dedupe - len(deduped)
             out = pd.concat([deduped, out.loc[~valid_game_ids]], axis=0, ignore_index=True)
-        out = out.drop(columns=["_completeness"], errors="ignore")
+        out = out.drop(columns=["_label_priority", "_completeness"], errors="ignore")
 
     sort_columns = [column for column in ("season", "week", "game_id") if column in out.columns]
     if sort_columns:
@@ -146,9 +156,8 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
-    from backend import build_csv_datasets_v3 as dataset_builder
-
     args = parse_args()
+    from backend import build_csv_datasets_v3 as dataset_builder
     config = DatasetBuildConfig(
         start_season=args.start,
         end_season=args.end,
@@ -205,7 +214,11 @@ def main() -> None:
 
     metadata_path = run_dir / "game_features_metadata.json"
     quality_report_path = run_dir / "game_features_quality_report.json"
+    score_snapshot_path = run_dir / "game_scores.json"
     log_path = run_dir / "build_csv_datasets.log"
+    score_entries = extract_score_entries_from_dataframe(clean_df, updated_at=_utc_now().isoformat())
+    write_score_snapshot(score_snapshot_path, score_entries)
+    write_score_snapshot(out_root / "latest_scores.json", score_entries)
 
     manifest = DatasetArtifactManifest(
         run_id=run_id,
@@ -227,6 +240,7 @@ def main() -> None:
         run_dir=str(run_dir),
         metadata_path=str(metadata_path) if metadata_path.exists() else None,
         quality_report_path=str(quality_report_path) if quality_report_path.exists() else None,
+        score_snapshot_path=str(score_snapshot_path),
         log_path=str(log_path) if log_path.exists() else None,
         cleaning_stats={key: int(value) for key, value in clean_stats.items()},
     )
@@ -245,6 +259,7 @@ def main() -> None:
     )
     dataset_builder.logging.info("Promoted clean dataset to %s", promoted_clean_path)
     dataset_builder.logging.info("Wrote dataset manifest to %s", run_dir / "dataset_manifest.json")
+    dataset_builder.logging.info("Wrote %d completed game scores to %s", len(score_entries), score_snapshot_path)
 
 
 if __name__ == "__main__":

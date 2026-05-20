@@ -16,32 +16,31 @@
   padding:.2rem 1.4rem;
   border-bottom-left-radius: 30px;
   border-bottom-right-radius: 30px;
-  border: 1px solid lch(25, 205, 255, 0.46);
+  border: 1px solid lch(76.59% 36.03 267.53 / 0.317);
   background:
-    linear-gradient(180deg, lch(0% 0 0), lch(74.03% 40.02 271.38 / 0.403)),
+    linear-gradient(180deg, lch(0% 0 0), lch(52.27% 28.14 261.93 / 0.484)),
     lch(0% 0 0);
   color: lch(95.47% 6.86 276.24);
   box-shadow:
-    0 22px 60px lch(9, 12, 18, 0.14),
-    inset 0 1px 0 lch(255, 255, 255, 0.82);
+    0 22px 60px lch(0% 0 0 / 0.341),
+    inset 0 1px 0 lch(25 25 225 / 0.82);
   backdrop-filter: blur(24px) saturate(1.35);
   -webkit-backdrop-filter: blur(24px) saturate(1.35);
   transition:
     transform 180ms ease,
     box-shadow 180ms ease,
-    background 180ms ease,
     border-color 180ms ease;
 }
 
 .navBar.sticking .navBar__surface {
   transform: translateY(-1px);
   background:
-    linear-gradient(180deg, lch(252, 252, 253, 0.96), lch(242, 243, 247, 0.84)),
-    lch(255, 255, 255, 0.86);
-  border-color: lch(255, 255, 255, 0.68);
+    linear-gradient(180deg, (0% 2 223 / 0.96), lch(96.76% 16.25 198.43 / 0.302)),
+    lch(0% 0 0 / 0.789);
+  border-color: lch(25 25 255 / 0.68);
   box-shadow:
-    0 24px 72px lch(10, 13, 20, 0.18),
-    inset 0 1px 0 lch(255, 255, 255, 0.92);
+    0 24px 72px lch(10 13 20 / 0.18),
+    inset 0 1px 0 lch(255 255 255 / 0.92);
 }
 
 .navBar__brandCluster {
@@ -68,8 +67,8 @@
   border-radius: 999px;
   background: linear-gradient(135deg, #0f1115, #8f99aa 72%, #ffffff);
   box-shadow:
-    0 0 0 8px lch(255, 255, 255, 0.62),
-    0 12px 30px lch(13, 16, 22, 0.18);
+    0 0 0 8px lch(255 255 255 / 0.62),
+    0 12px 30px lch(13 16 22 / 0.18);
 }
 
 .navBar__brandCopy,
@@ -86,7 +85,7 @@
   font-size: 0.76rem;
   letter-spacing: 0.2em;
   text-transform: uppercase;
-  color: lch(15, 17, 21, 0.56);
+  color: lch(100% 0.01 296.81 / 0.709);
 }
 
 .navBar__headline,
@@ -117,7 +116,7 @@
 .navBar__menuButton {
   display: none;
   appearance: none;
-  border: 1px solid lch(15, 17, 21, 0.08);
+  border: 1px solid lch(15 17 21 / 0.08);
   background: lch(70.92% 44.96 269.26 / 0.094);
   color: inherit;
   border-radius: 999px;
@@ -144,15 +143,14 @@
 .navBar__link,
 .navBar__signOut {
   appearance: auto;
-  border: 1.5px solid lch(78.81% 32.61 275.55 / 0.663);
+  border: 1.5px solid lch(91.11% 13.48 273.84 / 0.848);
   border-radius: 999px;
   padding: 3px 5px;
   text-decoration: none;
   color: lch(100% 0.01 296.81);
-  background: lch(52.3% 78.73 288.08 / 0);
+  background: lch(5 25 255 / 0.58);
   transition:
     transform 160ms ease-in-out,
-    background 160ms ease-in-out,
     border-color 160ms ease-in-out,
     color 160ms ease-in-out,
     box-shadow 160ms ease-in-out;
@@ -170,7 +168,7 @@
 
 .navBar__link.is-active {
   background: lch(0% 0 0);
-  border-color: lch(68.31% 28.32 276.68);
+  border-color: lch(73.5% 31.23 276.91);
   color: lch(89.93% 15.26 272.26);
   box-shadow: 0 12px 26px lch(58.7% 31.26 279.18 / 0.597);
 }
@@ -187,9 +185,9 @@
   gap: 9px;
   padding: 10px 13px;
   border-radius: 999px;
-  background: lch(255, 255, 255, 0.48);
-  border: 1px solid lch(15, 17, 21, 0.08);
-  color: lch(15, 17, 21, 0.72);
+  background: lch(5 25 255 / 0.48);
+  border: 1px solid lch(30% 25.63 277.67 / 0.992);
+  color: lch(96.96% 0.35 17.6);
   white-space: nowrap;
 }
 
@@ -202,27 +200,27 @@
 
 .navBar__status--ok .navBar__statusDot {
   background: var(--color-health-ok);
-  box-shadow: 0 0 14px color-mix(in srgb, var(--color-health-ok) 58%, transparent);
+  box-shadow: 0 0 14px color-mix(in slch, var(--color-health-ok) 58%, transparent);
 }
 
 .navBar__status--error .navBar__statusDot {
   background: var(--color-health-error);
-  box-shadow: 0 0 14px color-mix(in srgb, var(--color-health-error) 54%, transparent);
+  box-shadow: 0 0 14px color-mix(in slch, var(--color-health-error) 54%, transparent);
 }
 
 .navBar__status--unknown .navBar__statusDot {
   background: var(--color-health-unknown);
-  box-shadow: 0 0 14px color-mix(in srgb, var(--color-health-unknown) 48%, transparent);
+  box-shadow: 0 0 14px color-mix(in slch, var(--color-health-unknown) 48%, transparent);
 }
 
 .navBar__user {
   display: inline-flex;
   align-items: center;
-  gap: 12px;
+
   padding: 8px 10px 8px 8px;
   border-radius: 999px;
-  background: lch(255, 255, 255, 0.58);
-  border: 1px solid lch(15, 17, 21, 0.08);
+  background: lch(5 25 255 / 0.58);
+  border: 1px solid lch(15 17 21 / 0.08);
 }
 
 .navBar__avatar {
@@ -245,7 +243,7 @@
 }
 
 .navBar :focus-visible {
-  outline: 2px solid lch(17, 19, 23, 0.78);
+  outline: 2px solid lch(17 19 23 / 0.78);
   outline-offset: 3px;
 }
 
@@ -292,7 +290,6 @@
     width: 100%;
     flex-direction: column;
     align-items: stretch;
-    gap: 12px;
     margin-left: 0;
     padding-top: 8px;
   }
@@ -309,6 +306,7 @@
   }
 
   .navBar__user {
+    background-color: #0f1115;
     flex: 1 1 100%;
   }
 }

@@ -36,13 +36,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--dataset-build-script",
         type=str,
-        default=str((BACKEND_DIR / "scripts" / "build_csv_datasets.py").resolve()),
-        help="Dataset build script entrypoint.",
+        default=str((BACKEND_DIR / "builddataset.py").resolve()),
+        help="Canonical dataset build script entrypoint.",
     )
     parser.add_argument(
         "--build-start-season",
         type=int,
-        default=max(1999, current_year - 8),
+        default=max(1999, current_year - 10),
         help="Start season for dataset rebuild.",
     )
     parser.add_argument(
@@ -161,9 +161,6 @@ def _run_dataset_build(
         str(int(end_season)),
         "--out-dir",
         str(data_dir),
-        "--reports-dir",
-        str(reports_dir),
-        "--strict-validation",
     ]
     cmd.extend(extra_args)
     proc = subprocess.run(
@@ -186,6 +183,11 @@ def main() -> None:
     data_dir = Path(args.data_dir).resolve()
     train_script = Path(args.train_script).resolve()
     build_script = Path(args.dataset_build_script).resolve()
+
+    if not build_script.exists():
+        raise FileNotFoundError(f"Dataset build script not found: {build_script}")
+    if not train_script.exists():
+        raise FileNotFoundError(f"Training script not found: {train_script}")
 
     build_result: Dict[str, object] = {
         "skipped": bool(args.skip_dataset_build),

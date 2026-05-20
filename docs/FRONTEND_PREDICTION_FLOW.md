@@ -1,78 +1,118 @@
 # Frontend Prediction Flow
 
-This note explains the smallest useful mental model for the current React app.
+This is the smallest accurate mental model for the current frontend.
 
-## Why this document exists
+## The Main Idea
 
-The frontend has a simple runtime path, but several files touch the same data:
+The app now has one shared prediction state owner for the primary app shell.
 
-- the dashboard loads a schedule
-- the user predicts a matchup
-- the status pages read history and health
-- the UI has to keep schedule rows, prediction responses, and history entries aligned
+- `frontend/src/App.jsx` creates auth state and route structure.
+- `frontend/src/hooks/usePredictionState.js` owns shared schedule, history, summary, logos, health, and per-matchup request state.
+- `frontend/src/components/DashBoard/Dashboard.jsx` reads that shared state and triggers user actions.
+- `frontend/src/components/HistoryPage.jsx` renders the same shared history state.
 
-The important rule is that the frontend now uses one shared normalization layer in [frontend/src/utils/gameUtils.js](../frontend/src/utils/gameUtils.js).
+That architecture matters because older versions of the app duplicated schedule and prediction state inside the dashboard, which made pages drift out of sync.
 
-## Request flow
+## Active Request Flow
 
-1. `frontend/src/App.jsx`
-   Loads the router and asks `getStatusOverview()` for a lightweight health snapshot used by the nav.
+1. `App.jsx`
+   Creates the auth session and mounts the protected app shell.
 
-2. `frontend/src/components/DashBoard/Dashboard.jsx`
-   Owns the "next week schedule" and the per-game prediction state.
+2. `usePredictionState.js`
+   Hydrates the next slate, history, history summary, logos, and health status.
 
-3. `frontend/src/api/client.js`
-   Wraps HTTP calls and normalizes older backend response shapes into stable frontend shapes.
+3. `client.js`
+   Handles HTTP transport, normalizes backend response shapes, and applies compatibility fallbacks.
 
-4. `frontend/src/components/Card/TeamGrid.jsx`
-   Receives schedule rows plus prediction/loading/error maps and renders one `Card` per game.
+4. `Dashboard.jsx`
+   Uses the shared state to load a slate, predict one game, or predict the whole board.
 
-5. `frontend/src/pages/StatsPage.jsx`
-   Reads schedule, history, and overview data again for a status-oriented page.
+5. `HistoryPage.jsx`
+   Receives the shared history and summary through props.
 
-## Shared frontend contract
+6. `StatsPage.jsx`
+   Is the exception: it fetches its own status snapshot directly instead of consuming the shared hook.
 
-The UI repeatedly receives "game-like" objects from different sources:
+## Which Client File Is Real?
 
-- schedule rows from `/schedule/next-week`
+The active frontend transport layer is:
+
+- `frontend/src/api/client.js`
+
+The active app shell no longer keeps a second legacy fetch wrapper in the supported path. Transport quirks and compatibility fallbacks belong in `client.js`.
+
+## Shared Data Contracts
+
+The frontend works with several "game-like" payloads:
+
+- schedule rows from `/schedule` or `/schedule/next-week`
 - prediction responses from `/predict`
 - history entries from `/history`
 
-Those objects are similar, but not identical. `gameUtils.js` keeps the following rules in one place:
+Those shapes are similar, but not identical. The frontend keeps them aligned with:
 
-- `normalizeTeamCode(value)` converts team identifiers into the uppercase format expected by the API.
-- `getGameWeek(gameLike)` and `getGameSeason(gameLike)` tolerate older field aliases such as `week_num`.
-- `buildMatchupKey(gameLike)` creates the composite key used by dashboard state maps.
-- `buildPredictPayload(gameLike)` builds the exact body expected by `POST /predict`.
-- `normalizeMatchup(gameLike)` reshapes a raw schedule row into the smaller card-friendly format.
+- `frontend/src/utils/gameUtils.js` for matchup keys and prediction payloads
+- `frontend/src/api/client.js` for transport-level normalization
+- `frontend/src/hooks/usePredictionState.js` for shared app state
 
-## Why the key matters
+## Why Matchup Keys Matter
 
-The dashboard stores three parallel maps:
+The dashboard keeps parallel maps for:
 
-- `predictions`
-- `loadingMap`
-- `errorsMap`
+- predictions
+- loading flags
+- per-card errors
 
-Each map is keyed by the same season-week-home-away composite string. If one screen invents a slightly different key, the UI appears "out of sync" even though the network call succeeded. Centralizing key generation removes that class of bug.
+If one screen builds keys differently, the UI looks broken even when the network call succeeded. The current flow avoids that by using the same season-week-home-away key logic across schedule rows, predictions, and history.
 
-## Backend touchpoints
+## Compatibility Fallbacks
 
-The current frontend depends primarily on these backend endpoints:
+The frontend now tolerates older backend deployments.
 
-- `GET /status/overview`
+### History summary fallback
+
+If `/history/summary` is missing, `client.js` derives summary metrics from `/history`.
+
+### Queryable schedule fallback
+
+If `/schedule?season=<year>&week=<week>` is missing, `client.js` falls back to bundled CSVs in `frontend/public/schedules/`.
+
+### Next-slate fallback
+
+If `/schedule/next-week` is missing, the client also falls back to local schedule assets.
+
+### Status overview fallback
+
+If `/status/overview` is unavailable, the UI uses a safe fallback object instead of crashing the app shell.
+
+## Backend Touchpoints
+
+The frontend primarily depends on:
+
 - `GET /health`
+- `GET /status/overview`
+- `GET /schedule`
 - `GET /schedule/next-week`
+- `GET /teams/logos`
 - `GET /history`
+- `GET /history/summary`
 - `POST /predict`
 
-The main backend implementation lives in [backend/main.py](../backend/main.py), while prediction orchestration is explained in [backend/services/prediction_service.py](../backend/services/prediction_service.py).
+The main backend implementation lives in `backend/main.py`.
 
-## Safe extension points
+## Auth Boundary
 
-If you need to change behavior later, start here:
+- `useAuthSession.js` stores a local-device session in browser storage.
+- The frontend derives `X-User-Id` from that local session email.
+- This supports user-scoped history in the current app, but it is not a real authentication boundary.
 
-- add new schedule/prediction field aliases in `gameUtils.js`
-- keep `client.js` responsible for transport and response-shape cleanup
-- keep `Dashboard.jsx` responsible for user actions and per-card state
-- keep `TeamGrid.jsx` and `Card.jsx` focused on rendering
+## Safe Extension Rules
+
+If you change the frontend later, keep these boundaries:
+
+- Put transport quirks and legacy response handling in `client.js`
+- Keep shared route-level prediction state in `usePredictionState.js`
+- Keep `Dashboard.jsx` focused on user actions and rendering decisions
+- Keep presentational card components unaware of transport details
+
+That separation is what keeps the dashboard, history page, and status page coherent.

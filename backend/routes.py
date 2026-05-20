@@ -4,7 +4,8 @@
 # Input Data: HTTP requests.
 # Output Data: JSON responses (Legacy shapes).
 # Dependencies: backend.main_helpers, backend.services.prediction_service
-# Notes: Delegates to request.app.state.service where possible.
+# Notes: This module is not mounted by backend.main and is kept only as a
+# compatibility reference while the canonical API surface lives in backend.main.
 # ==========================================
 
 from __future__ import annotations

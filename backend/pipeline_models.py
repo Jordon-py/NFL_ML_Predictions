@@ -84,6 +84,8 @@ class DatasetArtifactManifest(BaseModel):
 
     quality_report_path: Optional[str] = None
 
+    score_snapshot_path: Optional[str] = None
+
     log_path: Optional[str] = None
 
     cleaning_stats: dict[str, int] = Field(

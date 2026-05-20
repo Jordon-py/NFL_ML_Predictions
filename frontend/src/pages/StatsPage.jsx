@@ -11,6 +11,7 @@
 import { useEffect, useState } from "react";
 import HistoryChart from "../components/HistoryChart.jsx";
 import {
+  getHistorySummary,
   getNextWeekSchedule,
   getPredictionHistory,
   getHistorySummary,
@@ -72,7 +73,7 @@ function formatWinProbability(probability) {
   return typeof probability === "number" ? `${Math.round(probability * 100)}%` : "n/a";
 }
 
-export default function StatsPage() {
+export default function StatsPage({ authSession = null }) {
   // Remote payloads from the backend
   const [schedule, setSchedule] = useState(/** @type {any[]} */([]));
   const [history, setHistory] = useState(/** @type {any[]} */([]));
@@ -82,6 +83,7 @@ export default function StatsPage() {
   // Local UI state
   const [isPageLoading, setIsPageLoading] = useState(true);
   const [pageError, setPageError] = useState(/** @type {string | null} */(null));
+  const userId = authSession?.userId || null;
 
   /**
    * Initial hydration:
@@ -95,11 +97,11 @@ export default function StatsPage() {
     const hydrate = async () => {
       try {
         setIsPageLoading(true);
-        const [scheduleData, historyResponse, overviewData, historySummaryData] = await Promise.all([
+        const [scheduleData, historyResponse, overviewData, summaryData] = await Promise.all([
           getNextWeekSchedule(),
-          getPredictionHistory(50),
-          getStatusOverview(),
-          getHistorySummary(),
+          getPredictionHistory(50, userId),
+          getStatusOverview(userId),
+          getHistorySummary(userId),
         ]);
 
         if (!active) return;
@@ -107,7 +109,7 @@ export default function StatsPage() {
         setSchedule(Array.isArray(scheduleData) ? scheduleData : []);
         setHistory(Array.isArray(historyResponse?.entries) ? historyResponse.entries : []);
         setOverview(overviewData || null);
-        setHistorySummary(historySummaryData || null);
+        setHistorySummary(summaryData || null);
         setPageError(null);
       } catch (err) {
         if (!active) return;
@@ -123,7 +125,7 @@ export default function StatsPage() {
       // guard so we don't update state on an unmounted component
       active = false;
     };
-  }, []);
+  }, [userId]);
 
   const historyMap = buildHistoryLookup(history);
 
@@ -135,22 +137,10 @@ export default function StatsPage() {
   const scheduleList = Array.isArray(schedule) ? schedule : [];
 
   const predictionWinRate = typeof historyMetrics?.win_rate === "number" ? `${Math.round(historyMetrics.win_rate * 100)}%` : "n/a";
-  const averageErrorLabel =
+  const spreadError =
     typeof historyMetrics?.avg_abs_spread_error === "number"
-      ? `${historyMetrics.avg_abs_spread_error.toFixed(2)} pts`
+      ? `${historyMetrics.avg_abs_spread_error.toFixed(1)} pts`
       : "n/a";
-  const confidenceLabel =
-    typeof historyMetrics?.avg_confidence === "number"
-      ? `${Math.round(historyMetrics.avg_confidence * 100)}%`
-      : "n/a";
-  const qualityTier = (() => {
-    if (typeof historyMetrics?.win_rate !== "number" || typeof historyMetrics?.avg_abs_spread_error !== "number") {
-      return "Calibrating";
-    }
-    if (historyMetrics.win_rate >= 0.62 && historyMetrics.avg_abs_spread_error <= 6.5) return "Elite";
-    if (historyMetrics.win_rate >= 0.55 && historyMetrics.avg_abs_spread_error <= 8.5) return "Strong";
-    return "Developing";
-  })();
 
   /**
    * Renders "Next Week Schedule" list:
@@ -251,15 +241,9 @@ export default function StatsPage() {
             subtext={`Win rate: ${predictionWinRate}`}
           />
           <SummaryCard
-            title="Prediction quality tier"
-            value={qualityTier}
-            subtext={`Resolved: ${historyMetrics?.resolved_games ?? 0} • Avg error: ${averageErrorLabel}`}
-            intent={qualityTier === "Elite" ? "ok" : qualityTier === "Developing" ? "error" : "default"}
-          />
-          <SummaryCard
-            title="Avg confidence"
-            value={confidenceLabel}
-            subtext="Tracks model conviction (higher is not always better)"
+            title="Resolved games"
+            value={historyMetrics?.resolved_games ?? 0}
+            subtext={`Avg spread error: ${spreadError}`}
           />
         </section>
 
@@ -270,8 +254,7 @@ export default function StatsPage() {
 
         <section className={styles.historySection}>
           <h2 className={styles.h2}>Historical Predictions</h2>
-          {/* HistoryChart still receives the raw history array plus context state */}
-          <HistoryChart history={history} />
+          <HistoryChart history={history} summary={historyMetrics} />
         </section>
       </div>
     </>

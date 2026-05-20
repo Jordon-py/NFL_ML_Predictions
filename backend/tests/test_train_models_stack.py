@@ -72,9 +72,25 @@ def test_fallback_home_win_probabilities_use_moneyline_then_neutral():
 
 def test_generate_stacked_train_probabilities_is_chronology_safe(monkeypatch):
     y = np.array([0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 0], dtype=int)
-    X_proc = np.arange(len(y), dtype=float).reshape(-1, 1)
+    X = pd.DataFrame(
+        {
+            "season": [2025] * len(y),
+            "week": np.arange(1, len(y) + 1),
+            "row_marker": np.arange(len(y), dtype=float),
+            "feature_a": np.linspace(0.1, 1.2, len(y)),
+            "home_team": ["BUF"] * len(y),
+            "away_team": ["KC"] * len(y),
+        }
+    )
     fallback = np.full(len(y), 0.41, dtype=float)
     fold_calls = []
+
+    class _IdentityPreprocessor:
+        def fit_transform(self, frame):
+            return np.asarray(frame[["row_marker"]], dtype=float)
+
+        def transform(self, frame):
+            return np.asarray(frame[["row_marker"]], dtype=float)
 
     class _SpyCalibratedModel:
         def __init__(self, train_rows):
@@ -90,12 +106,18 @@ def test_generate_stacked_train_probabilities_is_chronology_safe(monkeypatch):
         return _SpyCalibratedModel(np.asarray(X_train)[:, 0]), {"mode": "spy"}
 
     monkeypatch.setattr(tm, "_calibrate_classifier", _fake_calibrate_classifier)
+    monkeypatch.setattr(tm, "_make_preprocessor", lambda numeric_cols, categorical_cols: _IdentityPreprocessor())
+    group_labels = tm._make_group_labels(X[["season", "week"]])
 
     probs, info = tm._generate_stacked_train_probabilities(
-        X_proc,
+        X,
         y,
         tuned_estimator=_CloneableEstimator(),
+        numeric_cols=["row_marker", "feature_a"],
+        categorical_cols=["home_team", "away_team"],
+        group_labels=group_labels,
         cv_splits=3,
+        embargo_groups=1,
         fallback_probabilities=fallback,
     )
 
@@ -114,6 +136,26 @@ def test_generate_stacked_train_probabilities_is_chronology_safe(monkeypatch):
     assert not np.allclose(probs[sorted(predicted_rows)], y[sorted(predicted_rows)].astype(float))
     assert info["mode"] == "time_series_oof"
     assert info["fallback_mode"] == "home_moneyline_prob_or_neutral"
+    assert info["cv_strategy"] == "group_time_series"
+
+
+def test_group_time_series_splits_respect_embargo():
+    frame = pd.DataFrame(
+        {
+            "season": [2025] * 8,
+            "week": np.arange(1, 9),
+        }
+    )
+    group_labels = tm._make_group_labels(frame)
+
+    splits = tm._group_time_series_splits(group_labels, requested_splits=3, embargo_groups=1)
+
+    assert splits
+    ordered_groups = tm._ordered_unique_groups(group_labels)
+    for train_idx, val_idx in splits:
+        last_train_group = group_labels[train_idx[-1]]
+        first_val_group = group_labels[val_idx[0]]
+        assert ordered_groups.index(first_val_group) - ordered_groups.index(last_train_group) >= 2
 
 
 def test_augment_score_features_appends_nn_probability_column():
@@ -165,6 +207,9 @@ def test_training_main_writes_two_stage_metadata_and_report(tmp_path, monkeypatc
     report = json.loads((stage_dir / "training_report.json").read_text(encoding="utf-8"))
 
     assert metadata["serving_mode"] == "pipeline_primary"
+    assert metadata["bundle_contract_version"] == 2
+    assert metadata["sklearn_version"]
+    assert metadata["bundle_timestamp_utc"]
     assert metadata["generated_features"][tm.WIN_PROBA_FEATURE]["source"] == "winner_model_predict_proba"
     assert metadata["raw_feature_columns"]["win"]["numeric"]
     assert tm.WIN_PROBA_FEATURE not in metadata["raw_feature_columns"]["win"]["numeric"]
@@ -177,3 +222,4 @@ def test_training_main_writes_two_stage_metadata_and_report(tmp_path, monkeypatc
     assert report["train_info"]["win_base"]["algorithm"] == "mlp"
     assert report["train_info"]["win_calibration"]["mode"] in {"prefit_tail", "cv", "uncalibrated"}
     assert report["train_info"]["score_stack"]["fallback_mode"] == "home_moneyline_prob_or_neutral"
+    assert report["train_info"]["holdout_split"]["group_key_columns"] == list(tm.TIME_KEYS)

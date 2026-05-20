@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Any, Optional
 import pandas as pd
 
 TRUTHY = {"1", "true", "yes", "y", "on"}
@@ -25,21 +26,20 @@ DEFAULT_ALLOWED_ORIGINS = [
     "http://127.0.0.1:4173",
     "http://localhost:5173",
     "http://127.0.0.1:5173",
-    "https://nfl-ml-predictions.vercel.app",
-    "https://nfl-predict.vercel.app",
     "https://new-nfl-predict.vercel.app",
-    "https://nfl-ml-predictions-git-main-iprog.vercel.app",
-    "https://nfl-predict-christopher-jordons-projects.vercel.app",
-    "https://nfl-predict-git-main-christopher-jordons-projects.vercel.app",
 ]
-DEFAULT_ORIGIN_REGEX = r"https://.*\.vercel\.app$"
+DEFAULT_ORIGIN_REGEX = r"https://.*\\.vercel\\.app$"
 
 
 # Relative paths for portability (Heroku/Vercel/Local)
 # NOTE: Ensure '20260115' folder is tracked in git if you rely on it!
 # Otherwise, fall back to generic 'models' folder.
 
-MODELS_DIR = (BASE_DIR / "20260115" / "models").resolve()
+MODELS_DIR = (BASE_DIR / "data" / "models" / "current").resolve()
+if not MODELS_DIR.exists():
+    MODELS_DIR = (BASE_DIR / "data" / "models").resolve()
+if not MODELS_DIR.exists():
+    MODELS_DIR = (BASE_DIR / "20260115" / "models").resolve()
 if not MODELS_DIR.exists():
     MODELS_DIR = (BASE_DIR / "models").resolve()
 
@@ -60,7 +60,7 @@ if os.getenv("DATA_DIR") is None:
 def _split_origins(raw: str) -> list[str]:
     return [o.strip().rstrip("/") for o in raw.split(",") if o.strip()]
 
-def resolve_cors():
+def resolve_cors() -> list[str]:
     """
     Resolve allowed origins and regex from env, with safe defaults for dev + previews.
     """

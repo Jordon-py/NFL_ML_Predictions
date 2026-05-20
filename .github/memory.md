@@ -33,6 +33,30 @@ repo_profile:
 
 ```yaml
 changelog:
+  - date: "2026-04-09"
+    summary: "Removed dead frontend/admin experiment surfaces, added live API+CORS verification script, aligned retrain automation with builddataset.py, and cleaned tracked deployment/runtime artifacts."
+    files:
+      - "scripts/verify_api_cors.py"
+      - "backend/scripts/weekly_retrain.py"
+      - "backend/tests/test_weekly_retrain.py"
+      - "frontend/package.json"
+      - "frontend/package-lock.json"
+      - ".github/workflows/ci.yml"
+      - ".github/workflows/deploy.yml"
+      - "README.md"
+      - "docs/ENVIRONMENT.md"
+      - "docs/FRONTEND_PREDICTION_FLOW.md"
+    api_impact:
+      - "Removed stale docs/UI references to /predict/explain, /llm/chat, and /admin/reload from the active app surface"
+      - "Added scripts/verify_api_cors.py for current /health, /status/overview, /predict, and production CORS checks"
+    verification:
+      - "python -m pytest backend/tests -q"
+      - "cd frontend && npm test -- --run"
+      - "cd frontend && npm run build"
+      - "python scripts/verify_api_cors.py --backend-url https://nfl-predict-ecf5a5bd34fe.herokuapp.com --verbose"
+    risks:
+      - "backend/.env still needs human review and potential secret rotation"
+      - "backend/predictions.db remains tracked runtime state and should be handled in a later pass"
   - date: "2026-01-23"
     summary: "Removed legacy /legacy router; centralized team logos schema; history loads from disk; removed VITE_DEV_ENV fallback."
     files:
@@ -155,10 +179,14 @@ decisions:
 
 Verification Log (Last Known Good)
 verification_log:
-  last_verified_date: null
-  verified_by: null
-  checks_run: []
-  notes: ""
+  last_verified_date: "2026-04-09"
+  verified_by: "Codex"
+  checks_run:
+    - "python -m pytest backend/tests -q"
+    - "cd frontend && npm test -- --run"
+    - "cd frontend && npm run build"
+    - "python scripts/verify_api_cors.py --backend-url https://nfl-predict-ecf5a5bd34fe.herokuapp.com --verbose"
+  notes: "Live verification passed for production health, status overview, predict contract, and canonical frontend CORS origin."
 
 Open Issues / Tech Debt Queue
 tech_debt:

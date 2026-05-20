@@ -229,13 +229,25 @@ const derivePredictionMeta = (prediction) => {
 
   const homeProb = prediction?.home_win_probability;
   const awayProb = prediction?.away_win_probability;
+  const homePct = formatProbabilityAsPercentage(homeProb);
+  const awayPct = formatProbabilityAsPercentage(awayProb);
 
   const maxConfidence =
     typeof homeProb === 'number' || typeof awayProb === 'number'
       ? formatProbabilityAsPercentage(Math.max(homeProb ?? 0, awayProb ?? 0))
       : null;
 
-  return { hasScoreDetails, classifierUsed, isExpert, maxConfidence, sim, homeScore, awayScore };
+  return {
+    hasScoreDetails,
+    classifierUsed,
+    isExpert,
+    maxConfidence,
+    sim,
+    homeScore,
+    awayScore,
+    homePct,
+    awayPct,
+  };
 };
 
 /**
@@ -341,7 +353,7 @@ export default function Card({
   // Local debug state for a brief visual click cue
   const [debugClicked, setDebugClicked] = React.useState(false);
 
-  const { hasScoreDetails, classifierUsed, isExpert, maxConfidence, sim, homeScore, awayScore } =
+  const { hasScoreDetails, classifierUsed, isExpert, maxConfidence, sim, homeScore, awayScore, homePct, awayPct } =
     derivePredictionMeta(prediction);
   const hasPrediction =
     Boolean(prediction) &&
@@ -360,6 +372,10 @@ export default function Card({
       : null;
   const finalDelta =
     actualDiff != null && predictedDiff != null ? actualDiff - predictedDiff : null;
+  const hasProbabilityMeter = Number.isFinite(homePct) && Number.isFinite(awayPct);
+  const favoriteTeamCode = hasProbabilityMeter && homePct >= awayPct ? homeTeam : awayTeam;
+  const favoriteTeamName = hasProbabilityMeter && homePct >= awayPct ? homeFullName : awayFullName;
+  const confidenceSummary = hasProbabilityMeter ? Math.max(homePct, awayPct) : null;
 
   const cardClassName = buildCardClassNames({ hasPrediction, loading, error, debugClicked });
   const cardStyle = {
@@ -536,6 +552,32 @@ export default function Card({
                     </span>
                   )}
                 </div>
+
+                {hasProbabilityMeter && (
+                  <div className={styles.probabilityPanel}>
+                    <div className={styles.probabilityHeader}>
+                      <span>Win edge</span>
+                      <strong>
+                        {favoriteTeamCode} {confidenceSummary}%
+                      </strong>
+                    </div>
+                    <div className={styles.probabilityTrack} aria-hidden="true">
+                      <div
+                        className={`${styles.probabilityFill} ${styles.probabilityFillAway}`}
+                        style={{ width: `${awayPct}%` }}
+                      />
+                      <div
+                        className={`${styles.probabilityFill} ${styles.probabilityFillHome}`}
+                        style={{ width: `${homePct}%` }}
+                      />
+                    </div>
+                    <div className={styles.probabilityScale}>
+                      <span>{awayTeam} {awayPct}%</span>
+                      <span>{favoriteTeamName}</span>
+                      <span>{homeTeam} {homePct}%</span>
+                    </div>
+                  </div>
+                )}
 
                 {/* Optional numeric details if present */}
                 <div className={styles.predScore}>
