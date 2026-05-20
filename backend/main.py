@@ -99,6 +99,7 @@ from backend.utils.ops_reporting import (
     file_sha256,
     load_latest_dataset_manifest,
 )
+from backend.utils.cache import LRUCache
 
 _add_kickoff_utc_datetime = fn_main._add_kickoff_utc_datetime
 _coerce_season_week = fn_main._coerce_season_week
@@ -800,7 +801,11 @@ class AppState:
         self.score_preprocessor: Optional[Any] = None
         self.win_preprocessor: Optional[Any] = None
         self.history: List[Dict[str, Any]] = []
-        self.predict_cache: Dict[str, Dict[str, Any]] = {}
+        # Use an in-memory LRU cache with TTL for prediction results
+        try:
+            self.predict_cache = LRUCache(max_items=PREDICT_CACHE_MAX_ITEMS, ttl=PREDICT_CACHE_TTL_SEC)
+        except Exception:
+            self.predict_cache = LRUCache(max_items=256, ttl=300)
         self.predict_cache_hits: int = 0
         self.predict_cache_misses: int = 0
         self.retrain_jobs: Dict[str, Dict[str, Any]] = {}
@@ -942,41 +947,25 @@ class AppState:
     def get_cached_prediction(self, key: str) -> Optional[Dict[str, Any]]:
         if PREDICT_CACHE_TTL_SEC <= 0:
             return None
-
-        entry = self.predict_cache.get(key)
-        if not entry:
-            self.predict_cache_misses += 1
-            return None
-
-        ts = float(entry.get("stored_ts", 0.0))
-        age = time.time() - ts
-        if age > PREDICT_CACHE_TTL_SEC:
-            self.predict_cache.pop(key, None)
+        val = self.predict_cache.get(key)
+        if val is None:
             self.predict_cache_misses += 1
             return None
 
         self.predict_cache_hits += 1
-        payload = entry.get("payload")
-        if isinstance(payload, dict):
-            return payload.copy()
-        return None
+        # LRUCache stores raw payloads
+        if isinstance(val, dict):
+            return val.copy()
+        return val
 
     def store_cached_prediction(self, key: str, payload: Dict[str, Any]) -> None:
         if PREDICT_CACHE_TTL_SEC <= 0:
             return
-
-        if len(self.predict_cache) >= PREDICT_CACHE_MAX_ITEMS:
-            # Remove oldest entry first.
-            oldest_key = min(
-                self.predict_cache.keys(),
-                key=lambda k: float(self.predict_cache[k].get("stored_ts", 0.0)),
-            )
-            self.predict_cache.pop(oldest_key, None)
-
-        self.predict_cache[key] = {
-            "stored_ts": time.time(),
-            "payload": payload.copy(),
-        }
+        try:
+            self.predict_cache.set(key, payload.copy())
+        except Exception:
+            # Best-effort: if cache fails, ignore
+            pass
 
     def _load_dataset(self) -> None:
         """Load DATASET_PATH or the most recent game_features*.csv into memory."""
@@ -1297,6 +1286,39 @@ async def lifespan(app: FastAPI):
     """
     logging.info("[App] Starting up; loading dataset and models...")
     state.load()
+
+    # Start a background watcher to reload models when files in MODELS_DIR change.
+    def _model_watcher(poll_seconds: int = 30) -> None:
+        try:
+            last_stamp = None
+            while True:
+                try:
+                    if MODELS_DIR.exists():
+                        m = MODELS_DIR.stat().st_mtime
+                    else:
+                        m = None
+                    if last_stamp is None:
+                        last_stamp = m
+                    elif m is not None and m != last_stamp:
+                        logging.info("[ModelWatcher] Detected change in MODELS_DIR; reloading models...")
+                        try:
+                            state._load_models()
+                        except Exception:
+                            logging.exception("[ModelWatcher] Failed reloading models after change.")
+                        last_stamp = m
+                except Exception:
+                    logging.exception("[ModelWatcher] Error while polling models dir.")
+                try:
+                    time.sleep(poll_seconds)
+                except Exception:
+                    break
+
+        except Exception:
+            logging.exception("[ModelWatcher] Stopping due to fatal error.")
+
+    watcher = threading.Thread(target=_model_watcher, daemon=True, name="model-watcher")
+    watcher.start()
+
     yield
     logging.info("[App] Shutdown complete.")
 
@@ -2328,24 +2350,6 @@ def _feature_manifest(model_key: str = "scores") -> List[str]:
 # Health + Status
 # -------------------------------------------------------------------
 
-def _runtime_readiness_snapshot() -> Tuple[bool, List[str]]:
-    """
-    Compute runtime production readiness using both dynamic component checks
-    and startup/runtime blockers tracked on app state.
-    """
-    state._refresh_runtime_readiness()
-    blockers = list(state.production_blockers)
-
-    if state.dataset is None:
-        blockers.append("dataset not loaded")
-
-    missing_models = [m for m in REQUIRED_MODELS if m not in state.models]
-    if missing_models:
-        blockers.append(f"missing models: {', '.join(sorted(missing_models))}")
-
-    deduped_blockers = list(dict.fromkeys(blockers))
-    return (len(deduped_blockers) == 0, deduped_blockers)
-
 
 @app.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
@@ -2356,7 +2360,7 @@ def health() -> HealthResponse:
     """
     has_dataset = state.dataset is not None
     models_ok = all(m in state.models for m in REQUIRED_MODELS)
-    production_ready, blockers = _runtime_readiness_snapshot()
+    production_ready = has_dataset and models_ok and not state.production_blockers
 
     status: Literal["healthy", "unhealthy"]
     status = "healthy" if production_ready else "unhealthy"
@@ -2367,7 +2371,7 @@ def health() -> HealthResponse:
     if not models_ok:
         missing = [m for m in REQUIRED_MODELS if m not in state.models]
         reasons.append(f"missing models: {', '.join(missing)}")
-    reasons.extend(blockers)
+    reasons.extend(state.production_blockers)
     warning_sample = list(state.production_warnings[:5])
     if len(state.production_warnings) > 5:
         warning_sample.append(f"... {len(state.production_warnings) - 5} additional startup warnings")
@@ -2383,7 +2387,7 @@ def health() -> HealthResponse:
             models=models_ok,
             loaded_models=list(state.models.keys()),
             ready_for_production=production_ready,
-            blockers=blockers,
+            blockers=list(state.production_blockers),
             warnings=warning_sample,
         ),
     )
@@ -2715,8 +2719,6 @@ def status_runtime() -> RuntimeStatusResponse:
     cache_total = state.predict_cache_hits + state.predict_cache_misses
     cache_hit_rate = (state.predict_cache_hits / cache_total) if cache_total > 0 else None
 
-    production_ready, blockers = _runtime_readiness_snapshot()
-
     return RuntimeStatusResponse(
         generated_at=now.isoformat(),
         started_at=state.started_at.isoformat(),
@@ -2727,8 +2729,8 @@ def status_runtime() -> RuntimeStatusResponse:
         dataset_age_seconds=dataset_age_seconds,
         last_prediction_at=state.last_prediction_at.isoformat() if state.last_prediction_at else None,
         history_size=len(state.history),
-        production_ready=production_ready,
-        blockers=blockers,
+        production_ready=len(state.production_blockers) == 0,
+        blockers=list(state.production_blockers),
         warnings=list(state.production_warnings),
         predict_cache={
             "enabled": PREDICT_CACHE_TTL_SEC > 0,
@@ -2951,7 +2953,7 @@ def _load_schedule_dataframe(requested_season: Optional[int] = None) -> pd.DataF
     if requested_season is not None:
         candidate_seasons.append(int(requested_season))
     else:
-        candidate_seasons.extend([current_year - 1, current_year, current_year + 1, 2025])
+        candidate_seasons.extend([current_year - 1, current_year, current_year + 1, 2025, 2026])
 
     seen: set[int] = set()
     for season in candidate_seasons:
