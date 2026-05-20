@@ -2328,6 +2328,24 @@ def _feature_manifest(model_key: str = "scores") -> List[str]:
 # Health + Status
 # -------------------------------------------------------------------
 
+def _runtime_readiness_snapshot() -> Tuple[bool, List[str]]:
+    """
+    Compute runtime production readiness using both dynamic component checks
+    and startup/runtime blockers tracked on app state.
+    """
+    state._refresh_runtime_readiness()
+    blockers = list(state.production_blockers)
+
+    if state.dataset is None:
+        blockers.append("dataset not loaded")
+
+    missing_models = [m for m in REQUIRED_MODELS if m not in state.models]
+    if missing_models:
+        blockers.append(f"missing models: {', '.join(sorted(missing_models))}")
+
+    deduped_blockers = list(dict.fromkeys(blockers))
+    return (len(deduped_blockers) == 0, deduped_blockers)
+
 
 @app.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
@@ -2338,7 +2356,7 @@ def health() -> HealthResponse:
     """
     has_dataset = state.dataset is not None
     models_ok = all(m in state.models for m in REQUIRED_MODELS)
-    production_ready = has_dataset and models_ok and not state.production_blockers
+    production_ready, blockers = _runtime_readiness_snapshot()
 
     status: Literal["healthy", "unhealthy"]
     status = "healthy" if production_ready else "unhealthy"
@@ -2349,7 +2367,7 @@ def health() -> HealthResponse:
     if not models_ok:
         missing = [m for m in REQUIRED_MODELS if m not in state.models]
         reasons.append(f"missing models: {', '.join(missing)}")
-    reasons.extend(state.production_blockers)
+    reasons.extend(blockers)
     warning_sample = list(state.production_warnings[:5])
     if len(state.production_warnings) > 5:
         warning_sample.append(f"... {len(state.production_warnings) - 5} additional startup warnings")
@@ -2365,7 +2383,7 @@ def health() -> HealthResponse:
             models=models_ok,
             loaded_models=list(state.models.keys()),
             ready_for_production=production_ready,
-            blockers=list(state.production_blockers),
+            blockers=blockers,
             warnings=warning_sample,
         ),
     )
@@ -2697,6 +2715,8 @@ def status_runtime() -> RuntimeStatusResponse:
     cache_total = state.predict_cache_hits + state.predict_cache_misses
     cache_hit_rate = (state.predict_cache_hits / cache_total) if cache_total > 0 else None
 
+    production_ready, blockers = _runtime_readiness_snapshot()
+
     return RuntimeStatusResponse(
         generated_at=now.isoformat(),
         started_at=state.started_at.isoformat(),
@@ -2707,8 +2727,8 @@ def status_runtime() -> RuntimeStatusResponse:
         dataset_age_seconds=dataset_age_seconds,
         last_prediction_at=state.last_prediction_at.isoformat() if state.last_prediction_at else None,
         history_size=len(state.history),
-        production_ready=len(state.production_blockers) == 0,
-        blockers=list(state.production_blockers),
+        production_ready=production_ready,
+        blockers=blockers,
         warnings=list(state.production_warnings),
         predict_cache={
             "enabled": PREDICT_CACHE_TTL_SEC > 0,
