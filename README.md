@@ -90,11 +90,18 @@ The backend now boots even if models are missing or incompatible.
 - `/predict` returns `503` with structured blockers when the active bundle is not ready.
 - This makes deployments diagnosable instead of failing hard during startup.
 
+### Runtime Enhancements (May 2026)
+
+- Model hot-reload: the backend starts a lightweight background `model-watcher` thread that monitors the active models directory and reloads promoted bundles without requiring a full process restart. This improves promotion workflows and reduces downtime.
+- In-process LRU cache: prediction responses are cached in-memory with TTL and max-items controlled by `PREDICT_CACHE_TTL_SEC` and `PREDICT_CACHE_MAX_ITEMS` (see `backend/main.py`) to reduce repeated identical inference cost during heavy UI refreshes.
+
 ### Schedule loading is queryable and postseason-safe
 
 - `GET /schedule?season=<year>&week=<week>` returns a specific slate.
 - `GET /schedule/next-week` remains the compatibility route for "next slate".
-- When no future regular-season game exists, the backend falls back to the latest available slate, including postseason weeks.
+- When future postseason games exist, the backend keeps showing the next playoff slate.
+- During true offseason, if the next season schedule is bundled or available through `nflreadpy`, the backend shows the upcoming season's earliest week instead of a stale archived slate.
+- If no current or future season schedule exists anywhere, the backend falls back to the latest available archived slate rather than returning an empty schedule.
 
 ### History is user-scoped
 
@@ -219,5 +226,6 @@ python backend/train_models.py --data backend/data/datasets/<your_clean_dataset>
 
 ### Local schedule lookups return nothing
 
-- Make sure `backend/data/Nfl_schedule_2025.csv` exists, or set `SCHEDULE_PATH`.
+- Make sure `backend/data/Nfl_schedule_<upcoming-year>.csv` exists once the upcoming schedule is published.
+- `SCHEDULE_PATH` can point to a preferred CSV, but the backend also scans sibling schedule CSVs so a stale explicit file does not hide a newer packaged season.
 - The frontend also ships fallback CSVs under `frontend/public/schedules/` for compatibility with older backends.

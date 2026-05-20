@@ -24,12 +24,38 @@ Notes:
         - Request body: { home_team, away_team, season, week }
         - Response: PredictionResponse with home_score, away_score,
           home_win_probability, away_win_probability, point_diff, etc.
+
+Data shapes:
+    - Schedule input rows are pandas DataFrames with season/week/team columns,
+      optional gameday/gametime columns, and a derived UTC dt column.
+    - Schedule responses are List[ScheduleGameResponse] dictionaries consumed
+      by frontend/src/api/client.js.
+
+Syntax notes:
+    - FastAPI decorators expose route functions directly.
+    - Pydantic models below define public JSON contracts.
+
+Important functions (line numbers last refreshed 2026-04-30):
+    - _load_schedule_dataframe: around line 2925
+    - _select_schedule_slice: around line 3023
+    - _schedule_response: around line 3161
+
+Possible bugs:
+    - Upstream nflreadpy/network outages can force CSV fallback behavior.
+    - A stale SCHEDULE_PATH can hide newer packaged schedules if fallback
+      discovery is not allowed to scan sibling schedule CSVs.
+
+Enhancement ideas:
+    - Cache normalized schedule frames with a short TTL.
+    - Add a season-release job that refreshes packaged schedule CSVs after the
+      official NFL schedule release.
 """
 
 import json
 import logging
 import os
 import hashlib
+import re
 import time
 import sys
 import threading
@@ -73,6 +99,7 @@ from backend.utils.ops_reporting import (
     file_sha256,
     load_latest_dataset_manifest,
 )
+from backend.utils.cache import LRUCache
 
 _add_kickoff_utc_datetime = fn_main._add_kickoff_utc_datetime
 _coerce_season_week = fn_main._coerce_season_week
@@ -140,8 +167,12 @@ except Exception:  # pragma: no cover - optional runtime guard
 SKLEARN_RUNTIME_VERSION = getattr(sklearn, "__version__", None)
 
 try:
-    from sklearn.exceptions import InconsistentVersionWarning
-except Exception:  # pragma: no cover - sklearn import already guarded above
+    import warnings
+    try:
+        from sklearn.exceptions import InconsistentVersionWarning
+    except (ImportError, AttributeError):
+        InconsistentVersionWarning = None
+except (ImportError, AttributeError):  # pragma: no cover - sklearn import already guarded above
     InconsistentVersionWarning = None  # type: ignore[assignment]
 JOBS_DIR = DATA_DIR / "jobs"
 STAGING_MODELS_DIR = DATA_DIR / "models" / "staging"
@@ -213,36 +244,89 @@ def _to_pandas_schedule_safe(table: Any) -> pd.DataFrame:
         return pd.DataFrame()
 
 
-def _find_schedule_path() -> Optional[Path]:
+def _schedule_csv_year(path: Path) -> Optional[int]:
+    """Infer a season year from a schedule CSV filename when possible."""
+    matches = re.findall(r"(?:19|20|21)\d{2}", path.stem)
+    if not matches:
+        return None
+    try:
+        return int(matches[-1])
+    except Exception:
+        return None
+
+
+def _looks_like_schedule_csv(path: Path) -> bool:
+    """Return True for CSV files that are likely to contain NFL schedules."""
+    name = path.name.lower()
+    return path.suffix.lower() == ".csv" and ("schedule" in name or name.startswith("nfl"))
+
+
+def _schedule_path_sort_key(path: Path, requested_season: Optional[int]) -> Tuple[int, int, float, str]:
+    """Sort packaged schedule paths toward the requested or upcoming season."""
+    season = _schedule_csv_year(path)
+    mtime = path.stat().st_mtime if path.exists() else 0.0
+    if requested_season is not None:
+        if season == int(requested_season):
+            return (0, 0, -mtime, str(path))
+        if season is None:
+            return (1, 0, -mtime, str(path))
+        return (2, abs(season - int(requested_season)), -mtime, str(path))
+
+    current_year = datetime.now(timezone.utc).year
+    if season is None:
+        return (2, 9999, -mtime, str(path))
+    if season >= current_year:
+        return (0, season - current_year, -mtime, str(path))
+    return (1, current_year - season, -mtime, str(path))
+
+
+def _find_schedule_paths(requested_season: Optional[int] = None) -> List[Path]:
     """
-    Locate a schedule CSV file.
+    Locate schedule CSV files in priority order.
 
     Priority:
-      1. Explicit SCHEDULE_PATH (env override or default backend/data/Nfl_schedule_2025.csv)
-      2. Any CSV in backend/data/ that looks like a schedule
-      3. Frontend public copy at ../frontend/public/nflSchedule.csv (local dev)
+      1. Explicit SCHEDULE_PATH, when present
+      2. Packaged backend/data schedule CSVs
+      3. Frontend public schedule CSVs for local-dev compatibility
+
+    Multiple files are returned so a stale explicit path cannot hide a newer
+    packaged upcoming-season schedule during the offseason.
     """
+    candidates: List[Path] = []
+    seen: set[Path] = set()
+
+    def add(path: Path) -> None:
+        try:
+            resolved = path.resolve()
+        except Exception:
+            resolved = path
+        if resolved in seen or not path.exists() or not path.is_file():
+            return
+        seen.add(resolved)
+        candidates.append(path)
 
     # 1) explicit path
-    if SCHEDULE_PATH.exists():
-        return SCHEDULE_PATH
+    add(SCHEDULE_PATH)
 
     # 2) search backend/data for schedule-like CSVs
-    candidates: List[Path] = []
     for p in DATA_DIR.glob("*.csv"):
-        name = p.name.lower()
-        if "schedule" in name or name.startswith("nfl"):
-            candidates.append(p)
-    if candidates:
-        # Prefer most recently modified
-        return sorted(candidates, key=lambda p: p.stat().st_mtime, reverse=True)[0]
+        if _looks_like_schedule_csv(p):
+            add(p)
 
-    # 3) local dev fallback: frontend/public
-    frontend_sched = BASE_DIR.parent / "frontend" / "public" / "nflSchedule.csv"
-    if frontend_sched.exists():
-        return frontend_sched
+    # 3) local dev fallbacks under frontend/public
+    frontend_public = BASE_DIR.parent / "frontend" / "public"
+    for p in (frontend_public / "schedules").glob("*.csv"):
+        if _looks_like_schedule_csv(p):
+            add(p)
+    add(frontend_public / "nflSchedule.csv")
 
-    return None
+    return sorted(candidates, key=lambda p: _schedule_path_sort_key(p, requested_season))
+
+
+def _find_schedule_path() -> Optional[Path]:
+    """Backward-compatible single-path helper for older internal callers."""
+    paths = _find_schedule_paths()
+    return paths[0] if paths else None
 
 
 def _models_dir_has_required_artifacts(models_dir: Path) -> bool:
@@ -516,7 +600,8 @@ def _calculate_win_probability(
     def _fallback_probability() -> float:
         try:
             if full_df is not None and not full_df.empty and "home_moneyline_prob" in full_df.columns:
-                raw = pd.to_numeric(full_df.iloc[0].get("home_moneyline_prob"), errors="coerce")
+                val = full_df.iloc[0].get("home_moneyline_prob")
+                raw = pd.to_numeric(val, errors="coerce") if val is not None else pd.NA
                 if pd.notna(raw):
                     return float(np.clip(float(raw), 1e-6, 1 - 1e-6))
         except Exception:
@@ -716,7 +801,11 @@ class AppState:
         self.score_preprocessor: Optional[Any] = None
         self.win_preprocessor: Optional[Any] = None
         self.history: List[Dict[str, Any]] = []
-        self.predict_cache: Dict[str, Dict[str, Any]] = {}
+        # Use an in-memory LRU cache with TTL for prediction results
+        try:
+            self.predict_cache = LRUCache(max_items=PREDICT_CACHE_MAX_ITEMS, ttl=PREDICT_CACHE_TTL_SEC)
+        except Exception:
+            self.predict_cache = LRUCache(max_items=256, ttl=300)
         self.predict_cache_hits: int = 0
         self.predict_cache_misses: int = 0
         self.retrain_jobs: Dict[str, Dict[str, Any]] = {}
@@ -858,41 +947,25 @@ class AppState:
     def get_cached_prediction(self, key: str) -> Optional[Dict[str, Any]]:
         if PREDICT_CACHE_TTL_SEC <= 0:
             return None
-
-        entry = self.predict_cache.get(key)
-        if not entry:
-            self.predict_cache_misses += 1
-            return None
-
-        ts = float(entry.get("stored_ts", 0.0))
-        age = time.time() - ts
-        if age > PREDICT_CACHE_TTL_SEC:
-            self.predict_cache.pop(key, None)
+        val = self.predict_cache.get(key)
+        if val is None:
             self.predict_cache_misses += 1
             return None
 
         self.predict_cache_hits += 1
-        payload = entry.get("payload")
-        if isinstance(payload, dict):
-            return payload.copy()
-        return None
+        # LRUCache stores raw payloads
+        if isinstance(val, dict):
+            return val.copy()
+        return val
 
     def store_cached_prediction(self, key: str, payload: Dict[str, Any]) -> None:
         if PREDICT_CACHE_TTL_SEC <= 0:
             return
-
-        if len(self.predict_cache) >= PREDICT_CACHE_MAX_ITEMS:
-            # Remove oldest entry first.
-            oldest_key = min(
-                self.predict_cache.keys(),
-                key=lambda k: float(self.predict_cache[k].get("stored_ts", 0.0)),
-            )
-            self.predict_cache.pop(oldest_key, None)
-
-        self.predict_cache[key] = {
-            "stored_ts": time.time(),
-            "payload": payload.copy(),
-        }
+        try:
+            self.predict_cache.set(key, payload.copy())
+        except Exception:
+            # Best-effort: if cache fails, ignore
+            pass
 
     def _load_dataset(self) -> None:
         """Load DATASET_PATH or the most recent game_features*.csv into memory."""
@@ -980,7 +1053,7 @@ class AppState:
                         else:
                             combined = self.numeric_medians.copy()
                             for column, value in prior_series.items():
-                                combined.loc[column] = float(value)
+                                combined.loc[str(column)] = float(value)
                             self.numeric_medians = combined
                 except Exception as exc:
                     logging.warning("[Dataset] Failed to apply prior baseline medians: %s", exc)
@@ -1213,6 +1286,39 @@ async def lifespan(app: FastAPI):
     """
     logging.info("[App] Starting up; loading dataset and models...")
     state.load()
+
+    # Start a background watcher to reload models when files in MODELS_DIR change.
+    def _model_watcher(poll_seconds: int = 30) -> None:
+        try:
+            last_stamp = None
+            while True:
+                try:
+                    if MODELS_DIR.exists():
+                        m = MODELS_DIR.stat().st_mtime
+                    else:
+                        m = None
+                    if last_stamp is None:
+                        last_stamp = m
+                    elif m is not None and m != last_stamp:
+                        logging.info("[ModelWatcher] Detected change in MODELS_DIR; reloading models...")
+                        try:
+                            state._load_models()
+                        except Exception:
+                            logging.exception("[ModelWatcher] Failed reloading models after change.")
+                        last_stamp = m
+                except Exception:
+                    logging.exception("[ModelWatcher] Error while polling models dir.")
+                try:
+                    time.sleep(poll_seconds)
+                except Exception:
+                    break
+
+        except Exception:
+            logging.exception("[ModelWatcher] Stopping due to fatal error.")
+
+    watcher = threading.Thread(target=_model_watcher, daemon=True, name="model-watcher")
+    watcher.start()
+
     yield
     logging.info("[App] Shutdown complete.")
 
@@ -1601,7 +1707,7 @@ def _json_safe_row(row_df: pd.DataFrame) -> Dict[str, Any]:
     if row_df is None or row_df.empty:
         return {}
     row = row_df.iloc[0].to_dict()
-    return {k: _json_safe_value(v) for k, v in row.items()}
+    return {str(k): _json_safe_value(v) for k, v in row.items()}
 
 
 def _json_safe_records(df: pd.DataFrame) -> List[Dict[str, Any]]:
@@ -1610,7 +1716,8 @@ def _json_safe_records(df: pd.DataFrame) -> List[Dict[str, Any]]:
     records = df.to_dict(orient="records")
     safe_rows: List[Dict[str, Any]] = []
     for row in records:
-        safe_rows.append({k: _json_safe_value(v) for k, v in row.items()})
+        safe_row = {str(k): _json_safe_value(v) for k, v in row.items()}
+        safe_rows.append(safe_row)
     return safe_rows
 
 
@@ -2533,13 +2640,13 @@ def status_overview(request: Request) -> StatusOverviewResponse:
 
     history_summary = _history_summary_for_request(request)
 
-    return {
-        "health": health(),  # reuse typed health response
-        "dataset": dataset_stats,
-        "history": {
+    return StatusOverviewResponse(
+        health=health(),  # reuse typed health response
+        dataset=dataset_stats,
+        history={
             "metrics": history_summary
         },
-    }
+    )
 
 
 @app.get("/status/models")
@@ -2612,20 +2719,20 @@ def status_runtime() -> RuntimeStatusResponse:
     cache_total = state.predict_cache_hits + state.predict_cache_misses
     cache_hit_rate = (state.predict_cache_hits / cache_total) if cache_total > 0 else None
 
-    return {
-        "generated_at": now.isoformat(),
-        "started_at": state.started_at.isoformat(),
-        "uptime_seconds": uptime_seconds,
-        "dataset_path": str(state.dataset_path) if state.dataset_path else None,
-        "dataset_hash": state.dataset_hash,
-        "dataset_modified_at": dataset_modified_at,
-        "dataset_age_seconds": dataset_age_seconds,
-        "last_prediction_at": state.last_prediction_at.isoformat() if state.last_prediction_at else None,
-        "history_size": len(state.history),
-        "production_ready": len(state.production_blockers) == 0,
-        "blockers": list(state.production_blockers),
-        "warnings": list(state.production_warnings),
-        "predict_cache": {
+    return RuntimeStatusResponse(
+        generated_at=now.isoformat(),
+        started_at=state.started_at.isoformat(),
+        uptime_seconds=uptime_seconds,
+        dataset_path=str(state.dataset_path) if state.dataset_path else None,
+        dataset_hash=state.dataset_hash,
+        dataset_modified_at=dataset_modified_at,
+        dataset_age_seconds=dataset_age_seconds,
+        last_prediction_at=state.last_prediction_at.isoformat() if state.last_prediction_at else None,
+        history_size=len(state.history),
+        production_ready=len(state.production_blockers) == 0,
+        blockers=list(state.production_blockers),
+        warnings=list(state.production_warnings),
+        predict_cache={
             "enabled": PREDICT_CACHE_TTL_SEC > 0,
             "ttl_seconds": PREDICT_CACHE_TTL_SEC,
             "max_items": PREDICT_CACHE_MAX_ITEMS,
@@ -2634,7 +2741,7 @@ def status_runtime() -> RuntimeStatusResponse:
             "misses": state.predict_cache_misses,
             "hit_rate": cache_hit_rate,
         },
-    }
+    )
 
 
 @app.get("/status/dataset-versioning")
@@ -2669,11 +2776,11 @@ def status_performance_drift(
     limit: int = Query(52, ge=1, le=520)
 ) -> PerformanceDriftResponse:
     points = collect_performance_drift(BASE_DIR, limit=limit)
-    return {
-        "generated_at": datetime.now(timezone.utc).isoformat(),
-        "count": len(points),
-        "points": points,
-    }
+    return PerformanceDriftResponse(
+        generated_at=datetime.now(timezone.utc).isoformat(),
+        count=len(points),
+        points=[PerformanceDriftPointResponse(**p) for p in points],
+    )
 
 
 @app.get("/api/offseason/status", response_model=OffseasonStatusResponse)
@@ -2688,8 +2795,10 @@ def offseason_status() -> OffseasonStatusResponse:
     next_week: Optional[int] = None
     if next_games:
         first = next_games[0]
-        next_season = int(first.get("season")) if first.get("season") is not None else None
-        next_week = int(first.get("week")) if first.get("week") is not None else None
+        season_val = first.get("season")
+        next_season = int(season_val) if season_val is not None else None
+        week_val = first.get("week")
+        next_week = int(week_val) if week_val is not None else None
         kickoff_raw = first.get("kickoff")
         if kickoff_raw:
             try:
@@ -2703,11 +2812,17 @@ def offseason_status() -> OffseasonStatusResponse:
     if next_kickoff is not None:
         days_until_next = int((next_kickoff - now).total_seconds() // 86400)
 
+    stale_next_slate = days_until_next is not None and days_until_next < 0
     offseason_mode = bool(
         (not next_games)
         or (next_kickoff is None)
+        or stale_next_slate
         or (days_until_next is not None and days_until_next > 45)
     )
+
+    if stale_next_slate:
+        next_kickoff = None
+        days_until_next = None
 
     last_trained = (
         state.models_metadata.get("timestamp")
@@ -2722,17 +2837,17 @@ def offseason_status() -> OffseasonStatusResponse:
         except Exception:
             dataset_age_seconds = None
 
-    return {
-        "generated_at": now.isoformat(),
-        "offseason_mode": offseason_mode,
-        "current_season": next_season,
-        "current_week": next_week,
-        "next_known_schedule_date": next_kickoff.isoformat() if next_kickoff else None,
-        "days_until_next_game": days_until_next,
-        "data_freshness_seconds": dataset_age_seconds,
-        "dataset_hash": state.dataset_hash,
-        "last_trained_at": last_trained,
-    }
+    return OffseasonStatusResponse(
+        generated_at=now.isoformat(),
+        offseason_mode=offseason_mode,
+        current_season=next_season,
+        current_week=next_week,
+        next_known_schedule_date=next_kickoff.isoformat() if next_kickoff else None,
+        days_until_next_game=days_until_next,
+        data_freshness_seconds=dataset_age_seconds,
+        dataset_hash=state.dataset_hash,
+        last_trained_at=last_trained,
+    )
 
 
 # -------------------------------------------------------------------
@@ -2783,8 +2898,8 @@ def admin_retrain_status(job_id: str, request: Request) -> RetrainJobStatus:
     return RetrainJobStatus(
         job_id=job_id,
         status=str(job.get("status", "UNKNOWN")),
-        created_at=pd.to_datetime(job.get("created_at"), utc=True).to_pydatetime(),
-        updated_at=pd.to_datetime(job.get("updated_at"), utc=True).to_pydatetime(),
+        created_at=pd.to_datetime(job.get("created_at") or "", utc=True).to_pydatetime(),
+        updated_at=pd.to_datetime(job.get("updated_at") or "", utc=True).to_pydatetime(),
         logs=list(job.get("logs", [])),
         metrics=dict(job.get("metrics", {})),
         artifacts=dict(job.get("artifacts", {})),
@@ -2838,7 +2953,7 @@ def _load_schedule_dataframe(requested_season: Optional[int] = None) -> pd.DataF
     if requested_season is not None:
         candidate_seasons.append(int(requested_season))
     else:
-        candidate_seasons.extend([current_year - 1, current_year, current_year + 1, 2025])
+        candidate_seasons.extend([current_year - 1, current_year, current_year + 1, 2025, 2026])
 
     seen: set[int] = set()
     for season in candidate_seasons:
@@ -2861,20 +2976,45 @@ def _load_schedule_dataframe(requested_season: Optional[int] = None) -> pd.DataF
         if frame is not None and not frame.empty:
             frames.append(frame)
 
+    fallback_frames: List[pd.DataFrame] = []
+    for fallback in _find_schedule_paths(requested_season=requested_season):
+        try:
+            fallback_df = pd.read_csv(fallback)
+            if fallback_df is not None and not fallback_df.empty:
+                fallback_frames.append(fallback_df)
+                logging.info("[Schedule] Loaded fallback schedule CSV: %s", fallback)
+        except Exception as exc:
+            logging.warning("[Schedule] Failed fallback schedule CSV load from %s: %s", fallback, exc)
+
     if frames:
         df = pd.concat(frames, ignore_index=True)
+
+        # If live data only produced stale seasons, append packaged schedules
+        # so offseason mode can still show the upcoming season when bundled.
+        if fallback_frames:
+            live_seasons = set(
+                pd.to_numeric(df.get("season", pd.Series(dtype=int)), errors="coerce")
+                .dropna()
+                .astype(int)
+                .tolist()
+            )
+            missing_fallbacks: List[pd.DataFrame] = []
+            for fallback_df in fallback_frames:
+                fallback_seasons = set(
+                    pd.to_numeric(fallback_df.get("season", pd.Series(dtype=int)), errors="coerce")
+                    .dropna()
+                    .astype(int)
+                    .tolist()
+                )
+                if not fallback_seasons or not fallback_seasons.issubset(live_seasons):
+                    missing_fallbacks.append(fallback_df)
+                    live_seasons.update(fallback_seasons)
+            if missing_fallbacks:
+                df = pd.concat([df, *missing_fallbacks], ignore_index=True)
+    elif fallback_frames:
+        df = pd.concat(fallback_frames, ignore_index=True)
     else:
         df = pd.DataFrame()
-
-    if df is None or df.empty:
-        fallback = _find_schedule_path()
-        if fallback and fallback.exists():
-            try:
-                df = pd.read_csv(fallback)
-                logging.info("[Schedule] Loaded fallback schedule CSV: %s", fallback)
-            except Exception as exc:
-                logging.warning("[Schedule] Failed fallback schedule CSV load: %s", exc)
-                df = pd.DataFrame()
 
     if df is None or df.empty:
         return pd.DataFrame()
@@ -2884,6 +3024,13 @@ def _load_schedule_dataframe(requested_season: Optional[int] = None) -> pd.DataF
     df = _normalize_team_columns(
         df, cols=["home_abbr", "away_abbr", "home_team", "away_team"]
     )
+    dedupe_cols = [
+        col
+        for col in ("season", "week", "home_team", "away_team", "home_abbr", "away_abbr")
+        if col in df.columns
+    ]
+    if {"season", "week"}.issubset(dedupe_cols) and len(dedupe_cols) >= 4:
+        df = df.drop_duplicates(subset=dedupe_cols, keep="first")
     df = _add_kickoff_utc_datetime(df)
     return df
 
@@ -2892,14 +3039,16 @@ def _select_schedule_slice(
     df: pd.DataFrame,
     season: Optional[int] = None,
     week: Optional[int] = None,
+    now_utc: Optional[pd.Timestamp] = None,
 ) -> Tuple[pd.DataFrame, Optional[int], Optional[int]]:
     """Choose the requested slate or the backend's best "next slate".
 
     Rules:
     - If `season` and `week` are provided, return that exact slice.
     - If only `season` is provided, return the next upcoming week inside that season.
-    - If no future games remain, fall back to the latest available week, which
-      allows `/schedule/next-week` to keep serving postseason slates.
+    - If no future games remain and a current/future season is bundled, return
+      that upcoming season's earliest week instead of a stale archived slate.
+    - If no current/future season exists, fall back to the latest available week.
     """
     if df is None or df.empty:
         return pd.DataFrame(), season, week
@@ -2907,6 +3056,11 @@ def _select_schedule_slice(
     s_col = "season_num" if "season_num" in df.columns else "season"
     w_col = "week_num" if "week_num" in df.columns else "week"
     working = df
+    now_ts = pd.Timestamp.now(tz="UTC") if now_utc is None else pd.Timestamp(now_utc)
+    if now_ts.tzinfo is None:
+        now_ts = now_ts.tz_localize("UTC")
+    else:
+        now_ts = now_ts.tz_convert("UTC")
 
     if season is not None:
         working = working[pd.to_numeric(working[s_col], errors="coerce") == int(season)]
@@ -2917,20 +3071,43 @@ def _select_schedule_slice(
         week_df = working[pd.to_numeric(working[w_col], errors="coerce") == int(week)]
         return week_df, season, week
 
-    now_utc = pd.Timestamp.now(tz="UTC")
-    future = working[working["dt"].notna() & (working["dt"] > now_utc)].sort_values(
-        by=["dt", s_col, w_col]
-    )
+    if "dt" in working.columns:
+        future = working[working["dt"].notna() & (working["dt"] > now_ts)].sort_values(
+            by=["dt", s_col, w_col]
+        )
+    else:
+        future = pd.DataFrame()
 
     if not future.empty:
         next_row = future.iloc[0]
-        current_year = datetime.now(timezone.utc).year
+        current_year = int(now_ts.year)
         target_season = int(next_row.get(s_col, next_row.get("season", current_year)))
         target_week = int(next_row.get(w_col, next_row.get("week", 1)))
     else:
-        target_season = int(pd.to_numeric(working[s_col], errors="coerce").max())
+        season_values = (
+            pd.to_numeric(working[s_col], errors="coerce")
+            .dropna()
+            .astype(int)
+            .sort_values()
+        )
+        current_or_future_seasons = [
+            int(value) for value in season_values.unique().tolist() if int(value) >= int(now_ts.year)
+        ]
+        if season is None and current_or_future_seasons:
+            target_season = min(current_or_future_seasons)
+        elif season is not None and int(season) >= int(now_ts.year):
+            target_season = int(season)
+        else:
+            target_season = int(season_values.max())
         season_rows = working[pd.to_numeric(working[s_col], errors="coerce") == target_season]
-        target_week = int(pd.to_numeric(season_rows[w_col], errors="coerce").max())
+        week_values = pd.to_numeric(season_rows[w_col], errors="coerce").dropna().astype(int)
+        positive_weeks = week_values[week_values > 0]
+        if positive_weeks.empty:
+            return pd.DataFrame(), target_season, None
+        if target_season >= int(now_ts.year):
+            target_week = int(positive_weeks.min())
+        else:
+            target_week = int(positive_weeks.max())
 
     week_df = working[
         (pd.to_numeric(working[s_col], errors="coerce") == target_season)
@@ -3041,7 +3218,12 @@ def predict_next_week() -> Dict[str, Any]:
 @app.get("/teams/logos", response_model=TeamLogosResponse)
 def get_team_logos() -> TeamLogosResponse:
     """Return cached team branding metadata for frontend enrichment."""
-    return TeamLogosResponse(teams=_load_team_metadata_map())
+    return TeamLogosResponse(
+        teams={
+            code: TeamLogoMetadataResponse(**meta)
+            for code, meta in _load_team_metadata_map().items()
+        }
+    )
 
 
 # -------------------------------------------------------------------
