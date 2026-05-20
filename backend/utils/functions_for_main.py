@@ -1,3 +1,39 @@
+"""
+File: backend/utils/functions_for_main.py
+
+What it does:
+    Shared prediction helpers for backend/main.py: schedule time normalization,
+    team-code normalization, dataset row lookup, model input preparation, score
+    prediction, and leak-safe prior roll-forward.
+
+Data shapes:
+    - Schedule rows arrive as pandas DataFrames with season/week/team columns
+      plus gameday/gametime, kickoff, or kickoff_utc timestamp fields.
+    - Prediction rows leave this module as one-row DataFrames aligned to the
+      trained model/preprocessor feature contract.
+
+Syntax notes:
+    - Helpers stay as module-level functions because backend/main.py imports
+      them directly for FastAPI route execution.
+    - Pandas timestamp parsing keeps all schedule comparisons in UTC.
+
+Important functions (line numbers last refreshed 2026-04-30):
+    - _add_kickoff_utc_datetime: around line 66
+    - _get_game_row_with_source: around line 267
+    - _prepare_inputs: around line 376
+    - _predict_score: around line 514
+    - _roll_forward_missing_player_stats: around line 895
+
+Possible bugs:
+    - Mixed naive and timezone-aware schedule strings can break parsing unless
+      they are split and normalized before localization.
+    - Synthetic fallback rows can mask missing exact dataset coverage.
+
+Enhancement ideas:
+    - Move schedule timestamp parsing into a dedicated tested schedule module.
+    - Add typed response objects for row lookup diagnostics.
+"""
+
 import pandas as pd
 import logging
 import nflreadpy as nfl
@@ -33,6 +69,41 @@ try:
 except Exception as e:
     logging.warning("[Teams] Failed to load team_abbr_map.json: %s", e)
 
+
+def _parse_datetime_series_to_utc(values: pd.Series, *, assume_tz: str) -> pd.Series:
+    """Parse a string-like Series into timezone-aware UTC timestamps."""
+    raw = values.astype("string").str.strip()
+    has_explicit_tz = raw.str.contains(r"(?:z|[+-]\d{2}:?\d{2})$", case=False, na=False)
+    parsed = pd.Series(pd.NaT, index=values.index, dtype="datetime64[ns, UTC]")
+
+    if has_explicit_tz.any():
+        parsed.loc[has_explicit_tz] = pd.to_datetime(
+            raw.loc[has_explicit_tz],
+            errors="coerce",
+            utc=True,
+        )
+
+    naive_mask = ~has_explicit_tz
+    if naive_mask.any():
+        naive = pd.to_datetime(raw.loc[naive_mask], errors="coerce")
+        try:
+            localized = naive.dt.tz_localize(
+                assume_tz,
+                ambiguous="NaT",
+                nonexistent="shift_forward",
+            ).dt.tz_convert("UTC")
+        except Exception:
+            # Runtime fallback when local timezone data is unavailable.
+            localized = naive.dt.tz_localize(
+                "UTC",
+                ambiguous="NaT",
+                nonexistent="shift_forward",
+            )
+        parsed.loc[naive_mask] = localized
+
+    return parsed
+
+
 def _add_kickoff_utc_datetime(df: pd.DataFrame) -> pd.DataFrame:
     """
     Args:
@@ -51,51 +122,41 @@ def _add_kickoff_utc_datetime(df: pd.DataFrame) -> pd.DataFrame:
 
     """
 
-    df["dt"] = pd.NaT
+    df["dt"] = pd.Series(pd.NaT, index=df.index, dtype="datetime64[ns, UTC]")
+
+    for kickoff_col in ("kickoff_utc", "kickoff"):
+        if kickoff_col in df.columns:
+            parsed_kickoff = pd.to_datetime(df[kickoff_col], errors="coerce", utc=True)
+            df["dt"] = df["dt"].where(df["dt"].notna(), parsed_kickoff)
 
     if "gameday" in df.columns:
 
         if "gametime" in df.columns:
+            missing_dt = df["dt"].isna()
             kickoff_str = (
                 df["gameday"].astype(str).str.strip()
                 + " "
                 + df["gametime"].astype(str).str.strip()
             )
             logging.debug("[Schedule] kickoff_str sample: %s", kickoff_str.iloc[0] if len(kickoff_str) else "")
-            kickoff_naive = pd.to_datetime(kickoff_str, errors="coerce")
-
-            try:
-                df["dt"] = (
-                    kickoff_naive.dt.tz_localize(
-                        "America/New_York",
-                        ambiguous="NaT",
-                        nonexistent="shift_forward",
-                    ).dt.tz_convert("UTC")
+            if missing_dt.any():
+                parsed = _parse_datetime_series_to_utc(
+                    kickoff_str.loc[missing_dt],
+                    assume_tz="America/New_York",
                 )
-            except Exception:
-                # llback if tzdata is unavailable in the runtime.
-                df["dt"] = kickoff_naive.dt.tz_localize(
-                    "UTC",
-                    ambiguous="NaT",
-                    nonexistent="shift_forward",
-                )
+                df.loc[missing_dt, "dt"] = parsed
             return df
         else:
             # No gametime column: treat gameday as "upcoming" until end-of-day Eastern.
-            d = pd.to_datetime(df["gameday"], errors="coerce") + pd.Timedelta(hours=23, minutes=59)
-            try:
-                df["dt"] = (
-                    d.dt.tz_localize(
-                        "America/New_York",
-                        ambiguous="NaT",
-                        nonexistent="shift_forward",
-                    ).dt.tz_convert("UTC")
+            missing_dt = df["dt"].isna()
+            if missing_dt.any():
+                d = (
+                    pd.to_datetime(df.loc[missing_dt, "gameday"], errors="coerce")
+                    + pd.Timedelta(hours=23, minutes=59)
                 )
-            except Exception:
-                df["dt"] = d.dt.tz_localize(
-                    "UTC",
-                    ambiguous="NaT",
-                    nonexistent="shift_forward",
+                df.loc[missing_dt, "dt"] = _parse_datetime_series_to_utc(
+                    d.astype("string"),
+                    assume_tz="America/New_York",
                 )
             return df
 

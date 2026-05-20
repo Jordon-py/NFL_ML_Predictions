@@ -4,6 +4,11 @@
  * Purpose:
  *   One tiny, consistent fetch wrapper for the whole app (schedule + predict + history).
  *
+ * Data shapes:
+ *   Schedule calls return arrays of normalized game rows. History calls return
+ *   `{ entries, total }` plus summary metrics. Prediction calls return the flat
+ *   backend PredictionResponse contract.
+ *
  * The production gotcha (Vercel):
  *   Vite does NOT ship your local `.env` file to Vercel. You must set env vars
  *   in Vercel Project Settings → Environment Variables.
@@ -15,6 +20,20 @@
  * Notes:
  *   - Trailing slashes are stripped so URL joins are predictable.
  *   - Errors are thrown as HttpError(status, url, body) so UI can display useful info.
+ *
+ * Important functions (line numbers last refreshed 2026-04-30):
+ *   - fetchJson: around line 585
+ *   - getOffseasonStatus: around line 676
+ *   - getScheduleForWeek: around line 716
+ *   - predictGame: around line 792
+ *
+ * Possible bugs:
+ *   - Local CSV fallbacks can drift from the backend if schedule assets are not
+ *     updated together.
+ *
+ * Enhancement ideas:
+ *   - Extract schedule normalization into a separate tested module.
+ *   - Add an endpoint capability probe object to make fallback behavior visible.
  */
 
 import { buildPredictPayload as buildGamePredictPayload } from "../utils/gameUtils.js";
@@ -658,6 +677,24 @@ export async function getHealthStatus() {
 
 // Legacy alias kept for older wrappers that still import `health`.
 export const health = getHealthStatus;
+
+export async function getOffseasonStatus() {
+  try {
+    return await fetchJson("/offseason/status");
+  } catch {
+    console.warn("[client] Offseason status unavailable; using fallback");
+    return {
+      offseason_mode: false,
+      current_season: null,
+      current_week: null,
+      next_known_schedule_date: null,
+      days_until_next_game: null,
+      data_freshness_seconds: null,
+      dataset_hash: null,
+      last_trained_at: null,
+    };
+  }
+}
 
 // -------------------------
 // Context endpoints (cheap, cacheable)
