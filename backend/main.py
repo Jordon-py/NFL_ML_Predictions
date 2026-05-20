@@ -567,9 +567,9 @@ def _calculate_win_probability(
 
     Preferred order:
       1) Use a fitted sklearn Pipeline (win_pipe.joblib) on the *raw* DataFrame.
-      2) Use a calibrated classifier (win_clf_calibrated.joblib) on *preprocessed* features
-         via the standalone preprocessor.joblib, if present.
-      3) As a last resort, fall back to `home_moneyline_prob`, else `0.5`.
+      2) Use a wrapped calibrated classifier on the *raw* DataFrame if it owns preprocessing.
+      3) Use a calibrated classifier on *preprocessed* features via preprocessor.joblib.
+      4) As a last resort, fall back to `home_moneyline_prob`, else `0.5`.
 
     Returns:
       (home_win_probability, win_classifier_used)
@@ -619,7 +619,16 @@ def _calculate_win_probability(
             except Exception as e:
                 logging.warning("[Predict] win_pipe predict_proba failed; falling back to priors: %s", e)
 
-        # B) Classifier-only case: transform then predict_proba
+        # B) Wrapped classifier case: CalibratedClassifierCV can own a fitted
+        # pipeline internally without exposing .steps/.named_steps itself.
+        if not is_pipeline:
+            try:
+                win_prob = _predict_positive_class_probability(win_model, full_df)
+                return float(np.clip(win_prob, 1e-6, 1 - 1e-6)), True
+            except Exception as e:
+                logging.warning("[Predict] win_clf predict_proba failed on raw full_df; falling back: %s", e)
+
+        # C) Classifier-only case: transform then predict_proba
         if (not is_pipeline) and (preprocessor is not None):
             try:
                 X_proc = preprocessor.transform(full_df)
@@ -628,7 +637,7 @@ def _calculate_win_probability(
             except Exception as e:
                 logging.warning("[Predict] win_clf predict_proba failed after preprocessor.transform; falling back: %s", e)
 
-        # C) Last attempt: numeric-only (may work if the model was trained on raw numeric columns)
+        # D) Last attempt: numeric-only (may work if the model was trained on raw numeric columns)
         if not is_pipeline:
             try:
                 if numeric_df is not None and not numeric_df.empty:
@@ -1747,14 +1756,14 @@ def _add_legacy_rolling_feature_aliases(row_df: pd.DataFrame) -> pd.DataFrame:
         for legacy_stat, prior_stat in stat_map.items():
             for window, fallback_windows in window_fallbacks.items():
                 target_col = f"{side}_rolling_{legacy_stat}_{window}"
-                current_value = out.at[row_idx, target_col] if target_col in out.columns else pd.NA
+                current_value = out.at[row_idx, target_col] if target_col in out.columns else np.nan
                 try:
                     if pd.notna(current_value):
                         continue
                 except Exception:
                     pass
 
-                fill_value = pd.NA
+                fill_value = np.nan
                 for fallback_window in fallback_windows:
                     source_col = f"{side}_prior_{prior_stat}_{fallback_window}"
                     if source_col not in out.columns:
