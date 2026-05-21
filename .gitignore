@@ -121,6 +121,20 @@ backend/*/models/
 !requirements.txt
 !README.md
 
+## Curated production model bundle
+!backend/models/
+!backend/models/metadata.json
+!backend/models/home_model.joblib
+!backend/models/away_model.joblib
+!backend/models/win_clf_calibrated.joblib
+!backend/models/hist_win_clf_calibrated.joblib
+!backend/models/preprocessor.joblib
+!backend/models/home_pipe.joblib
+!backend/models/away_pipe.joblib
+!backend/models/win_pipe.joblib
+!backend/models/score_preprocessor.joblib
+!backend/models/win_preprocessor.joblib
+
 
 
 

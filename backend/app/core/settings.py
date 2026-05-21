@@ -1,3 +1,12 @@
+# ==========================================
+# File: backend/app/core/settings.py
+# Role: Environment configuration and path resolution.
+# Input Data: Environment variables (.env, Heroku config).
+# Output Data: Settings object with normalized paths and CORS policies.
+# Dependencies: pydantic_settings, pathlib, os
+# Notes: Authoritative source for runtime config; start here for deploy/CORS bugs.
+# ==========================================
+
 """
 File: backend/app/core/settings.py
 

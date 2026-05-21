@@ -1,3 +1,12 @@
+// ==========================================
+// File: frontend/src/api/client.js
+// Role: Unified fetch wrapper for all backend API communication.
+// Input Data: Request parameters, Environment variables (VITE_API_BASE_URL).
+// Output Data: Normalized JSON responses, HttpError exceptions.
+// Dependencies: papaparse, browser fetch API
+// Notes: Handles base URL resolution for local vs Vercel production environments.
+// ==========================================
+
 /**
  * File: frontend/src/api/client.js
  *
@@ -36,8 +45,8 @@
  *   - Add an endpoint capability probe object to make fallback behavior visible.
  */
 
-import { buildPredictPayload as buildGamePredictPayload } from "../utils/gameUtils.js";
 import Papa from "papaparse";
+import { buildPredictPayload as buildGamePredictPayload } from "../utils/gameUtils.js";
 
 export class HttpError extends Error {
   constructor(message, { status, url, body } = {}) {
@@ -592,7 +601,7 @@ export async function fetchJson(path, options = {}) {
   if (import.meta.env.PROD && !BASE_URL) {
     throw new Error(
       "Missing VITE_API_BASE_URL. Set it in Vercel → Project Settings → Environment Variables " +
-        "(example: https://<your-heroku-app>.herokuapp.com)."
+      "(example: https://<your-heroku-app>.herokuapp.com)."
     );
   }
 
@@ -640,14 +649,14 @@ export async function getStatusOverview(userId = null) {
         res.history?.metrics && typeof res.history.metrics === "object"
           ? normalizeHistorySummaryResponse(res.history.metrics)
           : normalizeHistorySummaryResponse({
-              total_predictions: res.history?.total_predictions,
-              resolved_games: res.history?.resolved_games,
-              win_rate: res.history?.win_rate,
-              avg_abs_spread_error: res.history?.avg_abs_spread_error,
-              avg_confidence: res.history?.avg_confidence,
-              latest_prediction_at: res.history?.latest_prediction_at,
-              last_score_sync_at: res.history?.last_score_sync_at,
-            });
+            total_predictions: res.history?.total_predictions,
+            resolved_games: res.history?.resolved_games,
+            win_rate: res.history?.win_rate,
+            avg_abs_spread_error: res.history?.avg_abs_spread_error,
+            avg_confidence: res.history?.avg_confidence,
+            latest_prediction_at: res.history?.latest_prediction_at,
+            last_score_sync_at: res.history?.last_score_sync_at,
+          });
       return {
         ...res,
         health: res.health ?? { status: "unknown" },

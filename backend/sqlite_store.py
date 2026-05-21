@@ -1,3 +1,12 @@
+# ==========================================
+# File: backend/sqlite_store.py
+# Role: SQLite persistence for game scores and user predictions.
+# Input Data: Score entries, Prediction records.
+# Output Data: SQL query results, DB updates.
+# Dependencies: sqlite3, pathlib, threading
+# Notes: Low-level DB access; ensures schema consistency and thread-safe writes.
+# ==========================================
+
 from __future__ import annotations
 import sqlite3
 from contextlib import contextmanager

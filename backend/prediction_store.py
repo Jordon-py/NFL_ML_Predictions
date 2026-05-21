@@ -1,3 +1,12 @@
+# ==========================================
+# File: backend/prediction_store.py
+# Role: User-scoped prediction history management.
+# Input Data: User IDs, Prediction records.
+# Output Data: History lists, User context, Storage keys.
+# Dependencies: hashlib, json, pathlib, sqlite_store
+# Notes: Bridges the gap between the API and the SQLite/JSON persistence layer.
+# ==========================================
+
 """
 Disk-backed, user-scoped prediction history.
 
