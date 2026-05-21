@@ -108,6 +108,7 @@ from backend.utils.ops_reporting import (
     file_sha256,
     load_latest_dataset_manifest,
 )
+from backend.utils.cache import LRUCache
 
 _add_kickoff_utc_datetime = fn_main._add_kickoff_utc_datetime
 _coerce_season_week = fn_main._coerce_season_week
@@ -856,7 +857,11 @@ class AppState:
         self.score_preprocessor: Optional[Any] = None
         self.win_preprocessor: Optional[Any] = None
         self.history: List[Dict[str, Any]] = []
-        self.predict_cache: Dict[str, Dict[str, Any]] = {}
+        # Use an in-memory LRU cache with TTL for prediction results
+        try:
+            self.predict_cache = LRUCache(max_items=PREDICT_CACHE_MAX_ITEMS, ttl=PREDICT_CACHE_TTL_SEC)
+        except Exception:
+            self.predict_cache = LRUCache(max_items=256, ttl=300)
         self.predict_cache_hits: int = 0
         self.predict_cache_misses: int = 0
         self.retrain_jobs: Dict[str, Dict[str, Any]] = {}
@@ -998,41 +1003,25 @@ class AppState:
     def get_cached_prediction(self, key: str) -> Optional[Dict[str, Any]]:
         if PREDICT_CACHE_TTL_SEC <= 0:
             return None
-
-        entry = self.predict_cache.get(key)
-        if not entry:
-            self.predict_cache_misses += 1
-            return None
-
-        ts = float(entry.get("stored_ts", 0.0))
-        age = time.time() - ts
-        if age > PREDICT_CACHE_TTL_SEC:
-            self.predict_cache.pop(key, None)
+        val = self.predict_cache.get(key)
+        if val is None:
             self.predict_cache_misses += 1
             return None
 
         self.predict_cache_hits += 1
-        payload = entry.get("payload")
-        if isinstance(payload, dict):
-            return payload.copy()
-        return None
+        # LRUCache stores raw payloads
+        if isinstance(val, dict):
+            return val.copy()
+        return val
 
     def store_cached_prediction(self, key: str, payload: Dict[str, Any]) -> None:
         if PREDICT_CACHE_TTL_SEC <= 0:
             return
-
-        if len(self.predict_cache) >= PREDICT_CACHE_MAX_ITEMS:
-            # Remove oldest entry first.
-            oldest_key = min(
-                self.predict_cache.keys(),
-                key=lambda k: float(self.predict_cache[k].get("stored_ts", 0.0)),
-            )
-            self.predict_cache.pop(oldest_key, None)
-
-        self.predict_cache[key] = {
-            "stored_ts": time.time(),
-            "payload": payload.copy(),
-        }
+        try:
+            self.predict_cache.set(key, payload.copy())
+        except Exception:
+            # Best-effort: if cache fails, ignore
+            pass
 
     def _load_dataset(self) -> None:
         """Load DATASET_PATH or the most recent game_features*.csv into memory."""
@@ -1353,6 +1342,39 @@ async def lifespan(app: FastAPI):
     """
     logging.info("[App] Starting up; loading dataset and models...")
     state.load()
+
+    # Start a background watcher to reload models when files in MODELS_DIR change.
+    def _model_watcher(poll_seconds: int = 30) -> None:
+        try:
+            last_stamp = None
+            while True:
+                try:
+                    if MODELS_DIR.exists():
+                        m = MODELS_DIR.stat().st_mtime
+                    else:
+                        m = None
+                    if last_stamp is None:
+                        last_stamp = m
+                    elif m is not None and m != last_stamp:
+                        logging.info("[ModelWatcher] Detected change in MODELS_DIR; reloading models...")
+                        try:
+                            state._load_models()
+                        except Exception:
+                            logging.exception("[ModelWatcher] Failed reloading models after change.")
+                        last_stamp = m
+                except Exception:
+                    logging.exception("[ModelWatcher] Error while polling models dir.")
+                try:
+                    time.sleep(poll_seconds)
+                except Exception:
+                    break
+
+        except Exception:
+            logging.exception("[ModelWatcher] Stopping due to fatal error.")
+
+    watcher = threading.Thread(target=_model_watcher, daemon=True, name="model-watcher")
+    watcher.start()
+
     yield
     logging.info("[App] Shutdown complete.")
 
@@ -2683,6 +2705,109 @@ def status_overview(request: Request) -> StatusOverviewResponse:
     )
 
 
+def _to_number(value: Any) -> Optional[float]:
+    try:
+        num = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not np.isfinite(num):
+        return None
+    return num
+
+
+def _to_iso(value: Any) -> Optional[str]:
+    if value in (None, ""):
+        return None
+    if isinstance(value, datetime):
+        return value.astimezone(timezone.utc).isoformat()
+    try:
+        parsed = pd.to_datetime(value, utc=True, errors="coerce")
+    except Exception:
+        return None
+    if pd.isna(parsed):
+        return None
+    return parsed.isoformat()
+
+
+def _pick_latest_iso(current: Optional[str], candidate: Optional[str]) -> Optional[str]:
+    if not candidate:
+        return current
+    if not current:
+        return candidate
+    try:
+        return candidate if pd.to_datetime(candidate) > pd.to_datetime(current) else current
+    except Exception:
+        return current
+
+
+def _build_history_metrics(entries: List[Dict[str, Any]]) -> Dict[str, Any]:
+    rows = entries if isinstance(entries, list) else []
+    resolved_games = 0
+    correct_predictions = 0
+    spread_error_total = 0.0
+    spread_error_count = 0
+    confidence_total = 0.0
+    confidence_count = 0
+    latest_prediction_at = None
+    last_score_sync_at = None
+
+    for entry in rows:
+        if not isinstance(entry, dict):
+            continue
+        latest_prediction_at = _pick_latest_iso(
+            latest_prediction_at,
+            _to_iso(entry.get("ts") or entry.get("timestamp") or entry.get("created_at") or entry.get("predicted_at")),
+        )
+        home_prob = _to_number(entry.get("home_win_probability"))
+        away_prob = _to_number(entry.get("away_win_probability"))
+        if home_prob is not None or away_prob is not None:
+            confidence_total += max(home_prob or 0.0, away_prob or 0.0)
+            confidence_count += 1
+
+        actual_home = _to_number(entry.get("final_home_score", entry.get("actual_home_score")))
+        actual_away = _to_number(entry.get("final_away_score", entry.get("actual_away_score")))
+        if actual_home is None or actual_away is None:
+            continue
+        resolved_games += 1
+        last_score_sync_at = _pick_latest_iso(
+            last_score_sync_at,
+            _to_iso(entry.get("score_updated_at") or entry.get("last_score_sync_at") or entry.get("updated_at")),
+        )
+
+        predicted_home = _to_number(entry.get("home_score"))
+        predicted_away = _to_number(entry.get("away_score"))
+        predicted_diff = predicted_home - predicted_away if predicted_home is not None and predicted_away is not None else _to_number(entry.get("point_diff"))
+        actual_diff = actual_home - actual_away
+
+        if predicted_diff is not None:
+            spread_error_total += abs(predicted_diff - actual_diff)
+            spread_error_count += 1
+
+        predicted_home_wins: Optional[bool] = None
+        if predicted_diff is not None:
+            predicted_home_wins = predicted_diff >= 0
+        elif home_prob is not None or away_prob is not None:
+            predicted_home_wins = (home_prob or 0.0) >= (away_prob or 0.0)
+        if predicted_home_wins is not None and (predicted_home_wins == (actual_diff >= 0)):
+            correct_predictions += 1
+
+    return {
+        "total_predictions": len(rows),
+        "resolved_games": resolved_games,
+        "win_rate": (correct_predictions / resolved_games) if resolved_games else None,
+        "avg_abs_spread_error": (spread_error_total / spread_error_count) if spread_error_count else None,
+        "avg_confidence": (confidence_total / confidence_count) if confidence_count else None,
+        "latest_prediction_at": latest_prediction_at,
+        "last_score_sync_at": last_score_sync_at,
+    }
+
+
+@app.get("/history/summary", response_model=HistoryMetricsResponse)
+def history_summary() -> HistoryMetricsResponse:
+    """Aggregated prediction quality and recency metrics for premium dashboard UX."""
+    return _build_history_metrics(state.history)
+
+
 @app.get("/status/models")
 def status_models() -> Dict[str, Any]:
     """
@@ -2987,7 +3112,7 @@ def _load_schedule_dataframe(requested_season: Optional[int] = None) -> pd.DataF
     if requested_season is not None:
         candidate_seasons.append(int(requested_season))
     else:
-        candidate_seasons.extend([current_year - 1, current_year, current_year + 1, 2025])
+        candidate_seasons.extend([current_year - 1, current_year, current_year + 1, 2025, 2026])
 
     seen: set[int] = set()
     for season in candidate_seasons:
