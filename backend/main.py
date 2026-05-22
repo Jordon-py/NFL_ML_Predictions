@@ -1,3 +1,12 @@
+# ==========================================
+# File: backend/main.py
+# Role: FastAPI backend for the NFL prediction dashboard.
+# Input Data: HTTP requests (JSON payloads), Model artifacts, Dataset CSVs.
+# Output Data: JSON responses (Health, Status, Schedule, Predictions, History).
+# Dependencies: fastapi, pydantic, pandas, numpy, joblib, nflreadpy, uvicorn
+# Notes: Highest-risk edit zone; manages the full runtime lifecycle and API surface.
+# ==========================================
+
 # -*- coding: utf-8 -*-
 """
 File: backend/main.py
@@ -347,18 +356,69 @@ def _models_dir_has_required_artifacts(models_dir: Path) -> bool:
         return False
 
 
+def _models_dir_metadata_tier(models_dir: Path) -> int:
+    """Rank model bundle metadata quality without validating runtime compatibility.
+
+    Selection should prefer a strict serving contract even if the current Python
+    environment cannot load it. That makes version mismatches visible as startup
+    blockers instead of silently falling back to an older metadata-less bundle.
+    """
+    metadata_path = models_dir / "metadata.json"
+    try:
+        if not metadata_path.exists():
+            return 0
+        meta = json.loads(metadata_path.read_text(encoding="utf-8"))
+        if not isinstance(meta, dict):
+            return 0
+        if meta.get("serving_mode") == "pipeline_primary" or meta.get("bundle_contract_version"):
+            return 2
+        return 1
+    except Exception:
+        return 0
+
+
+def _pick_best_models_dir(candidates: List[Path]) -> Optional[Path]:
+    strict: List[Path] = []
+    legacy_with_metadata: List[Path] = []
+    metadata_less: List[Path] = []
+
+    seen: set[Path] = set()
+    for candidate in candidates:
+        try:
+            resolved = candidate.resolve()
+        except Exception:
+            resolved = candidate
+        if resolved in seen or not _models_dir_has_required_artifacts(candidate):
+            continue
+        seen.add(resolved)
+
+        tier = _models_dir_metadata_tier(candidate)
+        if tier >= 2:
+            strict.append(candidate)
+        elif tier == 1:
+            legacy_with_metadata.append(candidate)
+        else:
+            metadata_less.append(candidate)
+
+    for bucket in (strict, legacy_with_metadata, metadata_less):
+        if bucket:
+            return bucket[0]
+    return None
+
+
 def _find_models_dir() -> Path:
     """Locate the best models directory.
 
     Priority order:
       1) Env override (recommended for Heroku): MODELS_DIR / MODELS_PATH / MODEL_DIR
       2) The promoted runtime bundle under backend/data/models/current
-      3) A complete bundle under backend/data/models
-      4) Other complete bundles in common repo locations (prod-models/models, dated runs, etc.)
+      3) Strict metadata-backed bundles such as backend/models
+      4) Complete legacy bundles under backend/data/models or common repo locations
       5) Fallback: backend/models (even if incomplete, so errors are visible in logs)
 
     Tip:
-      - On Heroku, always set MODELS_DIR to a path that exists *in the slug*.
+      - On Heroku, set MODELS_DIR=backend/models unless a promoted current bundle exists.
+      - Run with the repo environment that matches metadata.json's sklearn_version.
     """
     env_path = SETTINGS.resolved_models_dir
     if env_path is None:
@@ -382,35 +442,31 @@ def _find_models_dir() -> Path:
     # Promoted runtime bundle produced by admin/retrain flows.
     promoted_current = CURRENT_MODELS_DIR
     if _models_dir_has_required_artifacts(promoted_current):
-        candidates.append(promoted_current)
+        return promoted_current
 
-    # Repository-local shared bundle used by deployment packaging.
+    # Repository-local shared bundle used by older deployment packaging.
     packaged_data_models = DATA_DIR / "models"
-    if _models_dir_has_required_artifacts(packaged_data_models):
-        candidates.append(packaged_data_models)
+    candidates.append(packaged_data_models)
 
     # Common packaged pattern: backend/data/prod-models/models
     direct = BASE_DIR / "data" / "prod-models" / "models"
-    if _models_dir_has_required_artifacts(direct):
-        candidates.append(direct)
+    candidates.append(direct)
 
-    # Common local pattern: backend/models
+    # Verified repository-local bundle produced by train_models.py.
     local_default = BASE_DIR / "models"
-    if _models_dir_has_required_artifacts(local_default):
-        candidates.append(local_default)
+    candidates.append(local_default)
 
     # Date-stamped training runs: backend/20251215/models (most recent wins)
     for p in sorted(BASE_DIR.glob("20*/models"), key=lambda item: item.stat().st_mtime, reverse=True):
-        if _models_dir_has_required_artifacts(p):
-            candidates.append(p)
+        candidates.append(p)
 
     # Any nested prod-models/models in the repo
     for p in sorted(BASE_DIR.glob("**/prod-models/models"), key=lambda item: item.stat().st_mtime, reverse=True):
-        if _models_dir_has_required_artifacts(p):
-            candidates.append(p)
+        candidates.append(p)
 
-    if candidates:
-        return candidates[0]
+    best = _pick_best_models_dir(candidates)
+    if best is not None:
+        return best
 
     return local_default
 
@@ -2649,6 +2705,109 @@ def status_overview(request: Request) -> StatusOverviewResponse:
     )
 
 
+def _to_number(value: Any) -> Optional[float]:
+    try:
+        num = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not np.isfinite(num):
+        return None
+    return num
+
+
+def _to_iso(value: Any) -> Optional[str]:
+    if value in (None, ""):
+        return None
+    if isinstance(value, datetime):
+        return value.astimezone(timezone.utc).isoformat()
+    try:
+        parsed = pd.to_datetime(value, utc=True, errors="coerce")
+    except Exception:
+        return None
+    if pd.isna(parsed):
+        return None
+    return parsed.isoformat()
+
+
+def _pick_latest_iso(current: Optional[str], candidate: Optional[str]) -> Optional[str]:
+    if not candidate:
+        return current
+    if not current:
+        return candidate
+    try:
+        return candidate if pd.to_datetime(candidate) > pd.to_datetime(current) else current
+    except Exception:
+        return current
+
+
+def _build_history_metrics(entries: List[Dict[str, Any]]) -> Dict[str, Any]:
+    rows = entries if isinstance(entries, list) else []
+    resolved_games = 0
+    correct_predictions = 0
+    spread_error_total = 0.0
+    spread_error_count = 0
+    confidence_total = 0.0
+    confidence_count = 0
+    latest_prediction_at = None
+    last_score_sync_at = None
+
+    for entry in rows:
+        if not isinstance(entry, dict):
+            continue
+        latest_prediction_at = _pick_latest_iso(
+            latest_prediction_at,
+            _to_iso(entry.get("ts") or entry.get("timestamp") or entry.get("created_at") or entry.get("predicted_at")),
+        )
+        home_prob = _to_number(entry.get("home_win_probability"))
+        away_prob = _to_number(entry.get("away_win_probability"))
+        if home_prob is not None or away_prob is not None:
+            confidence_total += max(home_prob or 0.0, away_prob or 0.0)
+            confidence_count += 1
+
+        actual_home = _to_number(entry.get("final_home_score", entry.get("actual_home_score")))
+        actual_away = _to_number(entry.get("final_away_score", entry.get("actual_away_score")))
+        if actual_home is None or actual_away is None:
+            continue
+        resolved_games += 1
+        last_score_sync_at = _pick_latest_iso(
+            last_score_sync_at,
+            _to_iso(entry.get("score_updated_at") or entry.get("last_score_sync_at") or entry.get("updated_at")),
+        )
+
+        predicted_home = _to_number(entry.get("home_score"))
+        predicted_away = _to_number(entry.get("away_score"))
+        predicted_diff = predicted_home - predicted_away if predicted_home is not None and predicted_away is not None else _to_number(entry.get("point_diff"))
+        actual_diff = actual_home - actual_away
+
+        if predicted_diff is not None:
+            spread_error_total += abs(predicted_diff - actual_diff)
+            spread_error_count += 1
+
+        predicted_home_wins: Optional[bool] = None
+        if predicted_diff is not None:
+            predicted_home_wins = predicted_diff >= 0
+        elif home_prob is not None or away_prob is not None:
+            predicted_home_wins = (home_prob or 0.0) >= (away_prob or 0.0)
+        if predicted_home_wins is not None and (predicted_home_wins == (actual_diff >= 0)):
+            correct_predictions += 1
+
+    return {
+        "total_predictions": len(rows),
+        "resolved_games": resolved_games,
+        "win_rate": (correct_predictions / resolved_games) if resolved_games else None,
+        "avg_abs_spread_error": (spread_error_total / spread_error_count) if spread_error_count else None,
+        "avg_confidence": (confidence_total / confidence_count) if confidence_count else None,
+        "latest_prediction_at": latest_prediction_at,
+        "last_score_sync_at": last_score_sync_at,
+    }
+
+
+@app.get("/history/summary/memory", response_model=HistoryMetricsResponse)
+def history_summary_memory() -> HistoryMetricsResponse:
+    """Aggregated in-memory prediction quality and recency metrics for diagnostics."""
+    return _build_history_metrics(state.history)
+
+
 @app.get("/status/models")
 def status_models() -> Dict[str, Any]:
     """
@@ -3389,6 +3548,27 @@ async def predict(payload: PredictRequest, request: Request) -> Dict[str, Any]:
     except Exception as win_err:
         logging.warning("[Predict] Win probability calc failed; defaulting to 0.5: %s", str(win_err).splitlines()[0])
         win_prob_raw, clf_used = 0.5, False
+
+    if _requires_strict_bundle_contract(state.models_metadata) and not clf_used:
+        detail = _prediction_readiness_payload()
+        blockers = list(detail.get("blockers") or [])
+        blocker = "win classifier unavailable for strict model bundle"
+        if blocker not in blockers:
+            blockers.append(blocker)
+        detail.update(
+            {
+                "message": "Prediction service unavailable.",
+                "blockers": blockers,
+                "models_dir": str(MODELS_DIR),
+            }
+        )
+        logging.error(
+            "[Predict] Strict model bundle at %s could not produce a classifier-backed win probability for %s vs %s.",
+            MODELS_DIR,
+            home_team,
+            away_team,
+        )
+        raise HTTPException(status_code=503, detail=detail)
 
     score_full_df, score_numeric_df = _augment_with_win_probability_feature(
         full_df,

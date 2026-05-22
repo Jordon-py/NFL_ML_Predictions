@@ -1,3 +1,14 @@
+```text
+# ==========================================
+# File: README.md
+# Role: Project entry point and operator guide.
+# Input Data: N/A
+# Output Data: Setup instructions, deploy targets, and architecture overview.
+# Dependencies: N/A
+# Notes: Keep this aligned with real deploy targets and current setup steps.
+# ==========================================
+```
+
 # NFL ML Predictions
 
 Full-stack NFL forecasting workspace with a FastAPI backend, a React/Vite frontend, a dataset build pipeline, and a model training pipeline.

@@ -4,9 +4,10 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 jobs:
-  deploy:
+  deploy-heroku:
     runs-on: ubuntu-latest
     concurrency:
       group: deploy-${{ github.ref }}
@@ -14,53 +15,81 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v4
         with:
-          python-version: 3.11
+          fetch-depth: 0
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: Setup Heroku CLI (action)
-        # Use an action that accepts api key via 'with' to avoid using secrets at top-level
-        uses: akshnz/heroku-cli-action@v1
-        with:
-          heroku_api_key: ${{ secrets.HEROKU_API_KEY }}
-
-      - name: Verify Heroku login (safe step-level env)
-        env:
-          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+      - name: Verify required model bundle is committed
         run: |
-          if [ -z "${HEROKU_API_KEY}" ]; then
-            echo "ERROR: HEROKU_API_KEY secret is missing. Add it in Settings → Secrets and Variables → Actions."
-            exit 1
-          fi
-          heroku whoami || true
+          set -euo pipefail
+          test -f backend/models/home_pipe.joblib
+          test -f backend/models/away_pipe.joblib
+          test -f backend/models/win_pipe.joblib
+          test -f backend/models/score_preprocessor.joblib
+          test -f backend/models/win_preprocessor.joblib
 
-      - name: Setup Vercel (if used)
-        uses: amondnet/vercel-action@v20
-        with:
-          vercel-token: ${{ secrets.VERCEL_TOKEN }}
-          vercel-args: '--prod'
-          working-directory: ./frontend
+      - name: Install Heroku CLI
+        run: |
+          curl https://cli-assets.heroku.com/install.sh | sh
 
-      - name: Deploy to Heroku via buildpack git push (conditional)
-        if: ${{ secrets.HEROKU_API_KEY && secrets.HEROKU_APP }}
+      - name: Deploy to Heroku
         env:
           HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
           HEROKU_APP: ${{ secrets.HEROKU_APP }}
         run: |
-          echo "Deploying to Heroku using buildpack-based git push..."
-          heroku git:remote --app "$HEROKU_APP"
-          git push "https://heroku:${HEROKU_API_KEY}@git.heroku.com/${HEROKU_APP}.git" HEAD:main
+          set -euo pipefail
+          if [ -z "${HEROKU_API_KEY}" ]; then
+            echo "ERROR: HEROKU_API_KEY secret is missing. Add it in Settings -> Secrets and variables -> Actions."
+            exit 1
+          fi
+          HEROKU_APP="${HEROKU_APP:-nfl-predict}"
+          git remote remove heroku 2>/dev/null || true
+          git remote add heroku "https://heroku:${HEROKU_API_KEY}@git.heroku.com/${HEROKU_APP}.git"
+          git push heroku HEAD:main
 
-      - name: Fail if required deployment secrets are missing
-        if: ${{ !secrets.HEROKU_API_KEY || !secrets.HEROKU_APP || !secrets.VERCEL_TOKEN }}
+      - name: Verify production model gates
+        env:
+          BACKEND_URL: ${{ secrets.CI_BACKEND_URL }}
         run: |
-          echo "One or more deployment secrets (HEROKU_API_KEY, HEROKU_APP, VERCEL_TOKEN) are missing."
-          echo "Add them at: Settings → Secrets and variables → Actions"
-          exit 1
+          set -euo pipefail
+          BACKEND_URL="${BACKEND_URL:-https://nfl-predict-ecf5a5bd34fe.herokuapp.com}"
+          python - <<'PY'
+          import json
+          import os
+          import time
+          import urllib.request
+
+          base_url = os.environ.get("BACKEND_URL", "https://nfl-predict-ecf5a5bd34fe.herokuapp.com").rstrip("/")
+          required_artifacts = [
+              "home_pipe",
+              "away_pipe",
+              "win_pipe",
+              "score_preprocessor",
+              "win_preprocessor",
+          ]
+
+          def fetch_json(path, payload=None):
+              data = None
+              headers = {"Accept": "application/json"}
+              if payload is not None:
+                  data = json.dumps(payload).encode("utf-8")
+                  headers["Content-Type"] = "application/json"
+              request = urllib.request.Request(f"{base_url}{path}", data=data, headers=headers)
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  return json.loads(response.read().decode("utf-8"))
+
+          status = None
+          for _ in range(12):
+              status = fetch_json("/status/models")
+              artifacts = status.get("artifacts", {})
+              if status.get("ready") and all(artifacts.get(name) is True for name in required_artifacts):
+                  break
+              time.sleep(10)
+          else:
+              raise SystemExit(f"Model gate failed: {json.dumps(status, sort_keys=True)}")
+
+          payload = {"home_team": "PHI", "away_team": "DAL", "season": 2025, "week": 1}
+          prediction = fetch_json("/predict", payload)
+          if prediction.get("win_classifier_used") is not True:
+              raise SystemExit(f"Predict gate failed: {json.dumps(prediction, sort_keys=True)}")
+          print(json.dumps({"status": status, "prediction": prediction}, sort_keys=True))
+          PY

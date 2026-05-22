@@ -1,3 +1,12 @@
+# ==========================================
+# File: backend/services/schedule_ingestion.py
+# Role: ESPN -> clean NFL schedule ingestion.
+# Input Data: ESPN Scoreboard API responses.
+# Output Data: Normalized schedule CSVs and Parquet files.
+# Dependencies: requests, pandas, pydantic, argparse
+# Notes: Maps postseason weeks to 19-22; ensures future rows are leak-safe.
+# ==========================================
+
 """
 backend/services/schedule_ingestion.py
 --------------------------------------

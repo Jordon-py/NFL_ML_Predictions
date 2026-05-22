@@ -1,4 +1,13 @@
 #!/usr/bin/env python3
+# ==========================================
+# File: backend/train_models.py
+# Role: Production-grade trainer for NFL score + win-probability models.
+# Input Data: Clean feature datasets (CSV).
+# Output Data: Trained model pipelines (.joblib), Performance reports.
+# Dependencies: sklearn, pandas, numpy, joblib
+# Notes: Implements staging/promotion gating to prevent regression in production.
+# ==========================================
+
 # File: backend/train_models.py
 # Purpose: Production-grade trainer for NFL score + win-probability models with staging/promotion gating.
 

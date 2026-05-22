@@ -1,3 +1,12 @@
+// ==========================================
+// File: frontend/src/hooks/usePredictionState.js
+// Role: Central route-level state manager for the prediction app.
+// Input Data: User auth session, API responses (schedule, history, health).
+// Output Data: Shared state (schedule, predictions, history, season context).
+// Dependencies: react (useState, useEffect, useCallback), client.js
+// Notes: Prevents state drift between Dashboard and HistoryPage.
+// ==========================================
+
 /**
  * Central route-level state for the protected app shell.
  *
@@ -23,16 +32,16 @@
  * - Let StatsPage consume this same hook instead of fetching separately.
  */
 
-import { useEffect, useState, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
-  getHistorySummary,
-  getOffseasonStatus,
-  getNextWeekSchedule,
   getHealthStatus as fetchHealth,
+  getHistorySummary,
+  getNextWeekSchedule,
+  getOffseasonStatus,
   getPredictionHistory,
   getScheduleForWeek,
-  getTeamLogos,
   getSeasonContext,
+  getTeamLogos,
 } from "../api/client.js";
 import {
   buildGameKey,
@@ -336,10 +345,10 @@ export function usePredictionState(authSession = null) {
 
   // 2. Health Polling
   useEffect(() => {
-  const poll = async () => {
-    try {
-      const h = await fetchHealth();
-      setHealth(h);
+    const poll = async () => {
+      try {
+        const h = await fetchHealth();
+        setHealth(h);
       } catch (err) {
         const message = err?.message || "fetch failed";
         setHealth({ status: "error", reason: message });
