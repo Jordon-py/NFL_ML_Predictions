@@ -33,3 +33,15 @@
 - 2026-05-21: Follow-up verification passed: `python -m py_compile backend/main.py backend/tests/test_model_dir_resolution.py backend/tests/test_predict_two_stage.py`, global targeted pytest (`6 passed, 1 skipped`), `nflenv` targeted pytest (`7 passed`), full `nflenv` backend tests (`47 passed`), frontend tests (`6 passed`), frontend build, and a Playwright Chromium UI smoke against `http://127.0.0.1:3000/app` with 2025 Week 1 loaded 16 cards and rendered a classifier-backed prediction with no console errors.
  - 2026-05-20: Added runtime enhancements: in-process LRU prediction cache and background model-watcher to reload promoted bundles without full restart. Updated prediction cache to respect `PREDICT_CACHE_TTL_SEC` and `PREDICT_CACHE_MAX_ITEMS` settings. Updated smoke tests to include cache metrics in `/status/runtime`.
  - 2026-05-20: Minor cleanup: extracted small LRU cache util at `backend/utils/cache.py` and started a daemon `model-watcher` thread at app startup to improve operational experience during promotion flows.
+
+## 2026-05-22 - CI history summary and dataset provenance repair
+
+Summary: Fixed duplicate history summary routing, hardened SQLite score summaries, and aligned model metadata to the packaged deployed dataset.
+
+Files changed: backend/main.py, backend/sqlite_store.py, backend/prediction_store.py, backend/data/datasets/latest_dataset.json, backend/models/metadata.json.
+
+Verification: GitHub Actions CI/deploy run should verify backend tests and production model gates after this commit.
+
+Remaining issues: Full retraining was not performed in this read-only Codex environment; metadata was aligned to the deployed packaged dataset.
+
+Recommended next step: Retrain the promoted bundle from the packaged dataset in a write-enabled environment when compute is available.

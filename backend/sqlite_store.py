@@ -330,8 +330,8 @@ def get_user_history(
             "away_win_probability": row["away_win_probability"],
             "prediction_source": row["prediction_source"],
             "win_classifier_used": bool(row["win_classifier_used"]) if row["win_classifier_used"] is not None else False,
-            "final_home_score": row["final_home_score"],
-            "final_away_score": row["final_away_score"],
+            "final_home_score": row["final_home_score"] if row["final_home_score"] is not None else row["actual_home_score"],
+            "final_away_score": row["final_away_score"] if row["final_away_score"] is not None else row["actual_away_score"],
             "game_status": row["game_status"],
             "score_updated_at": row["score_updated_at"],
         }
@@ -364,8 +364,8 @@ def get_user_history_summary(context: PredictionUserContext) -> Dict[str, object
                 up.away_win_probability,
                 up.predicted_home_score,
                 up.predicted_away_score,
-                up.final_home_score,
-                up.final_away_score,
+                COALESCE(up.final_home_score, gs.home_score) AS final_home_score,
+                COALESCE(up.final_away_score, gs.away_score) AS final_away_score,
                 gs.updated_at AS score_updated_at
             FROM user_predictions up
             LEFT JOIN game_scores gs

@@ -187,7 +187,9 @@ def get_prediction_history_summary(context: PredictionUserContext) -> dict[str, 
     """Return per-user prediction metrics with SQLite as the primary source."""
 
     try:
-        return get_user_history_summary(context)
+        summary = get_user_history_summary(context)
+        if int(summary.get("total_predictions") or 0) > 0:
+            return summary
     except Exception:
         log.exception("Failed to summarize SQLite-backed prediction history; falling back to JSON.")
 

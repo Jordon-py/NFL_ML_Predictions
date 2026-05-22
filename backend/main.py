@@ -2802,9 +2802,9 @@ def _build_history_metrics(entries: List[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
-@app.get("/history/summary", response_model=HistoryMetricsResponse)
-def history_summary() -> HistoryMetricsResponse:
-    """Aggregated prediction quality and recency metrics for premium dashboard UX."""
+@app.get("/history/summary/memory", response_model=HistoryMetricsResponse)
+def history_summary_memory() -> HistoryMetricsResponse:
+    """Aggregated in-memory prediction quality and recency metrics for diagnostics."""
     return _build_history_metrics(state.history)
 
 
