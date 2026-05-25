@@ -1,10 +1,10 @@
 // ==========================================
 // File: frontend/src/App.jsx
-// Role: Frontend module.
-// Input Data: Module inputs.
-// Output Data: Exports for UI usage.
-// Dependencies: react, react-router-dom, ./components/ErrorBoundary, ./hooks/usePredictionState
-// Notes: Shared application code.
+// Role: Main application shell and routing orchestrator.
+// Input Data: Auth session, Route parameters.
+// Output Data: Rendered React component tree.
+// Dependencies: react, react-router-dom, usePredictionState, useAuthSession
+// Notes: Initializes the shared prediction state hook at the top level.
 // ==========================================
 
 import React, { Suspense, lazy } from 'react';
@@ -87,21 +87,21 @@ function PredictionAppRoutes({ authSession, onSignOut }) {
       <Route
         path="app"
         element={(
-            <Dashboard
-              authSession={authSession}
-              onSignOut={onSignOut}
-              schedule={schedule}
-              week={week}
-              predictions={predictions}
-              loading={loading}
-              errors={errors}
-              scheduleLoading={scheduleLoading}
-              scheduleError={scheduleError}
-              current={current}
-              history={history}
-              health={health}
-              loadScheduleForWeek={loadScheduleForWeek}
-              setPrediction={setPrediction}
+          <Dashboard
+            authSession={authSession}
+            onSignOut={onSignOut}
+            schedule={schedule}
+            week={week}
+            predictions={predictions}
+            loading={loading}
+            errors={errors}
+            scheduleLoading={scheduleLoading}
+            scheduleError={scheduleError}
+            current={current}
+            history={history}
+            health={health}
+            loadScheduleForWeek={loadScheduleForWeek}
+            setPrediction={setPrediction}
             setLoading={setLoading}
             setError={setError}
             pushHistory={pushHistory}

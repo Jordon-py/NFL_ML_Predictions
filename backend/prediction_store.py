@@ -1,3 +1,12 @@
+# ==========================================
+# File: backend/prediction_store.py
+# Role: User-scoped prediction history management.
+# Input Data: User IDs, Prediction records.
+# Output Data: History lists, User context, Storage keys.
+# Dependencies: hashlib, json, pathlib, sqlite_store
+# Notes: Bridges the gap between the API and the SQLite/JSON persistence layer.
+# ==========================================
+
 """
 Disk-backed, user-scoped prediction history.
 
@@ -178,7 +187,9 @@ def get_prediction_history_summary(context: PredictionUserContext) -> dict[str, 
     """Return per-user prediction metrics with SQLite as the primary source."""
 
     try:
-        return get_user_history_summary(context)
+        summary = get_user_history_summary(context)
+        if int(summary.get("total_predictions") or 0) > 0:
+            return summary
     except Exception:
         log.exception("Failed to summarize SQLite-backed prediction history; falling back to JSON.")
 

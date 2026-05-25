@@ -64,7 +64,7 @@
     },
     "MODELS_DIR": {
       "description": "Path to the canonical packaged model bundle relative to backend/",
-      "value": "data/models",
+      "value": "models",
       "required": false
     }
   },

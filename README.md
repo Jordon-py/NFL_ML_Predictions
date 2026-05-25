@@ -1,3 +1,14 @@
+```text
+# ==========================================
+# File: README.md
+# Role: Project entry point and operator guide.
+# Input Data: N/A
+# Output Data: Setup instructions, deploy targets, and architecture overview.
+# Dependencies: N/A
+# Notes: Keep this aligned with real deploy targets and current setup steps.
+# ==========================================
+```
+
 # NFL ML Predictions
 
 Full-stack NFL forecasting workspace with a FastAPI backend, a React/Vite frontend, a dataset build pipeline, and a model training pipeline.
@@ -94,6 +105,14 @@ The backend now boots even if models are missing or incompatible.
 
 - Model hot-reload: the backend starts a lightweight background `model-watcher` thread that monitors the active models directory and reloads promoted bundles without requiring a full process restart. This improves promotion workflows and reduces downtime.
 - In-process LRU cache: prediction responses are cached in-memory with TTL and max-items controlled by `PREDICT_CACHE_TTL_SEC` and `PREDICT_CACHE_MAX_ITEMS` (see `backend/main.py`) to reduce repeated identical inference cost during heavy UI refreshes.
+
+### Premium reliability hardening (May 2026)
+
+The backend prediction path was iterated in three passes:
+
+1. **Weakpoint discovery pass**: identified duplicate in-memory history growth on cache hits and non-fail-fast team-code validation during `/predict`.
+2. **Mitigation pass**: added bounded+deduplicated in-memory history recording to prevent repeated identical cache returns from crowding out useful recent history.
+3. **Validation pass**: added runtime-backed team code validation (dataset + team map) so invalid abbreviations fail fast with actionable error hints.
 
 ### Schedule loading is queryable and postseason-safe
 

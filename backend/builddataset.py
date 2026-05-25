@@ -1,4 +1,12 @@
 #!/usr/bin/env python3
+# ==========================================
+# File: backend/builddataset.py
+# Role: Canonical dataset build entrypoint.
+# Input Data: Raw NFL data, Schedule assets.
+# Output Data: Cleaned feature datasets (CSV), Dataset manifests.
+# Dependencies: pandas, pathlib, backend.pipeline_models
+# Notes: Wrapper around build_csv_datasets_v3.py to provide stable run directories.
+# ==========================================
 """
 Canonical dataset build entrypoint.
 

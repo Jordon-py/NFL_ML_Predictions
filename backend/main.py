@@ -1,3 +1,12 @@
+# ==========================================
+# File: backend/main.py
+# Role: FastAPI backend for the NFL prediction dashboard.
+# Input Data: HTTP requests (JSON payloads), Model artifacts, Dataset CSVs.
+# Output Data: JSON responses (Health, Status, Schedule, Predictions, History).
+# Dependencies: fastapi, pydantic, pandas, numpy, joblib, nflreadpy, uvicorn
+# Notes: Highest-risk edit zone; manages the full runtime lifecycle and API surface.
+# ==========================================
+
 # -*- coding: utf-8 -*-
 """
 File: backend/main.py
@@ -68,7 +77,7 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from contextlib import asynccontextmanager
 from functools import lru_cache
-from typing import List, Dict, Any, Optional, Tuple, Literal
+from typing import List, Dict, Any, Optional, Tuple, Literal, Set
 import nflreadpy as nfl
 from dotenv import load_dotenv
 import numpy as np
@@ -347,18 +356,69 @@ def _models_dir_has_required_artifacts(models_dir: Path) -> bool:
         return False
 
 
+def _models_dir_metadata_tier(models_dir: Path) -> int:
+    """Rank model bundle metadata quality without validating runtime compatibility.
+
+    Selection should prefer a strict serving contract even if the current Python
+    environment cannot load it. That makes version mismatches visible as startup
+    blockers instead of silently falling back to an older metadata-less bundle.
+    """
+    metadata_path = models_dir / "metadata.json"
+    try:
+        if not metadata_path.exists():
+            return 0
+        meta = json.loads(metadata_path.read_text(encoding="utf-8"))
+        if not isinstance(meta, dict):
+            return 0
+        if meta.get("serving_mode") == "pipeline_primary" or meta.get("bundle_contract_version"):
+            return 2
+        return 1
+    except Exception:
+        return 0
+
+
+def _pick_best_models_dir(candidates: List[Path]) -> Optional[Path]:
+    strict: List[Path] = []
+    legacy_with_metadata: List[Path] = []
+    metadata_less: List[Path] = []
+
+    seen: set[Path] = set()
+    for candidate in candidates:
+        try:
+            resolved = candidate.resolve()
+        except Exception:
+            resolved = candidate
+        if resolved in seen or not _models_dir_has_required_artifacts(candidate):
+            continue
+        seen.add(resolved)
+
+        tier = _models_dir_metadata_tier(candidate)
+        if tier >= 2:
+            strict.append(candidate)
+        elif tier == 1:
+            legacy_with_metadata.append(candidate)
+        else:
+            metadata_less.append(candidate)
+
+    for bucket in (strict, legacy_with_metadata, metadata_less):
+        if bucket:
+            return bucket[0]
+    return None
+
+
 def _find_models_dir() -> Path:
     """Locate the best models directory.
 
     Priority order:
       1) Env override (recommended for Heroku): MODELS_DIR / MODELS_PATH / MODEL_DIR
       2) The promoted runtime bundle under backend/data/models/current
-      3) A complete bundle under backend/data/models
-      4) Other complete bundles in common repo locations (prod-models/models, dated runs, etc.)
+      3) Strict metadata-backed bundles such as backend/models
+      4) Complete legacy bundles under backend/data/models or common repo locations
       5) Fallback: backend/models (even if incomplete, so errors are visible in logs)
 
     Tip:
-      - On Heroku, always set MODELS_DIR to a path that exists *in the slug*.
+      - On Heroku, set MODELS_DIR=backend/models unless a promoted current bundle exists.
+      - Run with the repo environment that matches metadata.json's sklearn_version.
     """
     env_path = SETTINGS.resolved_models_dir
     if env_path is None:
@@ -382,35 +442,31 @@ def _find_models_dir() -> Path:
     # Promoted runtime bundle produced by admin/retrain flows.
     promoted_current = CURRENT_MODELS_DIR
     if _models_dir_has_required_artifacts(promoted_current):
-        candidates.append(promoted_current)
+        return promoted_current
 
-    # Repository-local shared bundle used by deployment packaging.
+    # Repository-local shared bundle used by older deployment packaging.
     packaged_data_models = DATA_DIR / "models"
-    if _models_dir_has_required_artifacts(packaged_data_models):
-        candidates.append(packaged_data_models)
+    candidates.append(packaged_data_models)
 
     # Common packaged pattern: backend/data/prod-models/models
     direct = BASE_DIR / "data" / "prod-models" / "models"
-    if _models_dir_has_required_artifacts(direct):
-        candidates.append(direct)
+    candidates.append(direct)
 
-    # Common local pattern: backend/models
+    # Verified repository-local bundle produced by train_models.py.
     local_default = BASE_DIR / "models"
-    if _models_dir_has_required_artifacts(local_default):
-        candidates.append(local_default)
+    candidates.append(local_default)
 
     # Date-stamped training runs: backend/20251215/models (most recent wins)
     for p in sorted(BASE_DIR.glob("20*/models"), key=lambda item: item.stat().st_mtime, reverse=True):
-        if _models_dir_has_required_artifacts(p):
-            candidates.append(p)
+        candidates.append(p)
 
     # Any nested prod-models/models in the repo
     for p in sorted(BASE_DIR.glob("**/prod-models/models"), key=lambda item: item.stat().st_mtime, reverse=True):
-        if _models_dir_has_required_artifacts(p):
-            candidates.append(p)
+        candidates.append(p)
 
-    if candidates:
-        return candidates[0]
+    best = _pick_best_models_dir(candidates)
+    if best is not None:
+        return best
 
     return local_default
 
@@ -820,6 +876,7 @@ class AppState:
         # Set during _load_dataset().
         self.numeric_medians: Optional[pd.Series] = None
         self.prior_baseline_medians: Optional[pd.Series] = None
+        self._recent_history_keys: Set[str] = set()
 
 
     # -------------------------
@@ -912,6 +969,31 @@ class AppState:
 
     def _prediction_cache_key(self, *, season: int, week: int, home_team: str, away_team: str) -> str:
         return f"{season}:{week}:{home_team}:{away_team}"
+
+    def _remember_history(self, payload: Dict[str, Any]) -> None:
+        """Keep in-memory history bounded and avoid duplicate entries from cache hits."""
+        game_id = str(payload.get("game_id") or "")
+        generated_at = str(payload.get("generated_at") or "")
+        dedupe_key = f"{game_id}:{generated_at}"
+        if dedupe_key in self._recent_history_keys:
+            return
+        self.history.append(payload)
+        self._recent_history_keys.add(dedupe_key)
+        if len(self.history) > 500:
+            dropped = self.history.pop(0)
+            dropped_key = f"{dropped.get('game_id', '')}:{dropped.get('generated_at', '')}"
+            self._recent_history_keys.discard(dropped_key)
+
+    def valid_team_codes(self) -> Set[str]:
+        """Collect a runtime-valid set of team codes for fail-fast input validation."""
+        codes: Set[str] = {str(k).upper() for k in TEAM_ABBR_MAP.keys()}
+        if self.dataset is not None:
+            for col in ("home_team", "away_team", "home_abbr", "away_abbr"):
+                if col in self.dataset.columns:
+                    codes.update(
+                        self.dataset[col].dropna().astype(str).str.upper().unique().tolist()
+                    )
+        return {code for code in codes if code}
 
     def _refresh_runtime_readiness(self) -> None:
         blockers: List[str] = []
@@ -2746,9 +2828,9 @@ def _build_history_metrics(entries: List[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
-@app.get("/history/summary", response_model=HistoryMetricsResponse)
-def history_summary() -> HistoryMetricsResponse:
-    """Aggregated prediction quality and recency metrics for premium dashboard UX."""
+@app.get("/history/summary/memory", response_model=HistoryMetricsResponse)
+def history_summary_memory() -> HistoryMetricsResponse:
+    """Aggregated in-memory prediction quality and recency metrics for diagnostics."""
     return _build_history_metrics(state.history)
 
 
@@ -3411,6 +3493,17 @@ async def predict(payload: PredictRequest, request: Request) -> Dict[str, Any]:
     away_team = _normalize_team_code(payload.away_team)
     if home_team == away_team:
         raise HTTPException(status_code=400, detail="home_team and away_team must be different.")
+    valid_codes = state.valid_team_codes()
+    invalid_codes = sorted([code for code in (home_team, away_team) if code not in valid_codes])
+    if invalid_codes:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "message": "Unknown team code(s).",
+                "invalid_team_codes": invalid_codes,
+                "hint": "Use canonical NFL abbreviations (e.g., KC, BUF, DAL).",
+            },
+        )
 
     cache_key = state._prediction_cache_key(
         season=season,
@@ -3422,8 +3515,7 @@ async def predict(payload: PredictRequest, request: Request) -> Dict[str, Any]:
     if cached is not None:
         state.last_prediction_at = datetime.now(timezone.utc)
         _persist_prediction_for_request(request, payload, cached)
-        state.history.append(cached)
-        state.history = state.history[-500:]
+        state._remember_history(cached)
         logging.info(
             "[Predict] Cache hit for %s vs %s (season=%s week=%s)",
             home_team,
@@ -3492,6 +3584,27 @@ async def predict(payload: PredictRequest, request: Request) -> Dict[str, Any]:
     except Exception as win_err:
         logging.warning("[Predict] Win probability calc failed; defaulting to 0.5: %s", str(win_err).splitlines()[0])
         win_prob_raw, clf_used = 0.5, False
+
+    if _requires_strict_bundle_contract(state.models_metadata) and not clf_used:
+        detail = _prediction_readiness_payload()
+        blockers = list(detail.get("blockers") or [])
+        blocker = "win classifier unavailable for strict model bundle"
+        if blocker not in blockers:
+            blockers.append(blocker)
+        detail.update(
+            {
+                "message": "Prediction service unavailable.",
+                "blockers": blockers,
+                "models_dir": str(MODELS_DIR),
+            }
+        )
+        logging.error(
+            "[Predict] Strict model bundle at %s could not produce a classifier-backed win probability for %s vs %s.",
+            MODELS_DIR,
+            home_team,
+            away_team,
+        )
+        raise HTTPException(status_code=503, detail=detail)
 
     score_full_df, score_numeric_df = _augment_with_win_probability_feature(
         full_df,
@@ -3604,8 +3717,7 @@ async def predict(payload: PredictRequest, request: Request) -> Dict[str, Any]:
     _persist_prediction_for_request(request, payload, result)
 
     # ----- History (bounded) -----
-    state.history.append(result)
-    state.history = state.history[-500:]
+    state._remember_history(result)
 
     logging.info(
         "[Predict] %s vs %s (season=%s week=%s source=%s quality=%.1f hash=%s) -> home=%.1f away=%.1f total=%.1f win_p=%.3f (clf_used=%s)",

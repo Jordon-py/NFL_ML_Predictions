@@ -6,9 +6,9 @@
   "bundle_contract_version": 2,
   "sklearn_version": "1.7.2",
   "training_script": "backend/train_models.py",
-  "dataset_path": "C:\\Users\\goku\\Documents\\NFL_ML_Predictions\\backend\\data\\datasets\\game_features_20260320_clean.csv",
-  "dataset_hash": "76b08e81a432d7026cd005aa348340298803282cd29e53b685943797798cefe6",
-  "rows_total": 2227,
+  "dataset_path": "backend/data/datasets/game_features_20260123.csv",
+  "dataset_hash": "b62a0845dabf13c9b7a53ce7118b9b8e3d72c0a69c748fcb2d4ea30d879690f9",
+  "rows_total": 2761,
   "rows_train": 1764,
   "rows_holdout": 447,
   "raw_feature_columns": {
@@ -1820,5 +1820,12 @@
     "legacy_reg_home": "home_model.joblib",
     "legacy_reg_away": "away_model.joblib",
     "legacy_clf_home_win": "win_clf_calibrated.joblib"
-  }
+  },
+  "previous_dataset_provenance": {
+    "dataset_path": "C:\\Users\\goku\\Documents\\NFL_ML_Predictions\\backend\\data\\datasets\\game_features_20260320_clean.csv",
+    "dataset_hash": "76b08e81a432d7026cd005aa348340298803282cd29e53b685943797798cefe6",
+    "rows_total": 2227
+  },
+  "bundle_metadata_aligned_at_utc": "2026-05-22T19:21:15.918597+00:00",
+  "bundle_metadata_alignment_note": "Aligned top-level bundle provenance to the dataset currently shipped and loaded in deployment."
 }

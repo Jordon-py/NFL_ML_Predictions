@@ -14,7 +14,6 @@ import {
   getHistorySummary,
   getNextWeekSchedule,
   getPredictionHistory,
-  getHistorySummary,
   getStatusOverview,
 } from "../api/client";
 import { buildMatchupKey } from "../utils/gameUtils.js";

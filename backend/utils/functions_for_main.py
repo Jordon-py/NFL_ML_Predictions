@@ -1,3 +1,12 @@
+# ==========================================
+# File: backend/utils/functions_for_main.py
+# Role: Shared prediction helpers for backend/main.py.
+# Input Data: Schedule DataFrames, Team codes, Model inputs.
+# Output Data: Normalized timestamps, Prepared model rows, Score predictions.
+# Dependencies: pandas, numpy, sklearn, nflreadpy
+# Notes: Handles the critical "last-mile" data transformation before model inference.
+# ==========================================
+
 """
 File: backend/utils/functions_for_main.py
 

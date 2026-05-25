@@ -273,20 +273,16 @@ def test_predict_persists_user_scoped_history_and_status_counts(tmp_path, monkey
     monkeypatch.setattr(sqlite_store, "DB_PATH", tmp_path / "predictions.db")
 
     with TestClient(app) as client:
-        schedule = client.get("/schedule/next-week")
-        assert schedule.status_code == 200
-        game = schedule.json()[0]
         payload = {
-            "home_team": game["home_team"],
-            "away_team": game["away_team"],
-            "season": int(game["season"]),
-            "week": int(game["week"]),
+            "home_team": "PHI",
+            "away_team": "DAL",
+            "season": 2025,
+            "week": 1,
         }
 
         headers_a = {"X-User-Id": "analyst@example.com"}
         headers_b = {"X-User-Id": "scout@example.com"}
 
-        monkeypatch.setitem(main_module.state.models, "win", object())
         monkeypatch.setattr(main_module.state, "model_load_errors", {})
         monkeypatch.setattr(main_module.state, "production_warnings", [])
         monkeypatch.setattr(main_module.state, "production_blockers", [])
@@ -327,18 +323,14 @@ def test_history_backfills_final_scores_for_completed_games(tmp_path, monkeypatc
     monkeypatch.setattr(sqlite_store, "DB_PATH", tmp_path / "predictions.db")
 
     with TestClient(app) as client:
-        schedule = client.get("/schedule/next-week")
-        assert schedule.status_code == 200
-        game = schedule.json()[0]
         payload = {
-            "home_team": game["home_team"],
-            "away_team": game["away_team"],
-            "season": int(game["season"]),
-            "week": int(game["week"]),
+            "home_team": "PHI",
+            "away_team": "DAL",
+            "season": 2025,
+            "week": 1,
         }
         headers = {"X-User-Id": "historian@example.com"}
 
-        monkeypatch.setitem(main_module.state.models, "win", object())
         monkeypatch.setattr(main_module.state, "model_load_errors", {})
         monkeypatch.setattr(main_module.state, "production_warnings", [])
         monkeypatch.setattr(main_module.state, "production_blockers", [])
