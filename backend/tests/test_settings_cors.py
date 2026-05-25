@@ -33,3 +33,15 @@ def test_default_vercel_regex_is_origin_only_and_rejects_non_matching_hosts():
     assert not re.fullmatch(VERCEL_PROJECT_ORIGIN_REGEX, "https://nflmlforcast.vercel.app/app")
     assert not re.fullmatch(VERCEL_PROJECT_ORIGIN_REGEX, "http://nflmlforcast.vercel.app")
     assert not re.fullmatch(VERCEL_PROJECT_ORIGIN_REGEX, "https://example.com")
+
+def test_invalid_or_legacy_regex_falls_back_to_vercel_pattern():
+    settings = Settings(
+        _env_file=None,
+        app_env="production",
+        allowed_origins_raw="https://new-nfl-predict.vercel.app",
+        allow_origin_regex="https://.*/.vercel/.app$",
+        allow_vercel_previews=True,
+        restrict_cors=True,
+    )
+
+    assert settings.effective_allow_origin_regex == VERCEL_PROJECT_ORIGIN_REGEX
