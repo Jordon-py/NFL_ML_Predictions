@@ -77,7 +77,7 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from contextlib import asynccontextmanager
 from functools import lru_cache
-from typing import List, Dict, Any, Optional, Tuple, Literal
+from typing import List, Dict, Any, Optional, Tuple, Literal, Set
 import nflreadpy as nfl
 from dotenv import load_dotenv
 import numpy as np
@@ -876,6 +876,7 @@ class AppState:
         # Set during _load_dataset().
         self.numeric_medians: Optional[pd.Series] = None
         self.prior_baseline_medians: Optional[pd.Series] = None
+        self._recent_history_keys: Set[str] = set()
 
 
     # -------------------------
@@ -968,6 +969,31 @@ class AppState:
 
     def _prediction_cache_key(self, *, season: int, week: int, home_team: str, away_team: str) -> str:
         return f"{season}:{week}:{home_team}:{away_team}"
+
+    def _remember_history(self, payload: Dict[str, Any]) -> None:
+        """Keep in-memory history bounded and avoid duplicate entries from cache hits."""
+        game_id = str(payload.get("game_id") or "")
+        generated_at = str(payload.get("generated_at") or "")
+        dedupe_key = f"{game_id}:{generated_at}"
+        if dedupe_key in self._recent_history_keys:
+            return
+        self.history.append(payload)
+        self._recent_history_keys.add(dedupe_key)
+        if len(self.history) > 500:
+            dropped = self.history.pop(0)
+            dropped_key = f"{dropped.get('game_id', '')}:{dropped.get('generated_at', '')}"
+            self._recent_history_keys.discard(dropped_key)
+
+    def valid_team_codes(self) -> Set[str]:
+        """Collect a runtime-valid set of team codes for fail-fast input validation."""
+        codes: Set[str] = {str(k).upper() for k in TEAM_ABBR_MAP.keys()}
+        if self.dataset is not None:
+            for col in ("home_team", "away_team", "home_abbr", "away_abbr"):
+                if col in self.dataset.columns:
+                    codes.update(
+                        self.dataset[col].dropna().astype(str).str.upper().unique().tolist()
+                    )
+        return {code for code in codes if code}
 
     def _refresh_runtime_readiness(self) -> None:
         blockers: List[str] = []
@@ -3467,6 +3493,17 @@ async def predict(payload: PredictRequest, request: Request) -> Dict[str, Any]:
     away_team = _normalize_team_code(payload.away_team)
     if home_team == away_team:
         raise HTTPException(status_code=400, detail="home_team and away_team must be different.")
+    valid_codes = state.valid_team_codes()
+    invalid_codes = sorted([code for code in (home_team, away_team) if code not in valid_codes])
+    if invalid_codes:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "message": "Unknown team code(s).",
+                "invalid_team_codes": invalid_codes,
+                "hint": "Use canonical NFL abbreviations (e.g., KC, BUF, DAL).",
+            },
+        )
 
     cache_key = state._prediction_cache_key(
         season=season,
@@ -3478,8 +3515,7 @@ async def predict(payload: PredictRequest, request: Request) -> Dict[str, Any]:
     if cached is not None:
         state.last_prediction_at = datetime.now(timezone.utc)
         _persist_prediction_for_request(request, payload, cached)
-        state.history.append(cached)
-        state.history = state.history[-500:]
+        state._remember_history(cached)
         logging.info(
             "[Predict] Cache hit for %s vs %s (season=%s week=%s)",
             home_team,
@@ -3681,8 +3717,7 @@ async def predict(payload: PredictRequest, request: Request) -> Dict[str, Any]:
     _persist_prediction_for_request(request, payload, result)
 
     # ----- History (bounded) -----
-    state.history.append(result)
-    state.history = state.history[-500:]
+    state._remember_history(result)
 
     logging.info(
         "[Predict] %s vs %s (season=%s week=%s source=%s quality=%.1f hash=%s) -> home=%.1f away=%.1f total=%.1f win_p=%.3f (clf_used=%s)",

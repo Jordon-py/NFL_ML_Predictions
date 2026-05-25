@@ -106,6 +106,14 @@ The backend now boots even if models are missing or incompatible.
 - Model hot-reload: the backend starts a lightweight background `model-watcher` thread that monitors the active models directory and reloads promoted bundles without requiring a full process restart. This improves promotion workflows and reduces downtime.
 - In-process LRU cache: prediction responses are cached in-memory with TTL and max-items controlled by `PREDICT_CACHE_TTL_SEC` and `PREDICT_CACHE_MAX_ITEMS` (see `backend/main.py`) to reduce repeated identical inference cost during heavy UI refreshes.
 
+### Premium reliability hardening (May 2026)
+
+The backend prediction path was iterated in three passes:
+
+1. **Weakpoint discovery pass**: identified duplicate in-memory history growth on cache hits and non-fail-fast team-code validation during `/predict`.
+2. **Mitigation pass**: added bounded+deduplicated in-memory history recording to prevent repeated identical cache returns from crowding out useful recent history.
+3. **Validation pass**: added runtime-backed team code validation (dataset + team map) so invalid abbreviations fail fast with actionable error hints.
+
 ### Schedule loading is queryable and postseason-safe
 
 - `GET /schedule?season=<year>&week=<week>` returns a specific slate.
