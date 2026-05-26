@@ -318,6 +318,57 @@ def test_predict_persists_user_scoped_history_and_status_counts(tmp_path, monkey
         assert summary_b.json()["total_predictions"] == 0
 
 
+def test_delete_history_clears_only_active_user(tmp_path, monkeypatch):
+    monkeypatch.setattr(prediction_store, "PREDICTION_STORE_ROOT", tmp_path / "Predictions" / "users")
+    monkeypatch.setattr(sqlite_store, "DB_PATH", tmp_path / "predictions.db")
+
+    context_a = prediction_store.build_prediction_user_context("analyst@example.com")
+    context_b = prediction_store.build_prediction_user_context("scout@example.com")
+    request_payload = prediction_store.PredictionRequest(
+        home_team="PHI",
+        away_team="DAL",
+        season=2025,
+        week=1,
+    )
+
+    def seed(context, home_team, away_team):
+        prediction_store.append_prediction_record(
+            context,
+            request_payload,
+            {
+                "home_score": 27.0,
+                "away_score": 20.0,
+                "point_diff": 7.0,
+                "home_win_probability": 0.62,
+                "away_win_probability": 0.38,
+                "prediction_source": "unit-test",
+                "win_classifier_used": True,
+                "game_id": f"2025_1_{home_team}_{away_team}",
+                "season": 2025,
+                "week": 1,
+                "home_team": home_team,
+                "away_team": away_team,
+            },
+        )
+
+    seed(context_a, "PHI", "DAL")
+    seed(context_b, "BUF", "MIA")
+
+    with TestClient(app) as client:
+        delete_response = client.delete("/history", headers={"X-User-Id": "analyst@example.com"})
+        assert delete_response.status_code == 200
+        assert delete_response.json()["status"] == "cleared"
+
+        history_a = client.get("/history?limit=5", headers={"X-User-Id": "analyst@example.com"})
+        history_b = client.get("/history?limit=5", headers={"X-User-Id": "scout@example.com"})
+
+    assert history_a.status_code == 200
+    assert history_b.status_code == 200
+    assert history_a.json() == []
+    assert len(history_b.json()) == 1
+    assert history_b.json()[0]["user_id"] == "scout@example.com"
+
+
 def test_history_backfills_final_scores_for_completed_games(tmp_path, monkeypatch):
     monkeypatch.setattr(prediction_store, "PREDICTION_STORE_ROOT", tmp_path / "Predictions" / "users")
     monkeypatch.setattr(sqlite_store, "DB_PATH", tmp_path / "predictions.db")

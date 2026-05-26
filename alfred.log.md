@@ -59,3 +59,17 @@ Verification result: Dataset provenance now matches across `metadata.json`, `tra
 Remaining issues: Verification still emits known pandas and sklearn warnings for all-empty optional fields such as `neutral_site`, `kickoff_hour_utc`, `travel_distance_km`, and `kickoff`.
 
 Recommended next step: Deploy backend with `MODELS_DIR=backend/models` or equivalent Heroku-relative path, then run production `/status/models` and `/predict` smoke against both a packaged 2025 row and the 2026 Week 1 CAR vs CHI synthetic row.
+
+## 2026-05-25 - Premium prediction and history enhancements
+
+Summary: Implemented two premium UI/UX upgrades and one real functional history-management upgrade. The dashboard prediction slate now has explicit card actions, clearer loading/error states, progress chips, and readable light-theme contrast. The history page now behaves like a review workspace with stronger empty/no-result states, matchup context, projected-winner summaries, confidence bars, and responsive controls. Prediction history can now be cleared through the FastAPI backend for the signed-in user instead of only clearing local browser state.
+
+Files changed: backend/main.py, backend/prediction_store.py, backend/sqlite_store.py, backend/tests/test_api_endpoints.py, frontend/src/api/client.js, frontend/src/hooks/usePredictionState.js, frontend/src/components/Card/Card.jsx, frontend/src/components/Card/Card.module.css, frontend/src/components/Card/TeamGrid.jsx, frontend/src/components/Card/TeamGrid.css, frontend/src/components/D_BUTTON.jsx, frontend/src/components/HistoryPage.jsx, frontend/src/components/HistoryChart.jsx, frontend/src/components/DashBoard/Dashboard.css, frontend/src/styles/theme-grid.css.
+
+Commands run: `python -m py_compile backend/main.py backend/sqlite_store.py backend/prediction_store.py`; `python -m pytest backend/tests/test_api_endpoints.py -q -o addopts=''`; `python -m pytest backend/tests/test_api_endpoints.py::test_delete_history_clears_only_active_user -q -o addopts=''`; `backend\.venv\Scripts\python.exe -m pytest backend\tests\test_api_endpoints.py -q -o addopts=''`; `backend\.venv\Scripts\python.exe -m pytest backend\tests -q -o addopts=''`; `cd frontend && npm test -- --run`; `cd frontend && npm run build`; local FastAPI/Vite smoke with Playwright screenshots.
+
+Verification result: Backend venv suite passed with 49 tests. Frontend tests passed with 6 tests. Frontend production build passed. Playwright verified `/app` prediction cards, a generated prediction, `/history`, backend-backed clear history, and mobile history layout. The global Python pytest run failed because that interpreter cannot load the packaged scikit-learn model bundle (`sklearn.frozen` / version mismatch); the backend virtualenv run passed.
+
+Remaining issues: `git status` still reports generated verification artifacts as modified: `backend/predictions.db`, `backend/tests/__pycache__/test_api_endpoints.cpython-313-pytest-7.4.4.pyc`, and `frontend/dist/index.html`. Git also reports permission warnings for `artifacts/pytest_codex_schedule*` directories.
+
+Recommended next step: Decide whether generated artifacts should be restored or committed, then run a deployed backend smoke for `DELETE /history` after the next release.

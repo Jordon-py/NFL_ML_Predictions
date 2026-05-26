@@ -41,7 +41,9 @@ p.nfl-matchups {
 section.history-chart {
   display: flex;
   flex-direction: column;
-  background-color: oklch(0% 0 0 / 0.7);
+  background:
+    radial-gradient(circle at top left, color-mix(in oklab, var(--c-brand-1, #54ade8) 12%, transparent), transparent 44%),
+    oklch(0% 0 0 / 0.72);
   gap: 20px;
   font-size: 1rem;
   /* Adjusted for consistency */
@@ -49,7 +51,8 @@ section.history-chart {
   border-top: 1px solid oklch(70% 0.17 269 / 0.5);
   border-radius: var(--r-sm);
   padding: 1rem;
-  margin: 1rem;
+  margin: 1rem auto;
+  width: min(1280px, calc(100% - 2rem));
   max-width: 100%;
   animation: cardPop 1.8s var(--a-ease) both;
   /* Pop-in animation */
@@ -60,6 +63,14 @@ section.history-chart {
   justify-content: space-between;
   gap: 1rem;
   align-items: start;
+  flex-wrap: wrap;
+}
+
+.history-chart__insight {
+  max-width: 34ch;
+  margin: 0;
+  color: var(--c-text-muted-on-dark);
+  line-height: 1.45;
 }
 
 .history-chart__summary {
@@ -142,8 +153,10 @@ section.history-chart {
   padding: 1rem;
   border-radius: var(--r-md);
   border: 1px solid oklch(70% 0.12 220 / 0.12);
-  background: oklch(20% 0.04 245 / 0.4);
-  gap: 0.5rem;
+  background:
+    linear-gradient(180deg, oklch(100% 0 0 / 0.04), transparent 36%),
+    oklch(20% 0.04 245 / 0.52);
+  gap: 0.7rem;
   transition: transform 200ms var(--a-ease), box-shadow 200ms var(--a-ease), border-color 200ms var(--a-ease);
   position: relative;
   overflow: hidden;
@@ -204,9 +217,76 @@ section.history-chart {
   border-color: oklch(74% 0.12 230 / 0.3);
 }
 
-.history-card__title {
+.history-card__matchup {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 48px;
+}
+
+.history-card__team {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  border: 1px solid oklch(70% 0.12 220 / 0.18);
+  border-radius: 12px;
+  background: oklch(100% 0 0 / 0.04);
+  color: var(--c-text-on-dark);
+  font-family: var(--font-tech);
+  font-weight: 800;
+}
+
+.history-card__at {
+  color: var(--c-text-muted-on-dark);
+  font-weight: 800;
+}
+
+.history-card__meta {
+  color: var(--c-text-muted-on-dark);
+  font-size: 0.82rem;
+}
+
+.history-card__compactLabel {
+  color: var(--c-text-muted-on-dark);
+  font-family: var(--font-tech);
+  font-size: 0.72rem;
+}
+
+.history-card__takeaway {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.75rem;
+  border: 1px solid color-mix(in oklab, var(--c-brand-1, #54ade8) 20%, transparent);
+  border-radius: 12px;
+  background: oklch(0% 0 0 / 0.24);
+}
+
+.history-card__takeaway span {
+  color: var(--c-text-muted-on-dark);
+  font-size: 0.76rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.history-card__takeaway strong {
+  color: var(--c-text-on-dark);
   font-size: 1.05rem;
-  margin: 0.25rem 0 0.5rem;
+}
+
+.history-card__confidenceTrack {
+  height: 7px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: oklch(100% 0 0 / 0.08);
+}
+
+.history-card__confidenceTrack span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--c-brand-1, #54ade8), var(--c-accent, #8bd7ff));
 }
 
 .history-card__stats {
@@ -219,6 +299,7 @@ section.history-chart {
 .history-card__statRow {
   display: flex;
   justify-content: space-between;
+  gap: 0.9rem;
   border-bottom: 1px solid oklch(100% 0 0 / 0.05);
   padding-bottom: 0.35rem;
   margin-bottom: 0.15rem;
@@ -235,6 +316,8 @@ section.history-chart {
 
 .history-card__statValue {
   font-weight: 500;
+  text-align: right;
+  overflow-wrap: anywhere;
 }
 
 .history-chart__search {
@@ -322,12 +405,129 @@ section.history-chart {
   text-align: center;
   padding: 2rem;
   color: var(--c-text-muted-on-dark);
-  font-style: italic;
+  border: 1px dashed oklch(70% 0.12 220 / 0.25);
+  border-radius: var(--r-md);
+  background: oklch(100% 0 0 / 0.035);
+}
+
+.history-chart__empty strong,
+.history-chart__noResults strong {
+  display: block;
+  margin-bottom: 0.35rem;
+  color: var(--c-text-on-dark);
+  font-size: 1.05rem;
+}
+
+.history-chart__empty p,
+.history-chart__noResults p {
+  margin: 0 auto 0.9rem;
+  max-width: 46ch;
+}
+
+.history-chart__emptyAction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0.45rem 0.9rem;
+  border: 1px solid color-mix(in oklab, var(--c-brand-1, #54ade8) 42%, transparent);
+  border-radius: 999px;
+  color: var(--c-text-on-dark);
+  text-decoration: none;
+  font-weight: 800;
+  background: color-mix(in oklab, var(--c-brand-1, #54ade8) 16%, transparent);
 }
 
 .history-chart__footer {
   display: flex;
   justify-content: center;
+}
+
+.history-controls {
+  width: min(1280px, calc(100% - 2rem));
+  margin: 1rem auto 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 0.9rem 1rem;
+  border: 1px solid oklch(70% 0.12 220 / 0.18);
+  border-radius: var(--r-md);
+  background: oklch(0% 0 0 / 0.55);
+}
+
+.history-controls__copy {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.history-controls__copy strong {
+  color: var(--c-text-on-dark);
+}
+
+.history-controls__copy span,
+.history-controls__status {
+  color: var(--c-text-muted-on-dark);
+}
+
+.history-controls__status {
+  width: min(1280px, calc(100% - 2rem));
+  margin: 0.65rem auto 0;
+  padding: 0.75rem 0.95rem;
+  border-radius: var(--r-sm);
+  border: 1px solid oklch(70% 0.12 220 / 0.18);
+  background: oklch(0% 0 0 / 0.45);
+}
+
+.history-controls__status--success {
+  border-color: oklch(72% 0.16 150 / 0.36);
+}
+
+.history-controls__status--error {
+  border-color: oklch(74% 0.18 25 / 0.38);
+}
+
+.clear-history-button {
+  min-height: 42px;
+  border: 1px solid oklch(74% 0.18 25 / 0.32);
+  border-radius: 999px;
+  padding: 0.55rem 0.95rem;
+  background: oklch(62% 0.18 25 / 0.16);
+  color: var(--c-text-on-dark);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.clear-history-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+@media (max-width: 640px) {
+  section.history-chart,
+  .history-controls,
+  .history-controls__status {
+    width: min(100%, calc(100% - 1rem));
+  }
+
+  .history-chart__toolbar {
+    align-items: stretch;
+  }
+
+  .history-chart__search,
+  .history-chart__controls,
+  .history-chart__sortSelect {
+    width: 100%;
+  }
+
+  .history-card__matchup {
+    grid-template-columns: 1fr;
+  }
+
+  .history-card__at {
+    text-align: center;
+  }
 }
 
 /* --- Team grid layout ---------------------------------------------------- */

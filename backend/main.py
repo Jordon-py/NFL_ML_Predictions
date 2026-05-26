@@ -93,6 +93,7 @@ from backend.app.core.settings import get_settings
 from backend.prediction_store import (
     append_prediction_record,
     build_prediction_user_context,
+    clear_prediction_history,
     get_prediction_history as load_prediction_history,
     get_prediction_history_count,
     get_prediction_history_summary as load_prediction_history_summary,
@@ -3513,6 +3514,28 @@ def get_prediction_history_summary(request: Request) -> Dict[str, Any]:
     return {
         **_history_summary_for_request(request),
         "user_id": context.user_id,
+    }
+
+
+@app.delete("/history")
+def delete_prediction_history(request: Request) -> Dict[str, Any]:
+    """Clear persisted prediction history for the active lightweight user context."""
+
+    context = _prediction_user_context_from_request(request)
+    result = clear_prediction_history(context)
+    state.history.clear()
+    return {
+        "status": "cleared",
+        **result,
+        "summary": {
+            "total_predictions": 0,
+            "resolved_games": 0,
+            "win_rate": None,
+            "avg_abs_spread_error": None,
+            "avg_confidence": None,
+            "latest_prediction_at": None,
+            "last_score_sync_at": None,
+        },
     }
 
 

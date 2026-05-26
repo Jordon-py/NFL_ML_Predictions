@@ -394,8 +394,9 @@ export default function Card({
    * - Guards against handler exceptions.
    * - Preserves original semantics: call onClick() with no event arg.
    */
-  const handleArticleClick = () => {
+  const handlePredictAction = (event) => {
     try {
+      event?.stopPropagation?.();
       // Brief visual click cue for dev feedback
       setDebugClicked(true);
       setTimeout(() => setDebugClicked(false), 700);
@@ -406,15 +407,6 @@ export default function Card({
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('[Card] onClick handler threw', err);
-    }
-  };
-
-  /** Keyboard accessibility: allow Enter/Space to trigger the same click path. */
-  const handleKeyDown = (event) => {
-    if (!onClick) return;
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      onClick();
     }
   };
 
@@ -441,10 +433,6 @@ export default function Card({
       className={cardClassName + (loading ? 'game-card--loading' : '') + (error ? 'game-card--error' : '')}
       // @ts-ignore custom property used by some animations
       style={cardStyle}
-      onClick={handleArticleClick}
-      onKeyDown={onClick ? handleKeyDown : undefined}
-      role={onClick ? 'button' : undefined}
-      tabIndex={onClick ? 0 : -1}
       aria-busy={loading ? 'true' : undefined}
     >
 
@@ -513,10 +501,25 @@ export default function Card({
         {/* Prediction body / footer */}
         <footer className={`${styles.gameCardFooter} game-card__footer`}>
           {loading ? (
-            <span className="game-card__prediction--loading">
-              <span className={styles.spinner} aria-label="Loading" /> Fetching
-              prediction...
-            </span>
+            <div className={styles.actionPanel} role="status" aria-live="polite">
+              <span className="game-card__prediction--loading">
+                <span className={styles.spinner} aria-label="Loading" /> Running model pipeline...
+              </span>
+              <span className={styles.actionHint}>Preparing score, winner probability, and confidence signals.</span>
+            </div>
+          ) : error ? (
+            <div className={`${styles.actionPanel} ${styles.errorPanel}`} role="alert">
+              <strong>Prediction unavailable</strong>
+              <span>{error}</span>
+              <button
+                type="button"
+                className={styles.predictButton}
+                onClick={handlePredictAction}
+                disabled={typeof onClick !== 'function'}
+              >
+                Try again
+              </button>
+            </div>
           ) : hasPrediction ? (
             <>
               {/* Reset button: clears prediction via parent handler */}
@@ -623,9 +626,20 @@ export default function Card({
               </div>
             </>
           ) : (
-            <span className="game-card__prediction game-card__prediction--empty">
-              Predictions not available yet
-            </span>
+            <div className={styles.actionPanel}>
+              <div>
+                <strong>Ready to forecast</strong>
+                <span>Generate projected score, win edge, and model confidence for this matchup.</span>
+              </div>
+              <button
+                type="button"
+                className={styles.predictButton}
+                onClick={handlePredictAction}
+                disabled={typeof onClick !== 'function'}
+              >
+                Generate prediction
+              </button>
+            </div>
           )}
         </footer>
       </div>

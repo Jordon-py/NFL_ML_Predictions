@@ -30,7 +30,7 @@ article._card {
     inset 0 1px 0 oklch(100% 0 0 / 0.1),
     0 18px 40px oklch(0% 0 0 / 0.5);
   backdrop-filter: blur(24px);
-  color: var(--lch-text);
+  color: var(--c-text-on-dark, #dae6f6);
   overflow: hidden;
   outline: none;
   animation: cardPop 500ms ease both;
@@ -142,7 +142,7 @@ div.cardInner {
   border-radius: 999px;
   border: 1px solid color-mix(in oklab, var(--c-brand-1, #54ade8) 40%, transparent);
   background: color-mix(in oklab, var(--c-brand-1, #addaf9) 12%, transparent);
-  color: var(--lch-text);
+  color: var(--c-text-on-dark, #dae6f6);
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -156,7 +156,7 @@ div.cardInner {
 
 .kickoffTime {
   font-size: 0.92rem;
-  color: var(--lch-muted);
+  color: var(--c-text-muted-on-dark, #c9d3e0);
   font-family: var(--font-tech);
   text-align: center;
 }
@@ -262,7 +262,7 @@ div.cardInner {
 
 .gameCardLabel {
   font-size: 0.7rem;
-  color: var(--lch-muted);
+  color: var(--c-text-muted-on-dark, #c9d3e0);
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-weight: 700;
@@ -276,7 +276,7 @@ div.cardInner {
   border-radius: 999px;
   background: color-mix(in oklab, var(--team-primary, var(--c-brand-1, #54ade8)) 35%, transparent);
   border: 1px solid color-mix(in oklab, var(--team-primary, var(--c-brand-1, #54ade8)) 26%, transparent);
-  color: var(--lch-text);
+  color: var(--c-text-on-dark, #dae6f6);
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -299,7 +299,7 @@ div.cardInner {
   border-radius: 999px;
   border: 1px solid color-mix(in oklab, var(--c-brand-1, #54ade8) 36%, transparent);
   background: oklch(0% 0 0 / 0.28);
-  color: var(--lch-text);
+  color: var(--c-text-on-dark, #dae6f6);
   font-family: var(--font-tech);
   font-size: 0.82rem;
   font-weight: 800;
@@ -314,6 +314,70 @@ div.cardInner {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+}
+
+.actionPanel {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.85rem;
+  border: 1px solid color-mix(in oklab, var(--c-brand-1, #54ade8) 18%, transparent);
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at top right, color-mix(in oklab, var(--c-brand-1, #54ade8) 16%, transparent), transparent 54%),
+    oklch(0% 0 0 / 0.26);
+}
+
+.actionPanel strong {
+  display: block;
+  margin-bottom: 0.18rem;
+  color: var(--c-text-on-dark, #dae6f6);
+  font-size: 0.95rem;
+}
+
+.actionPanel span {
+  color: var(--c-text-muted-on-dark, #c9d3e0);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.actionHint {
+  display: block;
+}
+
+.errorPanel {
+  border-color: color-mix(in oklab, var(--c-danger, #df1b05) 48%, transparent);
+  background:
+    radial-gradient(circle at top right, color-mix(in oklab, var(--c-danger, #df1b05) 16%, transparent), transparent 56%),
+    oklch(0% 0 0 / 0.26);
+}
+
+.predictButton {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid color-mix(in oklab, var(--c-brand-1, #54ade8) 42%, white 8%);
+  border-radius: 999px;
+  background:
+    linear-gradient(135deg, color-mix(in oklab, var(--c-brand-1, #54ade8) 28%, transparent), oklch(100% 0 0 / 0.06));
+  color: var(--c-text-on-dark, #dae6f6);
+  font-weight: 800;
+  cursor: pointer;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    filter 160ms ease;
+}
+
+.predictButton:hover:not(:disabled),
+.predictButton:focus-visible {
+  transform: translateY(-1px);
+  border-color: color-mix(in oklab, var(--c-brand-1, #54ade8) 66%, white 16%);
+  filter: brightness(1.08);
+  outline: none;
+}
+
+.predictButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .predictionBody {
@@ -337,7 +401,7 @@ div.cardInner {
   border-radius: 999px;
   border: 1px solid color-mix(in oklab, var(--c-brand-1, #54ade8) 22%, transparent);
   background: oklch(100% 0 0 / 0.04);
-  color: var(--lch-text);
+  color: var(--c-text-on-dark, #dae6f6);
   font-size: 0.72rem;
   text-align: center;
 }
@@ -365,11 +429,11 @@ div.cardInner {
   justify-content: space-between;
   gap: 0.75rem;
   font-size: 0.8rem;
-  color: var(--lch-muted);
+  color: var(--c-text-muted-on-dark, #c9d3e0);
 }
 
 .probabilityHeader strong {
-  color: var(--lch-text);
+  color: var(--c-text-on-dark, #dae6f6);
   font-family: var(--font-tech);
   font-size: 0.86rem;
 }
@@ -405,12 +469,12 @@ div.cardInner {
   gap: 0.5rem;
   align-items: center;
   font-size: 0.72rem;
-  color: var(--lch-muted);
+  color: var(--c-text-muted-on-dark, #c9d3e0);
 }
 
 .probabilityScale span:nth-child(2) {
   text-align: center;
-  color: var(--lch-text);
+  color: var(--c-text-on-dark, #dae6f6);
   font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -440,7 +504,7 @@ div.cardInner {
   font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--lch-muted);
+  color: var(--c-text-muted-on-dark, #c9d3e0);
 }
 
 .actualStatus {
@@ -485,7 +549,7 @@ div.cardInner {
   border-radius: 999px;
   border: 1px solid color-mix(in oklab, var(--c-brand-1, #54ade8) 28%, transparent);
   background: oklch(100% 0 0 / 0.04);
-  color: var(--lch-text);
+  color: var(--c-text-on-dark, #dae6f6);
   font-size: 0.78rem;
   font-weight: 700;
   cursor: pointer;

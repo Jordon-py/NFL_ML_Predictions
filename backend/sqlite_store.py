@@ -352,6 +352,22 @@ def get_user_history_count(context: PredictionUserContext) -> int:
     return int(row["total"]) if row and row["total"] is not None else 0
 
 
+def clear_user_history(context: PredictionUserContext) -> int:
+    """Delete persisted prediction rows for one user and return the row count."""
+
+    with _conn_context() as conn:
+        before = conn.execute(
+            "SELECT COUNT(*) AS total FROM user_predictions WHERE storage_key = ?",
+            (context.storage_key,),
+        ).fetchone()
+        conn.execute(
+            "DELETE FROM user_predictions WHERE storage_key = ?",
+            (context.storage_key,),
+        )
+
+    return int(before["total"]) if before and before["total"] is not None else 0
+
+
 def get_user_history_summary(context: PredictionUserContext) -> Dict[str, object]:
     """Return aggregate accuracy and freshness metrics for one user's predictions."""
 

@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 
 const PAGE_SIZE = 12;
 
@@ -23,6 +24,18 @@ function buildGameLabel(event, index) {
   const away = event.away_team || "away";
   const home = event.home_team || "home";
   return `${season} ${week} ${away}@${home}`.trim();
+}
+
+function buildReadableMatchup(event) {
+  const away = event?.away_team || "Away";
+  const home = event?.home_team || "Home";
+  return {
+    away,
+    home,
+    meta: [event?.season, event?.week != null ? `Week ${event.week}` : null]
+      .filter(Boolean)
+      .join(" • "),
+  };
 }
 
 function normalizeHistoryRow(event, index) {
@@ -53,6 +66,7 @@ function normalizeHistoryRow(event, index) {
     id: event?.game_id || `${buildGameLabel(event, index)}-${index}`,
     timestamp: toDateOrNull(event?.ts || event?.timestamp || event?.time || null),
     label: buildGameLabel(event, index),
+    matchup: buildReadableMatchup(event),
     predictedHome,
     predictedAway,
     actualHome,
@@ -162,15 +176,25 @@ export default function HistoryChart({ history = [], summary = null }) {
     typeof summary?.avg_abs_spread_error === "number"
       ? `${summary.avg_abs_spread_error.toFixed(1)} pts`
       : "n/a";
+  const analysisNote =
+    resolvedCount > 0
+      ? `${resolvedCount} resolved games can be reviewed against final scores.`
+      : "Pending predictions will become more useful once final scores sync.";
 
   if (rows.length === 0) {
     return (
       <section className="history-chart" aria-live="polite">
         <header className="history-chart__header">
-          <h2>Prediction History</h2>
-          <small>0 saved</small>
+          <div>
+            <h2>Prediction History</h2>
+            <small>0 saved</small>
+          </div>
         </header>
-        <p className="history-chart__empty">No saved predictions yet. Generate a forecast to start your history.</p>
+        <div className="history-chart__empty">
+          <strong>No saved predictions yet.</strong>
+          <p>Generate a forecast from the dashboard to build a reviewable model history.</p>
+          <Link className="history-chart__emptyAction" to="/app">Go to dashboard</Link>
+        </div>
       </section>
     );
   }
@@ -185,6 +209,7 @@ export default function HistoryChart({ history = [], summary = null }) {
             {mostRecent ? ` • last: ${mostRecent.toLocaleString()}` : ""}
           </small>
         </div>
+        <p className="history-chart__insight">{analysisNote}</p>
       </header>
 
       <section className="history-chart__summary" aria-label="History summary">
@@ -279,16 +304,44 @@ export default function HistoryChart({ history = [], summary = null }) {
             row.actualDiff != null && row.predictedDiff != null
               ? `${(row.actualDiff - row.predictedDiff).toFixed(1)} pts`
               : "n/a";
+          const predictedWinner =
+            row.homeWinProbability != null || row.awayWinProbability != null
+              ? row.homeWinProbability >= row.awayWinProbability
+                ? row.matchup.home
+                : row.matchup.away
+              : row.predictedDiff != null
+                ? row.predictedDiff >= 0
+                  ? row.matchup.home
+                  : row.matchup.away
+                : "n/a";
+          const confidencePercent =
+            typeof row.confidence === "number" ? Math.round(row.confidence * 100) : null;
           return (
             <article key={row.id} className="history-card" title={row.label}>
               <div className="history-card__header">
-                <code className="history-card__date">{row.timestamp ? row.timestamp.toLocaleString() : "—"}</code>
+                <span className="history-card__date">{row.timestamp ? row.timestamp.toLocaleString() : "No timestamp"}</span>
                 <span className={`history-card__badge history-card__badge--${resultLabel.toLowerCase()}`}>
                   {resultLabel}
                 </span>
               </div>
 
-              <strong className="history-card__title">{row.label}</strong>
+              <div className="history-card__matchup">
+                <span className="history-card__team">{row.matchup.away}</span>
+                <span className="history-card__at">@</span>
+                <span className="history-card__team">{row.matchup.home}</span>
+              </div>
+              <span className="history-card__meta">{row.matchup.meta}</span>
+              <span className="history-card__compactLabel">{row.label}</span>
+
+              <div className="history-card__takeaway">
+                <span>Projected winner</span>
+                <strong>{predictedWinner}</strong>
+                {confidencePercent != null ? (
+                  <div className="history-card__confidenceTrack" aria-label={`Confidence ${confidencePercent}%`}>
+                    <span style={{ width: `${confidencePercent}%` }} />
+                  </div>
+                ) : null}
+              </div>
 
               <div className="history-card__stats">
                 <div className="history-card__statRow">
@@ -319,7 +372,19 @@ export default function HistoryChart({ history = [], summary = null }) {
         })}
         {displayRows.length === 0 && (
           <div className="history-chart__noResults">
-            <p>No predictions match your search or filter criteria.</p>
+            <strong>No matching predictions.</strong>
+            <p>Try a different team code, clear search, or switch the result filter.</p>
+            <button
+              type="button"
+              className="history-chart__moreButton"
+              onClick={() => {
+                setSearchQuery("");
+                setDebouncedQuery("");
+                setFilter("all");
+              }}
+            >
+              Reset filters
+            </button>
           </div>
         )}
       </div>

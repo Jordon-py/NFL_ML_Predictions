@@ -836,6 +836,14 @@ export async function getPredictionHistory(limit = 100, userId = null) {
   }
 }
 
+export async function clearPredictionHistory(userId = null) {
+  const headers = buildUserHeaders(userId);
+  return fetchJson("/history", {
+    method: "DELETE",
+    ...(headers ? { headers } : {}),
+  });
+}
+
 export async function getHistorySummary(userId = null) {
   if (ENDPOINT_SUPPORT.historySummary !== false) {
     try {
