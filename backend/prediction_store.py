@@ -30,6 +30,7 @@ from .pipeline_models import PredictionStorageProfile, PredictionUserContext
 from .schemas import HistoryEntry, HistoryResponse, PredictionRequest, StoredPredictionRecord
 
 from .sqlite_store import (
+    clear_user_history,
     get_user_history,
     get_user_history_count,
     get_user_history_summary,
@@ -181,6 +182,43 @@ def get_prediction_history_count(context: PredictionUserContext) -> int:
     history_path = _user_history_path(context)
     with _prediction_store_lock:
         return len(_read_history_records(history_path))
+
+
+def clear_prediction_history(context: PredictionUserContext) -> dict[str, object]:
+    """Clear one user's SQLite history and JSON fallback ledger."""
+
+    deleted_sqlite = 0
+    try:
+        deleted_sqlite = clear_user_history(context)
+    except Exception:
+        log.exception("Failed to clear SQLite-backed prediction history; continuing with JSON fallback.")
+
+    timestamp = datetime.now(timezone.utc).isoformat()
+    history_path = _user_history_path(context)
+    profile_path = _user_profile_path(context)
+    with _prediction_store_lock:
+        json_count = len(_read_history_records(history_path))
+        _write_json(history_path, [])
+        existing_profile = _read_profile(profile_path)
+        profile = PredictionStorageProfile(
+            user_id=context.user_id,
+            storage_key=context.storage_key,
+            updated_at_utc=timestamp,
+            retained_predictions=0,
+            total_predictions_all_time=(
+                existing_profile.total_predictions_all_time if existing_profile else 0
+            ),
+        )
+        _write_json(profile_path, profile.model_dump(mode="json"))
+
+    return {
+        "deleted": max(deleted_sqlite, json_count),
+        "sqlite_deleted": deleted_sqlite,
+        "json_deleted": json_count,
+        "user_id": context.user_id,
+        "storage_key": context.storage_key,
+        "cleared_at": timestamp,
+    }
 
 
 def get_prediction_history_summary(context: PredictionUserContext) -> dict[str, object]:

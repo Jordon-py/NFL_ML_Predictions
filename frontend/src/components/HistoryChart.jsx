@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 
 const PAGE_SIZE = 12;
 
@@ -23,6 +24,18 @@ function buildGameLabel(event, index) {
   const away = event.away_team || "away";
   const home = event.home_team || "home";
   return `${season} ${week} ${away}@${home}`.trim();
+}
+
+function buildReadableMatchup(event) {
+  const away = event?.away_team || "Away";
+  const home = event?.home_team || "Home";
+  return {
+    away,
+    home,
+    meta: [event?.season, event?.week != null ? `Week ${event.week}` : null]
+      .filter(Boolean)
+      .join(" • "),
+  };
 }
 
 function normalizeHistoryRow(event, index) {
@@ -53,6 +66,7 @@ function normalizeHistoryRow(event, index) {
     id: event?.game_id || `${buildGameLabel(event, index)}-${index}`,
     timestamp: toDateOrNull(event?.ts || event?.timestamp || event?.time || null),
     label: buildGameLabel(event, index),
+    matchup: buildReadableMatchup(event),
     predictedHome,
     predictedAway,
     actualHome,
@@ -83,21 +97,73 @@ function SummaryTile({ label, value, detail }) {
 
 export default function HistoryChart({ history = [], summary = null }) {
   const [filter, setFilter] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [sortConfig, setSortConfig] = useState({ key: "date", direction: "desc" });
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const historyItems = Array.isArray(history) ? history : [];
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedQuery(searchQuery);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   const rows = useMemo(
     () => historyItems.map((event, index) => normalizeHistoryRow(event, index)),
     [historyItems]
   );
 
-  const filteredRows = useMemo(() => {
-    if (filter === "resolved") return rows.filter((row) => row.resolved);
-    if (filter === "pending") return rows.filter((row) => !row.resolved);
-    return rows;
-  }, [filter, rows]);
+  const filteredAndSortedRows = useMemo(() => {
+    let result = rows;
+    
+    // Status Filter
+    if (filter === "resolved") result = result.filter((row) => row.resolved);
+    if (filter === "pending") result = result.filter((row) => !row.resolved);
+    
+    // Search Filter
+    if (debouncedQuery.trim() !== "") {
+      const q = debouncedQuery.toLowerCase();
+      result = result.filter(row => 
+        row.label.toLowerCase().includes(q)
+      );
+    }
 
-  const displayRows = filteredRows.slice(0, visibleCount);
+    // Sort Logic
+    result = [...result].sort((a, b) => {
+      let aVal, bVal;
+      
+      switch (sortConfig.key) {
+        case "confidence":
+          aVal = a.confidence ?? 0;
+          bVal = b.confidence ?? 0;
+          break;
+        case "margin":
+          // Absolute margin delta - lower is better (more accurate)
+          aVal = (a.actualDiff != null && a.predictedDiff != null) 
+            ? Math.abs(a.actualDiff - a.predictedDiff) 
+            : Infinity; // Unresolved or missing go to bottom
+          bVal = (b.actualDiff != null && b.predictedDiff != null) 
+            ? Math.abs(b.actualDiff - b.predictedDiff) 
+            : Infinity;
+          break;
+        case "date":
+        default:
+          aVal = a.timestamp ? a.timestamp.getTime() : 0;
+          bVal = b.timestamp ? b.timestamp.getTime() : 0;
+          break;
+      }
+
+      if (aVal < bVal) return sortConfig.direction === "asc" ? -1 : 1;
+      if (aVal > bVal) return sortConfig.direction === "asc" ? 1 : -1;
+      return 0;
+    });
+    
+    return result;
+  }, [filter, debouncedQuery, sortConfig, rows]);
+
+  const displayRows = filteredAndSortedRows.slice(0, visibleCount);
   const mostRecent = rows[0]?.timestamp || null;
   const resolvedCount =
     typeof summary?.resolved_games === "number"
@@ -110,15 +176,25 @@ export default function HistoryChart({ history = [], summary = null }) {
     typeof summary?.avg_abs_spread_error === "number"
       ? `${summary.avg_abs_spread_error.toFixed(1)} pts`
       : "n/a";
+  const analysisNote =
+    resolvedCount > 0
+      ? `${resolvedCount} resolved games can be reviewed against final scores.`
+      : "Pending predictions will become more useful once final scores sync.";
 
   if (rows.length === 0) {
     return (
       <section className="history-chart" aria-live="polite">
         <header className="history-chart__header">
-          <h2>Prediction History</h2>
-          <small>0 saved</small>
+          <div>
+            <h2>Prediction History</h2>
+            <small>0 saved</small>
+          </div>
         </header>
-        <p>No saved predictions yet. Generate a forecast to start your history.</p>
+        <div className="history-chart__empty">
+          <strong>No saved predictions yet.</strong>
+          <p>Generate a forecast from the dashboard to build a reviewable model history.</p>
+          <Link className="history-chart__emptyAction" to="/app">Go to dashboard</Link>
+        </div>
       </section>
     );
   }
@@ -133,6 +209,7 @@ export default function HistoryChart({ history = [], summary = null }) {
             {mostRecent ? ` • last: ${mostRecent.toLocaleString()}` : ""}
           </small>
         </div>
+        <p className="history-chart__insight">{analysisNote}</p>
       </header>
 
       <section className="history-chart__summary" aria-label="History summary">
@@ -147,6 +224,55 @@ export default function HistoryChart({ history = [], summary = null }) {
       </section>
 
       <div className="history-chart__toolbar">
+        <div className="history-chart__search">
+          <div className="history-chart__searchWrapper">
+            <input 
+              type="text" 
+              placeholder="Search by team (e.g. KC, BUF)" 
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setVisibleCount(PAGE_SIZE);
+              }}
+              className="history-chart__searchInput"
+              aria-label="Search predictions by team"
+            />
+            {searchQuery && (
+              <button 
+                type="button" 
+                className="history-chart__clearSearch" 
+                onClick={() => {
+                  setSearchQuery("");
+                  setDebouncedQuery("");
+                }}
+                aria-label="Clear search"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="history-chart__controls">
+          <select 
+            className="history-chart__sortSelect"
+            value={`${sortConfig.key}-${sortConfig.direction}`}
+            onChange={(e) => {
+              const [key, direction] = e.target.value.split("-");
+              setSortConfig({ key, direction });
+              setVisibleCount(PAGE_SIZE);
+            }}
+            aria-label="Sort predictions"
+          >
+            <option value="date-desc">Newest First</option>
+            <option value="date-asc">Oldest First</option>
+            <option value="confidence-desc">Highest Confidence</option>
+            <option value="confidence-asc">Lowest Confidence</option>
+            <option value="margin-asc">Most Accurate (Margin)</option>
+            <option value="margin-desc">Least Accurate (Margin)</option>
+          </select>
+        </div>
+
         <div className="history-chart__filters" role="tablist" aria-label="History filters">
           {[
             { key: "all", label: "All" },
@@ -167,41 +293,103 @@ export default function HistoryChart({ history = [], summary = null }) {
           ))}
         </div>
         <p className="history-chart__toolbarText">
-          Showing {displayRows.length} of {filteredRows.length}
+          Showing {displayRows.length} of {filteredAndSortedRows.length}
         </p>
       </div>
 
-      <ol className="history-points a-text-fade-slide">
+      <div className="history-chart__grid">
         {displayRows.map((row) => {
           const resultLabel = !row.resolved ? "Pending" : row.correct ? "Correct" : "Missed";
           const marginDelta =
             row.actualDiff != null && row.predictedDiff != null
               ? `${(row.actualDiff - row.predictedDiff).toFixed(1)} pts`
               : "n/a";
+          const predictedWinner =
+            row.homeWinProbability != null || row.awayWinProbability != null
+              ? row.homeWinProbability >= row.awayWinProbability
+                ? row.matchup.home
+                : row.matchup.away
+              : row.predictedDiff != null
+                ? row.predictedDiff >= 0
+                  ? row.matchup.home
+                  : row.matchup.away
+                : "n/a";
+          const confidencePercent =
+            typeof row.confidence === "number" ? Math.round(row.confidence * 100) : null;
           return (
-            <li key={row.id} className="history-chart__item" title={row.label}>
-              <div className="history-chart__itemHeader">
-                <code>{row.timestamp ? row.timestamp.toLocaleString() : "—"}</code>
-                <span className={`history-chart__pill history-chart__pill--${resultLabel.toLowerCase()}`}>
+            <article key={row.id} className="history-card" title={row.label}>
+              <div className="history-card__header">
+                <span className="history-card__date">{row.timestamp ? row.timestamp.toLocaleString() : "No timestamp"}</span>
+                <span className={`history-card__badge history-card__badge--${resultLabel.toLowerCase()}`}>
                   {resultLabel}
                 </span>
               </div>
 
-              <strong className="history-chart__label">{row.label}</strong>
-
-              <div className="history-score">
-                <span>Pred: {row.predictedHome ?? "—"}-{row.predictedAway ?? "—"}</span>
-                <span>Final: {row.resolved ? `${row.actualHome}-${row.actualAway}` : "Pending"}</span>
-                <span>Confidence: {formatPercent(row.confidence)}</span>
-                <span>Margin delta: {marginDelta}</span>
-                {row.gameStatus ? <span>Status: {row.gameStatus}</span> : null}
+              <div className="history-card__matchup">
+                <span className="history-card__team">{row.matchup.away}</span>
+                <span className="history-card__at">@</span>
+                <span className="history-card__team">{row.matchup.home}</span>
               </div>
-            </li>
+              <span className="history-card__meta">{row.matchup.meta}</span>
+              <span className="history-card__compactLabel">{row.label}</span>
+
+              <div className="history-card__takeaway">
+                <span>Projected winner</span>
+                <strong>{predictedWinner}</strong>
+                {confidencePercent != null ? (
+                  <div className="history-card__confidenceTrack" aria-label={`Confidence ${confidencePercent}%`}>
+                    <span style={{ width: `${confidencePercent}%` }} />
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="history-card__stats">
+                <div className="history-card__statRow">
+                  <span className="history-card__statLabel">Prediction</span>
+                  <span className="history-card__statValue">{row.predictedHome ?? "—"} - {row.predictedAway ?? "—"}</span>
+                </div>
+                <div className="history-card__statRow">
+                  <span className="history-card__statLabel">Final</span>
+                  <span className="history-card__statValue">{row.resolved ? `${row.actualHome} - ${row.actualAway}` : "Pending"}</span>
+                </div>
+                <div className="history-card__statRow">
+                  <span className="history-card__statLabel">Confidence</span>
+                  <span className="history-card__statValue">{formatPercent(row.confidence)}</span>
+                </div>
+                <div className="history-card__statRow">
+                  <span className="history-card__statLabel">Margin delta</span>
+                  <span className="history-card__statValue">{marginDelta}</span>
+                </div>
+                {row.gameStatus && (
+                  <div className="history-card__statRow">
+                    <span className="history-card__statLabel">Status</span>
+                    <span className="history-card__statValue">{row.gameStatus}</span>
+                  </div>
+                )}
+              </div>
+            </article>
           );
         })}
-      </ol>
+        {displayRows.length === 0 && (
+          <div className="history-chart__noResults">
+            <strong>No matching predictions.</strong>
+            <p>Try a different team code, clear search, or switch the result filter.</p>
+            <button
+              type="button"
+              className="history-chart__moreButton"
+              onClick={() => {
+                setSearchQuery("");
+                setDebouncedQuery("");
+                setFilter("all");
+              }}
+            >
+              Reset filters
+            </button>
+          </div>
+        )}
+      </div>
 
-      {displayRows.length < filteredRows.length ? (
+      {displayRows.length < filteredAndSortedRows.length ? (
         <div className="history-chart__footer">
           <button
             type="button"

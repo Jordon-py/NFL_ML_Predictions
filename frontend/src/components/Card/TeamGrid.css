@@ -44,6 +44,90 @@
   align-items: stretch;
 }
 
+.team-grid__header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.9rem 1rem;
+  align-items: end;
+  margin-bottom: 1rem;
+}
+
+.team-grid__heading {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.team-grid__badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0.15rem 0.65rem;
+  border: 1px solid color-mix(in oklab, var(--c-brand-1, #0080ff) 36%, transparent);
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--c-brand-1, #0080ff) 16%, transparent);
+  color: #eef7ff;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.team-grid__title {
+  margin: 0;
+}
+
+.team-grid__subtitle {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--c-ink-soft);
+}
+
+.team-grid__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.team-grid__progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  color: var(--c-ink-soft);
+  font-size: 0.78rem;
+}
+
+.team-grid__progress span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in oklab, var(--c-brand-1, #0080ff) 18%, transparent);
+  background: oklch(100% 0 0 / 0.04);
+}
+
+.team-grid__btn {
+  min-height: 42px;
+  border: 1px solid color-mix(in oklab, var(--c-brand-1, #0080ff) 46%, transparent);
+  border-radius: 999px;
+  padding: 0.55rem 0.95rem;
+  background:
+    linear-gradient(135deg, color-mix(in oklab, var(--c-brand-1, #0080ff) 24%, transparent), oklch(100% 0 0 / 0.06));
+  color: #f6fbff;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.team-grid__btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
 /* Empty / loading state */
 
 .team-grid__empty {
@@ -340,6 +424,14 @@
 @media (max-width: 600px) {
   .team-grid {
     padding-inline: 0.75rem;
+  }
+
+  .team-grid__header {
+    grid-template-columns: 1fr;
+  }
+
+  .team-grid__actions {
+    justify-content: flex-start;
   }
 
   .game-card {

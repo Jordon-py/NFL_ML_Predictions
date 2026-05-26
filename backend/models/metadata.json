@@ -1,14 +1,14 @@
 {
-  "timestamp": "2026-03-20T10:30:56.517401+00:00",
-  "training_timestamp_utc": "2026-03-20T10:30:56.517401+00:00",
-  "bundle_timestamp_utc": "2026-03-20T10:30:56.517401+00:00",
-  "bundle_version": "20260320-prod",
+  "timestamp": "2026-05-22T22:17:38.893905+00:00",
+  "training_timestamp_utc": "2026-05-22T22:17:38.893905+00:00",
+  "bundle_timestamp_utc": "2026-05-22T22:17:38.893905+00:00",
+  "bundle_version": "20260522T220413Z-prod",
   "bundle_contract_version": 2,
   "sklearn_version": "1.7.2",
   "training_script": "backend/train_models.py",
-  "dataset_path": "backend/data/datasets/game_features_20260123.csv",
-  "dataset_hash": "b62a0845dabf13c9b7a53ce7118b9b8e3d72c0a69c748fcb2d4ea30d879690f9",
-  "rows_total": 2761,
+  "dataset_path": "backend/data/datasets/game_features_20260522_clean.csv",
+  "dataset_hash": "76b08e81a432d7026cd005aa348340298803282cd29e53b685943797798cefe6",
+  "rows_total": 2227,
   "rows_train": 1764,
   "rows_holdout": 447,
   "raw_feature_columns": {
@@ -1758,16 +1758,16 @@
   "metrics": {
     "regression": {
       "home": {
-        "mae": 4.2961517091567725,
-        "rmse": 5.4613254000678655,
-        "r2": 0.706486664515884
+        "mae": 4.347192239718793,
+        "rmse": 5.527387515225348,
+        "r2": 0.6993428358113343
       },
       "away": {
         "mae": 4.15989548197682,
         "rmse": 5.314470840750044,
         "r2": 0.7017677112292955
       },
-      "combined_mae": 4.228023595566796
+      "combined_mae": 4.253543860847806
     },
     "classification": {
       "accuracy": 0.8053691275167785,
@@ -1782,11 +1782,11 @@
     "failures": [],
     "current": {
       "brier": 0.14857594008753128,
-      "combined_mae": 4.228023595566796
+      "combined_mae": 4.253543860847806
     },
     "previous": {
-      "brier": null,
-      "combined_mae": null
+      "brier": 0.14857594008753128,
+      "combined_mae": 4.228023595566796
     },
     "thresholds": {
       "max_brier_delta": 0.01,
@@ -1820,12 +1820,5 @@
     "legacy_reg_home": "home_model.joblib",
     "legacy_reg_away": "away_model.joblib",
     "legacy_clf_home_win": "win_clf_calibrated.joblib"
-  },
-  "previous_dataset_provenance": {
-    "dataset_path": "C:\\Users\\goku\\Documents\\NFL_ML_Predictions\\backend\\data\\datasets\\game_features_20260320_clean.csv",
-    "dataset_hash": "76b08e81a432d7026cd005aa348340298803282cd29e53b685943797798cefe6",
-    "rows_total": 2227
-  },
-  "bundle_metadata_aligned_at_utc": "2026-05-22T19:21:15.918597+00:00",
-  "bundle_metadata_alignment_note": "Aligned top-level bundle provenance to the dataset currently shipped and loaded in deployment."
+  }
 }

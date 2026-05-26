@@ -45,3 +45,31 @@ Verification: GitHub Actions CI/deploy run should verify backend tests and produ
 Remaining issues: Full retraining was not performed in this read-only Codex environment; metadata was aligned to the deployed packaged dataset.
 
 Recommended next step: Retrain the promoted bundle from the packaged dataset in a write-enabled environment when compute is available.
+
+## 2026-05-22 - Synthetic predict schema and production retrain
+
+Summary: Fixed strict `/predict` synthetic fallback by routing future-game rows through the schema-aware inference builder and aligning raw frames to fitted `feature_names_in_` before `win_pipe.predict_proba`. Repaired the backend venv parquet stack, rebuilt the 2018-2025 clean dataset, and promoted production bundle `20260522T220413Z-prod` with scikit-learn 1.7.2 metadata.
+
+Files changed: backend/main.py, backend/services/inference_row.py, backend/tests/test_predict_two_stage.py, backend/models/*.joblib, backend/models/metadata.json, backend/models/training_report.json, backend/models/run_summary.json, backend/data/datasets/latest_dataset.json, backend/data/datasets/latest_scores.json.
+
+Commands run: `backend\.venv\Scripts\python.exe -m pip install --force-reinstall --no-cache-dir pyarrow==18.1.0 fastparquet==2024.11.0 polars==1.36.1 polars-runtime-32==1.36.1 nflreadpy==0.1.5`; `backend\.venv\Scripts\python.exe -m pip install -r requirements.txt`; `backend\.venv\Scripts\python.exe backend\builddataset.py --start 2018 --end 2025 --out-dir backend\data\datasets --encode onehot --no-calibration-rows`; `backend\.venv\Scripts\python.exe backend\train_models.py --data backend\data\datasets\game_features_20260522_clean.csv --out backend\models --production --bundle-version 20260522T220413Z-prod --n-jobs -1 --hp-niter 30 --splits 5 --embargo 1`; `backend\.venv\Scripts\python.exe -m py_compile backend\main.py backend\services\inference_row.py backend\train_models.py backend\builddataset.py`; `backend\.venv\Scripts\python.exe -m pytest backend\tests\test_predict_two_stage.py -q`; `backend\.venv\Scripts\python.exe -m pytest backend\tests -q`; FastAPI TestClient `/status/models` and `/predict` smoke for 2026 Week 1 CAR vs CHI.
+
+Verification result: Dataset provenance now matches across `metadata.json`, `training_report.json`, `latest_dataset.json`, the actual clean CSV, and runtime `/predict`: `76b08e81a432d7026cd005aa348340298803282cd29e53b685943797798cefe6`. `/status/models` returned ready with bundle `20260522T220413Z-prod`. Synthetic CAR vs CHI returned 200 with `win_classifier_used=true`, `selected_row_source=synthetic`, and `home_win_probability=0.8399729592527575`. Targeted prediction tests passed: 5 passed. Full backend tests passed: 48 passed.
+
+Remaining issues: Verification still emits known pandas and sklearn warnings for all-empty optional fields such as `neutral_site`, `kickoff_hour_utc`, `travel_distance_km`, and `kickoff`.
+
+Recommended next step: Deploy backend with `MODELS_DIR=backend/models` or equivalent Heroku-relative path, then run production `/status/models` and `/predict` smoke against both a packaged 2025 row and the 2026 Week 1 CAR vs CHI synthetic row.
+
+## 2026-05-25 - Premium prediction and history enhancements
+
+Summary: Implemented two premium UI/UX upgrades and one real functional history-management upgrade. The dashboard prediction slate now has explicit card actions, clearer loading/error states, progress chips, and readable light-theme contrast. The history page now behaves like a review workspace with stronger empty/no-result states, matchup context, projected-winner summaries, confidence bars, and responsive controls. Prediction history can now be cleared through the FastAPI backend for the signed-in user instead of only clearing local browser state.
+
+Files changed: backend/main.py, backend/prediction_store.py, backend/sqlite_store.py, backend/tests/test_api_endpoints.py, frontend/src/api/client.js, frontend/src/hooks/usePredictionState.js, frontend/src/components/Card/Card.jsx, frontend/src/components/Card/Card.module.css, frontend/src/components/Card/TeamGrid.jsx, frontend/src/components/Card/TeamGrid.css, frontend/src/components/D_BUTTON.jsx, frontend/src/components/HistoryPage.jsx, frontend/src/components/HistoryChart.jsx, frontend/src/components/DashBoard/Dashboard.css, frontend/src/styles/theme-grid.css.
+
+Commands run: `python -m py_compile backend/main.py backend/sqlite_store.py backend/prediction_store.py`; `python -m pytest backend/tests/test_api_endpoints.py -q -o addopts=''`; `python -m pytest backend/tests/test_api_endpoints.py::test_delete_history_clears_only_active_user -q -o addopts=''`; `backend\.venv\Scripts\python.exe -m pytest backend\tests\test_api_endpoints.py -q -o addopts=''`; `backend\.venv\Scripts\python.exe -m pytest backend\tests -q -o addopts=''`; `cd frontend && npm test -- --run`; `cd frontend && npm run build`; local FastAPI/Vite smoke with Playwright screenshots.
+
+Verification result: Backend venv suite passed with 49 tests. Frontend tests passed with 6 tests. Frontend production build passed. Playwright verified `/app` prediction cards, a generated prediction, `/history`, backend-backed clear history, and mobile history layout. The global Python pytest run failed because that interpreter cannot load the packaged scikit-learn model bundle (`sklearn.frozen` / version mismatch); the backend virtualenv run passed.
+
+Remaining issues: `git status` still reports generated verification artifacts as modified: `backend/predictions.db`, `backend/tests/__pycache__/test_api_endpoints.cpython-313-pytest-7.4.4.pyc`, and `frontend/dist/index.html`. Git also reports permission warnings for `artifacts/pytest_codex_schedule*` directories.
+
+Recommended next step: Decide whether generated artifacts should be restored or committed, then run a deployed backend smoke for `DELETE /history` after the next release.

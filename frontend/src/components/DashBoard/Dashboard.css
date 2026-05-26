@@ -2,6 +2,7 @@
   width: min(1280px, calc(100% - 2rem));
   margin: 0 auto 4rem;
   padding: 1.25rem 0 0;
+  color: var(--c-text-on-dark, #dae6f6);
 }
 
 .dashboard__hero {
@@ -37,12 +38,13 @@
   font-size: clamp(1.9rem, 3vw, 2.9rem);
   line-height: 1.05;
   max-width: 12ch;
+  color: var(--c-text-on-dark, #dae6f6);
 }
 
 .dashboard__subtitle {
   margin: 0;
   max-width: 58ch;
-  color: var(--lch-muted, #c9d3e0);
+  color: var(--c-text-muted-on-dark, #c9d3e0);
 }
 
 .dashboard__actions {
@@ -70,7 +72,7 @@
   font-size: 0.72rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--lch-muted, #c9d3e0);
+  color: var(--c-text-muted-on-dark, #c9d3e0);
 }
 
 .dashboard__control select {
@@ -78,7 +80,7 @@
   border-radius: 14px;
   border: 1px solid color-mix(in oklab, var(--c-brand-1, #54ade8) 32%, transparent);
   background: color-mix(in oklab, var(--glass, #111628) 82%, #08111f 18%);
-  color: var(--lch-text, #f6f6f6);
+  color: var(--c-text-on-dark, #f6f6f6);
   padding: 0.75rem 0.9rem;
 }
 
@@ -87,7 +89,7 @@
   border-radius: 999px;
   border: 1px solid color-mix(in oklab, var(--c-brand-1, #54ade8) 34%, transparent);
   background: linear-gradient(135deg, color-mix(in oklab, var(--c-brand-1, #54ade8) 18%, transparent), oklch(100% 0 0 / 0.06));
-  color: var(--lch-text, #f6f6f6);
+  color: var(--c-text-on-dark, #f6f6f6);
   font-weight: 700;
   cursor: pointer;
   transition:
@@ -150,17 +152,17 @@
   font-size: 0.78rem;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--lch-muted, #c9d3e0);
+  color: var(--c-text-muted-on-dark, #c9d3e0);
 }
 
 .dashboard__statValue {
   font-size: clamp(1.35rem, 2vw, 1.9rem);
   line-height: 1.1;
-  color: var(--lch-text, #f6f6f6);
+  color: var(--c-text-on-dark, #f6f6f6);
 }
 
 .dashboard__statDetail {
-  color: var(--lch-muted, #c9d3e0);
+  color: var(--c-text-muted-on-dark, #c9d3e0);
   font-size: 0.85rem;
   line-height: 1.45;
 }

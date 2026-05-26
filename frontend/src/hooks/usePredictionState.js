@@ -34,6 +34,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
+  clearPredictionHistory,
   getHealthStatus as fetchHealth,
   getHistorySummary,
   getNextWeekSchedule,
@@ -479,11 +480,18 @@ export function usePredictionState(authSession = null) {
     if (entryKey) setCurrentKey(entryKey);
   }, []);
 
-  const resetHistory = useCallback(() => {
+  const resetHistory = useCallback(async () => {
+    await clearPredictionHistory(userId);
     setHistory([]);
     setCurrent(null);
     setCurrentKey("");
-  }, []);
+    setHistorySummary(INITIAL_HISTORY_SUMMARY);
+    try {
+      localStorage.removeItem(historyStorageKey);
+    } catch (err) {
+      console.warn("History clear persistence cleanup failed", err);
+    }
+  }, [historyStorageKey, userId]);
 
   return {
     schedule,

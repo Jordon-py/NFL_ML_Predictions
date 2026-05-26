@@ -37,6 +37,15 @@ export default function TeamGrid({
   isBulkLoading = false,
 } = {}) {
   const safeGames = Array.isArray(games) ? games : [];
+  const predictedCount = safeGames.filter((game) => {
+    const key = buildMatchupKey(game);
+    return key && predictions?.[key];
+  }).length;
+  const errorCount = safeGames.filter((game) => {
+    const key = buildMatchupKey(game);
+    return key && errors?.[key];
+  }).length;
+  const remainingCount = Math.max(0, safeGames.length - predictedCount);
 
   // Prefer explicit week; fall back to first game; default to 10 as safe placeholder.
   const safeWeek = week ?? getGameWeek(safeGames[0]) ?? 10;
@@ -88,14 +97,19 @@ export default function TeamGrid({
           <h2 className="team-grid__title">Week {safeWeek}</h2>
         </div>
         <div className="team-grid__actions">
+          <div className="team-grid__progress" aria-label="Prediction progress">
+            <span>{predictedCount} predicted</span>
+            <span>{remainingCount} remaining</span>
+            {errorCount > 0 ? <span>{errorCount} need retry</span> : null}
+          </div>
           <button
             type="button"
             className="team-grid__btn"
             onClick={typeof onPredictAll === 'function' ? onPredictAll : undefined}
-            disabled={isLoading || isBulkLoading || typeof onPredictAll !== 'function'}
+            disabled={isLoading || isBulkLoading || remainingCount === 0 || typeof onPredictAll !== 'function'}
             aria-busy={isBulkLoading ? 'true' : 'false'}
           >
-            {isBulkLoading ? 'Predicting...' : 'Predict All Games'}
+            {isBulkLoading ? 'Predicting...' : remainingCount === 0 ? 'Slate Complete' : 'Predict All Games'}
           </button>
         </div>
         <p className="team-grid__subtitle">

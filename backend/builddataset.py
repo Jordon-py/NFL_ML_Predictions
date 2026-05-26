@@ -18,6 +18,7 @@ typed manifests, and operator-friendly logging/output paths.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import shutil
 import sys
@@ -133,6 +134,23 @@ def _write_json(path: Path, payload: object) -> None:
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
+def _sha256_file(path: Path) -> str:
+    hasher = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            hasher.update(chunk)
+    return hasher.hexdigest()
+
+
+def _manifest_path(path: Path, base_dir: Path) -> str:
+    resolved_path = path.resolve()
+    resolved_base = base_dir.resolve()
+    try:
+        return resolved_path.relative_to(resolved_base).as_posix()
+    except ValueError:
+        return str(resolved_path)
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Build and clean the canonical NFL dataset.")
     parser.add_argument("--start", type=int, default=2018, help="Start season inclusive.")
@@ -224,6 +242,7 @@ def main() -> None:
     quality_report_path = run_dir / "game_features_quality_report.json"
     score_snapshot_path = run_dir / "game_scores.json"
     log_path = run_dir / "build_csv_datasets.log"
+    manifest_base_dir = out_root.parent
     score_entries = extract_score_entries_from_dataframe(clean_df, updated_at=_utc_now().isoformat())
     write_score_snapshot(score_snapshot_path, score_entries)
     write_score_snapshot(out_root / "latest_scores.json", score_entries)
@@ -243,13 +262,18 @@ def main() -> None:
         encode=config.encode,
         no_calibration_rows=config.no_calibration_rows,
         legacy_root_copy=config.legacy_root_copy,
-        raw_dataset_path=str(raw_dataset_path),
-        clean_dataset_path=str(promoted_clean_path),
-        run_dir=str(run_dir),
-        metadata_path=str(metadata_path) if metadata_path.exists() else None,
-        quality_report_path=str(quality_report_path) if quality_report_path.exists() else None,
-        score_snapshot_path=str(score_snapshot_path),
-        log_path=str(log_path) if log_path.exists() else None,
+        raw_dataset_path=_manifest_path(raw_dataset_path, manifest_base_dir),
+        clean_dataset_path=_manifest_path(promoted_clean_path, manifest_base_dir),
+        run_dir=_manifest_path(run_dir, manifest_base_dir),
+        metadata_path=_manifest_path(metadata_path, manifest_base_dir) if metadata_path.exists() else None,
+        quality_report_path=(
+            _manifest_path(quality_report_path, manifest_base_dir)
+            if quality_report_path.exists()
+            else None
+        ),
+        score_snapshot_path=_manifest_path(score_snapshot_path, manifest_base_dir),
+        log_path=_manifest_path(log_path, manifest_base_dir) if log_path.exists() else None,
+        dataset_hash=_sha256_file(promoted_clean_path),
         cleaning_stats={key: int(value) for key, value in clean_stats.items()},
     )
 

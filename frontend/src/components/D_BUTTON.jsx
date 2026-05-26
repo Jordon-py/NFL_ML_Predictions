@@ -24,10 +24,10 @@
 import React from "react";
 
 
-export default function D_BUTTON({ onClear, count = 0 }) {
+export default function D_BUTTON({ onClear, count = 0, isClearing = false }) {
   const handleClear = () => {
-        if (typeof onClear === 'function') {
-          onClear();
+    if (typeof onClear === 'function') {
+      onClear();
     }
   };
 
@@ -38,9 +38,10 @@ export default function D_BUTTON({ onClear, count = 0 }) {
       onClick={handleClear}
       aria-label="Clear saved prediction history"
       title="Clear saved prediction history"
-      disabled={count === 0}
+      disabled={count === 0 || isClearing}
+      aria-busy={isClearing ? "true" : "false"}
     >
-      Clear saved history
+      {isClearing ? "Clearing history..." : "Clear saved history"}
     </button>
   );
 }
