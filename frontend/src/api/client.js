@@ -99,6 +99,23 @@ const ENDPOINT_SUPPORT = {
   nextWeekSchedule: null,
 };
 
+const REQUEST_TIMEOUT_MS = Number(import.meta.env.VITE_API_TIMEOUT_MS ?? 12000);
+const RETRY_ATTEMPTS = Number(import.meta.env.VITE_API_RETRY_ATTEMPTS ?? 1);
+const RETRYABLE_STATUS_CODES = new Set([408, 425, 429, 500, 502, 503, 504]);
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRetryableHttpError(error) {
+  return error instanceof HttpError && RETRYABLE_STATUS_CODES.has(error.status);
+}
+
+function isRetryableNetworkError(error) {
+  return error instanceof TypeError || error?.name === "AbortError";
+}
+
+
 async function safeReadJson(res) {
   try {
     return await res.json();
@@ -608,28 +625,47 @@ export async function fetchJson(path, options = {}) {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
   const url = `${BASE_URL}${normalizedPath}`;
 
-  const res = await fetch(url, {
-    method: "GET",
-    ...options,
-    credentials: "omit",
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
-    },
-  });
+  const maxAttempts = Number.isFinite(RETRY_ATTEMPTS) ? Math.max(0, Math.floor(RETRY_ATTEMPTS)) + 1 : 1;
 
-  // Parse body even for errors (helps UI show backend detail)
-  const body = await safeReadJson(res);
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const controller = new AbortController();
+    const timeoutMs = Number.isFinite(REQUEST_TIMEOUT_MS) ? Math.max(1000, REQUEST_TIMEOUT_MS) : 12000;
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
-  if (!res.ok) {
-    throw new HttpError(`Request failed (${res.status})`, {
-      status: res.status,
-      url,
-      body,
-    });
+    try {
+      const res = await fetch(url, {
+        method: "GET",
+        ...options,
+        credentials: "omit",
+        signal: options.signal ?? controller.signal,
+        headers: {
+          "Content-Type": "application/json",
+          ...(options.headers || {}),
+        },
+      });
+      clearTimeout(timeout);
+
+      // Parse body even for errors (helps UI show backend detail)
+      const body = await safeReadJson(res);
+
+      if (!res.ok) {
+        throw new HttpError(`Request failed (${res.status})`, {
+          status: res.status,
+          url,
+          body,
+        });
+      }
+
+      return body;
+    } catch (error) {
+      clearTimeout(timeout);
+      const canRetry = attempt < maxAttempts && (isRetryableHttpError(error) || isRetryableNetworkError(error));
+      if (!canRetry) throw error;
+      await delay(150 * attempt);
+    }
   }
 
-  return body;
+  throw new Error("Request failed unexpectedly");
 }
 
 // -------------------------

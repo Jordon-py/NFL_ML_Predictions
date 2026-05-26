@@ -195,6 +195,21 @@ frontend/
     schedules/
 ```
 
+
+### Premium enhancement iterations (May 2026)
+
+Two weak points were prioritized and improved over three implementation iterations:
+
+1. **CORS regex resilience and safety**
+   - Iteration 1: detected that malformed `ALLOW_ORIGIN_REGEX` values could override safe defaults.
+   - Iteration 2: normalized slash-delimited env regexes and rejected known-bad overmatching patterns.
+   - Iteration 3: added backend tests to guarantee fallback to the canonical Vercel-origin regex in production.
+
+2. **Frontend API reliability under transient failures**
+   - Iteration 1: identified fetch calls as single-shot requests (no timeout, no retry).
+   - Iteration 2: added request timeout + bounded retry logic for network/transient server errors.
+   - Iteration 3: added client tests proving transient `503` retries recover successfully.
+
 ## Useful Docs
 
 - [Environment configuration](docs/ENVIRONMENT.md)

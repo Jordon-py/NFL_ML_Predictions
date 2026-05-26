@@ -42,6 +42,7 @@ from __future__ import annotations
 
 import os
 from functools import lru_cache
+import re
 from pathlib import Path
 from typing import List, Optional
 from urllib.parse import urlparse
@@ -99,7 +100,7 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("ALLOWED_ORIGINS", "CORS_ORIGINS"),
     )
     allow_origin_regex: Optional[str] = Field(
-        default=VERCEL_PROJECT_ORIGIN_REGEX if IS_HEROKU else '127\\.0\\.0\\.1(:\\d+)?',
+        default=None,
         validation_alias=AliasChoices("CORS_ORIGINS_REGEX", "ALLOW_ORIGIN_REGEX"),
     )
     restrict_cors: bool = Field(default=True, validation_alias=AliasChoices("RESTRICT_CORS"))
@@ -153,12 +154,29 @@ class Settings(BaseSettings):
 
     @property
     def effective_allow_origin_regex(self) -> Optional[str]:
-        raw = (self.allow_origin_regex or "").strip()
+        raw = (self.allow_origin_regex or "").strip().strip('"').strip("'")
+
         if raw:
-            return raw
+            # Accept slash-delimited regex env conventions like /.../ and normalize escaped slashes.
+            if len(raw) >= 2 and raw.startswith("/") and raw.endswith("/"):
+                raw = raw[1:-1]
+            raw = raw.replace(r"\/", "/")
+
+            # Ignore known-bad patterns that over-match and break expected Vercel preview behavior.
+            if ".*/.vercel/.app" in raw:
+                raw = ""
+
+            if raw:
+                try:
+                    re.compile(raw)
+                    return raw
+                except re.error:
+                    raw = ""
+
         if self.allow_vercel_previews:
             return VERCEL_PROJECT_ORIGIN_REGEX
-        return None
+
+        return r"127\.0\.0\.1(:\d+)?" if not self.is_production else None
 
     @property
     def resolved_schedule_path(self) -> Optional[Path]:

@@ -151,3 +151,24 @@ describe("client compatibility fallbacks", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
+
+it("retries transient server failures and eventually succeeds", async () => {
+  vi.resetModules();
+
+  let calls = 0;
+  const fetchMock = vi.fn(async () => {
+    calls += 1;
+    if (calls === 1) {
+      return jsonResponse({ detail: "temporary" }, 503);
+    }
+    return jsonResponse({ status: "ok" }, 200);
+  });
+
+  vi.stubGlobal("fetch", fetchMock);
+
+  const { fetchJson } = await import("./client.js");
+  const result = await fetchJson("/health");
+
+  expect(result.status).toBe("ok");
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+});
