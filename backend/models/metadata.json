@@ -7,7 +7,7 @@
   "sklearn_version": "1.7.2",
   "training_script": "backend/train_models.py",
   "dataset_path": "C:\\Users\\goku\\Documents\\NFL_ML_Predictions\\backend\\data\\datasets\\game_features_20260526_clean.csv",
-  "dataset_hash": "cc904b86f4cc7addf8c6300868eaf7abb24b59958e898d0912e53bea40b69eb4",
+  "dataset_hash": "f4944b0217379249ffc5c8282c357425e1e2199e5de9b5cff46b38665130ef86",
   "feature_manifest_path": "feature_manifest.json",
   "rows_total": 2227,
   "rows_train": 1764,

@@ -55,6 +55,9 @@ def _parse_ts(raw: Any) -> Optional[datetime]:
 
 
 def file_sha256(path: Path) -> str:
+    if path.suffix.lower() == ".csv":
+        data = path.read_bytes().replace(b"\r\n", b"\n")
+        return hashlib.sha256(data).hexdigest()
     h = hashlib.sha256()
     with path.open("rb") as fh:
         for chunk in iter(lambda: fh.read(1024 * 1024), b""):
