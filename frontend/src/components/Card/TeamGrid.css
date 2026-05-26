@@ -121,11 +121,85 @@
   color: #f6fbff;
   font-weight: 800;
   cursor: pointer;
+  transition:
+    transform 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.team-grid__btn:hover:not(:disabled),
+.team-grid__btn:focus-visible {
+  transform: translateY(-1px);
+  border-color: color-mix(in oklab, var(--c-brand-1, #0080ff) 72%, white);
+  box-shadow: 0 12px 28px oklch(55% 0.16 254 / 0.24);
+  outline: none;
 }
 
 .team-grid__btn:disabled {
   cursor: not-allowed;
   opacity: 0.58;
+}
+
+.team-grid__btn--ghost {
+  min-height: 38px;
+  padding-inline: 0.8rem;
+  background: oklch(100% 0 0 / 0.04);
+  border-color: color-mix(in oklab, var(--c-border-strong, #334155) 82%, transparent);
+  color: var(--c-ink-soft);
+}
+
+.team-grid__tools {
+  width: 100%;
+  max-width: 1200px;
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(180px, 240px) auto;
+  align-items: end;
+  gap: 0.75rem;
+  margin: 0 0 1rem;
+  padding: 0.8rem;
+  border: 1px solid color-mix(in oklab, var(--c-border-strong, #334155) 70%, transparent);
+  border-radius: var(--radius-card);
+  background:
+    linear-gradient(135deg, oklch(18% 0.05 254 / 0.78), oklch(8% 0.04 254 / 0.68));
+  box-shadow: inset 0 1px 0 oklch(100% 0 0 / 0.07);
+}
+
+.team-grid__search,
+.team-grid__filter {
+  display: grid;
+  gap: 0.35rem;
+  color: var(--c-ink-soft);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.team-grid__search input,
+.team-grid__filter select {
+  min-height: 42px;
+  width: 100%;
+  border: 1px solid color-mix(in oklab, var(--c-border-strong, #334155) 76%, transparent);
+  border-radius: 12px;
+  background: oklch(4% 0.03 254 / 0.92);
+  color: #f8fbff;
+  padding: 0.6rem 0.75rem;
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 650;
+  letter-spacing: 0;
+  text-transform: none;
+  outline: none;
+}
+
+.team-grid__search input::placeholder {
+  color: color-mix(in oklab, var(--c-ink-soft, #93aed4) 72%, transparent);
+}
+
+.team-grid__search input:focus-visible,
+.team-grid__filter select:focus-visible {
+  border-color: color-mix(in oklab, var(--c-brand-1, #0080ff) 78%, white);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--c-brand-1, #0080ff) 28%, transparent);
 }
 
 /* Empty / loading state */
@@ -142,6 +216,13 @@
     linear-gradient(180deg, lch(0% 0 0), lch(74.03% 40.02 271.38 / 0.403)),
     lch(0% 0 0);
   color: lch(95.47% 6.86 276.24);
+}
+
+.team-grid__empty--filtered {
+  max-width: 1200px;
+  min-height: 150px;
+  justify-items: center;
+  text-align: center;
 }
 
 .team-grid__empty-text {
@@ -432,6 +513,11 @@
 
   .team-grid__actions {
     justify-content: flex-start;
+  }
+
+  .team-grid__tools {
+    grid-template-columns: 1fr;
+    border-radius: 14px;
   }
 
   .game-card {

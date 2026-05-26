@@ -1,7 +1,7 @@
 # Next 5 Tasks
 
-1. [ ] **Fix Dataset Generation Script** - Investigate and fix `ValueError: invalid literal for int() with base 10: 'season'` in `build_csv_datasets_v3.py`.
-2. [ ] **Run Smoke Tests** - Execute `py smoke_test_endpoints.py --base-url http://127.0.0.1:8000` against a running server.
-3. [ ] **Verify LLM Explanations** - Confirm Ollama integration logic in `backend/main.py` works as expected.
-4. [ ] **Refactor Backend Tests** - Add robust unit tests for `inference_row.py` and `prediction_service.py`.
-5. [ ] **Frontend Predictions** - Verify frontend is consuming the unified prediction response correctly.
+1. [ ] **Premium Dashboard Slate Upgrade** - Add evidence-based slate filtering/search and improve TeamGrid guidance states.
+2. [ ] **Premium Stats Overview Upgrade** - Rework the status page layout so health, dataset, schedule, and history read as one professional overview.
+3. [ ] **Functional Slate Filter Verification** - Add focused frontend tests proving team/status filters change real dashboard behavior.
+4. [ ] **Run Frontend Verification** - Execute Vitest and production build after the UI/functionality changes.
+5. [ ] **Update Project Notes** - Refresh `dataflow.md`, `alfred.log.md`, and task artifacts with the completed upgrade package.

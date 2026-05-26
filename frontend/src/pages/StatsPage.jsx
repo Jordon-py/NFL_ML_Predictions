@@ -10,6 +10,7 @@
 
 import { useEffect, useState } from "react";
 import HistoryChart from "../components/HistoryChart.jsx";
+import NavBar from "../components/NavBar/NavBar.jsx";
 import {
   getHistorySummary,
   getNextWeekSchedule,
@@ -72,7 +73,30 @@ function formatWinProbability(probability) {
   return typeof probability === "number" ? `${Math.round(probability * 100)}%` : "n/a";
 }
 
-export default function StatsPage({ authSession = null }) {
+function formatInteger(value) {
+  return Number.isFinite(Number(value)) ? Number(value).toLocaleString() : "-";
+}
+
+function formatKickoff(value) {
+  if (!value) return "TBD";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "TBD";
+  return date.toLocaleString([], {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function healthIntent(status) {
+  if (status === "healthy") return "ok";
+  if (status === "unhealthy") return "error";
+  return "default";
+}
+
+export default function StatsPage({ authSession = null, onSignOut }) {
   // Remote payloads from the backend
   const [schedule, setSchedule] = useState(/** @type {any[]} */([]));
   const [history, setHistory] = useState(/** @type {any[]} */([]));
@@ -134,12 +158,28 @@ export default function StatsPage({ authSession = null }) {
   const historyMetrics = historySummary || overviewData.history?.metrics || { total_predictions: history.length };
   /** @type {any[]} */
   const scheduleList = Array.isArray(schedule) ? schedule : [];
+  const healthStatus = health?.status ?? "unknown";
+  const healthTone = healthIntent(healthStatus);
+  const statusBadgeClass =
+    healthStatus === "healthy"
+      ? styles.statusOk
+      : healthStatus === "unhealthy"
+        ? styles.statusError
+        : styles.statusDefault;
+  const serviceReady = healthStatus === "healthy";
+  const firstKickoff = scheduleList[0]?.kickoff || null;
+  const latestPrediction = history[0]?.ts || history[0]?.timestamp || null;
 
   const predictionWinRate = typeof historyMetrics?.win_rate === "number" ? `${Math.round(historyMetrics.win_rate * 100)}%` : "n/a";
   const spreadError =
     typeof historyMetrics?.avg_abs_spread_error === "number"
       ? `${historyMetrics.avg_abs_spread_error.toFixed(1)} pts`
       : "n/a";
+  const overviewMessage = pageError
+    ? "Status data could not fully load. Retry from the dashboard after backend health returns."
+    : serviceReady
+      ? "Backend models, schedule data, and history metrics are available for review."
+      : "The overview can still show cached or partial data, but new forecasts may be blocked.";
 
   /**
    * Renders "Next Week Schedule" list:
@@ -168,10 +208,7 @@ export default function StatsPage({ authSession = null }) {
             (idKey && historyMap.get(idKey)) ||
             (compositeKey && historyMap.get(compositeKey));
 
-          const kickoffDate = game?.kickoff ? new Date(game.kickoff) : null;
-          const kickoffLabel = kickoffDate
-            ? kickoffDate.toLocaleString()
-            : "TBD";
+          const kickoffLabel = formatKickoff(game?.kickoff);
 
           return (
             <li key={idKey || compositeKey} className={styles.scheduleItem}>
@@ -208,54 +245,89 @@ export default function StatsPage({ authSession = null }) {
 
   return (
     <>
-      <div className={styles.statsPage}>
+      <NavBar
+        authSession={authSession}
+        onSignOut={onSignOut}
+        state={{
+          health,
+          title: "Service Overview",
+          heroSubtitle: "Backend readiness, dataset coverage, and forecast history in one review surface.",
+          subtitle: `${scheduleList.length} upcoming game${scheduleList.length === 1 ? "" : "s"} tracked`,
+          healthLabel: serviceReady ? "Service: Live" : `Service: ${healthStatus}`,
+        }}
+      />
+
+      <main className={styles.statsPage} aria-label="NFL prediction service overview">
         <header className={styles.pageHeader}>
-          <h1 className={styles.h1}>Prediction Status Page</h1>
-          <p className={styles.pageLead}>
-            Live backend health, dataset stats, and recorded predictions.
-          </p>
+          <div className={styles.pageHeaderCopy}>
+            <p className={styles.pageEyebrow}>Operations overview</p>
+            <h1 className={styles.h1}>Prediction readiness, schedule context, and model history.</h1>
+            <p className={styles.pageLead}>{overviewMessage}</p>
+          </div>
+
+          <aside className={styles.pageStatusPanel} aria-label="Current service state">
+            <span className={`${styles.statusBadge} ${statusBadgeClass}`}>
+              {serviceReady ? "Ready" : healthStatus}
+            </span>
+            <strong>{serviceReady ? "Forecasting available" : "Check backend readiness"}</strong>
+            <span>{health?.reason || "No backend blocker reported."}</span>
+          </aside>
         </header>
 
-        <section className={styles.summaryGrid}>
+        <section className={styles.summaryGrid} aria-label="Overview summary">
           <SummaryCard
             title="Backend Health"
-            value={health?.status ?? "unknown"}
-            subtext={health?.reason}
-            intent={
-              health?.status === "healthy"
-                ? "ok"
-                : health?.status === "unhealthy"
-                  ? "error"
-                  : "default"
-            }
+            value={healthStatus}
+            subtext={health?.reason || "Health endpoint reachable when service is live"}
+            intent={healthTone}
           />
           <SummaryCard
             title="Dataset rows"
-            value={datasetStatistics?.rows ?? "-"}
-            subtext={datasetStatistics?.path ?? "path unknown"}
+            value={formatInteger(datasetStatistics?.rows)}
+            subtext={datasetStatistics?.path ?? "dataset path unknown"}
           />
           <SummaryCard
-            title="Predictions recorded"
-            value={historyMetrics?.total_predictions ?? history.length}
-            subtext={`Win rate: ${predictionWinRate}`}
+            title="Upcoming games"
+            value={scheduleList.length}
+            subtext={`First kickoff: ${formatKickoff(firstKickoff)}`}
           />
           <SummaryCard
-            title="Resolved games"
-            value={historyMetrics?.resolved_games ?? 0}
-            subtext={`Avg spread error: ${spreadError}`}
+            title="Prediction record"
+            value={formatInteger(historyMetrics?.total_predictions ?? history.length)}
+            subtext={`Win rate: ${predictionWinRate} | spread error: ${spreadError}`}
           />
         </section>
 
-        <section className={styles.scheduleSection}>
-          <h2 className={styles.h2}>Next Week Schedule</h2>
-          {renderScheduleList()}
+        <section className={styles.statusNarrative} aria-label="Status notes">
+          <span>Latest prediction: {latestPrediction ? formatKickoff(latestPrediction) : "none yet"}</span>
+          <span>Resolved games: {formatInteger(historyMetrics?.resolved_games ?? 0)}</span>
+          <span>History scope: {history.length} loaded entries</span>
         </section>
 
-        <section className={styles.historySection}>
-          <h2 className={styles.h2}>Historical Predictions</h2>
-          <HistoryChart history={history} summary={historyMetrics} />
-        </section>
-      </div>
+        <div className={styles.contentGrid}>
+          <section className={styles.scheduleSection}>
+            <div className={styles.sectionHeader}>
+              <div>
+                <p className={styles.pageEyebrow}>Next slate</p>
+                <h2 className={styles.h2}>Schedule and prediction coverage</h2>
+              </div>
+              <span>{scheduleList.length} games</span>
+            </div>
+            {renderScheduleList()}
+          </section>
+
+          <section className={styles.historySection}>
+            <div className={styles.sectionHeader}>
+              <div>
+                <p className={styles.pageEyebrow}>Model feedback</p>
+                <h2 className={styles.h2}>Historical predictions</h2>
+              </div>
+              <span>{predictionWinRate} win rate</span>
+            </div>
+            <HistoryChart history={history} summary={historyMetrics} />
+          </section>
+        </div>
+      </main>
     </>
   );
 }

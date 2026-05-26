@@ -1,6 +1,7 @@
 // File: frontend/src/components/Card/TeamGrid.jsx
-// Renders the weekly schedule grid and delegates prediction actions to its parent.
+// Renders the weekly schedule grid, local slate filters, and delegates prediction actions to its parent.
 
+import { useMemo, useState } from 'react';
 import Card from './Card.jsx';
 import {
   buildMatchupKey,
@@ -8,6 +9,47 @@ import {
   normalizeMatchup,
 } from '../../utils/gameUtils.js';
 import './TeamGrid.css';
+
+const STATUS_FILTERS = [
+  { value: 'all', label: 'All games' },
+  { value: 'open', label: 'Needs prediction' },
+  { value: 'predicted', label: 'Predicted' },
+  { value: 'error', label: 'Needs retry' },
+];
+
+const normalizeSearchText = (value) => (value ?? '').toString().trim().toLowerCase();
+
+function getGameStatus(game, predictions, loading, errors) {
+  const key = buildMatchupKey(game);
+  if (!key) return 'open';
+  if (errors?.[key]) return 'error';
+  if (loading?.[key]) return 'loading';
+  if (predictions?.[key]) return 'predicted';
+  return 'open';
+}
+
+function gameMatchesSearch(game, query) {
+  const normalizedQuery = normalizeSearchText(query);
+  if (!normalizedQuery) return true;
+
+  const matchup = normalizeMatchup(game);
+  const haystack = [
+    matchup.away_team,
+    matchup.home_team,
+    matchup.away_name,
+    matchup.home_name,
+    game?.away_abbr,
+    game?.home_abbr,
+    game?.away_team,
+    game?.home_team,
+    game?.stadium,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+  return haystack.includes(normalizedQuery);
+}
 
 /**
  * TeamGrid component
@@ -21,7 +63,7 @@ import './TeamGrid.css';
  * @param {Record<string, any>} [props.errors]
  * @param {(game: any) => void} [props.onPredict]
  * @param {(game: any) => void} [props.onReset]
- * @param {() => Promise<void> | void} [props.onPredictAll]
+ * @param {(games?: Array<any>) => Promise<void> | void} [props.onPredictAll]
  * @param {boolean} [props.isBulkLoading]
  */
 export default function TeamGrid({
@@ -36,6 +78,8 @@ export default function TeamGrid({
   onPredictAll,
   isBulkLoading = false,
 } = {}) {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
   const safeGames = Array.isArray(games) ? games : [];
   const predictedCount = safeGames.filter((game) => {
     const key = buildMatchupKey(game);
@@ -46,6 +90,26 @@ export default function TeamGrid({
     return key && errors?.[key];
   }).length;
   const remainingCount = Math.max(0, safeGames.length - predictedCount);
+  const filteredGames = useMemo(
+    () =>
+      safeGames.filter((game) => {
+        const matchesSearch = gameMatchesSearch(game, searchQuery);
+        const gameStatus = getGameStatus(game, predictions, loading, errors);
+        const matchesStatus =
+          statusFilter === 'all' ||
+          (statusFilter === 'open' && gameStatus === 'open') ||
+          (statusFilter === 'predicted' && gameStatus === 'predicted') ||
+          (statusFilter === 'error' && gameStatus === 'error');
+        return matchesSearch && matchesStatus;
+      }),
+    [safeGames, searchQuery, statusFilter, predictions, loading, errors]
+  );
+  const visiblePredictedCount = filteredGames.filter((game) => {
+    const key = buildMatchupKey(game);
+    return key && predictions?.[key];
+  }).length;
+  const remainingVisibleCount = Math.max(0, filteredGames.length - visiblePredictedCount);
+  const hasActiveFilters = Boolean(searchQuery.trim()) || statusFilter !== 'all';
 
   // Prefer explicit week; fall back to first game; default to 10 as safe placeholder.
   const safeWeek = week ?? getGameWeek(safeGames[0]) ?? 10;
@@ -56,7 +120,7 @@ export default function TeamGrid({
       <section className="team-grid" aria-busy="true">
         <header className="team-grid__header">
           <h2 className="team-grid__title">Week {safeWeek} Games</h2>
-          <p className="team-grid__subtitle">Loading schedule...</p>
+          <p className="team-grid__subtitle">Loading schedule, team context, and prediction state...</p>
         </header>
         <div className="team-grid__empty">
           <div className="team-grid__spinner" />
@@ -101,24 +165,92 @@ export default function TeamGrid({
             <span>{predictedCount} predicted</span>
             <span>{remainingCount} remaining</span>
             {errorCount > 0 ? <span>{errorCount} need retry</span> : null}
+            {hasActiveFilters ? <span>{filteredGames.length} visible</span> : null}
           </div>
           <button
             type="button"
             className="team-grid__btn"
-            onClick={typeof onPredictAll === 'function' ? onPredictAll : undefined}
-            disabled={isLoading || isBulkLoading || remainingCount === 0 || typeof onPredictAll !== 'function'}
+            onClick={
+              typeof onPredictAll === 'function'
+                ? () => onPredictAll(filteredGames)
+                : undefined
+            }
+            disabled={
+              isLoading ||
+              isBulkLoading ||
+              remainingVisibleCount === 0 ||
+              typeof onPredictAll !== 'function'
+            }
             aria-busy={isBulkLoading ? 'true' : 'false'}
           >
-            {isBulkLoading ? 'Predicting...' : remainingCount === 0 ? 'Slate Complete' : 'Predict All Games'}
+            {isBulkLoading
+              ? 'Predicting...'
+              : remainingVisibleCount === 0
+                ? hasActiveFilters
+                  ? 'Visible Complete'
+                  : 'Slate Complete'
+                : hasActiveFilters
+                  ? 'Predict visible'
+                  : 'Predict All Games'}
           </button>
         </div>
         <p className="team-grid__subtitle">
-          Showing <strong>{safeGames.length}</strong> games scheduled.
+          Showing <strong>{filteredGames.length}</strong> of <strong>{safeGames.length}</strong> games scheduled.
         </p>
       </header>
 
+      <div className="team-grid__tools" aria-label="Slate filters">
+        <label className="team-grid__search">
+          <span>Search teams</span>
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Team, code, or stadium"
+            aria-label="Search games by team or stadium"
+          />
+        </label>
+
+        <label className="team-grid__filter">
+          <span>Status</span>
+          <select
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value)}
+            aria-label="Filter games by prediction state"
+          >
+            {STATUS_FILTERS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        {hasActiveFilters ? (
+          <button
+            type="button"
+            className="team-grid__btn team-grid__btn--ghost"
+            onClick={() => {
+              setSearchQuery('');
+              setStatusFilter('all');
+            }}
+          >
+            Clear filters
+          </button>
+        ) : null}
+      </div>
+
+      {filteredGames.length === 0 ? (
+        <div className="team-grid__empty team-grid__empty--filtered" role="status">
+          <strong>No games match these filters.</strong>
+          <p className="team-grid__empty-text">
+            Clear the search or switch status to All games to return to the full slate.
+          </p>
+        </div>
+      ) : null}
+
       <div className="team-grid__grid">
-        {safeGames.map((game, index) => {
+        {filteredGames.map((game, index) => {
           // Keep this key aligned with Dashboard's prediction-state keys.
           const key = buildMatchupKey(game) || String(index);
           const prediction = predictions?.[key];

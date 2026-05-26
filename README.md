@@ -1,3 +1,5 @@
+# NFL ML Predictions README
+
 ```text
 # ==========================================
 # File: README.md
@@ -9,7 +11,7 @@
 # ==========================================
 ```
 
-# NFL ML Predictions
+## NFL ML Predictions
 
 Full-stack NFL forecasting workspace with a FastAPI backend, a React/Vite frontend, a dataset build pipeline, and a model training pipeline.
 
@@ -195,6 +197,11 @@ frontend/
     schedules/
 ```
 
+logos/
+
+```
+    favicon.ico
+```
 
 ### Premium enhancement iterations (May 2026)
 

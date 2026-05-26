@@ -163,11 +163,12 @@ export default function Dashboard({
     await Promise.all(workers);
   }
 
-  const onPredictAll = async () => {
+  const onPredictAll = async (targetGames = null) => {
     if (isBulkLoading) return;
+    const sourceGames = Array.isArray(targetGames) ? targetGames : safeGames;
     setIsBulkLoading(true);
     try {
-      const targets = safeGames.filter((game) => {
+      const targets = sourceGames.filter((game) => {
         const key = buildMatchupKey(game);
         return key && !safePredictions[key] && !safeLoading[key];
       });
