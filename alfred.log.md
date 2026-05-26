@@ -87,3 +87,17 @@ Verification result: Backend tests passed: 50 passed. Frontend tests passed: 7 p
 Remaining issues: Vercel CLI still pulled an empty production value for `VITE_API_BASE_URL`, so the source fallback is protecting production until the dashboard env value is corrected. `npm audit fix --dry-run` would change a broad dependency set, so it was not applied during this production hotfix.
 
 Recommended next step: Commit and push the hotfix after review, then handle the npm audit upgrades in a separate dependency-focused branch with full frontend regression testing.
+
+## 2026-05-26 - Dirty diff repair and deploy hardening
+
+Summary: Repaired broken dirty changes before release. `backend/train_models.py` now compiles again, restores holdout regressor refit/prediction flow, keeps optional training metric plotting lazy, and logs feature importances only when an estimator exposes them. Dataset cleanup now preserves target/identity columns while reporting dropped empty or constant optional fields. Docker packaging now excludes env/runtime files and respects platform `PORT`. Model promotion validation now requires the strict serving bundle artifacts and swaps bundles through a validated temporary copy with rollback.
+
+Files changed: .dockerignore, Dockerfile, backend/builddataset.py, backend/main.py, backend/train_models.py, backend/scripts/promote_model.py.
+
+Commands run: `git diff --check -- backend/main.py backend/builddataset.py backend/train_models.py .dockerignore Dockerfile backend/scripts/promote_model.py`; `python -m py_compile backend/main.py backend/builddataset.py backend/train_models.py backend/scripts/promote_model.py`; `python backend/scripts/promote_model.py --help`; `python backend/train_models.py --help`; `python backend/builddataset.py --help`; `python -c "from pathlib import Path; from backend.scripts.promote_model import validate_bundle; ok, msg = validate_bundle(Path('backend/models')); print(f'{ok}: {msg}')"`, `python -m pytest backend/tests/test_startup_checks.py backend/tests/test_train_models_stack.py backend/tests/test_model_dir_resolution.py -q -o addopts=''`.
+
+Verification result: Compile checks passed, script help commands loaded, the current `backend/models` strict bundle validated successfully, and focused backend tests passed: 16 passed.
+
+Remaining issues: `backend/.env` remains locally modified and intentionally unstaged. A tracked pytest pycache file was touched by verification and should not be included in release commits.
+
+Recommended next step: Push the safe source/deploy changes, deploy backend and frontend, then run live `/status/models`, `/predict`, and browser dashboard prediction smoke checks.
