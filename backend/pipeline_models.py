@@ -88,6 +88,8 @@ class DatasetArtifactManifest(BaseModel):
 
     log_path: Optional[str] = None
 
+    dataset_hash: Optional[str] = None
+
     cleaning_stats: dict[str, int] = Field(
 
         default_factory=dict,

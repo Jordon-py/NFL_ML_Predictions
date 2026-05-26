@@ -99,6 +99,7 @@ from backend.prediction_store import (
 )
 from backend.score_sync import extract_score_entries_from_dataframe
 from backend.schemas import PredictionRequest as StoredPredictionRequest
+from backend.services.inference_row import build_model_input_row
 from backend.sqlite_store import upsert_game_scores
 from backend.utils import functions_for_main as fn_main
 from backend.utils.ops_reporting import (
@@ -618,6 +619,7 @@ def _calculate_win_probability(
     full_df: pd.DataFrame,
     numeric_df: pd.DataFrame,
     preprocessor: Optional[Any] = None,
+    numeric_medians: Optional[pd.Series] = None,
 ) -> Tuple[float, bool]:
     """Compute home-team win probability with sensible fallbacks.
 
@@ -653,6 +655,29 @@ def _calculate_win_probability(
 
         return float(raw[0][positive_idx])
 
+    def _align_raw_features(features: pd.DataFrame, model: Any) -> pd.DataFrame:
+        aligned = features.copy() if features is not None else pd.DataFrame()
+        expected_cols = (
+            list(getattr(model, "feature_names_in_", []))
+            if hasattr(model, "feature_names_in_")
+            else []
+        )
+        if not expected_cols and preprocessor is not None:
+            expected_cols = (
+                list(getattr(preprocessor, "feature_names_in_", []))
+                if hasattr(preprocessor, "feature_names_in_")
+                else []
+            )
+        if expected_cols:
+            aligned = aligned.reindex(columns=expected_cols)
+            if numeric_medians is not None and not numeric_medians.empty:
+                for col in expected_cols:
+                    if col in numeric_medians.index:
+                        aligned[col] = pd.to_numeric(
+                            aligned[col], errors="coerce"
+                        ).fillna(float(numeric_medians[col]))
+        return aligned
+
     def _fallback_probability() -> float:
         try:
             if full_df is not None and not full_df.empty and "home_moneyline_prob" in full_df.columns:
@@ -670,7 +695,8 @@ def _calculate_win_probability(
         # A) Pipeline case: pass raw DataFrame
         if is_pipeline:
             try:
-                win_prob = _predict_positive_class_probability(win_model, full_df)
+                pipeline_df = _align_raw_features(full_df, win_model)
+                win_prob = _predict_positive_class_probability(win_model, pipeline_df)
                 return float(np.clip(win_prob, 1e-6, 1 - 1e-6)), True
             except Exception as e:
                 logging.warning("[Predict] win_pipe predict_proba failed; falling back to priors: %s", e)
@@ -678,7 +704,8 @@ def _calculate_win_probability(
         # B) Classifier-only case: transform then predict_proba
         if (not is_pipeline) and (preprocessor is not None):
             try:
-                X_proc = preprocessor.transform(full_df)
+                pre_df = _align_raw_features(full_df, preprocessor)
+                X_proc = preprocessor.transform(pre_df)
                 win_prob = _predict_positive_class_probability(win_model, X_proc)
                 return float(np.clip(win_prob, 1e-6, 1 - 1e-6)), True
             except Exception as e:
@@ -2428,6 +2455,46 @@ def _feature_manifest(model_key: str = "scores") -> List[str]:
     return []
 
 
+def _build_synthetic_prediction_row(
+    df: pd.DataFrame,
+    season: int,
+    week: int,
+    home_team: str,
+    away_team: str,
+) -> pd.DataFrame:
+    """Build a schema-complete future-game row for strict pipeline bundles."""
+    raw_feature_columns = _feature_manifest("win") or _feature_manifest("scores")
+    try:
+        built = build_model_input_row(
+            dataset_df=df,
+            preprocessor=state.win_preprocessor or state.preprocessor,
+            season=season,
+            week=week,
+            home_team=home_team,
+            away_team=away_team,
+            raw_feature_columns=raw_feature_columns,
+            impute_medians=getattr(state, "numeric_medians", None),
+        )
+        row = built[0]
+        if isinstance(row, pd.DataFrame) and not row.empty:
+            return row
+    except Exception as exc:
+        logging.warning("[Predict] Rich synthetic row builder failed; using schema fallback: %s", exc)
+
+    columns = list(df.columns) if df is not None and not df.empty else list(raw_feature_columns)
+    synthetic = {col: np.nan for col in columns}
+    synthetic.update(
+        {
+            "season": int(season),
+            "week": int(week),
+            "home_team": home_team,
+            "away_team": away_team,
+            "time_key": (int(season) * 100) + int(week),
+        }
+    )
+    return pd.DataFrame([synthetic], columns=columns)
+
+
 # -------------------------------------------------------------------
 # Health + Status
 # -------------------------------------------------------------------
@@ -2534,16 +2601,8 @@ def debug_predict_input(request: PredictRequest) -> DebugPredictInputResponse:
         )
     except HTTPException:
         selected_row_source = "synthetic"
-        row_df = pd.DataFrame(
-            [
-                {
-                    "season": season,
-                    "week": week,
-                    "home_team": home_team,
-                    "away_team": away_team,
-                    "time_key": (season * 100) + week,
-                }
-            ]
+        row_df = _build_synthetic_prediction_row(
+            state.dataset, season, week, home_team, away_team
         )
 
     row_df = _roll_forward_missing_player_stats(
@@ -2562,6 +2621,7 @@ def debug_predict_input(request: PredictRequest) -> DebugPredictInputResponse:
             full_df,
             numeric_df,
             preprocessor=state.win_preprocessor or state.preprocessor,
+            numeric_medians=getattr(state, "numeric_medians", None),
         )
     except Exception:
         debug_win_prob = 0.5
@@ -3544,16 +3604,8 @@ async def predict(payload: PredictRequest, request: Request) -> Dict[str, Any]:
             season,
             week,
         )
-        row = pd.DataFrame(
-            [
-                {
-                    "season": season,
-                    "week": week,
-                    "home_team": home_team,
-                    "away_team": away_team,
-                    "time_key": (season * 100) + week,
-                }
-            ]
+        row = _build_synthetic_prediction_row(
+            df, season, week, home_team, away_team
         )
         selected_row_source = "synthetic"
 
@@ -3580,6 +3632,7 @@ async def predict(payload: PredictRequest, request: Request) -> Dict[str, Any]:
             full_df,
             numeric_df,
             preprocessor=state.win_preprocessor or state.preprocessor,
+            numeric_medians=getattr(state, "numeric_medians", None),
         )
     except Exception as win_err:
         logging.warning("[Predict] Win probability calc failed; defaulting to 0.5: %s", str(win_err).splitlines()[0])

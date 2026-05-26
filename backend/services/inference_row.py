@@ -205,13 +205,16 @@ def _get_latest_prior_game(
 
 def _init_base_row(season: int, week: int, home: str, away: str) -> pd.DataFrame:
     """Create the initial 1-row DataFrame with identity columns."""
+    season_i = int(season)
+    week_i = int(week)
     return pd.DataFrame([{
-        "season": int(season),
-        "week": int(week),
+        "season": season_i,
+        "week": week_i,
         "home_team": _normalize_team(home),
         "away_team": _normalize_team(away),
+        "time_key": (season_i * 100) + week_i,
         # Helper for debugging/tracking
-        "api_game_id": f"{int(season)}-{int(week)}-{_normalize_team(home)}-{_normalize_team(away)}",
+        "api_game_id": f"{season_i}-{week_i}-{_normalize_team(home)}-{_normalize_team(away)}",
     }])
 
 def _enrich_from_schedule(
