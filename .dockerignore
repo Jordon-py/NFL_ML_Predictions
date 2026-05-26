@@ -1,0 +1,20 @@
+# .dockerignore
+.git
+.env
+.env.*
+backend/.env
+backend/.env.*
+.venv
+.venv-*
+backend/.venv
+backend/.venv-*
+__pycache__
+*.pyc
+*.db
+tmp_pytest*
+.runtime_*
+pytest_basetemp_*
+frontend/dist
+frontend/node_modules
+node_modules
+artifacts/screenshots

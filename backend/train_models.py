@@ -137,6 +137,56 @@ class ClassificationMetrics:
     log_loss: Optional[float]
 
 
+def _log_feature_importance(model, feature_names, target_name, log: logging.Logger):
+    """Extract and log feature importance for estimators that expose it."""
+    try:
+        if hasattr(model, "feature_importances_"):
+            importances = model.feature_importances_
+            sorted_idx = np.argsort(importances)[::-1]
+            top_n = 15
+            log.info(f"Top {top_n} features for {target_name}:")
+            for i in range(min(top_n, len(feature_names))):
+                idx = sorted_idx[i]
+                log.info(f"  {i+1}. {feature_names[idx]}: {importances[idx]:.4f}")
+    except Exception as e:
+        log.warning(f"Could not extract feature importance for {target_name}: {e}")
+
+
+def _plot_training_metrics(report: Dict[str, Any], out_dir: Path):
+    """Generate a compact training metrics chart when matplotlib is available."""
+    try:
+        import matplotlib
+
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+    except Exception as e:
+        logging.warning(f"Skipping training metrics plot because matplotlib is unavailable: {e}")
+        return
+
+    try:
+        metrics = report.get("metrics", {})
+        reg = metrics.get("regression", {})
+        cls = metrics.get("classification", {})
+
+        plt.figure(figsize=(10, 6))
+        labels = ["Combined MAE", "Brier Score"]
+        values = [reg.get("combined_mae"), cls.get("brier")]
+        valid = [(l, v) for l, v in zip(labels, values) if v is not None]
+        if not valid:
+            plt.close()
+            return
+        l_final, v_final = zip(*valid)
+        plt.bar(l_final, v_final, color=["skyblue", "salmon"])
+        generated_at = str(report.get("generated_at", ""))[:10]
+        plt.title(f"Training Performance Summary - {generated_at}")
+        plt.ylabel("Error Metric (Lower is Better)")
+        plot_path = out_dir / "training_metrics_plot.png"
+        plt.savefig(plot_path)
+        plt.close()
+        logging.info(f"Training metrics plot saved to {plot_path}")
+    except Exception as e:
+        logging.warning(f"Failed to generate training plot: {e}")
+
 def _setup_logging() -> logging.Logger:
     logging.basicConfig(
         level=logging.INFO,
@@ -1186,8 +1236,15 @@ def main() -> int:
     score_preprocessor.fit(X_train_score)
     X_train_score_proc = np.asarray(score_preprocessor.transform(X_train_score))
     X_hold_score_proc = np.asarray(score_preprocessor.transform(X_holdout_score))
+
     home_reg = clone(home_reg).fit(X_train_score_proc, y_home_train)
     away_reg = clone(away_reg).fit(X_train_score_proc, y_away_train)
+    try:
+        score_model_feature_names = list(score_preprocessor.get_feature_names_out())
+    except Exception:
+        score_model_feature_names = [f"feature_{idx}" for idx in range(X_train_score_proc.shape[1])]
+    _log_feature_importance(home_reg, score_model_feature_names, "home_score", log)
+    _log_feature_importance(away_reg, score_model_feature_names, "away_score", log)
 
     home_pred = home_reg.predict(X_hold_score_proc)
     away_pred = away_reg.predict(X_hold_score_proc)
@@ -1413,6 +1470,9 @@ def main() -> int:
     _write_json(stage_dir / "run_summary.json", summary_payload)
     if status == "PROMOTED":
         _write_json(out_dir / "run_summary.json", summary_payload)
+
+    # Generate training metrics plot
+    _plot_training_metrics(report, out_dir)
 
     log.info(
         "Training finished. status=%s gate_passed=%s stage=%s out=%s",

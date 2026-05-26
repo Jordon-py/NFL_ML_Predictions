@@ -1187,7 +1187,9 @@ class AppState:
     def _load_models(self) -> None:
         """Load each required model independently."""
         self.models = {}
+        self.shadow_models = {}
         self.models_metadata = {}
+        self.shadow_models_metadata = {}
         self.preprocessor = None
         self.score_preprocessor = None
         self.win_preprocessor = None

@@ -106,6 +106,35 @@ def _clean_dataset(df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, Any]]:
             out = pd.concat([deduped, out.loc[~valid_game_ids]], axis=0, ignore_index=True)
         out = out.drop(columns=["_label_priority", "_completeness"], errors="ignore")
 
+    # Drop optional feature columns that are entirely empty or constant. Keep
+    # identity and target columns protected so the trainer contract stays intact.
+    protected_columns = {
+        "season",
+        "week",
+        "game_id",
+        "home_team",
+        "away_team",
+        "home_points_for",
+        "away_points_for",
+        "home_win",
+        "winner",
+    }
+    cols_to_drop = []
+    for col in out.columns:
+        if col in protected_columns:
+            continue
+        if out[col].isna().all():
+            cols_to_drop.append(col)
+            continue
+        try:
+            if out[col].dropna().nunique() <= 1:
+                cols_to_drop.append(col)
+        except TypeError:
+            continue
+
+    if cols_to_drop:
+        out = out.drop(columns=cols_to_drop)
+
     sort_columns = [column for column in ("season", "week", "game_id") if column in out.columns]
     if sort_columns:
         out = out.sort_values(sort_columns, kind="stable").reset_index(drop=True)
@@ -123,6 +152,8 @@ def _clean_dataset(df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, Any]]:
         "rows_after_cleaning": len(out),
         "blank_rows_removed": int(blank_mask.sum()),
         "duplicate_game_ids_removed": duplicate_game_ids_removed,
+        "dropped_empty_or_constant_columns": len(cols_to_drop),
+        "dropped_empty_or_constant_column_names": cols_to_drop,
         "completed_rows": completed_rows,
         "future_rows": future_rows,
     }
