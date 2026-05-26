@@ -82,11 +82,11 @@ const PROD_BASE_URL =
   import.meta.env.VITE_API_URL;
 
 const RAW_BASE_URL = import.meta.env.DEV ? DEV_BASE_URL : PROD_BASE_URL;
+const CANONICAL_PROD_API_URL = "https://nfl-predict-ecf5a5bd34fe.herokuapp.com";
+const FALLBACK_BASE_URL = import.meta.env.DEV ? "http://127.0.0.1:8000" : CANONICAL_PROD_API_URL;
 
-// If not set, default to localhost in DEV, but require it in PROD.
-const BASE_URL = (
-  RAW_BASE_URL ?? (import.meta.env.DEV ? "http://127.0.0.1:8000" : "")
-).replace(/\/+$/, "");
+// If not set, default to localhost in DEV and the documented Heroku backend in PROD.
+const BASE_URL = (String(RAW_BASE_URL ?? "").trim() || FALLBACK_BASE_URL).replace(/\/+$/, "");
 
 export const API_BASE = BASE_URL;
 const APP_BASE_PATH = import.meta.env.BASE_URL || "/";

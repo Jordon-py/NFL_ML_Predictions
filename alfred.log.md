@@ -73,3 +73,17 @@ Verification result: Backend venv suite passed with 49 tests. Frontend tests pas
 Remaining issues: `git status` still reports generated verification artifacts as modified: `backend/predictions.db`, `backend/tests/__pycache__/test_api_endpoints.cpython-313-pytest-7.4.4.pyc`, and `frontend/dist/index.html`. Git also reports permission warnings for `artifacts/pytest_codex_schedule*` directories.
 
 Recommended next step: Decide whether generated artifacts should be restored or committed, then run a deployed backend smoke for `DELETE /history` after the next release.
+
+## 2026-05-26 - Vercel API base URL fallback and production smoke
+
+Summary: Fixed the deployed Vercel dashboard error caused by an empty production `VITE_API_BASE_URL` value by adding a production-safe Heroku API fallback in the frontend API client. Redeployed the prebuilt Vercel production output and verified the signed-in dashboard no longer shows the missing env, degraded prediction, or Week 0 states.
+
+Files changed: frontend/src/api/client.js.
+
+Commands run: `py -3.12 -m venv .venv`; `.venv\Scripts\python.exe -m pip install -r requirements.txt`; `.venv\Scripts\python.exe -m pytest backend/tests -q`; `cd frontend && npm test -- --run`; `cd frontend && npm run build`; `cd frontend && vercel build --prod`; `cd frontend && vercel deploy --prebuilt --prod`; Heroku `/health`, `/status/models`, `/schedule`, and `/predict` smoke checks; Playwright production dashboard smoke against `https://new-nfl-predict.vercel.app/app`.
+
+Verification result: Backend tests passed: 50 passed. Frontend tests passed: 7 passed. Frontend production build and Vercel production build passed. Vercel deployment `dpl_6extgLFipB99vK9XpfkSJHzspA7f` was aliased to `https://new-nfl-predict.vercel.app`. Live Heroku health, model status, schedule, and prediction checks returned 200. Playwright verified the production dashboard shows Week 1 with 16 games and does not include the previous failure messages.
+
+Remaining issues: Vercel CLI still pulled an empty production value for `VITE_API_BASE_URL`, so the source fallback is protecting production until the dashboard env value is corrected. `npm audit fix --dry-run` would change a broad dependency set, so it was not applied during this production hotfix.
+
+Recommended next step: Commit and push the hotfix after review, then handle the npm audit upgrades in a separate dependency-focused branch with full frontend regression testing.
