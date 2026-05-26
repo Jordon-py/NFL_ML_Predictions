@@ -101,6 +101,24 @@ def _dataset_csv_candidates(data_dir: Path) -> List[Path]:
     return list(deduped.values())
 
 
+def _resolve_manifest_dataset_path(data_dir: Path, raw_path: str) -> Optional[Path]:
+    path = Path(str(raw_path)).expanduser()
+    candidates = [path]
+    if not path.is_absolute():
+        candidates.extend(
+            [
+                (data_dir / path).resolve(),
+                (data_dir / "datasets" / path).resolve(),
+                (data_dir.parent / path).resolve(),
+                (data_dir.parent / "data" / path).resolve(),
+            ]
+        )
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate.resolve()
+    return None
+
+
 def resolve_latest_dataset(data_dir: Path, explicit_path: Optional[str] = None) -> Path:
     if explicit_path:
         raw = Path(explicit_path).expanduser()
@@ -117,14 +135,15 @@ def resolve_latest_dataset(data_dir: Path, explicit_path: Optional[str] = None) 
     latest_manifest = load_latest_dataset_manifest(data_dir)
     manifest_candidates = [
         latest_manifest.get("clean_dataset_path"),
+        latest_manifest.get("completed_dataset_path"),
         latest_manifest.get("raw_dataset_path"),
     ]
     for raw_path in manifest_candidates:
         if not raw_path:
             continue
-        path = Path(str(raw_path)).expanduser()
-        if path.exists():
-            return path.resolve()
+        resolved = _resolve_manifest_dataset_path(data_dir, str(raw_path))
+        if resolved is not None:
+            return resolved
 
     candidates = sorted(_dataset_csv_candidates(data_dir), key=lambda p: p.stat().st_mtime, reverse=True)
     if not candidates:

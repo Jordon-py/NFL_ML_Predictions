@@ -1,0 +1,26 @@
+{
+  "status": "PROMOTED",
+  "staging_dir": "C:\\Users\\goku\\Documents\\NFL_ML_Predictions\\backend\\models\\staging\\20260526T215557Z",
+  "models_dir": "C:\\Users\\goku\\Documents\\NFL_ML_Predictions\\backend\\models",
+  "dated_bundle_dir": "C:\\Users\\goku\\Documents\\NFL_ML_Predictions\\backend\\20260526\\models",
+  "rollback_dir": "C:\\Users\\goku\\Documents\\NFL_ML_Predictions\\backend\\models\\rollback\\20260526T215557Z",
+  "gate": {
+    "enabled": true,
+    "passed": true,
+    "failures": [],
+    "current": {
+      "brier": 0.2175767373025059,
+      "combined_mae": 7.034720020817689
+    },
+    "previous": {
+      "brier": 0.14857594008753128,
+      "combined_mae": 4.253543860847806
+    },
+    "previous_comparison": "skipped_previous_report_contains_hard_leak_features",
+    "thresholds": {
+      "max_brier_delta": 0.01,
+      "max_mae_delta": 0.5
+    }
+  },
+  "duration_seconds": 915.59
+}

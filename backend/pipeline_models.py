@@ -8,7 +8,7 @@ from __future__ import annotations
 """
 
 
-from typing import Optional
+from typing import Any, Optional
 from pydantic import BaseModel, Field
 
 
@@ -78,11 +78,16 @@ class DatasetArtifactManifest(BaseModel):
 
     raw_dataset_path: str
     clean_dataset_path: str
+    completed_dataset_path: Optional[str] = None
+    future_dataset_path: Optional[str] = None
     run_dir: str
 
     metadata_path: Optional[str] = None
 
     quality_report_path: Optional[str] = None
+    schema_report_path: Optional[str] = None
+    missingness_report_path: Optional[str] = None
+    duplicate_report_path: Optional[str] = None
 
     score_snapshot_path: Optional[str] = None
 
@@ -90,7 +95,7 @@ class DatasetArtifactManifest(BaseModel):
 
     dataset_hash: Optional[str] = None
 
-    cleaning_stats: dict[str, int] = Field(
+    cleaning_stats: dict[str, Any] = Field(
 
         default_factory=dict,
 

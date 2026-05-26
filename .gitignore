@@ -136,6 +136,9 @@ backend/*/models/
 !backend/models/win_pipe.joblib
 !backend/models/score_preprocessor.joblib
 !backend/models/win_preprocessor.joblib
+!backend/models/feature_manifest.json
+!backend/models/training_report.json
+!backend/models/run_summary.json
 
 
 

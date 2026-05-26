@@ -105,6 +105,12 @@ LEAK_BLOCKLIST: Tuple[str, ...] = (
     "post_game_total",
     "actual_margin",
 )
+FEATURE_NEAR_EMPTY_THRESHOLD = 0.95
+HARD_LEAK_REASONS = {
+    "target_or_postgame_column",
+    "same_week_player_stat",
+    "same_week_team_stat",
+}
 
 REG_PARAM_DISTS: Dict[str, Sequence[Any]] = {
     "max_depth": [3, 6, 10, 14],
@@ -257,19 +263,86 @@ def _make_preprocessor(numeric_cols: List[str], categorical_cols: List[str]) -> 
     )
 
 
-def _drop_leaky_columns(df: pd.DataFrame, log: logging.Logger) -> pd.DataFrame:
-    to_drop: List[str] = []
-    blocked = set(LEAK_BLOCKLIST) | set(ID_COLUMNS)
+def _column_drop_reason(col: str, series: pd.Series) -> Tuple[Optional[str], bool]:
+    lower = str(col).strip().lower()
+    blocked = {name.lower() for name in LEAK_BLOCKLIST} | {name.lower() for name in ID_COLUMNS}
+    if lower in blocked:
+        return "target_or_postgame_column", True
+    if lower.startswith("_"):
+        return "internal_column", False
+    if lower.endswith("_id") and lower not in {"season", "week"}:
+        return "id_only_column", False
+    if lower.startswith(("home_player_", "away_player_")) or "_player_" in lower:
+        return "same_week_player_stat", True
+    if lower.startswith(("home_teamstat_", "away_teamstat_")) or "_teamstat_" in lower:
+        return "same_week_team_stat", True
+    suspicious_tokens = (
+        "postgame",
+        "post_game",
+        "actual_",
+        "final_",
+        "winner",
+        "target",
+        "label",
+    )
+    if any(token in lower for token in suspicious_tokens):
+        return "target_or_postgame_column", True
+
+    missing_ratio = float(series.isna().mean()) if len(series) else 1.0
+    if missing_ratio >= FEATURE_NEAR_EMPTY_THRESHOLD:
+        return "near_empty_column", False
+    try:
+        if series.dropna().nunique() <= 1:
+            return "constant_column", False
+    except TypeError:
+        pass
+    return None, False
+
+
+def _drop_leaky_columns(df: pd.DataFrame, log: logging.Logger) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+    dropped: List[Dict[str, Any]] = []
     for col in df.columns:
-        if col in blocked:
-            to_drop.append(col)
+        reason, hard_leak = _column_drop_reason(str(col), df[col])
+        if reason is None:
             continue
-        if isinstance(col, str) and col.startswith("_"):
-            to_drop.append(col)
-    if to_drop:
-        log.info("Dropping non-feature columns: %s", sorted(set(to_drop)))
-        return df.drop(columns=sorted(set(to_drop)), errors="ignore")
-    return df
+        dropped.append(
+            {
+                "column": str(col),
+                "reason": reason,
+                "hard_leak": bool(hard_leak),
+                "missing_ratio": float(df[col].isna().mean()) if len(df) else 1.0,
+                "unique_count": int(df[col].nunique(dropna=True)),
+            }
+        )
+
+    drop_cols = sorted({item["column"] for item in dropped})
+    if drop_cols:
+        reason_counts: Dict[str, int] = {}
+        for item in dropped:
+            reason_counts[item["reason"]] = reason_counts.get(item["reason"], 0) + 1
+        log.info("Dropping %d non-feature/leak-risk columns: %s", len(drop_cols), reason_counts)
+        df = df.drop(columns=drop_cols, errors="ignore")
+
+    used_columns = [str(col) for col in df.columns]
+    hard_leak_remaining = [
+        col for col in used_columns if _column_drop_reason(str(col), df[col])[1]
+    ]
+    manifest = {
+        "near_empty_threshold": FEATURE_NEAR_EMPTY_THRESHOLD,
+        "used_columns": used_columns,
+        "used_column_count": int(len(used_columns)),
+        "dropped_columns": dropped,
+        "dropped_column_count": int(len(dropped)),
+        "dropped_reason_counts": {
+            reason: int(sum(1 for item in dropped if item["reason"] == reason))
+            for reason in sorted({item["reason"] for item in dropped})
+        },
+        "hard_leak_columns_dropped": [
+            item["column"] for item in dropped if bool(item.get("hard_leak"))
+        ],
+        "hard_leak_columns_remaining": hard_leak_remaining,
+    }
+    return df, manifest
 
 
 def _coerce_binary_label(y: pd.Series) -> pd.Series:
@@ -838,6 +911,108 @@ def _compute_classifier_metrics(y_true: np.ndarray, y_prob: np.ndarray) -> Class
     )
 
 
+def _baseline_metrics(
+    *,
+    y_home_train: np.ndarray,
+    y_away_train: np.ndarray,
+    y_win_train: np.ndarray,
+    y_home_hold: np.ndarray,
+    y_away_hold: np.ndarray,
+    y_win_hold: np.ndarray,
+    X_holdout: pd.DataFrame,
+) -> Dict[str, Any]:
+    home_mean = float(np.mean(y_home_train))
+    away_mean = float(np.mean(y_away_train))
+    home_mean_pred = np.full_like(y_home_hold, home_mean, dtype=float)
+    away_mean_pred = np.full_like(y_away_hold, away_mean, dtype=float)
+    home_mean_metrics = _compute_regression_metrics(y_home_hold, home_mean_pred)
+    away_mean_metrics = _compute_regression_metrics(y_away_hold, away_mean_pred)
+
+    train_win_rate = float(np.mean(y_win_train))
+    prior_prob = np.full_like(y_win_hold, train_win_rate, dtype=float)
+    market_prob = _fallback_home_win_probabilities(X_holdout, neutral_prob=train_win_rate)
+
+    return {
+        "score_train_mean": {
+            "home": asdict(home_mean_metrics),
+            "away": asdict(away_mean_metrics),
+            "combined_mae": float((home_mean_metrics.mae + away_mean_metrics.mae) / 2.0),
+            "home_mean": home_mean,
+            "away_mean": away_mean,
+        },
+        "win_train_rate": {
+            **asdict(_compute_classifier_metrics(y_win_hold, prior_prob)),
+            "train_home_win_rate": train_win_rate,
+        },
+        "win_market_or_train_rate": asdict(_compute_classifier_metrics(y_win_hold, market_prob)),
+    }
+
+
+def _calibration_report(y_true: np.ndarray, y_prob: np.ndarray, bins: int = 10) -> Dict[str, Any]:
+    probs = np.clip(np.asarray(y_prob, dtype=float), 1e-6, 1 - 1e-6)
+    y = np.asarray(y_true, dtype=float)
+    edges = np.linspace(0.0, 1.0, bins + 1)
+    bin_rows: List[Dict[str, Any]] = []
+    expected_calibration_error = 0.0
+    max_calibration_error = 0.0
+    for idx in range(bins):
+        left = edges[idx]
+        right = edges[idx + 1]
+        if idx == bins - 1:
+            mask = (probs >= left) & (probs <= right)
+        else:
+            mask = (probs >= left) & (probs < right)
+        count = int(mask.sum())
+        if count == 0:
+            bin_rows.append(
+                {
+                    "bin": idx,
+                    "lower": float(left),
+                    "upper": float(right),
+                    "count": 0,
+                    "avg_predicted_probability": None,
+                    "empirical_home_win_rate": None,
+                    "absolute_error": None,
+                }
+            )
+            continue
+        avg_pred = float(probs[mask].mean())
+        empirical = float(y[mask].mean())
+        abs_error = abs(avg_pred - empirical)
+        expected_calibration_error += abs_error * (count / max(1, len(y)))
+        max_calibration_error = max(max_calibration_error, abs_error)
+        bin_rows.append(
+            {
+                "bin": idx,
+                "lower": float(left),
+                "upper": float(right),
+                "count": count,
+                "avg_predicted_probability": avg_pred,
+                "empirical_home_win_rate": empirical,
+                "absolute_error": float(abs_error),
+            }
+        )
+    return {
+        "bins": bin_rows,
+        "expected_calibration_error": float(expected_calibration_error),
+        "max_calibration_error": float(max_calibration_error),
+    }
+
+
+def _score_classifier_agreement(home_pred: np.ndarray, away_pred: np.ndarray, win_prob: np.ndarray) -> Dict[str, Any]:
+    point_diff = np.asarray(home_pred, dtype=float) - np.asarray(away_pred, dtype=float)
+    implied_prob = 1.0 / (1.0 + np.exp(-point_diff / 7.5))
+    clf_prob = np.clip(np.asarray(win_prob, dtype=float), 1e-6, 1 - 1e-6)
+    delta = np.abs(clf_prob - implied_prob)
+    return {
+        "method": "logistic_home_minus_away_score_scale_7_5",
+        "avg_abs_probability_delta": float(np.mean(delta)),
+        "p90_abs_probability_delta": float(np.quantile(delta, 0.9)),
+        "disagreement_rate_over_0_20": float(np.mean(delta > 0.20)),
+        "side_conflict_rate": float(np.mean((clf_prob >= 0.5) != (implied_prob >= 0.5))),
+    }
+
+
 def _load_previous_report(out_dir: Path) -> Optional[Dict[str, Any]]:
     path = out_dir / "training_report.json"
     if not path.exists():
@@ -864,6 +1039,75 @@ def _extract_gate_metrics(report: Dict[str, Any]) -> Tuple[Optional[float], Opti
     return brier_f, mae_f
 
 
+def _report_feature_columns(report: Dict[str, Any]) -> List[str]:
+    out: List[str] = []
+    features = report.get("features", {})
+    if not isinstance(features, dict):
+        return out
+    for value in features.values():
+        if isinstance(value, dict):
+            for key in ("numeric", "categorical", "generated"):
+                raw_cols = value.get(key, [])
+                if isinstance(raw_cols, list):
+                    out.extend(str(col) for col in raw_cols)
+        elif isinstance(value, list):
+            out.extend(str(col) for col in value)
+    return out
+
+
+def _feature_name_is_hard_leak(col: str) -> bool:
+    lower = str(col).strip().lower()
+    if lower in {name.lower() for name in LEAK_BLOCKLIST}:
+        return True
+    if lower.startswith(("home_player_", "away_player_")) or "_player_" in lower:
+        return True
+    if lower.startswith(("home_teamstat_", "away_teamstat_")) or "_teamstat_" in lower:
+        return True
+    return any(token in lower for token in ("postgame", "post_game", "actual_", "final_", "winner", "target", "label"))
+
+
+def _report_has_hard_leak_features(report: Dict[str, Any]) -> bool:
+    existing_selection = report.get("feature_selection", {})
+    if isinstance(existing_selection, dict) and existing_selection.get("hard_leak_columns_remaining"):
+        return True
+    return any(_feature_name_is_hard_leak(col) for col in _report_feature_columns(report))
+
+
+def _baseline_gate_failures(report: Dict[str, Any]) -> List[str]:
+    failures: List[str] = []
+    curr_brier, curr_mae = _extract_gate_metrics(report)
+    baselines = report.get("baselines", {})
+    score_mean = baselines.get("score_train_mean", {}) if isinstance(baselines, dict) else {}
+    win_train_rate = baselines.get("win_train_rate", {}) if isinstance(baselines, dict) else {}
+    win_market = baselines.get("win_market_or_train_rate", {}) if isinstance(baselines, dict) else {}
+
+    try:
+        baseline_mae = float(score_mean.get("combined_mae"))
+    except Exception:
+        baseline_mae = None
+    if curr_mae is not None and baseline_mae is not None and curr_mae >= baseline_mae:
+        failures.append(f"score model does not beat train-mean baseline: current={curr_mae:.4f} baseline={baseline_mae:.4f}")
+
+    try:
+        train_rate_brier = float(win_train_rate.get("brier"))
+    except Exception:
+        train_rate_brier = None
+    if curr_brier is not None and train_rate_brier is not None and curr_brier >= train_rate_brier:
+        failures.append(
+            f"win model does not beat train-rate baseline: current={curr_brier:.4f} baseline={train_rate_brier:.4f}"
+        )
+
+    try:
+        market_brier = float(win_market.get("brier"))
+    except Exception:
+        market_brier = None
+    if curr_brier is not None and market_brier is not None and curr_brier > (market_brier + 0.02):
+        failures.append(
+            f"win model materially trails market/prior baseline: current={curr_brier:.4f} baseline={market_brier:.4f} tolerance=0.0200"
+        )
+    return failures
+
+
 def _gate_result(
     *,
     current_report: Dict[str, Any],
@@ -871,6 +1115,7 @@ def _gate_result(
     max_brier_delta: float,
     max_mae_delta: float,
     disable_gate: bool,
+    extra_failures: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     if disable_gate:
         return {"enabled": False, "passed": True, "reason": "gate disabled"}
@@ -883,17 +1128,22 @@ def _gate_result(
         prev_brier, prev_mae = _extract_gate_metrics(previous_report)
 
     failures: List[str] = []
+    if extra_failures:
+        failures.extend(extra_failures)
+    failures.extend(_baseline_gate_failures(current_report))
     if curr_brier is None or curr_mae is None:
         failures.append("missing current metrics")
 
-    if prev_brier is not None and curr_brier is not None:
+    previous_leak_invalidated = bool(previous_report and _report_has_hard_leak_features(previous_report))
+
+    if not previous_leak_invalidated and prev_brier is not None and curr_brier is not None:
         if curr_brier > (prev_brier + max_brier_delta):
             failures.append(
                 f"brier regression: current={curr_brier:.4f} previous={prev_brier:.4f} "
                 f"max_delta={max_brier_delta:.4f}"
             )
 
-    if prev_mae is not None and curr_mae is not None:
+    if not previous_leak_invalidated and prev_mae is not None and curr_mae is not None:
         if curr_mae > (prev_mae + max_mae_delta):
             failures.append(
                 f"mae regression: current={curr_mae:.4f} previous={prev_mae:.4f} "
@@ -906,6 +1156,11 @@ def _gate_result(
         "failures": failures,
         "current": {"brier": curr_brier, "combined_mae": curr_mae},
         "previous": {"brier": prev_brier, "combined_mae": prev_mae},
+        "previous_comparison": (
+            "skipped_previous_report_contains_hard_leak_features"
+            if previous_leak_invalidated
+            else "compared"
+        ),
         "thresholds": {
             "max_brier_delta": float(max_brier_delta),
             "max_mae_delta": float(max_mae_delta),
@@ -928,6 +1183,7 @@ def _stage_bundle(
     win_clf: BaseEstimator,
     metadata: Dict[str, Any],
     report: Dict[str, Any],
+    feature_manifest: Dict[str, Any],
 ) -> List[str]:
     stage_dir.mkdir(parents=True, exist_ok=True)
 
@@ -947,6 +1203,7 @@ def _stage_bundle(
 
     _write_json(stage_dir / "metadata.json", metadata)
     _write_json(stage_dir / "training_report.json", report)
+    _write_json(stage_dir / "feature_manifest.json", feature_manifest)
 
     return [
         "preprocessor.joblib",
@@ -960,20 +1217,29 @@ def _stage_bundle(
         "win_pipe.joblib",
         "metadata.json",
         "training_report.json",
+        "feature_manifest.json",
     ]
 
 
-def _promote_stage(stage_dir: Path, out_dir: Path, files: List[str]) -> None:
+def _promote_stage(stage_dir: Path, out_dir: Path, files: List[str], run_id: str) -> Optional[Path]:
     out_dir.mkdir(parents=True, exist_ok=True)
+    backup_dir = out_dir / "rollback" / run_id
+    backed_up = False
     for name in files:
         src = stage_dir / name
         if not src.exists():
             continue
+        existing = out_dir / name
+        if existing.exists():
+            backup_dir.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(existing, backup_dir / name)
+            backed_up = True
         tmp = out_dir / f".{name}.tmp"
         shutil.copy2(src, tmp)
         tmp.replace(out_dir / name)
     # Ensure runtime model discovery that sorts by directory mtime selects this bundle.
     os.utime(out_dir, None)
+    return backup_dir if backed_up else None
 
 
 def _mirror_to_dated_bundle(out_dir: Path, files: List[str], run_date_tag: str) -> Optional[Path]:
@@ -1127,7 +1393,7 @@ def main() -> int:
             f"Dataset too small for reliable production training (rows={len(df)}). Need at least 80 rows."
         )
 
-    feature_df = _drop_leaky_columns(df.copy(), log)
+    feature_df, feature_selection_manifest = _drop_leaky_columns(df.copy(), log)
     numeric_cols, categorical_cols = _infer_feature_columns(feature_df)
     feature_cols = numeric_cols + categorical_cols
     if not feature_cols:
@@ -1254,6 +1520,17 @@ def main() -> int:
     away_metrics = _compute_regression_metrics(y_away_hold, away_pred)
     cls_metrics = _compute_classifier_metrics(y_win_hold, win_prob)
     combined_mae = float((home_metrics.mae + away_metrics.mae) / 2.0)
+    baselines = _baseline_metrics(
+        y_home_train=y_home_train,
+        y_away_train=y_away_train,
+        y_win_train=y_win_train,
+        y_home_hold=y_home_hold,
+        y_away_hold=y_away_hold,
+        y_win_hold=y_win_hold,
+        X_holdout=X_holdout,
+    )
+    calibration = _calibration_report(y_win_hold, win_prob)
+    score_win_agreement = _score_classifier_agreement(home_pred, away_pred, win_prob)
 
     report: Dict[str, Any] = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -1278,6 +1555,7 @@ def main() -> int:
             },
             "generated": [WIN_PROBA_FEATURE],
         },
+        "feature_selection": feature_selection_manifest,
         "metrics": {
             "regression": {
                 "home": asdict(home_metrics),
@@ -1285,7 +1563,10 @@ def main() -> int:
                 "combined_mae": combined_mae,
             },
             "classification": asdict(cls_metrics),
+            "calibration": calibration,
+            "score_win_agreement": score_win_agreement,
         },
+        "baselines": baselines,
         "train_info": {
             "home": home_train_info,
             "away": away_train_info,
@@ -1332,6 +1613,10 @@ def main() -> int:
         report["train_info"]["win_calibration_full"] = win_calibration_info
         report["train_info"]["score_stack_full"] = full_stack_info
 
+    feature_gate_failures = [
+        f"leak guard retained suspicious feature column: {column}"
+        for column in feature_selection_manifest.get("hard_leak_columns_remaining", [])
+    ]
     previous_report = _load_previous_report(out_dir)
     gate = _gate_result(
         current_report=report,
@@ -1339,6 +1624,7 @@ def main() -> int:
         max_brier_delta=float(args.max_brier_delta),
         max_mae_delta=float(args.max_mae_delta),
         disable_gate=bool(args.disable_gate),
+        extra_failures=feature_gate_failures,
     )
 
     bundle_timestamp = datetime.now(timezone.utc).isoformat()
@@ -1352,6 +1638,7 @@ def main() -> int:
         "training_script": "backend/train_models.py",
         "dataset_path": str(dataset_path),
         "dataset_hash": report["dataset_hash"],
+        "feature_manifest_path": "feature_manifest.json",
         "rows_total": int(len(X)),
         "rows_train": int(len(X_train)),
         "rows_holdout": int(len(X_holdout)),
@@ -1367,6 +1654,13 @@ def main() -> int:
         },
         "feature_names": score_feature_cols,
         "feature_names_win": feature_cols,
+        "feature_selection": {
+            "used_column_count": feature_selection_manifest.get("used_column_count"),
+            "dropped_column_count": feature_selection_manifest.get("dropped_column_count"),
+            "dropped_reason_counts": feature_selection_manifest.get("dropped_reason_counts", {}),
+            "hard_leak_columns_dropped": feature_selection_manifest.get("hard_leak_columns_dropped", []),
+            "hard_leak_columns_remaining": feature_selection_manifest.get("hard_leak_columns_remaining", []),
+        },
         "feature_manifests": {
             "win": {
                 "numeric": numeric_cols,
@@ -1404,6 +1698,9 @@ def main() -> int:
         "gate": gate,
         "artifacts": {
             "preprocessor": "score_preprocessor.joblib",
+            "reg_home": "home_pipe.joblib",
+            "reg_away": "away_pipe.joblib",
+            "clf_home_win": "win_pipe.joblib",
             "score_preprocessor": "score_preprocessor.joblib",
             "win_preprocessor": "win_preprocessor.joblib",
             "home_model": "home_pipe.joblib",
@@ -1441,6 +1738,7 @@ def main() -> int:
         win_clf=win_clf,
         metadata=metadata,
         report=report,
+        feature_manifest=feature_selection_manifest,
     )
 
     allow_promote = gate["passed"] or bool(args.force_promote)
@@ -1448,8 +1746,9 @@ def main() -> int:
         allow_promote = False
 
     dated_bundle_dir: Optional[Path] = None
+    rollback_dir: Optional[Path] = None
     if allow_promote:
-        _promote_stage(stage_dir, out_dir, promoted_files)
+        rollback_dir = _promote_stage(stage_dir, out_dir, promoted_files, run_id=run_id)
         dated_bundle_dir = _mirror_to_dated_bundle(
             out_dir=out_dir,
             files=promoted_files,
@@ -1464,6 +1763,7 @@ def main() -> int:
         "staging_dir": str(stage_dir),
         "models_dir": str(out_dir),
         "dated_bundle_dir": str(dated_bundle_dir) if dated_bundle_dir else None,
+        "rollback_dir": str(rollback_dir) if rollback_dir else None,
         "gate": gate,
         "duration_seconds": round(time.time() - start_ts, 2),
     }

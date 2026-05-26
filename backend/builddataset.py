@@ -35,6 +35,26 @@ from backend.pipeline_models import DatasetArtifactManifest, DatasetBuildConfig
 from backend.score_sync import extract_score_entries_from_dataframe, write_score_snapshot
 
 
+TEAM_ABBR_ALIASES: dict[str, str] = {
+    "LA": "LAR",
+    "STL": "LAR",
+    "SD": "LAC",
+    "OAK": "LV",
+    "WSH": "WAS",
+}
+
+REQUIRED_SCHEMA_COLUMNS: tuple[str, ...] = (
+    "season",
+    "week",
+    "game_id",
+    "home_team",
+    "away_team",
+    "home_points_for",
+    "away_points_for",
+    "home_win",
+)
+
+
 def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -50,24 +70,43 @@ def _pick_latest_dataset_file(run_dir: Path) -> Path:
     return max(candidates, key=lambda item: item.stat().st_mtime)
 
 
+def _canonical_team_code(value: Any) -> str:
+    if pd.isna(value):
+        return ""
+    code = str(value).strip().upper()
+    if not code or code in {"NAN", "NONE", "NULL"}:
+        return ""
+    return TEAM_ABBR_ALIASES.get(code, code)
+
+
+def _canonical_game_id(season: Any, week: Any, away_team: Any, home_team: Any) -> str:
+    season_value = pd.to_numeric(pd.Series([season]), errors="coerce").iloc[0]
+    week_value = pd.to_numeric(pd.Series([week]), errors="coerce").iloc[0]
+    away = _canonical_team_code(away_team)
+    home = _canonical_team_code(home_team)
+    if pd.isna(season_value) or pd.isna(week_value) or not away or not home:
+        return ""
+    return f"{int(season_value)}_{int(week_value):02d}_{away}_{home}"
+
+
 def _ensure_game_id(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
     required = {"season", "week", "home_team", "away_team"}
-    if "game_id" in out.columns:
-        out["game_id"] = out["game_id"].fillna("").astype(str).str.strip()
-        return out
     if not required.issubset(out.columns):
+        if "game_id" in out.columns:
+            out["game_id"] = out["game_id"].fillna("").astype(str).str.strip()
         return out
 
-    season = pd.to_numeric(out["season"], errors="coerce")
-    week = pd.to_numeric(out["week"], errors="coerce")
-    home = out["home_team"].astype(str).str.strip().str.upper()
-    away = out["away_team"].astype(str).str.strip().str.upper()
+    out["home_team"] = out["home_team"].apply(_canonical_team_code)
+    out["away_team"] = out["away_team"].apply(_canonical_team_code)
     out["game_id"] = [
-        f"{int(season_val)}-{int(week_val)}-{home_val}-{away_val}"
-        if pd.notna(season_val) and pd.notna(week_val) and home_val and away_val
-        else ""
-        for season_val, week_val, home_val, away_val in zip(season, week, home, away)
+        _canonical_game_id(season, week, away, home)
+        for season, week, away, home in zip(
+            out["season"],
+            out["week"],
+            out["away_team"],
+            out["home_team"],
+        )
     ]
     return out
 
@@ -86,6 +125,7 @@ def _clean_dataset(df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, Any]]:
     out = _ensure_game_id(out)
 
     duplicate_game_ids_removed = 0
+    duplicate_game_ids: list[str] = []
     if "game_id" in out.columns:
         label_cols = [c for c in ("home_points_for", "away_points_for", "home_win", "winner") if c in out.columns]
         if label_cols:
@@ -101,6 +141,14 @@ def _clean_dataset(df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, Any]]:
         valid_game_ids = out["game_id"].fillna("").astype(str).str.strip().ne("")
         if valid_game_ids.any():
             before_dedupe = int(valid_game_ids.sum())
+            duplicate_game_ids = (
+                out.loc[valid_game_ids, "game_id"]
+                .value_counts()
+                .loc[lambda counts: counts > 1]
+                .head(100)
+                .index.astype(str)
+                .tolist()
+            )
             deduped = out.loc[valid_game_ids].drop_duplicates(subset=["game_id"], keep="first")
             duplicate_game_ids_removed = before_dedupe - len(deduped)
             out = pd.concat([deduped, out.loc[~valid_game_ids]], axis=0, ignore_index=True)
@@ -152,6 +200,7 @@ def _clean_dataset(df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, Any]]:
         "rows_after_cleaning": len(out),
         "blank_rows_removed": int(blank_mask.sum()),
         "duplicate_game_ids_removed": duplicate_game_ids_removed,
+        "duplicate_game_ids_sample": duplicate_game_ids,
         "dropped_empty_or_constant_columns": len(cols_to_drop),
         "dropped_empty_or_constant_column_names": cols_to_drop,
         "completed_rows": completed_rows,
@@ -163,6 +212,93 @@ def _clean_dataset(df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, Any]]:
 def _write_json(path: Path, payload: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+
+def _completed_mask(df: pd.DataFrame) -> pd.Series:
+    if "home_win" in df.columns:
+        return df["home_win"].notna()
+    score_cols = [col for col in ("home_points_for", "away_points_for") if col in df.columns]
+    if score_cols:
+        return df[score_cols].notna().all(axis=1)
+    return pd.Series([True] * len(df), index=df.index)
+
+
+def _schema_report(df: pd.DataFrame) -> dict[str, Any]:
+    missing_required = [col for col in REQUIRED_SCHEMA_COLUMNS if col not in df.columns]
+    columns: list[dict[str, Any]] = []
+    for col in df.columns:
+        series = df[col]
+        columns.append(
+            {
+                "name": str(col),
+                "dtype": str(series.dtype),
+                "missing_count": int(series.isna().sum()),
+                "missing_ratio": float(series.isna().mean()) if len(series) else 0.0,
+                "unique_count": int(series.nunique(dropna=True)),
+            }
+        )
+    return {
+        "required_columns": list(REQUIRED_SCHEMA_COLUMNS),
+        "missing_required_columns": missing_required,
+        "rows": int(len(df)),
+        "columns": int(len(df.columns)),
+        "column_report": columns,
+    }
+
+
+def _missingness_report(df: pd.DataFrame) -> dict[str, Any]:
+    rows = []
+    for col in df.columns:
+        missing_count = int(df[col].isna().sum())
+        rows.append(
+            {
+                "column": str(col),
+                "missing_count": missing_count,
+                "missing_ratio": float(missing_count / max(1, len(df))),
+            }
+        )
+    rows = sorted(rows, key=lambda item: (-item["missing_ratio"], item["column"]))
+    return {
+        "rows": int(len(df)),
+        "columns": int(len(df.columns)),
+        "columns_with_missing_values": int(sum(1 for row in rows if row["missing_count"] > 0)),
+        "missingness": rows,
+    }
+
+
+def _duplicate_report(df: pd.DataFrame, clean_stats: dict[str, Any]) -> dict[str, Any]:
+    duplicate_rows: list[dict[str, Any]] = []
+    if "game_id" in df.columns:
+        counts = df["game_id"].fillna("").astype(str).str.strip().value_counts()
+        duplicate_rows = [
+            {"game_id": str(game_id), "count": int(count)}
+            for game_id, count in counts[counts > 1].head(100).items()
+        ]
+    return {
+        "duplicate_game_ids_removed": int(clean_stats.get("duplicate_game_ids_removed", 0) or 0),
+        "duplicate_game_ids_sample_before_cleaning": clean_stats.get("duplicate_game_ids_sample", []),
+        "remaining_duplicate_game_ids": duplicate_rows,
+    }
+
+
+def _write_dataset_partitions(
+    *,
+    clean_df: pd.DataFrame,
+    out_root: Path,
+    run_dir: Path,
+    raw_stem: str,
+) -> tuple[Path, Path]:
+    completed = clean_df.loc[_completed_mask(clean_df)].copy()
+    future = clean_df.loc[~_completed_mask(clean_df)].copy()
+
+    completed_path = out_root / f"{raw_stem}_completed.csv"
+    future_path = out_root / f"{raw_stem}_future.csv"
+    completed.to_csv(completed_path, index=False)
+    future.to_csv(future_path, index=False)
+
+    shutil.copy2(completed_path, run_dir / completed_path.name)
+    shutil.copy2(future_path, run_dir / future_path.name)
+    return completed_path, future_path
 
 
 def _sha256_file(path: Path) -> str:
@@ -263,6 +399,12 @@ def main() -> None:
     promoted_clean_path = out_root / f"{raw_dataset_path.stem}_clean.csv"
     promoted_clean_path.parent.mkdir(parents=True, exist_ok=True)
     clean_df.to_csv(promoted_clean_path, index=False)
+    completed_dataset_path, future_dataset_path = _write_dataset_partitions(
+        clean_df=clean_df,
+        out_root=out_root,
+        run_dir=run_dir,
+        raw_stem=raw_dataset_path.stem,
+    )
 
     # Keep a copy inside the run directory for full run provenance.
     run_clean_path = run_dir / f"{raw_dataset_path.stem}_clean.csv"
@@ -271,9 +413,16 @@ def main() -> None:
 
     metadata_path = run_dir / "game_features_metadata.json"
     quality_report_path = run_dir / "game_features_quality_report.json"
+    schema_report_path = run_dir / "schema_report.json"
+    missingness_report_path = run_dir / "missingness_report.json"
+    duplicate_report_path = run_dir / "duplicate_report.json"
     score_snapshot_path = run_dir / "game_scores.json"
     log_path = run_dir / "build_csv_datasets.log"
     manifest_base_dir = out_root.parent
+    _write_json(schema_report_path, _schema_report(clean_df))
+    _write_json(missingness_report_path, _missingness_report(clean_df))
+    _write_json(duplicate_report_path, _duplicate_report(clean_df, clean_stats))
+
     score_entries = extract_score_entries_from_dataframe(clean_df, updated_at=_utc_now().isoformat())
     write_score_snapshot(score_snapshot_path, score_entries)
     write_score_snapshot(out_root / "latest_scores.json", score_entries)
@@ -295,6 +444,8 @@ def main() -> None:
         legacy_root_copy=config.legacy_root_copy,
         raw_dataset_path=_manifest_path(raw_dataset_path, manifest_base_dir),
         clean_dataset_path=_manifest_path(promoted_clean_path, manifest_base_dir),
+        completed_dataset_path=_manifest_path(completed_dataset_path, manifest_base_dir),
+        future_dataset_path=_manifest_path(future_dataset_path, manifest_base_dir),
         run_dir=_manifest_path(run_dir, manifest_base_dir),
         metadata_path=_manifest_path(metadata_path, manifest_base_dir) if metadata_path.exists() else None,
         quality_report_path=(
@@ -302,10 +453,13 @@ def main() -> None:
             if quality_report_path.exists()
             else None
         ),
+        schema_report_path=_manifest_path(schema_report_path, manifest_base_dir),
+        missingness_report_path=_manifest_path(missingness_report_path, manifest_base_dir),
+        duplicate_report_path=_manifest_path(duplicate_report_path, manifest_base_dir),
         score_snapshot_path=_manifest_path(score_snapshot_path, manifest_base_dir),
         log_path=_manifest_path(log_path, manifest_base_dir) if log_path.exists() else None,
         dataset_hash=_sha256_file(promoted_clean_path),
-        cleaning_stats={key: int(value) for key, value in clean_stats.items()},
+        cleaning_stats=clean_stats,
     )
 
     _write_json(run_dir / "dataset_manifest.json", manifest.model_dump(mode="json"))
