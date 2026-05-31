@@ -4,22 +4,22 @@ import './LandingPage.css';
 
 const VALUE_PILLARS = [
   {
-    title: '1. Sign in once',
-    body: 'Open the app with your email so your work stays cached on this device and you can pick up exactly where you left off.',
+    title: 'Sign in once',
+    body: 'Open the app with your email so forecasts, history, and matchup context stay tied to this device.',
   },
   {
-    title: '2. Browse any slate',
-    body: 'Toggle current or past weeks and seasons, then pick a matchup to generate a polished forecast in a single tap.',
+    title: 'Browse the 2026 slate',
+    body: 'Move through the upcoming regular season, archived weeks, and saved predictions from one workspace.',
   },
   {
-    title: '3. Track predictions vs. final score',
-    body: 'History saves every forecast alongside the final score that syncs after Sunday, Monday, and Thursday nights.',
+    title: 'Review every result',
+    body: 'History saves each forecast alongside final scores as games resolve through the season.',
   },
 ];
 
 const HERO_METRICS = [
-  { label: 'Score sync', value: 'Sun · Mon · Thu' },
-  { label: 'Season navigation', value: 'Live + archives' },
+  { label: '2026 schedule', value: '272 games' },
+  { label: 'Pipeline', value: 'Contract checked' },
   { label: 'History', value: 'Saved per user' },
 ];
 
@@ -86,11 +86,11 @@ export default function LandingPage({ authSession, onSignIn, onSignOut }) {
 
       <section className="landing-hero" id="experience">
         <div className="landing-copy">
-          <p className="landing-kicker">Weekly slates, finalized results</p>
-          <h1>Forecast any matchup, then compare how your call stacked up once the final score syncs.</h1>
+          <p className="landing-kicker">2026 schedule-ready forecasting</p>
+          <h1>Forecast upcoming NFL matchups with a checked model bundle and clean future-game rows.</h1>
           <p className="landing-lead">
-            Sign in to capture forecasts, browse the current or past slate, and rely on synced final scores
-            after Sunday, Monday, and Thursday night games.
+            Sign in to capture forecasts, browse the current or past slate, and compare each prediction
+            once final scores sync back into your history.
           </p>
 
           <div className="landing-hero__actions">
@@ -176,8 +176,7 @@ export default function LandingPage({ authSession, onSignIn, onSignOut }) {
                   Sign in
                 </button>
                 <p className="landing-form__note">
-                  Your session stays on this device and final scores refresh automatically after every Sunday,
-                  Monday, and Thursday night slate.
+                  Your session stays on this device, and final scores refresh as completed games are synced.
                 </p>
               </form>
             )}

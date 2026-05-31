@@ -1,0 +1,139 @@
+{
+  "rows": 2500,
+  "cols": 247,
+  "seasons_min": 2018,
+  "seasons_max": 2026,
+  "weeks_min": 1,
+  "weeks_max": 22,
+  "duplicate_game_id_rows": 0,
+  "future_rows": 273,
+  "training_rows": 2227,
+  "coverage": {
+    "home_team": 1.0,
+    "away_team": 1.0,
+    "home_rest": 0.9996,
+    "away_rest": 0.9996,
+    "spread_line": 0.9216,
+    "total_line": 0.9212,
+    "neutral_site": 0.0,
+    "roof": 0.9824,
+    "surface": 0.982,
+    "temp": 0.5588,
+    "wind": 0.5588,
+    "kickoff_hour_utc": 0.0004
+  },
+  "feature_group_coverage": {
+    "market": {
+      "columns": 32,
+      "coverage": 0.9579375,
+      "null_rate": 0.042062499999999996,
+      "sample_columns": [
+        "home_prior_away_moneyline_3",
+        "home_prior_home_moneyline_3",
+        "home_prior_spread_line_3",
+        "home_prior_total_line_3",
+        "home_prior_away_moneyline_5",
+        "home_prior_home_moneyline_5",
+        "home_prior_spread_line_5",
+        "home_prior_total_line_5"
+      ]
+    },
+    "prior_team_form": {
+      "columns": 76,
+      "coverage": 1.0,
+      "null_rate": 0.0,
+      "sample_columns": [
+        "home_prior_pf_avg_3",
+        "home_prior_pa_avg_3",
+        "home_prior_win_pct_3",
+        "home_prior_away_moneyline_3",
+        "home_prior_home_moneyline_3",
+        "home_prior_spread_line_3",
+        "home_prior_total_line_3",
+        "home_prior_away_rest_3"
+      ]
+    },
+    "pbp_efficiency": {
+      "columns": 48,
+      "coverage": 0.6835333333333333,
+      "null_rate": 0.3164666666666667,
+      "sample_columns": [
+        "home_prior_off_epa_per_play_3",
+        "home_prior_off_success_rate_3",
+        "home_prior_off_explosive_rate_3",
+        "home_prior_off_turnover_rate_3",
+        "home_prior_def_success_rate_allowed_3",
+        "home_prior_def_explosive_rate_allowed_3",
+        "home_prior_def_epa_per_play_3",
+        "home_prior_def_takeaway_rate_3"
+      ]
+    },
+    "weather_rest": {
+      "columns": 33,
+      "coverage": 0.9272848484848485,
+      "null_rate": 0.07271515151515151,
+      "sample_columns": [
+        "home_prior_away_rest_3",
+        "home_prior_home_rest_3",
+        "home_prior_temp_3",
+        "home_prior_wind_3",
+        "home_prior_away_rest_5",
+        "home_prior_home_rest_5",
+        "home_prior_temp_5",
+        "home_prior_wind_5"
+      ]
+    },
+    "elo_qb": {
+      "columns": 15,
+      "coverage": 0.88888,
+      "null_rate": 0.11112000000000001,
+      "sample_columns": [
+        "home_player_team_qb_pass_yards",
+        "home_player_team_qb_pass_tds",
+        "home_player_team_qb_completions",
+        "home_player_team_qb_attempts",
+        "home_player_team_qb_completion_pct",
+        "away_player_team_qb_pass_yards",
+        "away_player_team_qb_pass_tds",
+        "away_player_team_qb_completions"
+      ]
+    },
+    "team_encoding": {
+      "columns": 64,
+      "coverage": 1.0,
+      "null_rate": 0.0,
+      "sample_columns": [
+        "home_team_ARI",
+        "home_team_ATL",
+        "home_team_BAL",
+        "home_team_BUF",
+        "home_team_CAR",
+        "home_team_CHI",
+        "home_team_CIN",
+        "home_team_CLE"
+      ]
+    }
+  },
+  "critical_null_rates": {
+    "season": 0.0,
+    "week": 0.0,
+    "home_team": 0.0,
+    "away_team": 0.0,
+    "spread_line": 0.0784,
+    "total_line": 0.0788,
+    "home_rest": 0.0004,
+    "away_rest": 0.0004,
+    "home_moneyline_prob": 0.0784,
+    "away_moneyline_prob": 0.0784
+  },
+  "provider_status": {
+    "selected_nfl_backend": "nflreadpy",
+    "pbp_cache_available": true,
+    "pbp_cache_path": "backend\\pbp_cache.csv",
+    "player_stats_available": true,
+    "player_stats_column_count": 28,
+    "future_game_support": true,
+    "degraded_reason_codes": [],
+    "prediction_readiness": "production_ready"
+  }
+}

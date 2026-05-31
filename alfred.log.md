@@ -101,3 +101,73 @@ Verification result: Compile checks passed, script help commands loaded, the cur
 Remaining issues: `backend/.env` remains locally modified and intentionally unstaged. A tracked pytest pycache file was touched by verification and should not be included in release commits.
 
 Recommended next step: Push the safe source/deploy changes, deploy backend and frontend, then run live `/status/models`, `/predict`, and browser dashboard prediction smoke checks.
+
+## 2026-05-26 - Dashboard slate filters and premium overview
+
+Summary: Identified the dashboard slate workflow, stats overview, and primary schedule/card affordances as the three weakest product areas. Implemented two premium UI upgrades and one real functional upgrade: TeamGrid now has search/status controls with polished guidance states, StatsPage is now a shared-shell service overview, and "Predict visible" passes only the filtered slate into the dashboard bulk prediction flow.
+
+Files changed: dataflow.md, artifacts/important_info.md, artifacts/last_5_tasks.md, artifacts/next_5_tasks.md, frontend/src/components/Card/TeamGrid.jsx, frontend/src/components/Card/TeamGrid.css, frontend/src/components/Card/TeamGrid.test.jsx, frontend/src/components/DashBoard/Dashboard.jsx, frontend/src/pages/StatsPage.jsx, frontend/src/pages/StatsPage.module.css.
+
+Commands run: `cd frontend && npm test -- --run` (first run exposed missing test cleanup, fixed); `cd frontend && npm test -- --run`; `cd frontend && npm run build`; `cd frontend && npm run preview -- --host 127.0.0.1 --port 4173`; Playwright Chromium render checks for authenticated `/app` and `/stats` with screenshots saved under `output/playwright/`.
+
+Verification result: Frontend tests passed: 9 passed across 4 files. Production build passed. Local preview rendered `/stats` with the new overview heading and captured `output/playwright/stats-overview.png`. Authenticated `/app` rendered the empty-slate state because the API reported no live weekly slate, so the visible-slate behavior is verified by `TeamGrid.test.jsx` rather than a live-schedule browser flow.
+
+Remaining issues: Chrome plugin browser-control tools were not exposed by tool discovery, so Chrome-plugin screenshots could not be taken. The repo still has unrelated dirty files and deleted backend tests in git status; these were not reverted or modified.
+
+Recommended next step: After release, run the same smoke against the deployed Vercel URL on a week with real scheduled games and at least one saved prediction so the filtered dashboard slate can be visually verified with live data.
+
+## 2026-05-26 - Leak-guarded ML pipeline and production bundle
+
+Summary: Upgraded the dataset/training pipeline around stable game IDs, manifest resolution, completed/future dataset partitions, schema/missingness/duplicate reports, leakage-aware feature selection, baseline/calibration reporting, canonical artifact metadata, and rollback-backed production model promotion. Promoted bundle `20260526T215600Z-prod-leakguard` from dataset hash `cc904b86f4cc7addf8c6300868eaf7abb24b59958e898d0912e53bea40b69eb4`.
+
+Files changed: .gitignore, backend/builddataset.py, backend/pipeline_models.py, backend/train_models.py, backend/utils/ops_reporting.py, backend/tests/test_pipeline_contract.py, backend/data/datasets/latest_dataset.json, backend/data/datasets/latest_scores.json, backend/data/datasets/game_features_20260526_*.csv, backend/models/*.joblib, backend/models/metadata.json, backend/models/feature_manifest.json, backend/models/training_report.json, backend/models/run_summary.json.
+
+Commands run: `python -m compileall backend\builddataset.py backend\train_models.py backend\pipeline_models.py backend\utils\ops_reporting.py`; `python backend\builddataset.py --start 2018 --end 2025 --out-dir backend\data\datasets`; `python backend\train_models.py --data backend\data\datasets\game_features_20260526_clean.csv --out backend\models --fast-dev --no-promote --bundle-version smoke-20260526`; `python backend\train_models.py --data backend\data\datasets\game_features_20260526_clean.csv --out backend\models --production --bundle-version 20260526T215600Z-prod-leakguard`; `python -m pytest backend\tests -q`; FastAPI TestClient `/status/models` and `/predict` smoke; `cd frontend && npm test -- --run`; `cd frontend && npm run build`; local FastAPI/Vite Playwright flow through sign-in, slate load, and one generated prediction.
+
+Verification result: Dataset build produced 2,227 completed rows, 242 columns, zero duplicate game IDs, and no all-empty columns. Training dropped 33 leak-risk/non-feature columns, including all 26 same-week player-stat columns, and promoted with gate passed. Backend contract tests passed: 3 passed. Runtime `/status/models` returned ready with bundle `20260526T215600Z-prod-leakguard`; `/predict` for PHI vs DAL returned 200 with `win_classifier_used=true`. Frontend tests passed: 9 passed. Frontend production build passed. Playwright verified local authenticated dashboard prediction flow with `/predict` returning 200.
+
+Remaining issues: The leak-guarded classifier beats the train-rate baseline but trails the market/prior baseline on holdout Brier by about 0.0176, so probability blending or a market-aware classifier is the next model-quality target. Git status still contains unrelated pre-existing artifact note changes and permission warnings for `artifacts/pytest_codex_schedule*`.
+
+Recommended next step: Deploy backend and frontend, then run live Heroku `/status/models` plus `/predict` and Vercel authenticated dashboard prediction smoke against the production URLs.
+
+## 2026-05-31 - Pipeline status and prediction row quality audit
+
+Summary: Added a provider/dataset/model-bundle status layer and strict train/inference feature-contract validation for the NFL backend. Verified the exact prediction row used by `/predict` through `/debug/predict-input`, then sampled eight recent completed games through the API path to estimate prediction quality and row completeness.
+
+Files changed: backend/main.py, backend/build_csv_datasets_v3.py, backend/schemas_pipeline_status.py, backend/contracts/feature_contract.py, backend/contracts/model_bundle_contract.py, backend/services/contract_validator.py, backend/services/pipeline_status.py, backend/tests/test_feature_contract.py, backend/tests/test_model_bundle_contract.py, backend/tests/test_pipeline_status.py.
+
+Commands run: `python -m py_compile backend\main.py backend\build_csv_datasets_v3.py backend\schemas_pipeline_status.py backend\contracts\feature_contract.py backend\contracts\model_bundle_contract.py backend\services\contract_validator.py backend\services\pipeline_status.py`; `.venv\Scripts\python.exe -m pytest backend\tests -q`; FastAPI TestClient `/health`, `/metadata/dataset`, `/metadata/model-bundle`, `/debug/predict-input`, and `/predict` sample checks using `.venv`.
+
+Verification result: Compile passed. Backend tests passed: 8 passed. The compatible `.venv` runtime loaded all three models with bundle `20260526T215600Z-prod-leakguard`; default system Python was rejected because it has scikit-learn 1.5.2 while the bundle requires 1.7.2. The sampled prediction rows were `dataset_exact`, averaged row quality `100.0`, had zero missing values after imputation, and used the calibrated win classifier. Eight recent completed games averaged home MAE `7.738`, away MAE `5.671`, spread MAE `8.318`, and winner accuracy `0.625`.
+
+Remaining issues: The active dataset has no future rows and max season 2025, so the new pipeline metadata marks it stale for 2026. Dataset contract validation still reports expected nullable feature fields handled by median imputation; this is warning-only, not a blocker.
+
+Recommended next step: Rebuild the dataset with 2026 future schedule rows, then rerun `/health/pipeline` and the same `/debug/predict-input` sample for a future matchup to confirm synthetic row quality.
+
+## 2026-05-31 - 2026 future schedule rebuild and pipeline smoke
+
+Summary: Ingested the 2026 ESPN regular-season schedule, rebuilt the canonical dataset through 2026 with future rows enabled, and checked the running FastAPI pipeline plus future-row debug diagnostics.
+
+Files changed: backend/data/Nfl_schedule_2026.csv, backend/data/schedules/nfl_schedule_2026.parquet, backend/data/datasets/latest_dataset.json, backend/data/datasets/latest_scores.json, backend/data/datasets/game_features_20260531_clean.csv, backend/data/datasets/game_features_20260531_completed.csv, backend/data/datasets/game_features_20260531_future.csv, backend/data/datasets/runs/20260531T123503Z/*, alfred.log.md.
+
+Commands run: `.venv\Scripts\python.exe -m backend.services.schedule_ingestion --season 2026 --season-types 2,3 --out-csv backend\data\Nfl_schedule_2026.csv --out-parquet backend\data\schedules\nfl_schedule_2026.parquet --raw-dir backend\data\raw\espn\scoreboards --log-level INFO`; `.venv\Scripts\python.exe backend\builddataset.py --start 2018 --end 2026 --out-dir backend\data\datasets --encode onehot --no-calibration-rows`; FastAPI TestClient `GET /health/pipeline`; FastAPI TestClient `POST /debug/predict-input` for 2026 Week 1 ARI at LAC; FastAPI TestClient synthetic fallback debug check for 2026 Week 19 ARI at LAC; `.venv\Scripts\python.exe -m pytest backend\tests -q`.
+
+Verification result: ESPN ingestion produced 272 leak-safe 2026 future rows with null scores. Dataset rebuild promoted `backend/data/datasets/game_features_20260531_clean.csv` with 2,499 rows, 214 columns, 2,227 completed rows, 272 future rows, max season 2026, and dataset hash `db0f34ed782456f98a1dc19537820af706e290b1ed0658b1b06e6b5cc3fcef2a`. `/health/pipeline` saw the new dataset and marked it non-stale with future-game support enabled. `/debug/predict-input` for 2026 Week 1 ARI at LAC used `dataset_exact`, row quality `95.81`, 210 model features, and only the two QB completion columns missing after imputation. The controlled non-scheduled fallback check used `synthetic` and scored `51.14`, proving the debug route clearly distinguishes degraded synthetic rows. Backend tests passed: 8 passed.
+
+Remaining issues: `/health/pipeline` is not production-ready because the active model bundle was trained on the previous dataset hash and still expects `home_qb_completion_pct` and `away_qb_completion_pct`. `/predict` correctly returns 503 until the model bundle is retrained or the feature contract is intentionally re-aligned. The new CSV schedule/dataset files are ignored by `.gitignore`; committing `latest_dataset.json` without force-adding or regenerating those artifacts would point at local-only files.
+
+Recommended next step: Retrain/promote a model bundle from `backend/data/datasets/game_features_20260531_clean.csv`, then rerun `/health/pipeline`, `/metadata/model-bundle`, and a real 2026 `/predict` smoke.
+
+## 2026-05-31 - 2026 dataset promotion, model retrain, and release prep
+
+Summary: Fixed the remaining 2026 readiness blockers by preserving historical team/player stat features when future-season nflverse stat files are unavailable, rebuilding the 2018-2026 dataset, retraining/promoting a matching production model bundle, updating the landing page and top-level README, and capturing a landing-page screenshot.
+
+Files changed: .gitignore, README.md, backend/build_csv_datasets_v3.py, backend/main.py, backend/contracts/*, backend/services/contract_validator.py, backend/services/pipeline_status.py, backend/schemas_pipeline_status.py, backend/tests/*contract*.py, backend/tests/test_dataset_partial_availability.py, backend/data/Nfl_schedule_2026.csv, backend/data/schedules/nfl_schedule_2026.parquet, backend/data/datasets/latest_dataset.json, backend/data/datasets/latest_scores.json, backend/data/datasets/game_features_20260531_*.csv, backend/data/datasets/runs/20260531T124903Z/*.json, backend/models/* promoted bundle files, frontend/src/pages/LandingPage.jsx, output/playwright/landing-20260531.png.
+
+Commands run: `.venv\Scripts\python.exe -m backend.services.schedule_ingestion --season 2026 --season-types 2,3 --out-csv backend\data\Nfl_schedule_2026.csv --out-parquet backend\data\schedules\nfl_schedule_2026.parquet --raw-dir backend\data\raw\espn\scoreboards --log-level INFO`; `.venv\Scripts\python.exe backend\builddataset.py --start 2018 --end 2026 --out-dir backend\data\datasets --encode onehot --no-calibration-rows`; `.venv\Scripts\python.exe backend\train_models.py --data backend\data\datasets\game_features_20260531_clean.csv --out backend\models --production --bundle-version 20260531T124903Z-prod-2026 --n-jobs -1 --hp-niter 30 --splits 5 --embargo 1`; FastAPI TestClient `/health/pipeline`, `/metadata/model-bundle`, `/debug/predict-input`, and `/predict`; `.venv\Scripts\python.exe -m py_compile ...`; `.venv\Scripts\python.exe -m pytest backend\tests -q`; `cd frontend && npm test -- --run`; `cd frontend && npm run build`; local Vite preview plus Playwright screenshot.
+
+Verification result: Rebuild produced dataset hash `94bd8ca5e7e47ac5db5d4d583daaa93265313be24a20bf909848db68a18f188b`, 2,499 rows, 242 columns, 2,227 completed rows, 272 future rows, and preserved QB/player-derived columns while marking only 2026 stat files unavailable. Model training promoted bundle `20260531T124903Z-prod-2026`; gate passed with Brier improving from `0.2176` to `0.2119` and combined MAE improving from `7.0347` to `6.9767`. `/health/pipeline` reported production-ready with no blockers, `/metadata/model-bundle` contract was ok, `/debug/predict-input` for 2026 Week 1 ARI at LAC used `dataset_exact` with row quality `100.0`, and `/predict` returned 200 with `win_classifier_used=true`. Backend tests passed: 10 passed. Frontend tests passed: 9 passed. Frontend build passed. Screenshot saved to `output/playwright/landing-20260531.png`.
+
+Remaining issues: The training process still emits known scikit-learn median-imputer warnings for all-empty optional diff features, but the promoted bundle passed the existing quality gate and runtime contract checks. Local git status still includes unrelated artifact note changes under `artifacts/` that should stay out of the release commit unless explicitly requested.
+
+Recommended next step: Commit the scoped release files, push to GitHub, deploy Heroku backend and Vercel frontend, then smoke-test live `/health/pipeline`, `/predict`, and the deployed landing page.

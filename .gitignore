@@ -98,6 +98,15 @@ MANIFEST
 !backend/data/team_logo.csv
 !backend/Nfl_schedule_2025.csv
 !backend/data/Nfl_schedule_2025.csv
+!backend/data/Nfl_schedule_2026.csv
+!backend/data/datasets/game_features_20260531_clean.csv
+!backend/data/datasets/game_features_20260531_completed.csv
+!backend/data/datasets/game_features_20260531_future.csv
+!backend/data/datasets/runs/
+!backend/data/datasets/runs/20260531T124903Z/
+!backend/data/datasets/runs/20260531T124903Z/*.json
+!backend/data/schedules/
+!backend/data/schedules/*.parquet
 backend/data/datasets_local/
 
 # Local-only backend artifacts (keep production datasets under backend/data/datasets)
@@ -139,6 +148,7 @@ backend/*/models/
 !backend/models/feature_manifest.json
 !backend/models/training_report.json
 !backend/models/run_summary.json
+backend/models/training_metrics_plot.png
 
 
 

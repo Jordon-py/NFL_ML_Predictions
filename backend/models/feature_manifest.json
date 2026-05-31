@@ -92,14 +92,6 @@
     "home_minus_away_home_rest_3",
     "home_minus_away_temp_3",
     "home_minus_away_wind_3",
-    "home_minus_away_off_epa_per_play_3",
-    "home_minus_away_off_success_rate_3",
-    "home_minus_away_off_explosive_rate_3",
-    "home_minus_away_off_turnover_rate_3",
-    "home_minus_away_def_success_rate_allowed_3",
-    "home_minus_away_def_explosive_rate_allowed_3",
-    "home_minus_away_def_epa_per_play_3",
-    "home_minus_away_def_takeaway_rate_3",
     "home_minus_away_pf_avg_5",
     "home_minus_away_pa_avg_5",
     "home_minus_away_win_pct_5",
@@ -211,7 +203,7 @@
     "away_team_TEN",
     "away_team_WAS"
   ],
-  "used_column_count": 209,
+  "used_column_count": 201,
   "dropped_columns": [
     {
       "column": "game_id",
@@ -254,6 +246,62 @@
       "hard_leak": true,
       "missing_ratio": 0.0,
       "unique_count": 33
+    },
+    {
+      "column": "home_minus_away_off_epa_per_play_3",
+      "reason": "near_empty_column",
+      "hard_leak": false,
+      "missing_ratio": 0.9501571621014818,
+      "unique_count": 111
+    },
+    {
+      "column": "home_minus_away_off_success_rate_3",
+      "reason": "near_empty_column",
+      "hard_leak": false,
+      "missing_ratio": 0.9501571621014818,
+      "unique_count": 111
+    },
+    {
+      "column": "home_minus_away_off_explosive_rate_3",
+      "reason": "near_empty_column",
+      "hard_leak": false,
+      "missing_ratio": 0.9501571621014818,
+      "unique_count": 111
+    },
+    {
+      "column": "home_minus_away_off_turnover_rate_3",
+      "reason": "near_empty_column",
+      "hard_leak": false,
+      "missing_ratio": 0.9501571621014818,
+      "unique_count": 106
+    },
+    {
+      "column": "home_minus_away_def_success_rate_allowed_3",
+      "reason": "near_empty_column",
+      "hard_leak": false,
+      "missing_ratio": 0.9501571621014818,
+      "unique_count": 111
+    },
+    {
+      "column": "home_minus_away_def_explosive_rate_allowed_3",
+      "reason": "near_empty_column",
+      "hard_leak": false,
+      "missing_ratio": 0.9501571621014818,
+      "unique_count": 111
+    },
+    {
+      "column": "home_minus_away_def_epa_per_play_3",
+      "reason": "near_empty_column",
+      "hard_leak": false,
+      "missing_ratio": 0.9501571621014818,
+      "unique_count": 111
+    },
+    {
+      "column": "home_minus_away_def_takeaway_rate_3",
+      "reason": "near_empty_column",
+      "hard_leak": false,
+      "missing_ratio": 0.9501571621014818,
+      "unique_count": 102
     },
     {
       "column": "home_player_team_qb_pass_yards",
@@ -445,8 +493,9 @@
       "unique_count": 2
     }
   ],
-  "dropped_column_count": 33,
+  "dropped_column_count": 41,
   "dropped_reason_counts": {
+    "near_empty_column": 8,
     "same_week_player_stat": 26,
     "target_or_postgame_column": 7
   },

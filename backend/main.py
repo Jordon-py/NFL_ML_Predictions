@@ -101,6 +101,17 @@ from backend.prediction_store import (
 from backend.score_sync import extract_score_entries_from_dataframe
 from backend.schemas import PredictionRequest as StoredPredictionRequest
 from backend.services.inference_row import build_model_input_row
+from backend.schemas_pipeline_status import (
+    DatasetQualityStatus,
+    ModelBundleStatus,
+    PipelineStatusResponse,
+)
+from backend.services.contract_validator import (
+    align_prediction_feature_frame,
+    validate_prediction_feature_frame,
+    validate_runtime_contracts,
+)
+from backend.services.pipeline_status import build_pipeline_status
 from backend.sqlite_store import upsert_game_scores
 from backend.utils import functions_for_main as fn_main
 from backend.utils.ops_reporting import (
@@ -896,6 +907,9 @@ class AppState:
         self.retrain_lock = threading.Lock()
         self.production_blockers: List[str] = []
         self.production_warnings: List[str] = []
+        self.contract_blockers: List[str] = []
+        self.contract_warnings: List[str] = []
+        self.runtime_contract_validation: Dict[str, Any] = {}
         self.model_load_errors: Dict[str, str] = {}
         self.last_game_score_sync_at: Optional[datetime] = None
         self.last_game_score_sync_count: int = 0
@@ -1044,6 +1058,11 @@ class AppState:
             warnings_out.append(formatted)
             if key in REQUIRED_MODELS or key == "metadata":
                 blockers.append(formatted)
+
+        for message in self.contract_blockers:
+            blockers.append(message)
+        for message in self.contract_warnings:
+            warnings_out.append(message)
 
         for warning_message in self.production_warnings:
             if warning_message not in warnings_out:
@@ -1195,6 +1214,9 @@ class AppState:
         self.win_preprocessor = None
         self.production_blockers = []
         self.production_warnings = []
+        self.contract_blockers = []
+        self.contract_warnings = []
+        self.runtime_contract_validation = {}
         self.model_load_errors = {}
         logging.info("[Model] Using models directory: %s", MODELS_DIR)
         # Default model filenames (non-pipeline artifacts)
@@ -1377,6 +1399,28 @@ class AppState:
             self.feature_manifest = _feature_manifest()
         except Exception:
             self.feature_manifest = []
+
+        try:
+            runtime_contract = validate_runtime_contracts(
+                models_dir=MODELS_DIR,
+                metadata=self.models_metadata,
+                dataset=self.dataset,
+                dataset_hash=self.dataset_hash,
+                sklearn_runtime_version=SKLEARN_RUNTIME_VERSION,
+            )
+            self.runtime_contract_validation = runtime_contract.model_dump(mode="json")
+            self.contract_blockers = list(runtime_contract.blockers)
+            self.contract_warnings = list(runtime_contract.warnings)
+        except Exception as exc:
+            message = f"runtime contract validation failed: {str(exc).splitlines()[0]}"
+            self.runtime_contract_validation = {
+                "ok": False,
+                "blockers": [message],
+                "warnings": [],
+            }
+            self.contract_blockers = [message]
+            self.contract_warnings = []
+            logging.exception("[Contract] Runtime validation failed: %s", exc)
 
         self._refresh_runtime_readiness()
 
@@ -2891,6 +2935,58 @@ def _build_history_metrics(entries: List[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
+def _pipeline_status_snapshot(*, include_schedule: bool = True) -> PipelineStatusResponse:
+    schedule_df: Optional[pd.DataFrame] = None
+    schedule_error: Optional[str] = None
+    if include_schedule:
+        try:
+            schedule_df = _load_schedule_dataframe()
+        except Exception as exc:
+            schedule_error = str(exc).splitlines()[0]
+            logging.warning("[PipelineStatus] Schedule load failed: %s", schedule_error)
+
+    missing_required = [name for name in REQUIRED_MODELS if name not in state.models]
+    return build_pipeline_status(
+        backend_dir=BASE_DIR,
+        models_dir=MODELS_DIR,
+        dataset=state.dataset,
+        dataset_path=state.dataset_path,
+        dataset_hash=state.dataset_hash,
+        dataset_manifest=state.dataset_manifest,
+        dataset_metadata=state.dataset_metadata,
+        models_metadata=state.models_metadata,
+        loaded_models=sorted(state.models.keys()),
+        missing_required_models=missing_required,
+        model_load_errors=dict(state.model_load_errors),
+        production_blockers=list(state.production_blockers),
+        production_warnings=list(state.production_warnings),
+        runtime_contract_validation=dict(state.runtime_contract_validation),
+        schedule_df=schedule_df,
+        schedule_error=schedule_error,
+    )
+
+
+@app.get("/health/pipeline", response_model=PipelineStatusResponse)
+def health_pipeline() -> PipelineStatusResponse:
+    """Detailed pipeline health, data-source degradation, and contract status."""
+    state.refresh_dataset_if_changed()
+    return _pipeline_status_snapshot(include_schedule=True)
+
+
+@app.get("/metadata/dataset", response_model=DatasetQualityStatus)
+def metadata_dataset() -> DatasetQualityStatus:
+    """Dataset manifest, quality, coverage, stale-data, and null-rate metadata."""
+    state.refresh_dataset_if_changed()
+    return _pipeline_status_snapshot(include_schedule=False).dataset
+
+
+@app.get("/metadata/model-bundle", response_model=ModelBundleStatus)
+def metadata_model_bundle() -> ModelBundleStatus:
+    """Model bundle artifacts, provenance, and train/inference contract metadata."""
+    state._refresh_runtime_readiness()
+    return _pipeline_status_snapshot(include_schedule=False).model_bundle
+
+
 @app.get("/history/summary/memory", response_model=HistoryMetricsResponse)
 def history_summary_memory() -> HistoryMetricsResponse:
     """Aggregated in-memory prediction quality and recency metrics for diagnostics."""
@@ -3646,6 +3742,31 @@ async def predict(payload: PredictRequest, request: Request) -> Dict[str, Any]:
 
     # ----- Prepare model inputs -----
     full_df, numeric_df = _prepare_inputs(row)
+    contract_warnings: List[str] = []
+    if state.models_metadata:
+        win_contract_result = validate_prediction_feature_frame(
+            frame=full_df,
+            metadata=state.models_metadata,
+            model_key="win",
+        )
+        if win_contract_result.blockers:
+            detail = _prediction_readiness_payload()
+            detail.update(
+                {
+                    "message": "Prediction feature contract failed.",
+                    "contract": win_contract_result.model_dump(mode="json"),
+                    "models_dir": str(MODELS_DIR),
+                }
+            )
+            raise HTTPException(status_code=503, detail=detail)
+        contract_warnings.extend(win_contract_result.warnings)
+        full_df = align_prediction_feature_frame(
+            frame=full_df,
+            metadata=state.models_metadata,
+            model_key="win",
+        )
+        numeric_df = full_df.select_dtypes(include=[np.number]).copy()
+
     home_model = state.models["home"]
     away_model = state.models["away"]
     win_model = state.models.get("win")
@@ -3689,6 +3810,29 @@ async def predict(payload: PredictRequest, request: Request) -> Dict[str, Any]:
         numeric_df,
         win_prob_raw,
     )
+    if state.models_metadata:
+        score_contract_result = validate_prediction_feature_frame(
+            frame=score_full_df,
+            metadata=state.models_metadata,
+            model_key="score",
+        )
+        if score_contract_result.blockers:
+            detail = _prediction_readiness_payload()
+            detail.update(
+                {
+                    "message": "Prediction feature contract failed.",
+                    "contract": score_contract_result.model_dump(mode="json"),
+                    "models_dir": str(MODELS_DIR),
+                }
+            )
+            raise HTTPException(status_code=503, detail=detail)
+        contract_warnings.extend(score_contract_result.warnings)
+        score_full_df = align_prediction_feature_frame(
+            frame=score_full_df,
+            metadata=state.models_metadata,
+            model_key="score",
+        )
+        score_numeric_df = score_full_df.select_dtypes(include=[np.number]).copy()
 
     feature_cols = _feature_manifest("scores")
     view_for_quality = score_full_df.reindex(columns=feature_cols) if feature_cols else score_full_df.copy()
@@ -3784,6 +3928,7 @@ async def predict(payload: PredictRequest, request: Request) -> Dict[str, Any]:
             "dataset_path": str(state.dataset_path) if state.dataset_path else None,
             "missing_prior_count": int(missing_prior_count),
             "missing_after_impute_count": len(missing_after_quality),
+            "contract_warnings": sorted(set(contract_warnings))[:10],
         },
         "generated_at": generated_at,
         "mode": "production",

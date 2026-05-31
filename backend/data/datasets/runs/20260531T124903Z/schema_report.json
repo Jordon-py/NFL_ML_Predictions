@@ -1,0 +1,1711 @@
+{
+  "required_columns": [
+    "season",
+    "week",
+    "game_id",
+    "home_team",
+    "away_team",
+    "home_points_for",
+    "away_points_for",
+    "home_win"
+  ],
+  "missing_required_columns": [],
+  "rows": 2499,
+  "columns": 242,
+  "column_report": [
+    {
+      "name": "season",
+      "dtype": "int64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 9
+    },
+    {
+      "name": "week",
+      "dtype": "int64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 22
+    },
+    {
+      "name": "game_id",
+      "dtype": "object",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2499
+    },
+    {
+      "name": "home_game_date",
+      "dtype": "object",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 541
+    },
+    {
+      "name": "home_team",
+      "dtype": "object",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 32
+    },
+    {
+      "name": "away_team",
+      "dtype": "object",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 32
+    },
+    {
+      "name": "home_points_for",
+      "dtype": "float64",
+      "missing_count": 272,
+      "missing_ratio": 0.10884353741496598,
+      "unique_count": 56
+    },
+    {
+      "name": "away_points_for",
+      "dtype": "float64",
+      "missing_count": 272,
+      "missing_ratio": 0.10884353741496598,
+      "unique_count": 50
+    },
+    {
+      "name": "point_diff",
+      "dtype": "float64",
+      "missing_count": 272,
+      "missing_ratio": 0.10884353741496598,
+      "unique_count": 88
+    },
+    {
+      "name": "winner",
+      "dtype": "object",
+      "missing_count": 272,
+      "missing_ratio": 0.10884353741496598,
+      "unique_count": 33
+    },
+    {
+      "name": "home_prior_pf_avg_3",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 133
+    },
+    {
+      "name": "home_prior_pa_avg_3",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 128
+    },
+    {
+      "name": "home_prior_win_pct_3",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 5
+    },
+    {
+      "name": "home_prior_away_moneyline_3",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 1231
+    },
+    {
+      "name": "home_prior_home_moneyline_3",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 1286
+    },
+    {
+      "name": "home_prior_spread_line_3",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 126
+    },
+    {
+      "name": "home_prior_total_line_3",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 133
+    },
+    {
+      "name": "home_prior_away_rest_3",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 29
+    },
+    {
+      "name": "home_prior_home_rest_3",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 30
+    },
+    {
+      "name": "home_prior_temp_3",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 257
+    },
+    {
+      "name": "home_prior_wind_3",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 78
+    },
+    {
+      "name": "home_prior_off_epa_per_play_3",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 119
+    },
+    {
+      "name": "home_prior_off_success_rate_3",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 117
+    },
+    {
+      "name": "home_prior_off_explosive_rate_3",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 117
+    },
+    {
+      "name": "home_prior_off_turnover_rate_3",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 85
+    },
+    {
+      "name": "home_prior_def_success_rate_allowed_3",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 117
+    },
+    {
+      "name": "home_prior_def_explosive_rate_allowed_3",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 115
+    },
+    {
+      "name": "home_prior_def_epa_per_play_3",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 118
+    },
+    {
+      "name": "home_prior_def_takeaway_rate_3",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 91
+    },
+    {
+      "name": "home_prior_pf_avg_5",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 209
+    },
+    {
+      "name": "home_prior_pa_avg_5",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 199
+    },
+    {
+      "name": "home_prior_win_pct_5",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 11
+    },
+    {
+      "name": "home_prior_away_moneyline_5",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 1410
+    },
+    {
+      "name": "home_prior_home_moneyline_5",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 1475
+    },
+    {
+      "name": "home_prior_spread_line_5",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 192
+    },
+    {
+      "name": "home_prior_total_line_5",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 213
+    },
+    {
+      "name": "home_prior_away_rest_5",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 41
+    },
+    {
+      "name": "home_prior_home_rest_5",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 43
+    },
+    {
+      "name": "home_prior_temp_5",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 490
+    },
+    {
+      "name": "home_prior_wind_5",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 145
+    },
+    {
+      "name": "home_prior_off_epa_per_play_5",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 153
+    },
+    {
+      "name": "home_prior_off_success_rate_5",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 152
+    },
+    {
+      "name": "home_prior_off_explosive_rate_5",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 153
+    },
+    {
+      "name": "home_prior_off_turnover_rate_5",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 122
+    },
+    {
+      "name": "home_prior_def_success_rate_allowed_5",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 153
+    },
+    {
+      "name": "home_prior_def_explosive_rate_allowed_5",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 149
+    },
+    {
+      "name": "home_prior_def_epa_per_play_5",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 153
+    },
+    {
+      "name": "home_prior_def_takeaway_rate_5",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 120
+    },
+    {
+      "name": "away_prior_pf_avg_3",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 124
+    },
+    {
+      "name": "away_prior_pa_avg_3",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 125
+    },
+    {
+      "name": "away_prior_win_pct_3",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 5
+    },
+    {
+      "name": "away_prior_away_moneyline_3",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 1213
+    },
+    {
+      "name": "away_prior_home_moneyline_3",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 1264
+    },
+    {
+      "name": "away_prior_spread_line_3",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 125
+    },
+    {
+      "name": "away_prior_total_line_3",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 136
+    },
+    {
+      "name": "away_prior_away_rest_3",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 29
+    },
+    {
+      "name": "away_prior_home_rest_3",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 25
+    },
+    {
+      "name": "away_prior_temp_3",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 254
+    },
+    {
+      "name": "away_prior_wind_3",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 78
+    },
+    {
+      "name": "away_prior_off_epa_per_play_3",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 120
+    },
+    {
+      "name": "away_prior_off_success_rate_3",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 119
+    },
+    {
+      "name": "away_prior_off_explosive_rate_3",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 116
+    },
+    {
+      "name": "away_prior_off_turnover_rate_3",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 90
+    },
+    {
+      "name": "away_prior_def_success_rate_allowed_3",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 119
+    },
+    {
+      "name": "away_prior_def_explosive_rate_allowed_3",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 120
+    },
+    {
+      "name": "away_prior_def_epa_per_play_3",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 120
+    },
+    {
+      "name": "away_prior_def_takeaway_rate_3",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 88
+    },
+    {
+      "name": "away_prior_pf_avg_5",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 200
+    },
+    {
+      "name": "away_prior_pa_avg_5",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 194
+    },
+    {
+      "name": "away_prior_win_pct_5",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 11
+    },
+    {
+      "name": "away_prior_away_moneyline_5",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 1434
+    },
+    {
+      "name": "away_prior_home_moneyline_5",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 1505
+    },
+    {
+      "name": "away_prior_spread_line_5",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 188
+    },
+    {
+      "name": "away_prior_total_line_5",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 228
+    },
+    {
+      "name": "away_prior_away_rest_5",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 47
+    },
+    {
+      "name": "away_prior_home_rest_5",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 44
+    },
+    {
+      "name": "away_prior_temp_5",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 499
+    },
+    {
+      "name": "away_prior_wind_5",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 151
+    },
+    {
+      "name": "away_prior_off_epa_per_play_5",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 148
+    },
+    {
+      "name": "away_prior_off_success_rate_5",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 147
+    },
+    {
+      "name": "away_prior_off_explosive_rate_5",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 143
+    },
+    {
+      "name": "away_prior_off_turnover_rate_5",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 123
+    },
+    {
+      "name": "away_prior_def_success_rate_allowed_5",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 148
+    },
+    {
+      "name": "away_prior_def_explosive_rate_allowed_5",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 147
+    },
+    {
+      "name": "away_prior_def_epa_per_play_5",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 148
+    },
+    {
+      "name": "away_prior_def_takeaway_rate_5",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 120
+    },
+    {
+      "name": "home_minus_away_pf_avg_3",
+      "dtype": "float64",
+      "missing_count": 240,
+      "missing_ratio": 0.09603841536614646,
+      "unique_count": 418
+    },
+    {
+      "name": "home_minus_away_pa_avg_3",
+      "dtype": "float64",
+      "missing_count": 240,
+      "missing_ratio": 0.09603841536614646,
+      "unique_count": 388
+    },
+    {
+      "name": "home_minus_away_win_pct_3",
+      "dtype": "float64",
+      "missing_count": 240,
+      "missing_ratio": 0.09603841536614646,
+      "unique_count": 11
+    },
+    {
+      "name": "home_minus_away_away_moneyline_3",
+      "dtype": "float64",
+      "missing_count": 240,
+      "missing_ratio": 0.09603841536614646,
+      "unique_count": 1765
+    },
+    {
+      "name": "home_minus_away_home_moneyline_3",
+      "dtype": "float64",
+      "missing_count": 240,
+      "missing_ratio": 0.09603841536614646,
+      "unique_count": 1794
+    },
+    {
+      "name": "home_minus_away_spread_line_3",
+      "dtype": "float64",
+      "missing_count": 240,
+      "missing_ratio": 0.09603841536614646,
+      "unique_count": 335
+    },
+    {
+      "name": "home_minus_away_total_line_3",
+      "dtype": "float64",
+      "missing_count": 240,
+      "missing_ratio": 0.09603841536614646,
+      "unique_count": 237
+    },
+    {
+      "name": "home_minus_away_away_rest_3",
+      "dtype": "float64",
+      "missing_count": 240,
+      "missing_ratio": 0.09603841536614646,
+      "unique_count": 78
+    },
+    {
+      "name": "home_minus_away_home_rest_3",
+      "dtype": "float64",
+      "missing_count": 240,
+      "missing_ratio": 0.09603841536614646,
+      "unique_count": 92
+    },
+    {
+      "name": "home_minus_away_temp_3",
+      "dtype": "float64",
+      "missing_count": 666,
+      "missing_ratio": 0.2665066026410564,
+      "unique_count": 523
+    },
+    {
+      "name": "home_minus_away_wind_3",
+      "dtype": "float64",
+      "missing_count": 666,
+      "missing_ratio": 0.2665066026410564,
+      "unique_count": 267
+    },
+    {
+      "name": "home_minus_away_off_epa_per_play_3",
+      "dtype": "float64",
+      "missing_count": 2388,
+      "missing_ratio": 0.9555822328931572,
+      "unique_count": 111
+    },
+    {
+      "name": "home_minus_away_off_success_rate_3",
+      "dtype": "float64",
+      "missing_count": 2388,
+      "missing_ratio": 0.9555822328931572,
+      "unique_count": 111
+    },
+    {
+      "name": "home_minus_away_off_explosive_rate_3",
+      "dtype": "float64",
+      "missing_count": 2388,
+      "missing_ratio": 0.9555822328931572,
+      "unique_count": 111
+    },
+    {
+      "name": "home_minus_away_off_turnover_rate_3",
+      "dtype": "float64",
+      "missing_count": 2388,
+      "missing_ratio": 0.9555822328931572,
+      "unique_count": 106
+    },
+    {
+      "name": "home_minus_away_def_success_rate_allowed_3",
+      "dtype": "float64",
+      "missing_count": 2388,
+      "missing_ratio": 0.9555822328931572,
+      "unique_count": 111
+    },
+    {
+      "name": "home_minus_away_def_explosive_rate_allowed_3",
+      "dtype": "float64",
+      "missing_count": 2388,
+      "missing_ratio": 0.9555822328931572,
+      "unique_count": 111
+    },
+    {
+      "name": "home_minus_away_def_epa_per_play_3",
+      "dtype": "float64",
+      "missing_count": 2388,
+      "missing_ratio": 0.9555822328931572,
+      "unique_count": 111
+    },
+    {
+      "name": "home_minus_away_def_takeaway_rate_3",
+      "dtype": "float64",
+      "missing_count": 2388,
+      "missing_ratio": 0.9555822328931572,
+      "unique_count": 102
+    },
+    {
+      "name": "home_minus_away_pf_avg_5",
+      "dtype": "float64",
+      "missing_count": 209,
+      "missing_ratio": 0.08363345338135254,
+      "unique_count": 481
+    },
+    {
+      "name": "home_minus_away_pa_avg_5",
+      "dtype": "float64",
+      "missing_count": 209,
+      "missing_ratio": 0.08363345338135254,
+      "unique_count": 430
+    },
+    {
+      "name": "home_minus_away_win_pct_5",
+      "dtype": "float64",
+      "missing_count": 209,
+      "missing_ratio": 0.08363345338135254,
+      "unique_count": 35
+    },
+    {
+      "name": "home_minus_away_away_moneyline_5",
+      "dtype": "float64",
+      "missing_count": 209,
+      "missing_ratio": 0.08363345338135254,
+      "unique_count": 1786
+    },
+    {
+      "name": "home_minus_away_home_moneyline_5",
+      "dtype": "float64",
+      "missing_count": 209,
+      "missing_ratio": 0.08363345338135254,
+      "unique_count": 1884
+    },
+    {
+      "name": "home_minus_away_spread_line_5",
+      "dtype": "float64",
+      "missing_count": 209,
+      "missing_ratio": 0.08363345338135254,
+      "unique_count": 415
+    },
+    {
+      "name": "home_minus_away_total_line_5",
+      "dtype": "float64",
+      "missing_count": 209,
+      "missing_ratio": 0.08363345338135254,
+      "unique_count": 397
+    },
+    {
+      "name": "home_minus_away_away_rest_5",
+      "dtype": "float64",
+      "missing_count": 209,
+      "missing_ratio": 0.08363345338135254,
+      "unique_count": 121
+    },
+    {
+      "name": "home_minus_away_home_rest_5",
+      "dtype": "float64",
+      "missing_count": 209,
+      "missing_ratio": 0.08363345338135254,
+      "unique_count": 126
+    },
+    {
+      "name": "home_minus_away_temp_5",
+      "dtype": "float64",
+      "missing_count": 389,
+      "missing_ratio": 0.15566226490596238,
+      "unique_count": 1002
+    },
+    {
+      "name": "home_minus_away_wind_5",
+      "dtype": "float64",
+      "missing_count": 389,
+      "missing_ratio": 0.15566226490596238,
+      "unique_count": 620
+    },
+    {
+      "name": "home_minus_away_off_epa_per_play_5",
+      "dtype": "float64",
+      "missing_count": 2357,
+      "missing_ratio": 0.9431772709083633,
+      "unique_count": 142
+    },
+    {
+      "name": "home_minus_away_off_success_rate_5",
+      "dtype": "float64",
+      "missing_count": 2357,
+      "missing_ratio": 0.9431772709083633,
+      "unique_count": 142
+    },
+    {
+      "name": "home_minus_away_off_explosive_rate_5",
+      "dtype": "float64",
+      "missing_count": 2357,
+      "missing_ratio": 0.9431772709083633,
+      "unique_count": 142
+    },
+    {
+      "name": "home_minus_away_off_turnover_rate_5",
+      "dtype": "float64",
+      "missing_count": 2357,
+      "missing_ratio": 0.9431772709083633,
+      "unique_count": 137
+    },
+    {
+      "name": "home_minus_away_def_success_rate_allowed_5",
+      "dtype": "float64",
+      "missing_count": 2357,
+      "missing_ratio": 0.9431772709083633,
+      "unique_count": 142
+    },
+    {
+      "name": "home_minus_away_def_explosive_rate_allowed_5",
+      "dtype": "float64",
+      "missing_count": 2357,
+      "missing_ratio": 0.9431772709083633,
+      "unique_count": 142
+    },
+    {
+      "name": "home_minus_away_def_epa_per_play_5",
+      "dtype": "float64",
+      "missing_count": 2357,
+      "missing_ratio": 0.9431772709083633,
+      "unique_count": 142
+    },
+    {
+      "name": "home_minus_away_def_takeaway_rate_5",
+      "dtype": "float64",
+      "missing_count": 2357,
+      "missing_ratio": 0.9431772709083633,
+      "unique_count": 136
+    },
+    {
+      "name": "game_type",
+      "dtype": "object",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 5
+    },
+    {
+      "name": "home_moneyline_prob",
+      "dtype": "float64",
+      "missing_count": 195,
+      "missing_ratio": 0.07803121248499399,
+      "unique_count": 653
+    },
+    {
+      "name": "away_moneyline_prob",
+      "dtype": "float64",
+      "missing_count": 195,
+      "missing_ratio": 0.07803121248499399,
+      "unique_count": 633
+    },
+    {
+      "name": "moneyline_prob_diff",
+      "dtype": "float64",
+      "missing_count": 195,
+      "missing_ratio": 0.07803121248499399,
+      "unique_count": 1025
+    },
+    {
+      "name": "home_moneyline_prob_norm",
+      "dtype": "float64",
+      "missing_count": 195,
+      "missing_ratio": 0.07803121248499399,
+      "unique_count": 1025
+    },
+    {
+      "name": "away_moneyline_prob_norm",
+      "dtype": "float64",
+      "missing_count": 195,
+      "missing_ratio": 0.07803121248499399,
+      "unique_count": 1025
+    },
+    {
+      "name": "moneyline_prob_norm_diff",
+      "dtype": "float64",
+      "missing_count": 195,
+      "missing_ratio": 0.07803121248499399,
+      "unique_count": 1025
+    },
+    {
+      "name": "spread_line",
+      "dtype": "float64",
+      "missing_count": 195,
+      "missing_ratio": 0.07803121248499399,
+      "unique_count": 72
+    },
+    {
+      "name": "total_line",
+      "dtype": "float64",
+      "missing_count": 196,
+      "missing_ratio": 0.0784313725490196,
+      "unique_count": 58
+    },
+    {
+      "name": "home_rest",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 12
+    },
+    {
+      "name": "away_rest",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 13
+    },
+    {
+      "name": "rest_diff",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 15
+    },
+    {
+      "name": "roof",
+      "dtype": "object",
+      "missing_count": 43,
+      "missing_ratio": 0.01720688275310124,
+      "unique_count": 4
+    },
+    {
+      "name": "surface",
+      "dtype": "object",
+      "missing_count": 44,
+      "missing_ratio": 0.017607042817126852,
+      "unique_count": 7
+    },
+    {
+      "name": "temp",
+      "dtype": "float64",
+      "missing_count": 1102,
+      "missing_ratio": 0.4409763905562225,
+      "unique_count": 88
+    },
+    {
+      "name": "wind",
+      "dtype": "float64",
+      "missing_count": 1102,
+      "missing_ratio": 0.4409763905562225,
+      "unique_count": 29
+    },
+    {
+      "name": "home_player_team_qb_pass_yards",
+      "dtype": "float64",
+      "missing_count": 343,
+      "missing_ratio": 0.13725490196078433,
+      "unique_count": 358
+    },
+    {
+      "name": "home_player_team_qb_pass_tds",
+      "dtype": "float64",
+      "missing_count": 343,
+      "missing_ratio": 0.13725490196078433,
+      "unique_count": 7
+    },
+    {
+      "name": "home_player_team_qb_completions",
+      "dtype": "float64",
+      "missing_count": 343,
+      "missing_ratio": 0.13725490196078433,
+      "unique_count": 41
+    },
+    {
+      "name": "home_player_team_qb_attempts",
+      "dtype": "float64",
+      "missing_count": 343,
+      "missing_ratio": 0.13725490196078433,
+      "unique_count": 56
+    },
+    {
+      "name": "home_player_team_qb_completion_pct",
+      "dtype": "float64",
+      "missing_count": 343,
+      "missing_ratio": 0.13725490196078433,
+      "unique_count": 345
+    },
+    {
+      "name": "home_player_team_rb_rush_yards",
+      "dtype": "float64",
+      "missing_count": 343,
+      "missing_ratio": 0.13725490196078433,
+      "unique_count": 237
+    },
+    {
+      "name": "home_player_team_rb_rush_tds",
+      "dtype": "float64",
+      "missing_count": 343,
+      "missing_ratio": 0.13725490196078433,
+      "unique_count": 7
+    },
+    {
+      "name": "home_player_team_rb_receptions",
+      "dtype": "float64",
+      "missing_count": 343,
+      "missing_ratio": 0.13725490196078433,
+      "unique_count": 19
+    },
+    {
+      "name": "home_player_team_rb_receiving_yards",
+      "dtype": "float64",
+      "missing_count": 343,
+      "missing_ratio": 0.13725490196078433,
+      "unique_count": 139
+    },
+    {
+      "name": "home_player_team_wr_targets",
+      "dtype": "float64",
+      "missing_count": 343,
+      "missing_ratio": 0.13725490196078433,
+      "unique_count": 48
+    },
+    {
+      "name": "home_player_team_wr_receptions",
+      "dtype": "float64",
+      "missing_count": 343,
+      "missing_ratio": 0.13725490196078433,
+      "unique_count": 35
+    },
+    {
+      "name": "home_player_team_wr_receiving_yards",
+      "dtype": "float64",
+      "missing_count": 343,
+      "missing_ratio": 0.13725490196078433,
+      "unique_count": 335
+    },
+    {
+      "name": "home_player_team_wr_receiving_tds",
+      "dtype": "float64",
+      "missing_count": 343,
+      "missing_ratio": 0.13725490196078433,
+      "unique_count": 6
+    },
+    {
+      "name": "away_player_team_qb_pass_yards",
+      "dtype": "float64",
+      "missing_count": 349,
+      "missing_ratio": 0.139655862344938,
+      "unique_count": 355
+    },
+    {
+      "name": "away_player_team_qb_pass_tds",
+      "dtype": "float64",
+      "missing_count": 349,
+      "missing_ratio": 0.139655862344938,
+      "unique_count": 7
+    },
+    {
+      "name": "away_player_team_qb_completions",
+      "dtype": "float64",
+      "missing_count": 349,
+      "missing_ratio": 0.139655862344938,
+      "unique_count": 41
+    },
+    {
+      "name": "away_player_team_qb_attempts",
+      "dtype": "float64",
+      "missing_count": 349,
+      "missing_ratio": 0.139655862344938,
+      "unique_count": 55
+    },
+    {
+      "name": "away_player_team_qb_completion_pct",
+      "dtype": "float64",
+      "missing_count": 349,
+      "missing_ratio": 0.139655862344938,
+      "unique_count": 351
+    },
+    {
+      "name": "away_player_team_rb_rush_yards",
+      "dtype": "float64",
+      "missing_count": 349,
+      "missing_ratio": 0.139655862344938,
+      "unique_count": 222
+    },
+    {
+      "name": "away_player_team_rb_rush_tds",
+      "dtype": "float64",
+      "missing_count": 349,
+      "missing_ratio": 0.139655862344938,
+      "unique_count": 5
+    },
+    {
+      "name": "away_player_team_rb_receptions",
+      "dtype": "float64",
+      "missing_count": 349,
+      "missing_ratio": 0.139655862344938,
+      "unique_count": 18
+    },
+    {
+      "name": "away_player_team_rb_receiving_yards",
+      "dtype": "float64",
+      "missing_count": 349,
+      "missing_ratio": 0.139655862344938,
+      "unique_count": 141
+    },
+    {
+      "name": "away_player_team_wr_targets",
+      "dtype": "float64",
+      "missing_count": 349,
+      "missing_ratio": 0.139655862344938,
+      "unique_count": 47
+    },
+    {
+      "name": "away_player_team_wr_receptions",
+      "dtype": "float64",
+      "missing_count": 349,
+      "missing_ratio": 0.139655862344938,
+      "unique_count": 35
+    },
+    {
+      "name": "away_player_team_wr_receiving_yards",
+      "dtype": "float64",
+      "missing_count": 349,
+      "missing_ratio": 0.139655862344938,
+      "unique_count": 334
+    },
+    {
+      "name": "away_player_team_wr_receiving_tds",
+      "dtype": "float64",
+      "missing_count": 349,
+      "missing_ratio": 0.139655862344938,
+      "unique_count": 7
+    },
+    {
+      "name": "game_date_parsed",
+      "dtype": "object",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 541
+    },
+    {
+      "name": "game_day_of_week",
+      "dtype": "int64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 7
+    },
+    {
+      "name": "is_weekend",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "is_regular_season",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "is_playoff",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "time_key",
+      "dtype": "int64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 191
+    },
+    {
+      "name": "home_elo_pre",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2220
+    },
+    {
+      "name": "away_elo_pre",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2220
+    },
+    {
+      "name": "elo_diff_pre",
+      "dtype": "float64",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2466
+    },
+    {
+      "name": "home_qb_completion_pct",
+      "dtype": "float64",
+      "missing_count": 347,
+      "missing_ratio": 0.13885554221688676,
+      "unique_count": 344
+    },
+    {
+      "name": "away_qb_completion_pct",
+      "dtype": "float64",
+      "missing_count": 354,
+      "missing_ratio": 0.14165666266506602,
+      "unique_count": 350
+    },
+    {
+      "name": "home_win",
+      "dtype": "object",
+      "missing_count": 272,
+      "missing_ratio": 0.10884353741496598,
+      "unique_count": 2
+    },
+    {
+      "name": "home_team_ARI",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "home_team_ATL",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "home_team_BAL",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "home_team_BUF",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "home_team_CAR",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "home_team_CHI",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "home_team_CIN",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "home_team_CLE",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "home_team_DAL",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "home_team_DEN",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "home_team_DET",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "home_team_GB",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "home_team_HOU",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "home_team_IND",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "home_team_JAX",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "home_team_KC",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "home_team_LAC",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "home_team_LAR",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "home_team_LV",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "home_team_MIA",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "home_team_MIN",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "home_team_NE",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "home_team_NO",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "home_team_NYG",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "home_team_NYJ",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "home_team_PHI",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "home_team_PIT",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "home_team_SEA",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "home_team_SF",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "home_team_TB",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "home_team_TEN",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "home_team_WAS",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "away_team_ARI",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "away_team_ATL",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "away_team_BAL",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "away_team_BUF",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "away_team_CAR",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "away_team_CHI",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "away_team_CIN",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "away_team_CLE",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "away_team_DAL",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "away_team_DEN",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "away_team_DET",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "away_team_GB",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "away_team_HOU",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "away_team_IND",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "away_team_JAX",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "away_team_KC",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "away_team_LAC",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "away_team_LAR",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "away_team_LV",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "away_team_MIA",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "away_team_MIN",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "away_team_NE",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "away_team_NO",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "away_team_NYG",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "away_team_NYJ",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "away_team_PHI",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "away_team_PIT",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "away_team_SEA",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "away_team_SF",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "away_team_TB",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "away_team_TEN",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    },
+    {
+      "name": "away_team_WAS",
+      "dtype": "bool",
+      "missing_count": 0,
+      "missing_ratio": 0.0,
+      "unique_count": 2
+    }
+  ]
+}

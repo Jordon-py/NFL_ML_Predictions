@@ -482,20 +482,53 @@ def load_player_game_stats(seasons: List[int]) -> pd.DataFrame:
         logging.warning("No NFL backend available; player features disabled")
         return pd.DataFrame(columns=["season", "week", "team"])
 
-    try:
-        logging.info("Loading player stats via %s for seasons %s", NFL_BACKEND, seasons)
-        player_stats: Optional[pd.DataFrame] = None
-
+    def _load_player_stats_for(load_seasons: List[int]) -> Optional[pd.DataFrame]:
         if NFL_BACKEND == "nflreadpy":
             loader = getattr(nfl, "load_player_stats", None)
             if loader:
-                player_stats = to_pandas_safe(
-                    loader(seasons=seasons, summary_level="week")
-                )
+                return to_pandas_safe(loader(seasons=load_seasons, summary_level="week"))
         else:
             loader = getattr(nfl, "import_weekly_data", None)
             if loader:
-                player_stats = loader(seasons)
+                return to_pandas_safe(loader(load_seasons))
+        return None
+
+    try:
+        logging.info("Loading player stats via %s for seasons %s", NFL_BACKEND, seasons)
+        player_stats: Optional[pd.DataFrame] = None
+        try:
+            player_stats = _load_player_stats_for(seasons)
+        except Exception as exc:
+            logging.warning(
+                "Player stats bulk load failed (%s); retrying season-by-season",
+                exc,
+            )
+            frames: List[pd.DataFrame] = []
+            failed: List[int] = []
+            for season in sorted(set(int(s) for s in seasons)):
+                try:
+                    frame = _load_player_stats_for([season])
+                    if frame is not None and not frame.empty:
+                        frames.append(frame)
+                    else:
+                        failed.append(season)
+                except Exception as season_exc:
+                    failed.append(season)
+                    logging.info(
+                        "Player stats unavailable for season %s: %s",
+                        season,
+                        season_exc,
+                    )
+            if frames:
+                player_stats = pd.concat(frames, ignore_index=True, sort=False)
+                logging.info(
+                    "Loaded player stats for %d/%d requested seasons; unavailable seasons=%s",
+                    len(frames),
+                    len(set(int(s) for s in seasons)),
+                    failed,
+                )
+            else:
+                player_stats = None
 
         if player_stats is None or player_stats.empty:
             logging.warning("Player stats unavailable; skipping.")
@@ -615,24 +648,55 @@ def load_team_weekly_stats(seasons: List[int]) -> pd.DataFrame:
         logging.warning("No NFL backend; team-week stats disabled")
         return pd.DataFrame(columns=["season", "week", "team"])
 
-    try:
-        logging.info(
-            "Loading team weekly stats via %s for seasons %s", NFL_BACKEND, seasons
-        )
+    def _load_team_stats_for(load_seasons: List[int]) -> Optional[pd.DataFrame]:
         if NFL_BACKEND == "nflreadpy":
             loader = getattr(nfl, "load_team_stats", None)
             if loader:
-                team_stats = to_pandas_safe(
-                    loader(seasons=seasons, summary_level="week")
-                )
-            else:
-                team_stats = None
+                return to_pandas_safe(loader(seasons=load_seasons, summary_level="week"))
         else:
             loader = getattr(nfl, "import_team_desc", None)
             if loader:
                 # nfl_data_py doesn't have a direct weekly team stats equivalent;
                 # if unavailable, just skip.
-                team_stats = None
+                return None
+        return None
+
+    try:
+        logging.info(
+            "Loading team weekly stats via %s for seasons %s", NFL_BACKEND, seasons
+        )
+        team_stats: Optional[pd.DataFrame] = None
+        try:
+            team_stats = _load_team_stats_for(seasons)
+        except Exception as exc:
+            logging.warning(
+                "Team stats bulk load failed (%s); retrying season-by-season",
+                exc,
+            )
+            frames: List[pd.DataFrame] = []
+            failed: List[int] = []
+            for season in sorted(set(int(s) for s in seasons)):
+                try:
+                    frame = _load_team_stats_for([season])
+                    if frame is not None and not frame.empty:
+                        frames.append(frame)
+                    else:
+                        failed.append(season)
+                except Exception as season_exc:
+                    failed.append(season)
+                    logging.info(
+                        "Team stats unavailable for season %s: %s",
+                        season,
+                        season_exc,
+                    )
+            if frames:
+                team_stats = pd.concat(frames, ignore_index=True, sort=False)
+                logging.info(
+                    "Loaded team stats for %d/%d requested seasons; unavailable seasons=%s",
+                    len(frames),
+                    len(set(int(s) for s in seasons)),
+                    failed,
+                )
             else:
                 team_stats = None
 
@@ -1556,6 +1620,82 @@ def dataset_quality_report(df: pd.DataFrame, include_future: bool) -> Dict[str, 
         if c in df.columns:
             coverage[c] = float(df[c].notna().mean())
     report["coverage"] = coverage
+
+    feature_groups = {
+        "market": ["moneyline", "spread_line", "total_line"],
+        "prior_team_form": ["prior_", "rolling_"],
+        "pbp_efficiency": ["epa", "success_rate", "explosive_rate", "turnover_rate", "takeaway_rate"],
+        "weather_rest": ["temp", "wind", "rest", "roof", "surface"],
+        "elo_qb": ["elo", "qb_"],
+        "team_encoding": ["home_team_", "away_team_"],
+    }
+    group_coverage: Dict[str, Dict[str, Any]] = {}
+    for group, needles in feature_groups.items():
+        cols = [
+            str(col)
+            for col in df.columns
+            if any(str(col).startswith(needle) or needle in str(col) for needle in needles)
+        ]
+        if not cols:
+            group_coverage[group] = {"columns": 0, "coverage": None, "null_rate": None}
+            continue
+        null_rate = float(df[cols].isna().mean().mean())
+        group_coverage[group] = {
+            "columns": int(len(cols)),
+            "coverage": float(1.0 - null_rate),
+            "null_rate": null_rate,
+            "sample_columns": cols[:8],
+        }
+    report["feature_group_coverage"] = group_coverage
+
+    critical_cols = [
+        "season",
+        "week",
+        "home_team",
+        "away_team",
+        "spread_line",
+        "total_line",
+        "home_rest",
+        "away_rest",
+        "home_moneyline_prob",
+        "away_moneyline_prob",
+    ]
+    report["critical_null_rates"] = {
+        col: float(df[col].isna().mean())
+        for col in critical_cols
+        if col in df.columns
+    }
+
+    pbp_candidates = [
+        Path("pbp_cache.csv"),
+        Path("backend/pbp_cache.csv"),
+        Path("backend/data/pbp_cache.csv"),
+        Path("data/pbp_cache.csv"),
+    ]
+    pbp_cache_path = next((p for p in pbp_candidates if p.exists()), None)
+    player_cols = [
+        str(col)
+        for col in df.columns
+        if any(token in str(col).lower() for token in ("qb_", "receiver", "rusher", "player"))
+    ]
+    degraded_reason_codes: List[str] = []
+    if pbp_cache_path is None:
+        degraded_reason_codes.append("PBP_CACHE_MISSING")
+    if not player_cols:
+        degraded_reason_codes.append("PLAYER_STATS_UNAVAILABLE")
+    if include_future and int(report.get("future_rows") or 0) == 0:
+        degraded_reason_codes.append("NO_FUTURE_ROWS_IN_ACTIVE_DATASET")
+
+    report["provider_status"] = {
+        "selected_nfl_backend": NFL_BACKEND,
+        "pbp_cache_available": pbp_cache_path is not None,
+        "pbp_cache_path": str(pbp_cache_path) if pbp_cache_path else None,
+        "player_stats_available": bool(player_cols),
+        "player_stats_column_count": int(len(player_cols)),
+        "future_game_support": bool(int(report.get("future_rows") or 0) > 0),
+        "degraded_reason_codes": degraded_reason_codes,
+        "prediction_readiness": "warning_only" if degraded_reason_codes else "production_ready",
+    }
 
     # Rolling priors coverage (should steadily improve after first few weeks)
     prior_cols = [c for c in df.columns if c.startswith("prior_")]

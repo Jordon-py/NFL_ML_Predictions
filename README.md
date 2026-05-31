@@ -15,6 +15,17 @@
 
 Full-stack NFL forecasting workspace with a FastAPI backend, a React/Vite frontend, a dataset build pipeline, and a model training pipeline.
 
+## Current Production Data Snapshot
+
+- Active dataset target: `backend/data/datasets/game_features_20260531_clean.csv`
+- Active schedule artifact: `backend/data/Nfl_schedule_2026.csv`
+- Active model bundle: `backend/models` version `20260531T124903Z-prod-2026`
+- Active dataset hash: `94bd8ca5e7e47ac5db5d4d583daaa93265313be24a20bf909848db68a18f188b`
+- Dataset seasons: 2018-2026
+- Future-game coverage: 272 leak-safe 2026 regular-season rows
+- Future-row rule: scheduled games may include market/schedule context, but final scores and target columns stay null until completed
+- Model readiness rule: `/predict` should only serve when `/health/pipeline` reports no blockers and the model bundle dataset hash matches `latest_dataset.json`
+
 ## Canonical Deploy Targets
 
 - Frontend: Vercel project `nfl-ml-predictions`
@@ -47,22 +58,34 @@ npm install
 cd ..
 ```
 
-### 2. Build the canonical dataset
+### 2. Ingest the upcoming schedule
 
 ```bash
-python backend/builddataset.py --start 2018 --end 2025 --out-dir backend/data/datasets
+python -m backend.services.schedule_ingestion --season 2026 --season-types 2,3 ^
+  --out-csv backend/data/Nfl_schedule_2026.csv ^
+  --out-parquet backend/data/schedules/nfl_schedule_2026.parquet ^
+  --raw-dir backend/data/raw/espn/scoreboards
+```
+
+The schedule ingestion layer keeps future games leak-safe by leaving scores null for non-completed games.
+
+### 3. Build the canonical dataset
+
+```bash
+python backend/builddataset.py --start 2018 --end 2026 --out-dir backend/data/datasets --encode onehot --no-calibration-rows
 ```
 
 What this writes:
 
 - A dated run folder in `backend/data/datasets/runs/<timestamp>/`
 - A promoted clean CSV in `backend/data/datasets/`
+- Completed and future partitions in `backend/data/datasets/`
 - `backend/data/datasets/latest_dataset.json`
 
-### 3. Train models
+### 4. Train models
 
 ```bash
-python backend/train_models.py
+python backend/train_models.py --data backend/data/datasets/game_features_20260531_clean.csv --out backend/models --production
 ```
 
 What this writes by default:
@@ -78,13 +101,13 @@ Important runtime note:
 - Serving prefers `MODELS_DIR` when set, then `backend/data/models/current`, then `backend/data/models`, then packaged fallbacks, and finally `backend/models`.
 - That split is intentional so deployments can serve a promoted bundle while local training experiments stay isolated.
 
-### 4. Start the backend
+### 5. Start the backend
 
 ```bash
 uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-### 5. Start the frontend
+### 6. Start the frontend
 
 ```bash
 cd frontend
@@ -144,9 +167,12 @@ The frontend sends `X-User-Id`, and the backend uses that to isolate prediction 
 ### Health and status
 
 - `GET /health`
+- `GET /health/pipeline`
 - `GET /status/overview`
 - `GET /status/models`
 - `GET /status/runtime`
+- `GET /metadata/dataset`
+- `GET /metadata/model-bundle`
 
 ### Schedule and prediction
 
@@ -155,6 +181,7 @@ The frontend sends `X-User-Id`, and the backend uses that to isolate prediction 
 - `GET /api/predict/next-week`
 - `GET /teams/logos`
 - `POST /predict`
+- `POST /debug/predict-input`
 
 ### History
 
@@ -227,7 +254,7 @@ Two weak points were prioritized and improved over three implementation iteratio
 Recommended checks after backend or frontend changes:
 
 ```bash
-python -m pytest backend/tests -q
+.venv\Scripts\python.exe -m pytest backend/tests -q
 cd frontend && npm test -- --run && npm run build
 python scripts/verify_api_cors.py --backend-url https://nfl-predict-ecf5a5bd34fe.herokuapp.com
 ```
@@ -236,10 +263,11 @@ Runtime smoke checks:
 
 ```bash
 curl http://127.0.0.1:8000/health
+curl http://127.0.0.1:8000/health/pipeline
 curl http://127.0.0.1:8000/status/overview -H "X-User-Id: analyst@example.com"
 curl -X POST http://127.0.0.1:8000/predict ^
   -H "Content-Type: application/json" ^
-  -d "{\"home_team\":\"KC\",\"away_team\":\"BUF\",\"season\":2025,\"week\":15}"
+  -d "{\"home_team\":\"LAC\",\"away_team\":\"ARI\",\"season\":2026,\"week\":1}"
 ```
 
 ## Troubleshooting
@@ -247,7 +275,9 @@ curl -X POST http://127.0.0.1:8000/predict ^
 ### `/predict` returns `503`
 
 - Check `/status/models` for readiness blockers.
+- Check `/health/pipeline` for dataset hash, stale dataset, and feature-contract blockers.
 - Confirm `MODELS_DIR` points at a complete bundle.
+- If `latest_dataset.json` changed after a dataset rebuild, retrain and promote a new model bundle before serving predictions.
 - If the bundle was trained under a different scikit-learn version, retrain or align the runtime environment.
 
 ### The frontend loads but some pages look empty
@@ -270,3 +300,9 @@ python backend/train_models.py --data backend/data/datasets/<your_clean_dataset>
 - Make sure `backend/data/Nfl_schedule_<upcoming-year>.csv` exists once the upcoming schedule is published.
 - `SCHEDULE_PATH` can point to a preferred CSV, but the backend also scans sibling schedule CSVs so a stale explicit file does not hide a newer packaged season.
 - The frontend also ships fallback CSVs under `frontend/public/schedules/` for compatibility with older backends.
+
+### Dataset CSVs do not show up in `git status`
+
+- Curated production dataset CSVs under `backend/data/datasets/game_features_*.csv` are intentionally allowed through `.gitignore`.
+- Runtime databases and local prediction history remain ignored and should not be committed.
+- If a newly generated schedule CSV is production-critical, add an explicit unignore rule such as `!backend/data/Nfl_schedule_2026.csv`.

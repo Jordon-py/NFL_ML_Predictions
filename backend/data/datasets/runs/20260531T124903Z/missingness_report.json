@@ -1,0 +1,1217 @@
+{
+  "rows": 2499,
+  "columns": 242,
+  "columns_with_missing_values": 83,
+  "missingness": [
+    {
+      "column": "home_minus_away_def_epa_per_play_3",
+      "missing_count": 2388,
+      "missing_ratio": 0.9555822328931572
+    },
+    {
+      "column": "home_minus_away_def_explosive_rate_allowed_3",
+      "missing_count": 2388,
+      "missing_ratio": 0.9555822328931572
+    },
+    {
+      "column": "home_minus_away_def_success_rate_allowed_3",
+      "missing_count": 2388,
+      "missing_ratio": 0.9555822328931572
+    },
+    {
+      "column": "home_minus_away_def_takeaway_rate_3",
+      "missing_count": 2388,
+      "missing_ratio": 0.9555822328931572
+    },
+    {
+      "column": "home_minus_away_off_epa_per_play_3",
+      "missing_count": 2388,
+      "missing_ratio": 0.9555822328931572
+    },
+    {
+      "column": "home_minus_away_off_explosive_rate_3",
+      "missing_count": 2388,
+      "missing_ratio": 0.9555822328931572
+    },
+    {
+      "column": "home_minus_away_off_success_rate_3",
+      "missing_count": 2388,
+      "missing_ratio": 0.9555822328931572
+    },
+    {
+      "column": "home_minus_away_off_turnover_rate_3",
+      "missing_count": 2388,
+      "missing_ratio": 0.9555822328931572
+    },
+    {
+      "column": "home_minus_away_def_epa_per_play_5",
+      "missing_count": 2357,
+      "missing_ratio": 0.9431772709083633
+    },
+    {
+      "column": "home_minus_away_def_explosive_rate_allowed_5",
+      "missing_count": 2357,
+      "missing_ratio": 0.9431772709083633
+    },
+    {
+      "column": "home_minus_away_def_success_rate_allowed_5",
+      "missing_count": 2357,
+      "missing_ratio": 0.9431772709083633
+    },
+    {
+      "column": "home_minus_away_def_takeaway_rate_5",
+      "missing_count": 2357,
+      "missing_ratio": 0.9431772709083633
+    },
+    {
+      "column": "home_minus_away_off_epa_per_play_5",
+      "missing_count": 2357,
+      "missing_ratio": 0.9431772709083633
+    },
+    {
+      "column": "home_minus_away_off_explosive_rate_5",
+      "missing_count": 2357,
+      "missing_ratio": 0.9431772709083633
+    },
+    {
+      "column": "home_minus_away_off_success_rate_5",
+      "missing_count": 2357,
+      "missing_ratio": 0.9431772709083633
+    },
+    {
+      "column": "home_minus_away_off_turnover_rate_5",
+      "missing_count": 2357,
+      "missing_ratio": 0.9431772709083633
+    },
+    {
+      "column": "temp",
+      "missing_count": 1102,
+      "missing_ratio": 0.4409763905562225
+    },
+    {
+      "column": "wind",
+      "missing_count": 1102,
+      "missing_ratio": 0.4409763905562225
+    },
+    {
+      "column": "home_minus_away_temp_3",
+      "missing_count": 666,
+      "missing_ratio": 0.2665066026410564
+    },
+    {
+      "column": "home_minus_away_wind_3",
+      "missing_count": 666,
+      "missing_ratio": 0.2665066026410564
+    },
+    {
+      "column": "home_minus_away_temp_5",
+      "missing_count": 389,
+      "missing_ratio": 0.15566226490596238
+    },
+    {
+      "column": "home_minus_away_wind_5",
+      "missing_count": 389,
+      "missing_ratio": 0.15566226490596238
+    },
+    {
+      "column": "away_qb_completion_pct",
+      "missing_count": 354,
+      "missing_ratio": 0.14165666266506602
+    },
+    {
+      "column": "away_player_team_qb_attempts",
+      "missing_count": 349,
+      "missing_ratio": 0.139655862344938
+    },
+    {
+      "column": "away_player_team_qb_completion_pct",
+      "missing_count": 349,
+      "missing_ratio": 0.139655862344938
+    },
+    {
+      "column": "away_player_team_qb_completions",
+      "missing_count": 349,
+      "missing_ratio": 0.139655862344938
+    },
+    {
+      "column": "away_player_team_qb_pass_tds",
+      "missing_count": 349,
+      "missing_ratio": 0.139655862344938
+    },
+    {
+      "column": "away_player_team_qb_pass_yards",
+      "missing_count": 349,
+      "missing_ratio": 0.139655862344938
+    },
+    {
+      "column": "away_player_team_rb_receiving_yards",
+      "missing_count": 349,
+      "missing_ratio": 0.139655862344938
+    },
+    {
+      "column": "away_player_team_rb_receptions",
+      "missing_count": 349,
+      "missing_ratio": 0.139655862344938
+    },
+    {
+      "column": "away_player_team_rb_rush_tds",
+      "missing_count": 349,
+      "missing_ratio": 0.139655862344938
+    },
+    {
+      "column": "away_player_team_rb_rush_yards",
+      "missing_count": 349,
+      "missing_ratio": 0.139655862344938
+    },
+    {
+      "column": "away_player_team_wr_receiving_tds",
+      "missing_count": 349,
+      "missing_ratio": 0.139655862344938
+    },
+    {
+      "column": "away_player_team_wr_receiving_yards",
+      "missing_count": 349,
+      "missing_ratio": 0.139655862344938
+    },
+    {
+      "column": "away_player_team_wr_receptions",
+      "missing_count": 349,
+      "missing_ratio": 0.139655862344938
+    },
+    {
+      "column": "away_player_team_wr_targets",
+      "missing_count": 349,
+      "missing_ratio": 0.139655862344938
+    },
+    {
+      "column": "home_qb_completion_pct",
+      "missing_count": 347,
+      "missing_ratio": 0.13885554221688676
+    },
+    {
+      "column": "home_player_team_qb_attempts",
+      "missing_count": 343,
+      "missing_ratio": 0.13725490196078433
+    },
+    {
+      "column": "home_player_team_qb_completion_pct",
+      "missing_count": 343,
+      "missing_ratio": 0.13725490196078433
+    },
+    {
+      "column": "home_player_team_qb_completions",
+      "missing_count": 343,
+      "missing_ratio": 0.13725490196078433
+    },
+    {
+      "column": "home_player_team_qb_pass_tds",
+      "missing_count": 343,
+      "missing_ratio": 0.13725490196078433
+    },
+    {
+      "column": "home_player_team_qb_pass_yards",
+      "missing_count": 343,
+      "missing_ratio": 0.13725490196078433
+    },
+    {
+      "column": "home_player_team_rb_receiving_yards",
+      "missing_count": 343,
+      "missing_ratio": 0.13725490196078433
+    },
+    {
+      "column": "home_player_team_rb_receptions",
+      "missing_count": 343,
+      "missing_ratio": 0.13725490196078433
+    },
+    {
+      "column": "home_player_team_rb_rush_tds",
+      "missing_count": 343,
+      "missing_ratio": 0.13725490196078433
+    },
+    {
+      "column": "home_player_team_rb_rush_yards",
+      "missing_count": 343,
+      "missing_ratio": 0.13725490196078433
+    },
+    {
+      "column": "home_player_team_wr_receiving_tds",
+      "missing_count": 343,
+      "missing_ratio": 0.13725490196078433
+    },
+    {
+      "column": "home_player_team_wr_receiving_yards",
+      "missing_count": 343,
+      "missing_ratio": 0.13725490196078433
+    },
+    {
+      "column": "home_player_team_wr_receptions",
+      "missing_count": 343,
+      "missing_ratio": 0.13725490196078433
+    },
+    {
+      "column": "home_player_team_wr_targets",
+      "missing_count": 343,
+      "missing_ratio": 0.13725490196078433
+    },
+    {
+      "column": "away_points_for",
+      "missing_count": 272,
+      "missing_ratio": 0.10884353741496598
+    },
+    {
+      "column": "home_points_for",
+      "missing_count": 272,
+      "missing_ratio": 0.10884353741496598
+    },
+    {
+      "column": "home_win",
+      "missing_count": 272,
+      "missing_ratio": 0.10884353741496598
+    },
+    {
+      "column": "point_diff",
+      "missing_count": 272,
+      "missing_ratio": 0.10884353741496598
+    },
+    {
+      "column": "winner",
+      "missing_count": 272,
+      "missing_ratio": 0.10884353741496598
+    },
+    {
+      "column": "home_minus_away_away_moneyline_3",
+      "missing_count": 240,
+      "missing_ratio": 0.09603841536614646
+    },
+    {
+      "column": "home_minus_away_away_rest_3",
+      "missing_count": 240,
+      "missing_ratio": 0.09603841536614646
+    },
+    {
+      "column": "home_minus_away_home_moneyline_3",
+      "missing_count": 240,
+      "missing_ratio": 0.09603841536614646
+    },
+    {
+      "column": "home_minus_away_home_rest_3",
+      "missing_count": 240,
+      "missing_ratio": 0.09603841536614646
+    },
+    {
+      "column": "home_minus_away_pa_avg_3",
+      "missing_count": 240,
+      "missing_ratio": 0.09603841536614646
+    },
+    {
+      "column": "home_minus_away_pf_avg_3",
+      "missing_count": 240,
+      "missing_ratio": 0.09603841536614646
+    },
+    {
+      "column": "home_minus_away_spread_line_3",
+      "missing_count": 240,
+      "missing_ratio": 0.09603841536614646
+    },
+    {
+      "column": "home_minus_away_total_line_3",
+      "missing_count": 240,
+      "missing_ratio": 0.09603841536614646
+    },
+    {
+      "column": "home_minus_away_win_pct_3",
+      "missing_count": 240,
+      "missing_ratio": 0.09603841536614646
+    },
+    {
+      "column": "home_minus_away_away_moneyline_5",
+      "missing_count": 209,
+      "missing_ratio": 0.08363345338135254
+    },
+    {
+      "column": "home_minus_away_away_rest_5",
+      "missing_count": 209,
+      "missing_ratio": 0.08363345338135254
+    },
+    {
+      "column": "home_minus_away_home_moneyline_5",
+      "missing_count": 209,
+      "missing_ratio": 0.08363345338135254
+    },
+    {
+      "column": "home_minus_away_home_rest_5",
+      "missing_count": 209,
+      "missing_ratio": 0.08363345338135254
+    },
+    {
+      "column": "home_minus_away_pa_avg_5",
+      "missing_count": 209,
+      "missing_ratio": 0.08363345338135254
+    },
+    {
+      "column": "home_minus_away_pf_avg_5",
+      "missing_count": 209,
+      "missing_ratio": 0.08363345338135254
+    },
+    {
+      "column": "home_minus_away_spread_line_5",
+      "missing_count": 209,
+      "missing_ratio": 0.08363345338135254
+    },
+    {
+      "column": "home_minus_away_total_line_5",
+      "missing_count": 209,
+      "missing_ratio": 0.08363345338135254
+    },
+    {
+      "column": "home_minus_away_win_pct_5",
+      "missing_count": 209,
+      "missing_ratio": 0.08363345338135254
+    },
+    {
+      "column": "total_line",
+      "missing_count": 196,
+      "missing_ratio": 0.0784313725490196
+    },
+    {
+      "column": "away_moneyline_prob",
+      "missing_count": 195,
+      "missing_ratio": 0.07803121248499399
+    },
+    {
+      "column": "away_moneyline_prob_norm",
+      "missing_count": 195,
+      "missing_ratio": 0.07803121248499399
+    },
+    {
+      "column": "home_moneyline_prob",
+      "missing_count": 195,
+      "missing_ratio": 0.07803121248499399
+    },
+    {
+      "column": "home_moneyline_prob_norm",
+      "missing_count": 195,
+      "missing_ratio": 0.07803121248499399
+    },
+    {
+      "column": "moneyline_prob_diff",
+      "missing_count": 195,
+      "missing_ratio": 0.07803121248499399
+    },
+    {
+      "column": "moneyline_prob_norm_diff",
+      "missing_count": 195,
+      "missing_ratio": 0.07803121248499399
+    },
+    {
+      "column": "spread_line",
+      "missing_count": 195,
+      "missing_ratio": 0.07803121248499399
+    },
+    {
+      "column": "surface",
+      "missing_count": 44,
+      "missing_ratio": 0.017607042817126852
+    },
+    {
+      "column": "roof",
+      "missing_count": 43,
+      "missing_ratio": 0.01720688275310124
+    },
+    {
+      "column": "away_elo_pre",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_prior_away_moneyline_3",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_prior_away_moneyline_5",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_prior_away_rest_3",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_prior_away_rest_5",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_prior_def_epa_per_play_3",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_prior_def_epa_per_play_5",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_prior_def_explosive_rate_allowed_3",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_prior_def_explosive_rate_allowed_5",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_prior_def_success_rate_allowed_3",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_prior_def_success_rate_allowed_5",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_prior_def_takeaway_rate_3",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_prior_def_takeaway_rate_5",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_prior_home_moneyline_3",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_prior_home_moneyline_5",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_prior_home_rest_3",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_prior_home_rest_5",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_prior_off_epa_per_play_3",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_prior_off_epa_per_play_5",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_prior_off_explosive_rate_3",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_prior_off_explosive_rate_5",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_prior_off_success_rate_3",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_prior_off_success_rate_5",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_prior_off_turnover_rate_3",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_prior_off_turnover_rate_5",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_prior_pa_avg_3",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_prior_pa_avg_5",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_prior_pf_avg_3",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_prior_pf_avg_5",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_prior_spread_line_3",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_prior_spread_line_5",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_prior_temp_3",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_prior_temp_5",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_prior_total_line_3",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_prior_total_line_5",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_prior_win_pct_3",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_prior_win_pct_5",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_prior_wind_3",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_prior_wind_5",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_rest",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_team",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_team_ARI",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_team_ATL",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_team_BAL",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_team_BUF",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_team_CAR",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_team_CHI",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_team_CIN",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_team_CLE",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_team_DAL",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_team_DEN",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_team_DET",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_team_GB",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_team_HOU",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_team_IND",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_team_JAX",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_team_KC",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_team_LAC",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_team_LAR",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_team_LV",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_team_MIA",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_team_MIN",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_team_NE",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_team_NO",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_team_NYG",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_team_NYJ",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_team_PHI",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_team_PIT",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_team_SEA",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_team_SF",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_team_TB",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_team_TEN",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "away_team_WAS",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "elo_diff_pre",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "game_date_parsed",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "game_day_of_week",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "game_id",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "game_type",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_elo_pre",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_game_date",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_prior_away_moneyline_3",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_prior_away_moneyline_5",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_prior_away_rest_3",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_prior_away_rest_5",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_prior_def_epa_per_play_3",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_prior_def_epa_per_play_5",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_prior_def_explosive_rate_allowed_3",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_prior_def_explosive_rate_allowed_5",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_prior_def_success_rate_allowed_3",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_prior_def_success_rate_allowed_5",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_prior_def_takeaway_rate_3",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_prior_def_takeaway_rate_5",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_prior_home_moneyline_3",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_prior_home_moneyline_5",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_prior_home_rest_3",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_prior_home_rest_5",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_prior_off_epa_per_play_3",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_prior_off_epa_per_play_5",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_prior_off_explosive_rate_3",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_prior_off_explosive_rate_5",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_prior_off_success_rate_3",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_prior_off_success_rate_5",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_prior_off_turnover_rate_3",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_prior_off_turnover_rate_5",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_prior_pa_avg_3",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_prior_pa_avg_5",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_prior_pf_avg_3",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_prior_pf_avg_5",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_prior_spread_line_3",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_prior_spread_line_5",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_prior_temp_3",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_prior_temp_5",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_prior_total_line_3",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_prior_total_line_5",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_prior_win_pct_3",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_prior_win_pct_5",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_prior_wind_3",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_prior_wind_5",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_rest",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_team",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_team_ARI",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_team_ATL",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_team_BAL",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_team_BUF",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_team_CAR",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_team_CHI",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_team_CIN",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_team_CLE",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_team_DAL",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_team_DEN",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_team_DET",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_team_GB",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_team_HOU",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_team_IND",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_team_JAX",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_team_KC",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_team_LAC",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_team_LAR",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_team_LV",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_team_MIA",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_team_MIN",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_team_NE",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_team_NO",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_team_NYG",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_team_NYJ",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_team_PHI",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_team_PIT",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_team_SEA",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_team_SF",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_team_TB",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_team_TEN",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "home_team_WAS",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "is_playoff",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "is_regular_season",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "is_weekend",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "rest_diff",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "season",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "time_key",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    },
+    {
+      "column": "week",
+      "missing_count": 0,
+      "missing_ratio": 0.0
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-05-26T22:10:01.537909+00:00",
-  "dataset_path": "C:\\Users\\goku\\Documents\\NFL_ML_Predictions\\backend\\data\\datasets\\game_features_20260526_clean.csv",
-  "dataset_hash": "f4944b0217379249ffc5c8282c357425e1e2199e5de9b5cff46b38665130ef86",
+  "generated_at": "2026-05-31T13:00:17.198662+00:00",
+  "dataset_path": "C:\\Users\\goku\\Documents\\NFL_ML_Predictions\\backend\\data\\datasets\\game_features_20260531_clean.csv",
+  "dataset_hash": "94bd8ca5e7e47ac5db5d4d583daaa93265313be24a20bf909848db68a18f188b",
   "rows": {
     "total": 2227,
     "train": 1764,
@@ -100,14 +100,6 @@
         "home_minus_away_home_rest_3",
         "home_minus_away_temp_3",
         "home_minus_away_wind_3",
-        "home_minus_away_off_epa_per_play_3",
-        "home_minus_away_off_success_rate_3",
-        "home_minus_away_off_explosive_rate_3",
-        "home_minus_away_off_turnover_rate_3",
-        "home_minus_away_def_success_rate_allowed_3",
-        "home_minus_away_def_explosive_rate_allowed_3",
-        "home_minus_away_def_epa_per_play_3",
-        "home_minus_away_def_takeaway_rate_3",
         "home_minus_away_pf_avg_5",
         "home_minus_away_pa_avg_5",
         "home_minus_away_win_pct_5",
@@ -223,7 +215,7 @@
         "surface",
         "game_date_parsed"
       ],
-      "count": 209
+      "count": 201
     },
     "score": {
       "numeric": [
@@ -316,14 +308,6 @@
         "home_minus_away_home_rest_3",
         "home_minus_away_temp_3",
         "home_minus_away_wind_3",
-        "home_minus_away_off_epa_per_play_3",
-        "home_minus_away_off_success_rate_3",
-        "home_minus_away_off_explosive_rate_3",
-        "home_minus_away_off_turnover_rate_3",
-        "home_minus_away_def_success_rate_allowed_3",
-        "home_minus_away_def_explosive_rate_allowed_3",
-        "home_minus_away_def_epa_per_play_3",
-        "home_minus_away_def_takeaway_rate_3",
         "home_minus_away_pf_avg_5",
         "home_minus_away_pa_avg_5",
         "home_minus_away_win_pct_5",
@@ -440,7 +424,7 @@
         "surface",
         "game_date_parsed"
       ],
-      "count": 210
+      "count": 202
     },
     "generated": [
       "nn_home_win_proba"
@@ -540,14 +524,6 @@
       "home_minus_away_home_rest_3",
       "home_minus_away_temp_3",
       "home_minus_away_wind_3",
-      "home_minus_away_off_epa_per_play_3",
-      "home_minus_away_off_success_rate_3",
-      "home_minus_away_off_explosive_rate_3",
-      "home_minus_away_off_turnover_rate_3",
-      "home_minus_away_def_success_rate_allowed_3",
-      "home_minus_away_def_explosive_rate_allowed_3",
-      "home_minus_away_def_epa_per_play_3",
-      "home_minus_away_def_takeaway_rate_3",
       "home_minus_away_pf_avg_5",
       "home_minus_away_pa_avg_5",
       "home_minus_away_win_pct_5",
@@ -659,7 +635,7 @@
       "away_team_TEN",
       "away_team_WAS"
     ],
-    "used_column_count": 209,
+    "used_column_count": 201,
     "dropped_columns": [
       {
         "column": "game_id",
@@ -702,6 +678,62 @@
         "hard_leak": true,
         "missing_ratio": 0.0,
         "unique_count": 33
+      },
+      {
+        "column": "home_minus_away_off_epa_per_play_3",
+        "reason": "near_empty_column",
+        "hard_leak": false,
+        "missing_ratio": 0.9501571621014818,
+        "unique_count": 111
+      },
+      {
+        "column": "home_minus_away_off_success_rate_3",
+        "reason": "near_empty_column",
+        "hard_leak": false,
+        "missing_ratio": 0.9501571621014818,
+        "unique_count": 111
+      },
+      {
+        "column": "home_minus_away_off_explosive_rate_3",
+        "reason": "near_empty_column",
+        "hard_leak": false,
+        "missing_ratio": 0.9501571621014818,
+        "unique_count": 111
+      },
+      {
+        "column": "home_minus_away_off_turnover_rate_3",
+        "reason": "near_empty_column",
+        "hard_leak": false,
+        "missing_ratio": 0.9501571621014818,
+        "unique_count": 106
+      },
+      {
+        "column": "home_minus_away_def_success_rate_allowed_3",
+        "reason": "near_empty_column",
+        "hard_leak": false,
+        "missing_ratio": 0.9501571621014818,
+        "unique_count": 111
+      },
+      {
+        "column": "home_minus_away_def_explosive_rate_allowed_3",
+        "reason": "near_empty_column",
+        "hard_leak": false,
+        "missing_ratio": 0.9501571621014818,
+        "unique_count": 111
+      },
+      {
+        "column": "home_minus_away_def_epa_per_play_3",
+        "reason": "near_empty_column",
+        "hard_leak": false,
+        "missing_ratio": 0.9501571621014818,
+        "unique_count": 111
+      },
+      {
+        "column": "home_minus_away_def_takeaway_rate_3",
+        "reason": "near_empty_column",
+        "hard_leak": false,
+        "missing_ratio": 0.9501571621014818,
+        "unique_count": 102
       },
       {
         "column": "home_player_team_qb_pass_yards",
@@ -893,8 +925,9 @@
         "unique_count": 2
       }
     ],
-    "dropped_column_count": 33,
+    "dropped_column_count": 41,
     "dropped_reason_counts": {
+      "near_empty_column": 8,
       "same_week_player_stat": 26,
       "target_or_postgame_column": 7
     },
@@ -938,22 +971,22 @@
   "metrics": {
     "regression": {
       "home": {
-        "mae": 6.864514685181704,
-        "rmse": 8.721739291219603,
-        "r2": 0.2514204965615612
+        "mae": 6.912108635015916,
+        "rmse": 8.772821848906213,
+        "r2": 0.24262607222196475
       },
       "away": {
-        "mae": 7.204925356453673,
-        "rmse": 8.775950647419188,
-        "r2": 0.18675210283002763
+        "mae": 7.041374948384866,
+        "rmse": 8.606750964601101,
+        "r2": 0.21780852518035776
       },
-      "combined_mae": 7.034720020817689
+      "combined_mae": 6.976741791700391
     },
     "classification": {
-      "accuracy": 0.6666666666666666,
-      "brier": 0.2175767373025059,
-      "roc_auc": 0.7382703576480097,
-      "log_loss": 0.6245678716726144
+      "accuracy": 0.6621923937360179,
+      "brier": 0.2119299013803873,
+      "roc_auc": 0.7522933926045665,
+      "log_loss": 0.6124458191619153
     },
     "calibration": {
       "bins": [
@@ -979,64 +1012,64 @@
           "bin": 2,
           "lower": 0.2,
           "upper": 0.30000000000000004,
-          "count": 142,
-          "avg_predicted_probability": 0.2568955828087172,
-          "empirical_home_win_rate": 0.33098591549295775,
-          "absolute_error": 0.07409033268424053
+          "count": 92,
+          "avg_predicted_probability": 0.2934260720080094,
+          "empirical_home_win_rate": 0.21739130434782608,
+          "absolute_error": 0.07603476766018333
         },
         {
           "bin": 3,
           "lower": 0.30000000000000004,
           "upper": 0.4,
-          "count": 44,
-          "avg_predicted_probability": 0.3457917042957614,
-          "empirical_home_win_rate": 0.5227272727272727,
-          "absolute_error": 0.17693556843151131
+          "count": 87,
+          "avg_predicted_probability": 0.3368782801169666,
+          "empirical_home_win_rate": 0.47126436781609193,
+          "absolute_error": 0.13438608769912536
         },
         {
           "bin": 4,
           "lower": 0.4,
           "upper": 0.5,
-          "count": 37,
-          "avg_predicted_probability": 0.4491287607025139,
-          "empirical_home_win_rate": 0.40540540540540543,
-          "absolute_error": 0.04372335529710847
+          "count": 32,
+          "avg_predicted_probability": 0.4464079074676326,
+          "empirical_home_win_rate": 0.59375,
+          "absolute_error": 0.1473420925323674
         },
         {
           "bin": 5,
           "lower": 0.5,
           "upper": 0.6000000000000001,
           "count": 21,
-          "avg_predicted_probability": 0.5442449381755736,
-          "empirical_home_win_rate": 0.5714285714285714,
-          "absolute_error": 0.027183633252997774
+          "avg_predicted_probability": 0.5452784484159287,
+          "empirical_home_win_rate": 0.5238095238095238,
+          "absolute_error": 0.021468924606404816
         },
         {
           "bin": 6,
           "lower": 0.6000000000000001,
           "upper": 0.7000000000000001,
-          "count": 25,
-          "avg_predicted_probability": 0.6558505828164111,
-          "empirical_home_win_rate": 0.52,
-          "absolute_error": 0.13585058281641105
+          "count": 36,
+          "avg_predicted_probability": 0.6574581652881561,
+          "empirical_home_win_rate": 0.4722222222222222,
+          "absolute_error": 0.18523594306593394
         },
         {
           "bin": 7,
           "lower": 0.7000000000000001,
           "upper": 0.8,
-          "count": 56,
-          "avg_predicted_probability": 0.757424762604244,
-          "empirical_home_win_rate": 0.5714285714285714,
-          "absolute_error": 0.18599619117567256
+          "count": 179,
+          "avg_predicted_probability": 0.7567768035348276,
+          "empirical_home_win_rate": 0.7653631284916201,
+          "absolute_error": 0.008586324956792568
         },
         {
           "bin": 8,
           "lower": 0.8,
           "upper": 0.9,
-          "count": 122,
-          "avg_predicted_probability": 0.8212102814238657,
-          "empirical_home_win_rate": 0.8442622950819673,
-          "absolute_error": 0.02305201365810161
+          "count": 0,
+          "avg_predicted_probability": null,
+          "empirical_home_win_rate": null,
+          "absolute_error": null
         },
         {
           "bin": 9,
@@ -1048,15 +1081,15 @@
           "absolute_error": null
         }
       ],
-      "expected_calibration_error": 0.08304029002011401,
-      "max_calibration_error": 0.18599619117567256
+      "expected_calibration_error": 0.07171818512297656,
+      "max_calibration_error": 0.18523594306593394
     },
     "score_win_agreement": {
       "method": "logistic_home_minus_away_score_scale_7_5",
-      "avg_abs_probability_delta": 0.12342697571968592,
-      "p90_abs_probability_delta": 0.2607790185048403,
-      "disagreement_rate_over_0_20": 0.18791946308724833,
-      "side_conflict_rate": 0.203579418344519
+      "avg_abs_probability_delta": 0.12365091466618619,
+      "p90_abs_probability_delta": 0.2586025398996246,
+      "disagreement_rate_over_0_20": 0.18120805369127516,
+      "side_conflict_rate": 0.21252796420581654
     }
   },
   "baselines": {
@@ -1106,11 +1139,11 @@
     "away": {
       "mode": "search",
       "best_params": {
-        "min_samples_leaf": 20,
-        "max_leaf_nodes": 31,
+        "min_samples_leaf": 30,
+        "max_leaf_nodes": 63,
         "max_depth": 3,
         "learning_rate": 0.05,
-        "l2_regularization": 0.05
+        "l2_regularization": 0.1
       },
       "cv_strategy": "group_time_series",
       "cv_folds": 5,
@@ -1119,13 +1152,13 @@
     "win_base": {
       "mode": "search",
       "best_params": {
-        "learning_rate_init": 0.0003,
+        "learning_rate_init": 0.001,
         "hidden_layer_sizes": [
-          96
+          64
         ],
-        "batch_size": 128,
-        "alpha": 0.01,
-        "activation": "relu"
+        "batch_size": 32,
+        "alpha": 0.001,
+        "activation": "tanh"
       },
       "algorithm": "mlp",
       "cv_strategy": "group_time_series",
@@ -1368,7 +1401,7 @@
     },
     "cv_splits": 5,
     "embargo_groups": 1,
-    "hp_niter": 40,
+    "hp_niter": 30,
     "fast_dev": false,
     "win_calibration_full": {
       "mode": "prefit_tail",
