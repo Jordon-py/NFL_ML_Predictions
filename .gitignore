@@ -9,14 +9,18 @@ __pycache__/
 .venv*/
 venv/
 env/
-.env.example
 env.bak/
 backend/.venv/
 backend/venv/
 nfl_env/
 nflenv/
-
-.md
+*/.venv
+.pyi
+.ipynb_checkpoints
+.pytest_cache
+.pytest_cache*/
+*/.pytest_cache
+*/.ipynb_checkpoints
 ## Node artifacts
 node_modules/
 frontend/node_modules/
@@ -39,7 +43,9 @@ frontend/.vercel/
 ## Environment configuration
 .env
 .env.*
+!.env.example
 backend/.env
+!backend/.env.example
 frontend/.env*
 
 ## IDE & OS noise
@@ -61,13 +67,15 @@ coverage/
 *.coverage
 backend/logs/
 tmp_pytest/
+tmp_pytest*/
+pytest_basetemp_*/
+.runtime_*/
 codex_git_objects_push/
 codex_external_push.index
 ## Notebook checkpoints
 .ipynb_checkpoints/
 */*.index
 ## Packaging artifacts
-.slugignore
 *.so
 .Python
 develop-eggs/
@@ -91,9 +99,9 @@ MANIFEST
 /data/
 *.csv
 *.json
+*.jsonl
 *.db
-!backend/data/*.json
-!backend/data/datasets/*.json
+!backend/data/datasets/latest_*.json
 !backend/data/team_logos.csv
 !backend/data/team_logo.csv
 !backend/Nfl_schedule_2025.csv
@@ -108,8 +116,18 @@ MANIFEST
 !backend/data/schedules/
 !backend/data/schedules/*.parquet
 backend/data/datasets_local/
+backend/data/raw/
+backend/data/models/
+backend/data/jobs/
+backend/data/datasets/*.log
+backend/data/datasets/runs/*
+!backend/data/datasets/runs/20260531T124903Z/
+backend/data/datasets/runs/20260531T124903Z/*.csv
+backend/data/datasets/runs/20260531T124903Z/*.log
 
 # Local-only backend artifacts (keep production datasets under backend/data/datasets)
+backend/20260531/
+backend/Predictions/
 backend/data/legacy_data/
 backend/data/prod-models/
 backend/data/data.ipynb
@@ -117,6 +135,7 @@ backend/data/learning_memory.json
 backend/data/team_logo_squared_by_abbr.json
 frontend/public/data/
 frontend/playwright-*.png
+output/
 
 .bundle
 
@@ -127,7 +146,6 @@ frontend/playwright-*.png
 *.model
 *.joblib
 backend/models/
-backend/data/models/
 backend/*/models/
 !requirements.txt
 !README.md
@@ -149,6 +167,12 @@ backend/*/models/
 !backend/models/training_report.json
 !backend/models/run_summary.json
 backend/models/training_metrics_plot.png
+backend/models/feature_importance.json
+backend/models/predictions_*.csv
+backend/models/walkforward_*.csv
+backend/models/rollback/
+backend/models/staging/
+backend/models/*.log
 
 
 
@@ -158,6 +182,7 @@ backend/models/training_metrics_plot.png
 
 ## Deployment configs
 !vercel.json
+!frontend/vercel.json
 .vercel
 .env*.local
 

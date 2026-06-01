@@ -2,10 +2,10 @@
 
 ## Scan Metadata
 
-- Scan date: 2026-04-30
+- Scan date: 2026-06-01
 - Repo root: `C:\Users\goku\Documents\NFL_ML_Predictions`
 - HEAD at scan start: `54697421f`
-- Current branch: `main`
+- Current branch: `master`
 - GitHub remote: `https://github.com/Jordon-py/NFL_ML_Predictions.git`
 - Backend deploy remote: `https://git.heroku.com/nfl-predict.git`
 - Frontend deploy project: Vercel project `nfl-ml-predictions`
@@ -133,7 +133,7 @@ Frontend:
 | `backend/data/datasets/` | Promoted clean datasets and manifests | Generated; commit only intentional curated artifacts |
 | `backend/data/models/` | Packaged runtime model bundle | Generated/model artifact; do not hand-edit |
 | `backend/data/Nfl_schedule_2025.csv` | Current packaged schedule CSV | Curated runtime asset |
-| `backend/data/Nfl_schedule_2026.csv` | Empty local placeholder at scan time | Ignored and should not drive deploy until populated |
+| `backend/data/Nfl_schedule_2026.csv` | Current packaged 2026 schedule CSV | Curated runtime asset |
 | `backend/data/schedules/*.parquet` | Schedule ingestion parquet outputs | Generated evidence/possible future runtime asset |
 | `backend/predictions.db` | SQLite runtime prediction history | Runtime state; avoid committing |
 | `backend/Predictions/` | JSON fallback history | Runtime state; avoid committing |
@@ -245,7 +245,7 @@ Local Windows note: pytest temp folders in this checkout can raise `PermissionEr
 ### Deployment
 
 ```powershell
-git push origin main
+git push origin master
 git push heroku main
 heroku config:get SCHEDULE_PATH -a nfl-predict
 heroku config:get MODELS_DIR -a nfl-predict
@@ -257,9 +257,9 @@ heroku logs --tail -a nfl-predict
 - `backend/main.py` is too large and owns too many responsibilities.
 - `StatsPage.jsx` bypasses shared prediction state and can drift from dashboard behavior.
 - `frontend/package-lock.json` can pick up accidental churn from dirty `node_modules`; inspect before staging.
-- `frontend/dist/index.html` is tracked build output and can point to ignored assets.
+- `frontend/dist/index.html` should remain ignored build output and should not be part of normal deploy commits.
 - `backend/predictions.db` is runtime state and should not be part of normal deploy commits.
-- `backend/data/Nfl_schedule_2026.csv` exists locally as an empty ignored file. Do not set production `SCHEDULE_PATH` to it until it has real rows.
+- `backend/data/Nfl_schedule_2026.csv` is now a populated curated runtime asset.
 - Root `requirements.txt` and `backend/requirements.txt` differ. Heroku uses the root file; CI currently installs `backend/requirements.txt`.
 - `.slugignore` excludes docs/tests from Heroku, which is fine for slug size but means deploy debugging must rely on source locally/GitHub.
 - Multiple temp folders currently produce Windows permission warnings during git/pytest scans.
@@ -296,23 +296,23 @@ heroku logs --tail -a nfl-predict
 ## Likely Incomplete or Placeholder Areas
 
 - Real authentication is not implemented. `useAuthSession.js` is local-device identity only.
-- 2026 schedule CSV/parquet files are present locally but empty at scan time.
+- 2026 schedule CSV/parquet files are populated curated runtime assets.
 - Admin retrain/promote endpoints exist but require careful production token/config handling.
-- Frontend public schedule fallback assets do not include a populated 2026 schedule.
+- Frontend public schedule fallback assets are compatibility-only; backend schedule assets are the runtime source of truth.
 - Stats page does not yet share the dashboard hook's offseason routing behavior.
 - Schedule ingestion produces good clean schedule rows, but feature-dataset exact-match coverage still needs verification after ingestion changes.
 
 ## Recommended Next Steps
 
-1. Keep production `SCHEDULE_PATH` pointed at the latest non-empty schedule file until the 2026 schedule is populated.
+1. Keep `master` as the canonical GitHub source branch and GitHub Actions deploy trigger.
 2. Refactor `StatsPage.jsx` to consume shared season/schedule context or a shared schedule service.
-3. Decide whether generated `frontend/dist/*`, `backend/predictions.db`, and artifact task notes should remain tracked.
+3. Keep generated `frontend/dist/*`, `backend/predictions.db`, and local artifact screenshots out of Git.
 4. Add backend tests specifically for `/offseason/status` matching an available `/schedule?season=&week=` response.
 5. Align Heroku and CI dependency surfaces by resolving the root `requirements.txt` versus `backend/requirements.txt` split.
 
 ## Open Questions / Uncertainties
 
 - Should the repo commit generated parquet schedule artifacts, or keep only canonical CSV schedules in Git?
-- Should `backend/data/Nfl_schedule_2026.csv` become a tracked curated asset after the official schedule release?
-- Is the current Heroku config still `SCHEDULE_PATH=data/Nfl_schedule_2025.csv`, or has it drifted to an empty 2026 path?
-- Should GitHub Actions deploy both frontend and backend on every `main` push, or should backend deploy remain a manual Heroku push?
+- Should `origin/main` remain as a compatibility branch for any external deploy integration, or can it be deleted after `master` deployments are verified?
+- Is the current Heroku config still `SCHEDULE_PATH=data/Nfl_schedule_2025.csv`, or has it moved to the populated 2026 schedule?
+- Should GitHub Actions deploy both frontend and backend on every `master` push, or should backend deploy remain a manual Heroku push?

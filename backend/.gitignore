@@ -1,41 +1,77 @@
-# Python
-__pycache__/
-.exe
-
-*$py.class
-*.so
-.Python
-*.bundle
-# Virtual environments
+## Backend local environment
+.env
+.env.*
+!.env.example
+.venv/
 venv/
 env/
-ENV/
-.venv/
-
-# IDE
-.vscode/
-.idea/
-*.swp
-
-# Logs
-*.log
-
-# Model files
-
-
-# Data files (keep structure but not data)
-
-
-!data/.gitkeep
-Add backend/.venv/
-
-# Environment
-.env
-.env.local
-.env.production
-
-
-# Testing
+__pycache__/
+*.py[cod]
+*$py.class
 .pytest_cache/
-.coverage
-htmlcov/
+.ipynb_checkpoints/
+
+## Logs, coverage, and runtime state
+*.log
+*.out
+*.err
+*.jsonl
+*.coverage
+coverage/
+logs/
+predictions.db
+Predictions/
+
+## Local generated data
+20260531/
+data/raw/
+data/legacy_data/
+data/prod-models/
+data/datasets_local/
+data/models/
+data/jobs/
+data/data.ipynb
+data/learning_memory.json
+data/team_logo_squared_by_abbr.json
+data/datasets/*.log
+data/datasets/runs/*
+!data/datasets/runs/20260531T124903Z/
+data/datasets/runs/20260531T124903Z/*.csv
+data/datasets/runs/20260531T124903Z/*.log
+
+## Model outputs
+*.pkl
+*.model
+*.joblib
+models/
+*/models/
+!models/
+!models/metadata.json
+!models/home_model.joblib
+!models/away_model.joblib
+!models/win_clf_calibrated.joblib
+!models/hist_win_clf_calibrated.joblib
+!models/preprocessor.joblib
+!models/home_pipe.joblib
+!models/away_pipe.joblib
+!models/win_pipe.joblib
+!models/score_preprocessor.joblib
+!models/win_preprocessor.joblib
+!models/feature_manifest.json
+!models/training_report.json
+!models/run_summary.json
+models/training_metrics_plot.png
+models/feature_importance.json
+models/predictions_*.csv
+models/walkforward_*.csv
+models/rollback/
+models/staging/
+models/*.log
+
+## Packaging/build noise
+build/
+dist/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST

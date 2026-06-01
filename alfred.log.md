@@ -171,3 +171,17 @@ Verification result: Rebuild produced dataset hash `94bd8ca5e7e47ac5db5d4d583daa
 Remaining issues: The training process still emits known scikit-learn median-imputer warnings for all-empty optional diff features, but the promoted bundle passed the existing quality gate and runtime contract checks. Local git status still includes unrelated artifact note changes under `artifacts/` that should stay out of the release commit unless explicitly requested.
 
 Recommended next step: Commit the scoped release files, push to GitHub, deploy Heroku backend and Vercel frontend, then smoke-test live `/health/pipeline`, `/predict`, and the deployed landing page.
+
+## 2026-06-01 - Repo consolidation and branch cleanup prep
+
+Summary: Consolidated the repository around `master` as the canonical source branch, cleaned Git tracking for generated/runtime artifacts, removed the already-applied `offseason.patch`, added a sanitized backend env example, aligned the GitHub deploy workflow to `master`, and applied the open dependency patches directly on the canonical branch.
+
+Files changed: .gitignore, backend/.gitignore, backend/.env.example, .github/workflows/ci.yml, .github/workflows/deploy.yml, README.md, REPO-INFO.md, requirements.txt, frontend/package.json, frontend/package-lock.json, tracked generated/runtime artifact removals, offseason.patch removal.
+
+Commands run: `git fetch --all --prune`; `git bundle create ..\NFL_ML_Predictions_pre_cleanup.bundle --all`; `npm install vite@7.3.2 --save-dev --package-lock-only`; `npm update picomatch --package-lock-only`; `git rm -r --cached --ignore-unmatch ...`; `git rm --ignore-unmatch offseason.patch`; `git diff --check`; `python -m py_compile backend/main.py backend/app/core/settings.py backend/builddataset.py backend/train_models.py`; `python -m pytest backend/tests -q -o addopts=''`; `npm ci`; `npm test -- --run`; `npm run build`; `backend\.venv\Scripts\python.exe -m py_compile backend/main.py backend/app/core/settings.py backend/builddataset.py backend/train_models.py`; `backend\.venv\Scripts\python.exe -m ensurepip --upgrade`; `backend\.venv\Scripts\python.exe -m pip install "pytest>=9.0.0,<10.0.0"`; `backend\.venv\Scripts\python.exe -m pytest backend/tests -q -o addopts=''`; FastAPI TestClient smoke for `/health`, `/status/models`, `/schedule?season=2026&week=1`, and `/predict`.
+
+Verification result: Safety bundle created at `C:\Users\goku\Documents\NFL_ML_Predictions_pre_cleanup.bundle`. `git diff --check` passed. Default Python compile passed and backend tests passed: 10 passed. `backend\.venv` compile passed, pytest passed: 10 passed, and runtime smoke returned 200 for health/model/schedule/predict with `models_ready=true`, 16 Week 1 schedule games, and `win_classifier_used=true`. Frontend tests passed: 9 passed. Frontend production build passed with Vite 7.3.2. Dependency audit after lockfile update reported 0 vulnerabilities.
+
+Remaining issues: Default system Python is 3.13 with scikit-learn 1.5.2, so runtime model loading requires `backend\.venv` or another environment with scikit-learn 1.7.2. Local `backend/.env` stays on disk but is removed from Git tracking. Unrelated local changes remain in `backend/ollama/llm_ollama.py`, `pyproject.toml`, `backend/pyproject.toml`, `backend/ollama/chat.ipynb`, and the artifact task notes unless explicitly staged.
+
+Recommended next step: Commit and push the scoped cleanup to `origin/master`, close superseded PRs, delete verified stale branches, and keep `origin/main` until Vercel production branch settings are verified.

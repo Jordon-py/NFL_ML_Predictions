@@ -28,6 +28,7 @@ Full-stack NFL forecasting workspace with a FastAPI backend, a React/Vite fronte
 
 ## Canonical Deploy Targets
 
+- GitHub source branch: `master`
 - Frontend: Vercel project `nfl-ml-predictions`
 - Production frontend alias: `https://new-nfl-predict.vercel.app`
 - Backend: Heroku app `nfl-predict`
@@ -35,6 +36,7 @@ Full-stack NFL forecasting workspace with a FastAPI backend, a React/Vite fronte
 
 Deploy intent:
 
+- GitHub Actions deploys from `master`
 - Vercel should build from `frontend/`
 - Heroku should serve the FastAPI backend with the buildpack + `Procfile` flow
 - Production CORS should allow the canonical frontend origin plus `.vercel.app` previews
