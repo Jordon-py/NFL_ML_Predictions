@@ -1,7 +1,7 @@
 # Next 5 Tasks
 
-1. [ ] **Premium Dashboard Slate Upgrade** - Add evidence-based slate filtering/search and improve TeamGrid guidance states.
-2. [ ] **Premium Stats Overview Upgrade** - Rework the status page layout so health, dataset, schedule, and history read as one professional overview.
-3. [ ] **Functional Slate Filter Verification** - Add focused frontend tests proving team/status filters change real dashboard behavior.
-4. [ ] **Run Frontend Verification** - Execute Vitest and production build after the UI/functionality changes.
-5. [ ] **Update Project Notes** - Refresh `dataflow.md`, `alfred.log.md`, and task artifacts with the completed upgrade package.
+1. [ ] **Deployed Browser Smoke** - Re-run the dashboard and overview checks against the deployed Vercel URL after the next release.
+2. [ ] **Live Slate Filter Smoke** - Verify TeamGrid search/status filters against a week with real scheduled games and at least one saved prediction.
+3. [ ] **Backend Health Copy Review** - Decide whether the overview page should expose more `/status/models` model-bundle details.
+4. [ ] **Mobile UI Pass** - Capture mobile screenshots for `/app` and `/stats` once live schedule data is available.
+5. [ ] **Release Commit Review** - Separate this upgrade package from unrelated dirty files before committing or deploying.

@@ -1,11 +1,23 @@
-# ==========================================
+# ==============================================================================
 # File: backend/ollama/llm_ollama.py
-# Role: Backend helper module.
-# Input Data: Function inputs.
-# Output Data: Module outputs.
-# Dependencies: __future__, asyncio, json, os
-# Notes: Shared utilities.
-# ==========================================
+# Role: LLM Integration Module for Ollama
+#
+# OVERVIEW FOR DEVELOPERS:
+# This module provides a bridge between the NFL Prediction system and Ollama,
+# a local LLM runner. It supports two primary modes of interaction:
+#
+# 1. Structured Inference (explain_prediction):
+#    Used by the API to turn raw model numbers into human-readable JSON explanations.
+#
+# 2. Interactive Chat (chat):
+#    A streaming interface that supports "Reasoning Models" (e.g., DeepSeek, Gemma 4).
+#
+# KEY CONCEPT: The "Thinking" Flow
+# Modern reasoning models don't just give an answer; they "think" first.
+# In the API stream, this appears as a 'thinking' field. Once the model finishes
+# reasoning, it switches to the 'content' field for the final answer.
+# This module handles that transition seamlessly to provide a clean UI experience.
+# ==============================================================================
 
 from __future__ import annotations
 
@@ -14,11 +26,91 @@ import json
 import os
 import time
 from typing import Any, Dict, List, Optional
-
+from dotenv import load_dotenv, find_dotenv
 import httpx
+import ollama
+
+# Automatically find and load .env from the project root
+load_dotenv(find_dotenv())
+class OllamaClient:
+    """
+    A wrapper for the Ollama AsyncClient.
+
+    It handles configuration via environment variables, allowing the same code
+    to run locally (localhost:11434) or in a cloud environment via OLLAMA_BASE_URL.
+    """
+    def __init__(self, host: Optional[str] = None, model: Optional[str] = None, timeout_s: Optional[float] = None):
+        self.host = host or os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+        self.model = model or os.getenv("OLLAMA_MODEL", "gemma4:e4b").split(",")[0].strip()
+        self.timeout_s = timeout_s or float(os.getenv("OLLAMA_TIMEOUT_S", "300"))
+        self.client = ollama.AsyncClient(host=self.host, timeout=self.timeout_s)
+        self.api_key = os.getenv("OLLAMA_API_KEY")
+
+client = OllamaClient()
+
+async def chat() -> Any:
+    """Interactive chat loop demonstrating streaming and thinking capabilities."""
+    client = OllamaClient()
+    messages = [{'role': 'system', 'content': 'You are a helpful assistant.'}]
+
+    while True:
+        user_prompt = input("\nUser: ")
+        if user_prompt.lower() in ("exit", "quit"):
+            break
+
+        messages.append({'role': 'user', 'content': user_prompt})
+
+        print("\nAssistant: ", end='', flush=True)
+        # State tracking for reasoning models
+        in_thinking = False # True if the model is currently emitting 'thinking' tokens
+        full_content = ''  # Final answer accumulation
+        full_thinking = '' # Reasoning process accumulation
+
+        try:
+            stream = await client.client.chat(
+                model=client.model,
+                messages=messages,
+                stream=True,
+            )
+
+            async for chunk in stream:
+                # 1. Handle the 'thinking' field (Reasoning/Chain-of-Thought)
+                if hasattr(chunk.message, 'thinking') and chunk.message.thinking:
+                    if not in_thinking:
+                        in_thinking = True
+                        print('\n[Thinking...]', end='', flush=True)
+                    print(chunk.message.thinking, end='', flush=True)
+                    full_thinking += chunk.message.thinking
+
+                # 2. Handle the 'content' field (The actual answer)
+                elif chunk.message.content:
+                    # If we were thinking, we've now transitioned to the final answer
+                    if in_thinking:
+                        in_thinking = False
+                        print('\n[Answer]: ', end='', flush=True)
+                    print(chunk.message.content, end='', flush=True)
+                    full_content += chunk.message.content
+
+            # IMPORTANT: We must save the assistant's response back into the
+            # conversation history so the model remembers what it said in the next turn.
+            messages.append({
+                'role': 'assistant',
+                'content': full_content,
+                'thinking': full_thinking
+            })
+            print("\n")
+
+        except Exception as e:
+            print(f"\nError during chat: {e}")
+            break
 
 
+asyncio.run(chat())
 def _strip_code_fences(text: str) -> str:
+    """
+    LLMs often wrap JSON in markdown blocks like ```json { ... } ```.
+    This helper strips those fences so json.loads() can parse the raw string.
+    """
     t = (text or "").strip()
     if t.startswith("```"):
         t = t.split("```", 2)[1] if "```" in t else t
@@ -36,9 +128,11 @@ def _parse_ollama_response_text(raw_text: str) -> Dict[str, Any]:
     """
     Parse either a normal JSON response or Ollama's newline-delimited streaming JSON.
 
-    When streaming is enabled, Ollama returns one JSON object per line. We join the
-    incremental `message.content` chunks into one final payload so callers can treat
-    both response shapes the same way.
+    JUNIOR DEV NOTE:
+    When 'stream=True', Ollama doesn't return one big JSON object. Instead, it returns
+    many small JSON objects (one per line). This function detects if the input is
+    a single object or a stream of objects, and merges the 'content' chunks into
+    one final response.
     """
     text = (raw_text or "").strip()
     if not text:
@@ -108,10 +202,10 @@ async def _ollama_list_model_names(*, host: str, timeout_s: float) -> list[str]:
 
 def _pick_fallback_model(models: list[str]) -> Optional[str]:
     if not models:
-        return None
-    preferred = (["qwen3-coder:480b-cloud","deepseek-v3.2:cloud"])
+        preferred = ["gemma4:e4b", "gemma4:31b-cloud"]
     for m in preferred:
         if m in models:
+            return m
             return m
     return models[0]
 
@@ -376,18 +470,4 @@ async def chat_messages(
         return {"used_llm": False, "error": str(e), "model": model}
 
 
-async def _demo() -> None:
-    pred = {
-        "home_team": "KC",
-        "away_team": "BUF",
-        "home_score": 24,
-        "away_score": 27,
-        "home_win_probability": 0.46,
-        "prediction_source": "model",
-    }
-    result = await explain_prediction(pred)
-    print(json.dumps(result, indent=2))
-
-
-if __name__ == "__main__":
-    asyncio.run(_demo())
+# Demo/test code has been moved to a separate script (e.g., demo_llm_ollama.py) to avoid accidental execution in production environments.

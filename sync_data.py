@@ -16,7 +16,7 @@ def sync_schedules():
     backend_dir = Path(__file__).parent / "backend"
     data_dir = backend_dir / "data"
     
-    for year in [2024, 2025]:
+    for year in [2024, 2025, 2026]:
         print(f"Fetching schedule for {year}...")
         try:
             df = load_schedule_data_safe(year)

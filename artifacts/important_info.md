@@ -21,6 +21,9 @@ _Last Updated:_ 2026-01-02 08:27:54
 - Dataset alignment: DATA_DIR now defaults to `backend/data/datasets` (relative to backend) to match model feature expectations.
 - Dataset enforcement: `DATASET_PATH` can pin the exact CSV; startup fails if model features are missing.
 - Performance: per-team history cache avoids re-scanning the dataset for roll-forward fills.
+- Dashboard slate workflow: `TeamGrid.jsx` owns local search/status filters and passes the visible games to `Dashboard.jsx` for targeted bulk prediction.
+- Stats overview workflow: `StatsPage.jsx` now uses the shared `NavBar` shell and combines backend health, dataset rows, upcoming games, and history quality into one overview route.
+- Verification note: Chrome plugin browser controls were not exposed on 2026-05-26; local production preview was checked with Playwright and screenshot artifacts under `output/playwright/`.
 
 ## Key Documentation
 
