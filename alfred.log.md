@@ -185,3 +185,17 @@ Verification result: Safety bundle created at `C:\Users\goku\Documents\NFL_ML_Pr
 Remaining issues: Default system Python is 3.13 with scikit-learn 1.5.2, so runtime model loading requires `backend\.venv` or another environment with scikit-learn 1.7.2. Local `backend/.env` stays on disk but is removed from Git tracking. Unrelated local changes remain in `backend/ollama/llm_ollama.py`, `pyproject.toml`, `backend/pyproject.toml`, `backend/ollama/chat.ipynb`, and the artifact task notes unless explicitly staged.
 
 Recommended next step: Commit and push the scoped cleanup to `origin/master`, close superseded PRs, delete verified stale branches, and keep `origin/main` until Vercel production branch settings are verified.
+
+## 2026-06-01 - Final dependency PR absorption and branch pruning
+
+Summary: Absorbed the new Dependabot `gunicorn` and `vitest` patches directly on `master` after the cleanup commit, then prepared to close/delete the remaining dependency PR branches so the canonical branch stays consolidated.
+
+Files changed: requirements.txt, backend/requirements.txt, frontend/package.json, frontend/package-lock.json, alfred.log.md.
+
+Commands run: `gh pr view 131`; `gh pr view 132`; `npm install vitest@4.1.0 --save-dev --package-lock-only`; `backend\.venv\Scripts\python.exe -m py_compile backend/main.py backend/app/core/settings.py backend/builddataset.py backend/train_models.py`; `backend\.venv\Scripts\python.exe -m pytest backend/tests -q -o addopts=''`; `cd frontend && npm ci`; `cd frontend && npm test -- --run`; `cd frontend && npm run build`.
+
+Verification result: Backend compile passed. Backend tests passed: 10 passed. Frontend clean install reported 0 vulnerabilities. Frontend tests passed: 9 passed across 4 files with Vitest 4.1.0. Frontend production build passed with Vite 7.3.2.
+
+Remaining issues: The former linked `newest` worktree was removed from Git tracking, but Windows denied deletion of three generated `.pyd` files under a renamed `NFL_ML_Predictions_release_20260526_DELETE_PENDING` folder despite full-control ACLs. It is no longer registered as a Git worktree.
+
+Recommended next step: Commit/push the second dependency patch commit, close PRs #131 and #132, delete their branches, then rerun final GitHub branch and PR checks.
