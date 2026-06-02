@@ -241,3 +241,17 @@ Verification result: Compile passed. Ollama import smoke loaded `NFLAgent` with 
 Remaining issues: Live deploy and production smoke still need to run after commit/push. Local `artifacts/pytest_codex_schedule*` directories still produce Git permission warnings.
 
 Recommended next step: Commit all intended repo-structure, Ollama, env-template, and documentation changes, push `master`, then deploy Heroku backend and Vercel frontend.
+
+## 2026-06-02 - GitHub push and production redeploy verification
+
+Summary: Committed and pushed the repo cleanup, Ollama modular split, safe env-template tracking, and documentation updates to `master`, then deployed the backend to Heroku and the frontend to Vercel production.
+
+Files changed: alfred.log.md.
+
+Commands run: `git fetch origin master`; `git add -A`; staged file and secret-name scans; `git commit -m "refactor: organize repo and modularize ollama agent"`; `git push origin master`; `git push heroku master:main`; `vercel env ls`; `vercel deploy --prod --yes`; `backend\.venv\Scripts\python.exe scripts\verify_api_cors.py --backend-url https://nfl-predict-ecf5a5bd34fe.herokuapp.com --verbose`; live PowerShell smokes for `/health`, `/status/models`, `/schedule?season=2026&week=1`, `/predict`, and `https://new-nfl-predict.vercel.app`; Playwright smoke against the deployed frontend alias.
+
+Verification result: GitHub push succeeded at commit `0d892e8a6`. Heroku released backend `v740` for `https://nfl-predict-ecf5a5bd34fe.herokuapp.com/`. Vercel production deployment `dpl_Fsx651GW653wMxDQqhLc8KaFbB1U` reached `READY` and aliased to `https://new-nfl-predict.vercel.app`. API/CORS verification passed. `/health` returned healthy with `production_ready=true`; `/status/models` was ready; `/schedule?season=2026&week=1` returned 16 games including `2026_1_LAC_ARI`; `/predict` returned 200 with `win_classifier_used=true`. Deployed frontend browser smoke returned title `NFL Game Predictor`, root mounted, no missing-env/degraded/schedule-failed text, and zero console errors.
+
+Remaining issues: GitHub reported one existing high Dependabot vulnerability after push. Local Git status still warns on permission-blocked `artifacts/pytest_codex_schedule*` folders.
+
+Recommended next step: Commit and push this deployment log entry, then redeploy so production and GitHub end on the same final commit.
