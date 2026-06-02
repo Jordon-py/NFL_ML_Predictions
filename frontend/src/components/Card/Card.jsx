@@ -19,6 +19,7 @@
 
 import React from 'react';
 import styles from './Card.module.css'; // CSS module styles
+import { getPremiumExplanation } from '../../api/client.js';
 
 /**
  * Local lookup of NFL team abbreviations - full team names.
@@ -176,6 +177,14 @@ const formatProbabilityAsPercentage = (probabilityValue) =>
   typeof probabilityValue === 'number' && isFinite(probabilityValue)
     ? Math.round(probabilityValue * 100)
     : null;
+
+const extractPremiumErrorMessage = (error) => {
+  const detail = error?.body?.detail;
+  if (typeof detail === 'string') return detail;
+  if (detail?.message) return detail.message;
+  if (error?.body?.error?.message) return error.body.error.message;
+  return error?.message || 'Failed to load premium breakdown';
+};
 
 /** Build the main card CSS class string. */
 const buildCardClassNames = ({ hasPrediction, loading, error, debugClicked }) =>
@@ -353,6 +362,12 @@ export default function Card({
   // Local debug state for a brief visual click cue
   const [debugClicked, setDebugClicked] = React.useState(false);
 
+  // Premium AI breakdown state
+  const [premiumExplain, setPremiumExplain] = React.useState(null);
+  const [loadingPremium, setLoadingPremium] = React.useState(false);
+  const [premiumError, setPremiumError] = React.useState(null);
+  const [showPremiumExplain, setShowPremiumExplain] = React.useState(false);
+
   const { hasScoreDetails, classifierUsed, isExpert, maxConfidence, sim, homeScore, awayScore, homePct, awayPct } =
     derivePredictionMeta(prediction);
   const hasPrediction =
@@ -387,6 +402,33 @@ export default function Card({
   };
   const awayTeamStyle = buildTeamStyleVars(awayWordmark, awayColor, awayColor2);
   const homeTeamStyle = buildTeamStyleVars(homeWordmark, homeColor, homeColor2);
+
+  const handlePremiumExplain = async (event) => {
+    try {
+      event?.stopPropagation?.();
+      if (loadingPremium) return;
+      if (premiumExplain) {
+        setShowPremiumExplain(!showPremiumExplain);
+        return;
+      }
+
+      setLoadingPremium(true);
+      setPremiumError(null);
+      const res = await getPremiumExplanation({
+        home_team: homeTeam,
+        away_team: awayTeam,
+        season: matchup.season || 2025,
+        week: matchup.week || 1,
+      });
+      setPremiumExplain(String(res?.reply || 'Premium AI did not return an explanation.'));
+      setShowPremiumExplain(true);
+    } catch (err) {
+      console.error("[Card] premiumExplain failed", err);
+      setPremiumError(extractPremiumErrorMessage(err));
+    } finally {
+      setLoadingPremium(false);
+    }
+  };
 
   /**
    * Main click handler wrapper.
@@ -603,6 +645,56 @@ export default function Card({
                         {Math.round(sim.sim_home_score - 1.28 * sim.sim_home_sd)}-
                         {Math.round(sim.sim_home_score + 1.28 * sim.sim_home_sd)}
                       </em>
+                    </div>
+                  )}
+                </div>
+
+                {/* Premium AI Breakdown Section */}
+                <div className={styles.premiumSection}>
+                  <button
+                    type="button"
+                    className={styles.premiumButton}
+                    onClick={handlePremiumExplain}
+                    disabled={loadingPremium}
+                  >
+                    {loadingPremium ? (
+                      <>
+                        <span className={styles.premiumSpinner} />
+                        ✨ Analyzing Matchup...
+                      </>
+                    ) : (
+                      <>
+                        ✨ {showPremiumExplain ? 'Hide Premium AI Breakdown' : 'View Premium AI Breakdown'}
+                      </>
+                    )}
+                  </button>
+
+                  {premiumError && (
+                    <div className={styles.premiumError}>
+                      ⚠️ {premiumError}
+                    </div>
+                  )}
+
+                  {showPremiumExplain && premiumExplain && (
+                    <div className={styles.premiumContent}>
+                      <div className={styles.premiumContentHeader}>
+                        <span>🤖 Premium AI Analyst Report</span>
+                      </div>
+                      <div className={styles.premiumText}>
+                        {premiumExplain.split('\n').map((line, idx) => {
+                          const trimmed = line.trim();
+                          if (trimmed.startsWith('###')) {
+                            return <h4 key={idx} className={styles.premiumH4}>{trimmed.replace('###', '')}</h4>;
+                          } else if (trimmed.startsWith('##')) {
+                            return <h3 key={idx} className={styles.premiumH3}>{trimmed.replace('##', '')}</h3>;
+                          } else if (trimmed.startsWith('*') || trimmed.startsWith('-')) {
+                            return <li key={idx} className={styles.premiumLi}>{trimmed.substring(1).trim()}</li>;
+                          } else if (trimmed) {
+                            return <p key={idx} className={styles.premiumP}>{trimmed}</p>;
+                          }
+                          return <div key={idx} style={{ height: '6px' }} />;
+                        })}
+                      </div>
                     </div>
                   )}
                 </div>

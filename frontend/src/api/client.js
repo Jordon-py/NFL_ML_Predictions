@@ -860,6 +860,38 @@ export async function predictGame(payload, userId = null) {
   });
 }
 
+export async function getPremiumExplanation(payload, userId = null) {
+  const body = buildGamePredictPayload(payload);
+  if (
+    !body.home_team ||
+    !body.away_team ||
+    !Number.isFinite(body.season) ||
+    !Number.isFinite(body.week)
+  ) {
+    throw new Error("getPremiumExplanation requires {home_team, away_team, season, week}");
+  }
+
+  return fetchJson("/premium/explain", {
+    method: "POST",
+    body: JSON.stringify(body),
+    ...(buildUserHeaders(userId) ? { headers: buildUserHeaders(userId) } : {}),
+  });
+}
+
+export async function premiumChat(message, season = null, week = null, userId = null) {
+  const body = {
+    message,
+    season: season ? Number(season) : null,
+    week: week ? Number(week) : null,
+  };
+
+  return fetchJson("/premium/chat", {
+    method: "POST",
+    body: JSON.stringify(body),
+    ...(buildUserHeaders(userId) ? { headers: buildUserHeaders(userId) } : {}),
+  });
+}
+
 export async function getPredictionHistory(limit = 100, userId = null) {
   try {
     const safeLimit = Number.isFinite(Number(limit)) ? Number(limit) : 100;

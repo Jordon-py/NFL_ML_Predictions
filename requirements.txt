@@ -24,6 +24,7 @@ lightgbm==4.1.0
 matplotlib==3.10.8
 nflreadpy==0.1.5
 numpy==2.3.5
+ollama==0.6.1
 packaging==25.0
 pandas==2.3.3
 pillow==12.2.0

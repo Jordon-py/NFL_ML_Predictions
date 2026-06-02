@@ -1,223 +1,264 @@
 # ==============================================================================
 # File: backend/ollama/llm_ollama.py
-# Role: LLM Integration Module for Ollama
+# Role: NFL Dataset Q&A Agent powered by Ollama + Gemma
 #
-# OVERVIEW FOR DEVELOPERS:
-# This module provides a bridge between the NFL Prediction system and Ollama,
-# a local LLM runner. It supports two primary modes of interaction:
+# OVERVIEW:
+#   A simple agent that loads an NFL game-features CSV and answers questions
+#   about it using a Gemma model via Ollama (cloud or local).
 #
-# 1. Structured Inference (explain_prediction):
-#    Used by the API to turn raw model numbers into human-readable JSON explanations.
+# USAGE:
+#   # As a library:
+#   from backend.ollama.llm_ollama import NFLAgent
+#   agent = NFLAgent()
+#   answer = await agent.ask("Who had the best home record in 2024?")
 #
-# 2. Interactive Chat (chat):
-#    A streaming interface that supports "Reasoning Models" (e.g., DeepSeek, Gemma 4).
+#   # As a script (interactive chat):
+#   python backend/ollama/llm_ollama.py
 #
-# KEY CONCEPT: The "Thinking" Flow
-# Modern reasoning models don't just give an answer; they "think" first.
-# In the API stream, this appears as a 'thinking' field. Once the model finishes
-# reasoning, it switches to the 'content' field for the final answer.
-# This module handles that transition seamlessly to provide a clean UI experience.
+# CONFIG (via .env):
+#   OLLAMA_BASE_URL  – Ollama server URL  (default: http://localhost:11434)
+#   OLLAMA_MODEL     – Primary model name (default: gemma4:e4b)
+#   OLLAMA_API_KEY   – Bearer token for cloud Ollama (optional)
+#   OLLAMA_TIMEOUT_S – Request timeout in seconds (default: 15)
+#   NFL_DATASET_PATH – Path to the game-features CSV (has a sensible default)
 # ==============================================================================
 
 from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import time
+from pathlib import Path
 from typing import Any, Dict, List, Optional
-from dotenv import load_dotenv, find_dotenv
-import httpx
+
 import ollama
+import pandas as pd
+from dotenv import find_dotenv, load_dotenv
 
-# Automatically find and load .env from the project root
+# ── Config ───────────────────────────────────────────────────────────────────
 load_dotenv(find_dotenv())
+
+# Resolve the default dataset path relative to this file's location
+_THIS_DIR = Path(__file__).resolve().parent
+_DEFAULT_CSV = _THIS_DIR.parent / "data" / "datasets" / "game_features_20260531_clean.csv"
+
+log = logging.getLogger(__name__)
+
+
+def _env_float(name: str, default: float) -> float:
+    try:
+        return float(os.getenv(name, str(default)))
+    except (TypeError, ValueError):
+        log.warning("Invalid %s value; using %.1f", name, default)
+        return default
+
+
+OLLAMA_HOST = os.getenv("OLLAMA_BASE_URL") or os.getenv("OLLAMA_HOST", "http://localhost:11434")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gemma4:e4b").split(",")[0].strip()
+OLLAMA_TIMEOUT = _env_float("OLLAMA_TIMEOUT_S", 15.0)
+FALLBACK_MODEL = "gemma4:e4b"  # Always available locally
+
+
 class OllamaClient:
+    """Small compatibility wrapper around ollama.AsyncClient."""
+
+    def __init__(
+        self,
+        host: Optional[str] = None,
+        model: Optional[str] = None,
+        timeout_s: Optional[float] = None,
+    ):
+        self.host = host or OLLAMA_HOST
+        self.model = model or OLLAMA_MODEL
+        self.timeout_s = float(timeout_s) if timeout_s is not None else OLLAMA_TIMEOUT
+        api_key = os.getenv("OLLAMA_API_KEY")
+        headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+        self.client = ollama.AsyncClient(host=self.host, timeout=self.timeout_s, headers=headers)
+
+
+class NFLAgent:
     """
-    A wrapper for the Ollama AsyncClient.
+    Ask questions about NFL game data using Ollama + Gemma.
 
-    It handles configuration via environment variables, allowing the same code
-    to run locally (localhost:11434) or in a cloud environment via OLLAMA_BASE_URL.
+    Loads a game-features CSV, builds a compact data summary, and uses it
+    as context so the LLM can answer questions accurately.
     """
-    def __init__(self, host: Optional[str] = None, model: Optional[str] = None, timeout_s: Optional[float] = None):
-        self.host = host or os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-        self.model = model or os.getenv("OLLAMA_MODEL", "gemma4:e4b").split(",")[0].strip()
-        self.timeout_s = timeout_s or float(os.getenv("OLLAMA_TIMEOUT_S", "300"))
-        self.client = ollama.AsyncClient(host=self.host, timeout=self.timeout_s)
-        self.api_key = os.getenv("OLLAMA_API_KEY")
 
-client = OllamaClient()
+    def __init__(
+        self,
+        csv_path: Optional[str] = None,
+        model: Optional[str] = None,
+        host: Optional[str] = None,
+    ):
+        # ── Model & client setup ─────────────────────────────────────────
+        self.model = model or OLLAMA_MODEL
+        self.host = host or OLLAMA_HOST
+        self.client = OllamaClient(host=self.host, model=self.model).client
 
-async def chat() -> Any:
-    """Interactive chat loop demonstrating streaming and thinking capabilities."""
-    client = OllamaClient()
-    messages = [{'role': 'system', 'content': 'You are a helpful assistant.'}]
+        # ── Load the NFL dataset ─────────────────────────────────────────
+        path = csv_path or os.getenv("NFL_DATASET_PATH", str(_DEFAULT_CSV))
+        self.csv_path = Path(path)
+        if not self.csv_path.exists():
+            raise FileNotFoundError(f"NFL dataset not found: {self.csv_path}")
+        self.df = pd.read_csv(path)
+        log.info("Loaded %s NFL games from %s", f"{len(self.df):,}", self.csv_path.name)
 
-    while True:
-        user_prompt = input("\nUser: ")
-        if user_prompt.lower() in ("exit", "quit"):
-            break
+        # ── Pre-build a compact data summary for the system prompt ───────
+        self._data_summary = self._summarize_data()
 
-        messages.append({'role': 'user', 'content': user_prompt})
+    # ── Data summary (sent to the model as context) ──────────────────────
 
-        print("\nAssistant: ", end='', flush=True)
-        # State tracking for reasoning models
-        in_thinking = False # True if the model is currently emitting 'thinking' tokens
-        full_content = ''  # Final answer accumulation
-        full_thinking = '' # Reasoning process accumulation
+    def _summarize_data(self) -> str:
+        """
+        Build a concise text summary of the dataset.
 
-        try:
-            stream = await client.client.chat(
-                model=client.model,
-                messages=messages,
-                stream=True,
-            )
+        WHY: Sending 242 raw columns as JSON would blow up the context window
+        and confuse the model. Instead, we give it schema + key stats so it
+        can reason about the data intelligently.
+        """
+        df = self.df
+        teams = sorted(df["home_team"].dropna().unique()) if "home_team" in df.columns else []
+        seasons = sorted(df["season"].dropna().unique()) if "season" in df.columns else []
 
-            async for chunk in stream:
-                # 1. Handle the 'thinking' field (Reasoning/Chain-of-Thought)
-                if hasattr(chunk.message, 'thinking') and chunk.message.thinking:
-                    if not in_thinking:
-                        in_thinking = True
-                        print('\n[Thinking...]', end='', flush=True)
-                    print(chunk.message.thinking, end='', flush=True)
-                    full_thinking += chunk.message.thinking
+        # Key columns the model should know about (human-readable subset)
+        key_cols = [
+            "season", "week", "game_id", "home_team", "away_team",
+            "home_points_for", "away_points_for", "point_diff", "winner",
+            "home_prior_win_pct_3", "home_prior_pf_avg_3", "home_prior_pa_avg_3",
+            "away_prior_win_pct_3", "away_prior_pf_avg_3", "away_prior_pa_avg_3",
+            "home_prior_off_epa_per_play_3", "away_prior_off_epa_per_play_3",
+            "spread_line", "total_line", "game_type",
+            "home_win_prob_spread", "away_win_prob_spread",
+            "surface", "roof", "temp", "wind",
+        ]
+        # Only include columns that actually exist in this CSV
+        available = [c for c in key_cols if c in df.columns]
 
-                # 2. Handle the 'content' field (The actual answer)
-                elif chunk.message.content:
-                    # If we were thinking, we've now transitioned to the final answer
-                    if in_thinking:
-                        in_thinking = False
-                        print('\n[Answer]: ', end='', flush=True)
-                    print(chunk.message.content, end='', flush=True)
-                    full_content += chunk.message.content
+        return (
+            f"DATASET: NFL game features ({len(df):,} rows, {len(df.columns)} columns)\n"
+            f"SEASONS: {seasons[0] if seasons else 'unknown'}-{seasons[-1] if seasons else 'unknown'}\n"
+            f"TEAMS ({len(teams)}): {', '.join(teams)}\n"
+            f"KEY COLUMNS: {', '.join(available)}\n"
+            f"ALL COLUMNS: {', '.join(df.columns[:60])}... ({len(df.columns)} total)\n"
+        )
 
-            # IMPORTANT: We must save the assistant's response back into the
-            # conversation history so the model remembers what it said in the next turn.
-            messages.append({
-                'role': 'assistant',
-                'content': full_content,
-                'thinking': full_thinking
-            })
-            print("\n")
+    def _build_system_prompt(self) -> str:
+        """System prompt that turns the LLM into an NFL data analyst."""
+        return (
+            "You are an NFL data analyst. You have access to a dataset of NFL games.\n"
+            "Answer questions using ONLY the data described below.\n"
+            "Be concise, use numbers and stats when possible.\n"
+            "If a question can't be answered from this data, say so.\n\n"
+            f"{self._data_summary}"
+        )
 
-        except Exception as e:
-            print(f"\nError during chat: {e}")
-            break
+    # ── Core Q&A method ──────────────────────────────────────────────────
+
+    async def ask(self, question: str) -> str:
+        """
+        Ask a single question about the NFL data. Returns the answer string.
+
+        Flow: builds a context-enriched prompt → sends to Ollama → returns text.
+        If the primary model fails, retries with the local fallback model.
+        """
+        # Build a small data slice relevant to the question (top-level stats)
+        # For specific team/season queries, we filter and include a preview
+        context = self._get_relevant_context(question)
+
+        messages = [
+            {"role": "system", "content": self._build_system_prompt()},
+            {"role": "user", "content": f"{question}\n\nRelevant data:\n{context}"},
+        ]
+
+        # Create a list of all models to try (primary, env options, and fallback)
+        models_to_try = [self.model]
+        env_models = [m.strip() for m in os.getenv("OLLAMA_MODEL", "").split(",") if m.strip()]
+        for m in env_models:
+            if m not in models_to_try:
+                models_to_try.append(m)
+        if FALLBACK_MODEL not in models_to_try:
+            models_to_try.append(FALLBACK_MODEL)
+
+        # Try models in order, falling back dynamically
+        errors = []
+        for idx, model in enumerate(models_to_try):
+            try:
+                response = await self.client.chat(model=model, messages=messages)
+                return (response.message.content or "").strip()
+            except Exception as e:
+                err_msg = f"Model '{model}' failed: {e}"
+                errors.append(err_msg)
+                log.warning(err_msg)
+                if idx < len(models_to_try) - 1:
+                    log.info("Trying next Ollama model: %s", models_to_try[idx + 1])
+                continue
+
+        return "All Ollama models failed:\n" + "\n".join(errors)
+
+    def _get_relevant_context(self, question: str) -> str:
+        """
+        Extract a small, relevant slice of data based on the question.
+
+        WHY: Instead of dumping the whole CSV, we look for team names or
+        season numbers in the question and filter down to a manageable chunk.
+        """
+        df = self.df
+        q_upper = question.upper()
+
+        # Check if a specific team is mentioned
+        if "home_team" not in df.columns:
+            return "Dataset does not include a home_team column."
+
+        teams = df["home_team"].dropna().unique()
+        mentioned = [t for t in teams if t in q_upper]
+
+        # Check if a specific season is mentioned
+        seasons = df["season"].dropna().unique() if "season" in df.columns else []
+        mentioned_seasons = [s for s in seasons if str(int(s)) in question]
+
+        # Filter the data
+        filtered = df
+        if mentioned:
+            filtered = filtered[
+                (filtered["home_team"].isin(mentioned)) |
+                (filtered["away_team"].isin(mentioned) if "away_team" in filtered.columns else False)
+            ]
+        if mentioned_seasons:
+            filtered = filtered[filtered["season"].isin(mentioned_seasons)]
+
+        # Pick display columns that exist
+        display_cols = [
+            "season", "week", "home_team", "away_team",
+            "home_points_for", "away_points_for", "winner",
+        ]
+        display_cols = [c for c in display_cols if c in filtered.columns]
+
+        # Return a preview (max 30 rows to keep context manageable)
+        preview = filtered[display_cols].head(30)
+        summary = f"Showing {len(preview)} of {len(filtered)} matching games:\n"
+        return summary + preview.to_string(index=False)
+
+    async def explain_prediction(self, pred: Dict[str, Any]) -> Dict[str, Any]:
+        return await explain_prediction(pred, host=self.host, model=self.model)
 
 
-asyncio.run(chat())
 def _strip_code_fences(text: str) -> str:
-    """
-    LLMs often wrap JSON in markdown blocks like ```json { ... } ```.
-    This helper strips those fences so json.loads() can parse the raw string.
-    """
     t = (text or "").strip()
     if t.startswith("```"):
-        t = t.split("```", 2)[1] if "```" in t else t
-        t = t.replace("json", "", 1).strip()
+        parts = t.split("```")
+        t = parts[1] if len(parts) > 1 else t
+        if t.strip().lower().startswith("json"):
+            t = t.strip()[4:]
     if t.endswith("```"):
-        t = t[:-3].strip()
-    return t
+        t = t[:-3]
+    return t.strip()
 
 
-def _normalize_host(host: str) -> str:
-    return str(host or "").strip().rstrip("/")
-
-
-def _parse_ollama_response_text(raw_text: str) -> Dict[str, Any]:
-    """
-    Parse either a normal JSON response or Ollama's newline-delimited streaming JSON.
-
-    JUNIOR DEV NOTE:
-    When 'stream=True', Ollama doesn't return one big JSON object. Instead, it returns
-    many small JSON objects (one per line). This function detects if the input is
-    a single object or a stream of objects, and merges the 'content' chunks into
-    one final response.
-    """
-    text = (raw_text or "").strip()
-    if not text:
-        raise ValueError("empty response body")
-
-    try:
-        data = json.loads(text)
-        if isinstance(data, dict):
-            return data
-        raise ValueError("expected top-level JSON object")
-    except json.JSONDecodeError:
-        chunks: list[str] = []
-        last_obj: Dict[str, Any] | None = None
-
-        for line in text.splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            obj = json.loads(line)
-            if not isinstance(obj, dict):
-                continue
-            last_obj = obj
-
-            message = obj.get("message")
-            if isinstance(message, dict):
-                chunk = message.get("content")
-                if chunk is not None:
-                    chunks.append(str(chunk))
-
-        if last_obj is None:
-            raise ValueError("no JSON objects found in response body")
-
-        if chunks:
-            merged = dict(last_obj)
-            merged_message = dict(merged.get("message") or {})
-            merged_message["content"] = "".join(chunks)
-            merged["message"] = merged_message
-            return merged
-
-        return last_obj
-
-
-async def _ollama_list_model_names(*, host: str, timeout_s: float) -> list[str]:
-    host = _normalize_host(host)
-    if not host:
-        return []
-    url = f"{host}/api/tags"
-    timeout = httpx.Timeout(timeout_s)
-    try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            resp = await client.get(url)
-        resp.raise_for_status()
-        data = resp.json()
-    except Exception:
-        return []
-
-    models: list[str] = []
-    if isinstance(data, dict) and isinstance(data.get("models"), list):
-        for item in data["models"]:
-            if not isinstance(item, dict):
-                continue
-            name = item.get("name") or item.get("model")
-            if name:
-                models.append(str(name))
-    return models
-
-
-def _pick_fallback_model(models: list[str]) -> Optional[str]:
-    if not models:
-        preferred = ["gemma4:e4b", "gemma4:31b-cloud"]
-    for m in preferred:
-        if m in models:
-            return m
-            return m
-    return models[0]
-
-
-def _build_prompt(pred: Dict[str, Any]) -> str:
+def _build_explanation_prompt(pred: Dict[str, Any]) -> str:
     home = str(pred.get("home_team", "")).upper()
     away = str(pred.get("away_team", "")).upper()
-    hs = pred.get("home_score")
-    as_ = pred.get("away_score")
-    p_home = pred.get("home_win_probability")
-    src = pred.get("prediction_source", "model")
-
     return f"""
 You are explaining an NFL game prediction to a regular sports fan.
 Be concise, avoid claiming you saw injuries/weather unless provided.
@@ -230,89 +271,59 @@ Return ONLY valid JSON with keys:
 Game:
   home_team: {home}
   away_team: {away}
-  predicted_home_score: {hs}
-  predicted_away_score: {as_}
-  home_win_probability: {p_home}
-  prediction_source: {src}
-"""
+  predicted_home_score: {pred.get("home_score")}
+  predicted_away_score: {pred.get("away_score")}
+  home_win_probability: {pred.get("home_win_probability")}
+  prediction_source: {pred.get("prediction_source", "model")}
+""".strip()
 
 
-async def _ollama_chat(
+def _model_candidates(primary_model: str) -> List[str]:
+    candidates = [primary_model]
+    for model in os.getenv("OLLAMA_MODEL", "").split(","):
+        model = model.strip()
+        if model and model not in candidates:
+            candidates.append(model)
+    if FALLBACK_MODEL not in candidates:
+        candidates.append(FALLBACK_MODEL)
+    return candidates
+
+
+async def _chat_once(
     *,
-    host: str,
-    model: str,
     messages: List[Dict[str, str]],
-    timeout_s: float,
+    host: Optional[str] = None,
+    model: Optional[str] = None,
+    timeout_s: Optional[float] = None,
 ) -> Dict[str, Any]:
-    """
-    Minimal async client for Ollama's REST API.
+    active_host = host or OLLAMA_HOST
+    active_model = model or OLLAMA_MODEL
+    active_timeout = float(timeout_s) if timeout_s is not None else OLLAMA_TIMEOUT
+    client = OllamaClient(host=active_host, model=active_model, timeout_s=active_timeout).client
+    errors: List[str] = []
 
-    Ref: POST /api/chat
-    https://github.com/ollama/ollama/blob/main/docs/api.md
-    """
-    host = _normalize_host(host)
-    if not host:
-        return {"ok": False, "error": "OLLAMA_HOST not set"}
-
-    model = str(model or "").strip()
-    if not model:
-        return {"ok": False, "error": "OLLAMA_MODEL not set"}
-
-    url = f"{host}/api/chat"
-    payload: Dict[str, Any] = {
-        "model": model,
-        "messages": messages,
-        # We consume a single completed response; non-streaming avoids NDJSON parsing
-        # issues on the common path, while we still keep a fallback parser below.
-        "stream": False,
-    }
-
-    timeout = httpx.Timeout(timeout_s)
-
-    try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            resp = await client.post(url, json=payload)
-    except Exception as e:
-        return {"ok": False, "error": f"ollama request failed: {e}", "model": model, "host": host}
-
-    try:
-        resp.raise_for_status()
-    except Exception as e:
-        body_preview = ""
-        body_error = None
+    for candidate in _model_candidates(active_model):
         try:
-            body_preview = resp.text[:500]
-            data = resp.json()
-            if isinstance(data, dict):
-                body_error = data.get("error") or data.get("detail") or data.get("message")
-        except Exception:
-            body_preview = ""
-        return {
-            "ok": False,
-            "error": str(body_error).strip() if body_error else f"ollama http error: {e}",
-            "model": model,
-            "host": host,
-            "status_code": resp.status_code,
-            "body": body_preview,
-        }
+            response = await asyncio.wait_for(
+                client.chat(model=candidate, messages=messages),
+                timeout=active_timeout + 0.25,
+            )
+            return {
+                "ok": True,
+                "model": candidate,
+                "host": active_host,
+                "content": (response.message.content or "").strip(),
+            }
+        except Exception as exc:
+            errors.append(f"{candidate}: {exc}")
+            log.warning("Ollama chat failed for model %s: %s", candidate, exc)
 
-    try:
-        data = _parse_ollama_response_text(resp.text)
-    except Exception as e:
-        return {
-            "ok": False,
-            "error": f"ollama returned non-json: {e}",
-            "model": model,
-            "host": host,
-            "status_code": resp.status_code,
-            "body": (resp.text[:500] if resp.text else ""),
-        }
-
-    message = data.get("message") if isinstance(data, dict) else None
-    content = ""
-    if isinstance(message, dict):
-        content = str(message.get("content") or "")
-    return {"ok": True, "model": model, "host": host, "raw": data, "content": content}
+    return {
+        "ok": False,
+        "model": active_model,
+        "host": active_host,
+        "error": "; ".join(errors) or "ollama chat failed",
+    }
 
 
 async def explain_prediction(
@@ -321,84 +332,48 @@ async def explain_prediction(
     model: Optional[str] = None,
     timeout_s: Optional[float] = None,
 ) -> Dict[str, Any]:
-    """Generate a JSON explanation payload using Ollama (best-effort)."""
-    host = host or os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
-    model = model or os.getenv("OLLAMA_MODEL", "qwen3-coder:480b-cloud")
-    timeout_s = float(timeout_s) if timeout_s is not None else float(os.getenv("OLLAMA_TIMEOUT_S", "15"))
+    """Generate a structured explanation payload using Ollama, best-effort."""
+    started = time.perf_counter()
+    active_model = model or OLLAMA_MODEL
+    result = await _chat_once(
+        host=host,
+        model=active_model,
+        timeout_s=timeout_s,
+        messages=[{"role": "user", "content": _build_explanation_prompt(pred)}],
+    )
+    latency_ms = int((time.perf_counter() - started) * 1000)
 
-    prompt = _build_prompt(pred)
+    if not result.get("ok"):
+        return {
+            "used_llm": False,
+            "model": active_model,
+            "latency_ms": latency_ms,
+            "error": result.get("error") or "ollama chat failed",
+        }
+
+    content = str(result.get("content") or "")
     try:
-        t0 = time.perf_counter()
-        result = await asyncio.wait_for(
-            _ollama_chat(
-                host=host,
-                model=model,
-                messages=[{"role": "user", "content": prompt}],
-                timeout_s=timeout_s,
-            ),
-            timeout=timeout_s + 0.25,
-        )
-
-        # If the configured model doesn't exist locally, retry once with a known available model.
-        if (
-            not result.get("ok")
-            and int(result.get("status_code") or 0) == 404
-            and isinstance(result.get("error"), str)
-            and "model" in result["error"].lower()
-            and "not found" in result["error"].lower()
-        ):
-            names = await _ollama_list_model_names(host=host, timeout_s=min(timeout_s, 5.0))
-            fallback_model = _pick_fallback_model(names)
-            if fallback_model and fallback_model != model:
-                model = fallback_model
-                result = await asyncio.wait_for(
-                    _ollama_chat(
-                        host=host,
-                        model=model,
-                        messages=[{"role": "user", "content": prompt}],
-                        timeout_s=timeout_s,
-                    ),
-                    timeout=timeout_s + 0.25,
-                )
-
-        latency_ms = int((time.perf_counter() - t0) * 1000)
-
-        if not result.get("ok"):
-            return {
-                "used_llm": False,
-                "model": model,
-                "latency_ms": latency_ms,
-                "error": result.get("error") or "ollama chat failed",
-            }
-
-        content = str(result.get("content") or "")
-
-        raw = _strip_code_fences(content)
-        try:
-            obj = json.loads(raw)
-        except Exception:
-            # Best-effort: return plain text when the model didn't return JSON.
-            return {
-                "used_llm": True,
-                "model": model,
-                "latency_ms": latency_ms,
-                "explanation": content.strip(),
-                "bullets": [],
-                "caveats": [],
-                "error": None,
-            }
+        parsed = json.loads(_strip_code_fences(content))
+    except Exception:
         return {
             "used_llm": True,
-            "model": model,
+            "model": result.get("model") or active_model,
             "latency_ms": latency_ms,
-            "explanation": str(obj.get("explanation", "")).strip(),
-            "bullets": list(obj.get("bullets", []) or []),
-            "caveats": list(obj.get("caveats", []) or []),
+            "explanation": content,
+            "bullets": [],
+            "caveats": [],
+            "error": None,
         }
-    except asyncio.TimeoutError:
-        return {"used_llm": False, "error": "ollama request timed out", "model": model}
-    except Exception as e:
-        return {"used_llm": False, "error": str(e), "model": model}
+
+    return {
+        "used_llm": True,
+        "model": result.get("model") or active_model,
+        "latency_ms": latency_ms,
+        "explanation": str(parsed.get("explanation", "")).strip(),
+        "bullets": list(parsed.get("bullets", []) or []),
+        "caveats": list(parsed.get("caveats", []) or []),
+        "error": None,
+    }
 
 
 async def chat_messages(
@@ -409,13 +384,10 @@ async def chat_messages(
     timeout_s: Optional[float] = None,
 ) -> Dict[str, Any]:
     """Chat with Ollama using a list of role/content messages."""
-    host = host or os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
-    model = model or os.getenv("OLLAMA_MODEL", "deepseek-v3.2:cloud")
-    timeout_s = float(timeout_s) if timeout_s is not None else float(os.getenv("OLLAMA_TIMEOUT_S", "6"))
-
     chat_payload: List[Dict[str, str]] = []
     if system_prompt:
         chat_payload.append({"role": "system", "content": system_prompt})
+
     for msg in messages:
         role = str(msg.get("role", "user"))
         content = str(msg.get("content", "")).strip()
@@ -426,48 +398,60 @@ async def chat_messages(
         chat_payload.append({"role": role, "content": content})
 
     if not chat_payload:
-        return {"used_llm": False, "error": "no messages to send", "model": model}
+        return {"used_llm": False, "error": "no messages to send", "model": model or OLLAMA_MODEL}
 
-    try:
-        t0 = time.perf_counter()
-        result = await asyncio.wait_for(
-            _ollama_chat(host=host, model=model, messages=chat_payload, timeout_s=timeout_s),
-            timeout=timeout_s + 0.25,
-        )
+    started = time.perf_counter()
+    result = await _chat_once(host=host, model=model, timeout_s=timeout_s, messages=chat_payload)
+    latency_ms = int((time.perf_counter() - started) * 1000)
 
-        if (
-            not result.get("ok")
-            and int(result.get("status_code") or 0) == 404
-            and isinstance(result.get("error"), str)
-            and "model" in result["error"].lower()
-            and "not found" in result["error"].lower()
-        ):
-            names = await _ollama_list_model_names(host=host, timeout_s=min(timeout_s, 5.0))
-            fallback_model = _pick_fallback_model(names)
-            if fallback_model and fallback_model != model:
-                model = fallback_model
-                result = await asyncio.wait_for(
-                    _ollama_chat(host=host, model=model, messages=chat_payload, timeout_s=timeout_s),
-                    timeout=timeout_s + 0.25,
-                )
-
-        latency_ms = int((time.perf_counter() - t0) * 1000)
-
-        if not result.get("ok"):
-            return {"used_llm": False, "error": result.get("error") or "ollama chat failed", "model": model}
-
-        content = str(result.get("content") or "")
-
+    if not result.get("ok"):
         return {
-            "used_llm": True,
-            "model": model,
+            "used_llm": False,
+            "model": model or OLLAMA_MODEL,
             "latency_ms": latency_ms,
-            "reply": str(content or "").strip(),
+            "error": result.get("error") or "ollama chat failed",
         }
-    except asyncio.TimeoutError:
-        return {"used_llm": False, "error": "ollama request timed out", "model": model}
-    except Exception as e:
-        return {"used_llm": False, "error": str(e), "model": model}
+
+    return {
+        "used_llm": True,
+        "model": result.get("model") or model or OLLAMA_MODEL,
+        "latency_ms": latency_ms,
+        "reply": str(result.get("content") or "").strip(),
+    }
 
 
-# Demo/test code has been moved to a separate script (e.g., demo_llm_ollama.py) to avoid accidental execution in production environments.
+async def _nfl_agent_chat(self: NFLAgent) -> None:
+    """Interactive REPL chat loop. Type 'exit' or 'quit' to stop."""
+    print(f"\nNFL Agent | Model: {self.model} | {len(self.df):,} games loaded")
+    print("Type your question (or 'exit' to quit)\n")
+
+    while True:
+        try:
+            user_input = input("You: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print("\nGoodbye!")
+            break
+
+        if user_input.lower() in {"exit", "quit"}:
+            print("Goodbye!")
+            break
+        if not user_input:
+            continue
+
+        answer = await self.ask(user_input)
+        print(f"\nAgent: {answer}\n")
+
+
+NFLAgent.chat = _nfl_agent_chat
+
+
+async def chat() -> Any:
+    """Compatibility interactive chat entrypoint."""
+    agent = NFLAgent()
+    await agent.chat()
+
+
+# ── Entry point (only runs when executed directly) ───────────────────────
+if __name__ == "__main__":
+    agent = NFLAgent()
+    asyncio.run(agent.chat())

@@ -1,7 +1,7 @@
 # Next 5 Tasks
 
-1. [ ] **Deployed Browser Smoke** - Re-run the dashboard and overview checks against the deployed Vercel URL after the next release.
-2. [ ] **Live Slate Filter Smoke** - Verify TeamGrid search/status filters against a week with real scheduled games and at least one saved prediction.
-3. [ ] **Backend Health Copy Review** - Decide whether the overview page should expose more `/status/models` model-bundle details.
-4. [ ] **Mobile UI Pass** - Capture mobile screenshots for `/app` and `/stats` once live schedule data is available.
-5. [ ] **Release Commit Review** - Separate this upgrade package from unrelated dirty files before committing or deploying.
+1. [ ] **Deployed Browser Smoke** - Re-run dashboard, card breakdown, and Premium AI Coach checks against the deployed Vercel URL after release.
+2. [ ] **Heroku Ollama Runtime Config** - Confirm `OLLAMA_BASE_URL`, `OLLAMA_MODEL`, optional `OLLAMA_API_KEY`, and `OLLAMA_TIMEOUT_S` are set for production.
+3. [ ] **Premium Response Cache** - Add a backend TTL cache for repeated `premium_explain` matchup requests.
+4. [ ] **Pure Prediction Helper** - Refactor `/predict` computation into a shared helper so Premium endpoints can reuse model output without route-level side effects.
+5. [ ] **Offline Template Fallback** - Return a concise static model-summary template if all Ollama models are unavailable.

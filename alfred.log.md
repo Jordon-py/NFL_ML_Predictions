@@ -199,3 +199,17 @@ Verification result: Backend compile passed. Backend tests passed: 10 passed. Fr
 Remaining issues: The former linked `newest` worktree was removed from Git tracking, but Windows denied deletion of three generated `.pyd` files under a renamed `NFL_ML_Predictions_release_20260526_DELETE_PENDING` folder despite full-control ACLs. It is no longer registered as a Git worktree.
 
 Recommended next step: Commit/push the second dependency patch commit, close PRs #131 and #132, delete their branches, then rerun final GitHub branch and PR checks.
+
+## 2026-06-02 - Premium AI coach and scheduled retrain release prep
+
+Summary: Repaired and hardened the dirty Premium AI frontend/backend work, added the weekly GitHub Actions retrain workflow, aligned CI with the scikit-learn 1.7.2 model-runtime contract, and added the Ollama client dependency required by the Premium AI coach.
+
+Files changed: .github/workflows/ci.yml, .github/workflows/scheduled-retrain.yml, requirements.txt, backend/requirements.txt, backend/main.py, backend/ollama/__init__.py, backend/ollama/llm_ollama.py, frontend/src/api/client.js, frontend/src/components/Card/Card.jsx, frontend/src/components/Card/Card.module.css, frontend/src/components/DashBoard/Dashboard.jsx, frontend/src/components/DashBoard/Dashboard.css, dataflow.md, artifacts/*.md, alfred.log.md.
+
+Commands run: `backend\.venv\Scripts\python.exe -m py_compile backend\main.py backend\ollama\llm_ollama.py backend\ollama\__init__.py`; `git diff --check -- ...`; `backend\.venv\Scripts\python.exe -m pytest backend\tests -q -o addopts=''`; `cd frontend && npm test -- --run`; `cd frontend && npm run build`; workflow YAML parse check; Ollama module import/dataset smoke; local Vite preview plus Playwright desktop/mobile Premium chat smokes with stubbed AI responses.
+
+Verification result: Backend compile passed. Targeted diff hygiene passed. Backend tests passed: 10 passed. Frontend tests passed: 9 passed across 4 files. Frontend production build passed. Workflow YAML parsed successfully. Ollama import smoke loaded 2,499 dataset rows. Playwright verified the Premium chat opens and sends a stubbed response on desktop and mobile; the stubbed mobile run had no console errors and stayed within a 390px viewport.
+
+Remaining issues: Scheduled retrain uploads model and report artifacts for review, but it does not auto-commit, deploy, or promote binaries into production. Chrome plugin browser-control tools were not exposed in this session, so browser verification used Playwright. Local production-preview calls to the live Heroku API can hit CORS from `127.0.0.1:4173`; browser UI smokes stubbed those backend calls.
+
+Recommended next step: Commit the verified source changes, deploy Heroku and Vercel, then run live `/health`, `/status/models`, `/schedule`, `/predict`, and deployed dashboard Premium chat smokes.

@@ -1,0 +1,99 @@
+name: Scheduled Retrain
+
+on:
+  schedule:
+    # Weekly on Monday at 10:15 UTC. Keeps retraining automatic without
+    # auto-promoting binary model artifacts into production.
+    - cron: "15 10 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scheduled-retrain-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  retrain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      BUNDLE_VERSION: scheduled-${{ github.run_id }}
+      N_JOBS: "2"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install training dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install "pytest>=9.0.0,<10.0.0"
+
+      - name: Verify model runtime pins
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          import ollama
+          import sklearn
+
+          metadata = json.loads(Path("backend/models/metadata.json").read_text(encoding="utf-8"))
+          expected = str(metadata.get("sklearn_version") or "").strip()
+          actual = sklearn.__version__
+
+          if not expected:
+              raise SystemExit("backend/models/metadata.json is missing sklearn_version")
+          if actual != expected:
+              raise SystemExit(
+                  f"scikit-learn runtime drift: metadata requires {expected}, workflow installed {actual}"
+              )
+
+          print(f"scikit-learn runtime matches model metadata: {actual}")
+          print(f"ollama package import ok: {getattr(ollama, '__version__', 'installed')}")
+          PY
+
+      - name: Run focused contract tests
+        run: |
+          python -m pytest \
+            backend/tests/test_feature_contract.py \
+            backend/tests/test_model_bundle_contract.py \
+            backend/tests/test_pipeline_status.py \
+            -q
+
+      - name: Rebuild dataset and retrain model bundle
+        run: |
+          current_year="$(date -u +%Y)"
+          python backend/scripts/weekly_retrain.py \
+            --build-start-season 2018 \
+            --build-end-season "${current_year}" \
+            --splits 5 \
+            --embargo 1
+
+      - name: Upload retrain reports and model artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scheduled-retrain-${{ github.run_id }}
+          if-no-files-found: warn
+          retention-days: 30
+          path: |
+            backend/reports/automation/weekly_retrain_latest.json
+            backend/reports/versioning/**
+            backend/reports/drift/**
+            backend/data/datasets/latest_dataset.json
+            backend/data/datasets/latest_scores.json
+            backend/data/datasets/runs/**
+            backend/models/metadata.json
+            backend/models/training_report.json
+            backend/models/run_summary.json
+            backend/models/feature_manifest.json
+            backend/models/*.joblib

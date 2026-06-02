@@ -1607,6 +1607,19 @@ class PredictRequest(BaseModel):
     week: int
 
 
+class PremiumExplainRequest(BaseModel):
+    home_team: str
+    away_team: str
+    season: int
+    week: int
+
+
+class PremiumChatRequest(BaseModel):
+    message: str = Field(..., min_length=1, max_length=2000)
+    season: Optional[int] = None
+    week: Optional[int] = None
+
+
 class PredictionResponse(BaseModel):
     """
     Canonical prediction response for /predict.
@@ -3638,6 +3651,208 @@ def delete_prediction_history(request: Request) -> Dict[str, Any]:
 
 
 # -------------------------------------------------------------------
+# Premium AI Assistant and Commentary (FastAPI Integration)
+# -------------------------------------------------------------------
+_nfl_agent: Optional[Any] = None
+
+
+def get_nfl_agent() -> Any:
+    global _nfl_agent
+    if _nfl_agent is None:
+        try:
+            from backend.ollama.llm_ollama import NFLAgent
+
+            dataset_path = os.getenv("NFL_DATASET_PATH")
+            _nfl_agent = NFLAgent(csv_path=dataset_path)
+        except Exception as exc:
+            logging.exception("[PremiumAI] Failed to initialize NFLAgent")
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "message": "Premium AI analyst is unavailable.",
+                    "reason": str(exc).splitlines()[0],
+                },
+            ) from exc
+    return _nfl_agent
+
+
+def _prediction_persistence_enabled(request: Request) -> bool:
+    return not bool(getattr(request.state, "skip_prediction_persist", False))
+
+
+async def _predict_without_persist(payload: PredictRequest, request: Request) -> Dict[str, Any]:
+    previous_value = getattr(request.state, "skip_prediction_persist", False)
+    request.state.skip_prediction_persist = True
+    try:
+        return await predict(payload, request)
+    finally:
+        request.state.skip_prediction_persist = previous_value
+
+
+def _parse_teams_from_message(message: str, valid_codes: Set[str]) -> Tuple[Optional[str], Optional[str]]:
+    words = [w.strip("?,.!:;()").upper() for w in message.split()]
+    found = []
+    for w in words:
+        if w in valid_codes and w not in found:
+            found.append(w)
+
+    nickname_map = {
+        "CHIEFS": "KC", "BILLS": "BUF", "PATRIOTS": "NE", "DOLPHINS": "MIA",
+        "JETS": "NYJ", "RAVENS": "BAL", "STEELERS": "PIT", "BROWNS": "CLE",
+        "BENGALS": "CIN", "TEXANS": "HOU", "COLTS": "IND", "JAGUARS": "JAX",
+        "TITANS": "TEN", "BRONCOS": "DEN", "RAIDERS": "LV", "CHARGERS": "LAC",
+        "COWBOYS": "DAL", "GIANTS": "NYG", "EAGLES": "PHI", "COMMANDERS": "WAS",
+        "PACKERS": "GB", "VIKINGS": "MIN", "BEARS": "CHI", "LIONS": "DET",
+        "FALCONS": "ATL", "SAINTS": "NO", "PANTHERS": "CAR", "BUCCANEERS": "TB",
+        "BUCS": "TB", "SEAHAWKS": "SEA", "RAMS": "LAR", "CARDINALS": "ARI",
+        "CARDS": "ARI", "49ERS": "SF", "NINERS": "SF",
+    }
+    for word in words:
+        if word in nickname_map:
+            code = nickname_map[word]
+            if code not in found:
+                found.append(code)
+
+    if len(found) >= 2:
+        return found[0], found[1]
+    if len(found) == 1:
+        return found[0], None
+    return None, None
+
+
+@app.post("/api/premium/explain")
+@app.post("/premium/explain")
+async def premium_explain(payload: PremiumExplainRequest, request: Request) -> Dict[str, Any]:
+    """
+    Exposes a premium, context-rich AI breakdown of a prediction matchup.
+    Combines machine learning model predictions with historical metrics
+    and feeds it to the Gemma LLM for deep tactical commentary.
+    """
+    # 1. First, call the existing prediction logic or retrieve it
+    # We can invoke the `predict` endpoint directly!
+    pred_req = PredictRequest(
+        home_team=payload.home_team,
+        away_team=payload.away_team,
+        season=payload.season,
+        week=payload.week,
+    )
+    prediction = await _predict_without_persist(pred_req, request)
+
+    # 2. Get the NFLAgent
+    agent = get_nfl_agent()
+
+    # 3. Formulate a rich prompt integrating ML outputs
+    home_score = prediction.get("home_score", 0.0)
+    away_score = prediction.get("away_score", 0.0)
+    home_prob = prediction.get("home_win_probability", 0.5)
+    away_prob = prediction.get("away_win_probability", 0.5)
+    source = prediction.get("prediction_source", "model")
+
+    question = (
+        f"Provide a premium analyst game breakdown for {payload.away_team} at {payload.home_team} "
+        f"in Season {payload.season}, Week {payload.week}.\n"
+        f"Our machine learning model predicts a final score of: "
+        f"{payload.away_team} {away_score:.1f} - {payload.home_team} {home_score:.1f}.\n"
+        f"Predicted home win probability: {home_prob * 100:.1f}%, away win probability: {away_prob * 100:.1f}%.\n"
+        f"This is an ensemble ML prediction (source: {source}).\n"
+        f"Highlight the statistical keys to the game (e.g. EPA averages, win records), "
+        f"explain why the model favors the predicted winner, and suggest any high-value caveats for fans."
+    )
+
+    # 4. Generate the explanation
+    reply = await agent.ask(question)
+
+    return {
+        "reply": reply,
+        "prediction": prediction,
+        "model_used": agent.model,
+        "host_used": agent.host,
+    }
+
+
+@app.post("/api/premium/chat")
+@app.post("/premium/chat")
+async def premium_chat(payload: PremiumChatRequest, request: Request) -> Dict[str, Any]:
+    """
+    Exposes a conversational premium AI assistant.
+    If the message talks about specific teams, it injects their ML predictions and history!
+    """
+    message = payload.message.strip()
+    if not message:
+        raise HTTPException(status_code=400, detail="message is required.")
+
+    # Initialize agent
+    agent = get_nfl_agent()
+
+    # Extract teams if mentioned
+    valid_codes = set(state.valid_team_codes() if state.dataset is not None else [])
+    home_team, away_team = _parse_teams_from_message(message, valid_codes)
+
+    prediction_info = None
+    enriched_context = ""
+
+    # If two teams are found, try to run an ML prediction for the matchup to enrich the chat context!
+    if home_team and away_team:
+        try:
+            # Default to upcoming or latest season/week if not provided
+            season = payload.season
+            week = payload.week
+            if season is None or week is None:
+                # Find the latest matching game in the dataset to get a context season/week
+                df = state.dataset
+                if df is not None:
+                    matches = df[
+                        ((df["home_team"] == home_team) & (df["away_team"] == away_team)) |
+                        ((df["home_team"] == away_team) & (df["away_team"] == home_team))
+                    ]
+                    if not matches.empty:
+                        latest = matches.sort_values(["season", "week"], ascending=False).iloc[0]
+                        season = int(latest["season"])
+                        week = int(latest["week"])
+                    else:
+                        season = 2026
+                        week = 1
+                else:
+                    season = 2026
+                    week = 1
+
+            # Predict
+            pred_req = PredictRequest(
+                home_team=home_team,
+                away_team=away_team,
+                season=season,
+                week=week,
+            )
+            prediction = await _predict_without_persist(pred_req, request)
+            prediction_info = prediction
+
+            # Build context
+            enriched_context = (
+                f"\n[SYSTEM NOTICE: Our ML model predicted the matchup {away_team} at {home_team} "
+                f"for Season {season} Week {week} as: "
+                f"{away_team} {prediction.get('away_score', 0.0):.1f} - {home_team} {prediction.get('home_score', 0.0):.1f} "
+                f"with a home win probability of {prediction.get('home_win_probability', 0.5)*100:.1f}%. "
+                f"Use this prediction data in your response to explain the game!]"
+            )
+        except Exception as e:
+            logging.warning("Premium context enrichment failed: %s", e)
+
+    # Run ask with the enriched prompt
+    full_prompt = message
+    if enriched_context:
+        full_prompt += enriched_context
+
+    reply = await agent.ask(full_prompt)
+
+    return {
+        "reply": reply,
+        "has_prediction": prediction_info is not None,
+        "prediction": prediction_info,
+        "model_used": agent.model,
+    }
+
+
+# -------------------------------------------------------------------
 # /predict (final enhanced)
 # -------------------------------------------------------------------
 @app.post("/api/predict", response_model=PredictionResponse)
@@ -3695,8 +3910,9 @@ async def predict(payload: PredictRequest, request: Request) -> Dict[str, Any]:
     cached = state.get_cached_prediction(cache_key)
     if cached is not None:
         state.last_prediction_at = datetime.now(timezone.utc)
-        _persist_prediction_for_request(request, payload, cached)
-        state._remember_history(cached)
+        if _prediction_persistence_enabled(request):
+            _persist_prediction_for_request(request, payload, cached)
+            state._remember_history(cached)
         logging.info(
             "[Predict] Cache hit for %s vs %s (season=%s week=%s)",
             home_team,
@@ -3937,10 +4153,9 @@ async def predict(payload: PredictRequest, request: Request) -> Dict[str, Any]:
 
     state.last_prediction_at = generated_at
     state.store_cached_prediction(cache_key, result)
-    _persist_prediction_for_request(request, payload, result)
-
-    # ----- History (bounded) -----
-    state._remember_history(result)
+    if _prediction_persistence_enabled(request):
+        _persist_prediction_for_request(request, payload, result)
+        state._remember_history(result)
 
     logging.info(
         "[Predict] %s vs %s (season=%s week=%s source=%s quality=%.1f hash=%s) -> home=%.1f away=%.1f total=%.1f win_p=%.3f (clf_used=%s)",
