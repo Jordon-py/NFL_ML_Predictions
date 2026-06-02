@@ -2,6 +2,11 @@
 """
 Verify that the deployed or local FastAPI backend exposes the current public API
 surface and sends the expected CORS headers for the active frontend origins.
+
+Data shape:
+- Input: HTTP JSON responses from `/health`, `/status/overview`, and `/predict`.
+- Output: console pass/fail messages; process exit code signals verification
+  success or failure.
 """
 
 from __future__ import annotations

@@ -200,6 +200,13 @@ When `ENABLE_ADMIN=true`:
 ## Repository Map
 
 ```text
+repo root/
+  README.md                   Operator guide
+  REPO-INFO.md                Durable repo map and risk notes
+  requirements.txt            Heroku/backend production dependency surface
+  Procfile, Dockerfile        Backend deployment entrypoints
+  pyproject.toml, pytest.ini  Python tooling and tests
+
 backend/
   main.py                      FastAPI app and runtime orchestration
   builddataset.py              Canonical dataset build entrypoint
@@ -207,9 +214,11 @@ backend/
   prediction_store.py          User-scoped history persistence
   sqlite_store.py              SQLite-backed prediction history
   app/core/settings.py         Environment settings and path resolution
+  scripts/                     Backend operations and audit scripts
   data/
     datasets/
       latest_dataset.json
+      legacy/                  Ignored older generated feature CSVs
       runs/<timestamp>/
     models/
       current/
@@ -223,13 +232,15 @@ frontend/
     components/HistoryPage.jsx
     pages/StatsPage.jsx
   public/
-    schedules/
-```
+    nfl_ham2.png
+    nfl_pic.png
 
-logos/
-
-```
-    favicon.ico
+docs/
+  DATAFLOW.md
+  ENVIRONMENT.md
+  FRONTEND_PREDICTION_FLOW.md
+  NFL_SCHEDULE_SCHEMAS.md
+  PREDICTION_INTEGRATION_PATCH.md
 ```
 
 ### Premium enhancement iterations (May 2026)
@@ -250,6 +261,9 @@ Two weak points were prioritized and improved over three implementation iteratio
 
 - [Environment configuration](docs/ENVIRONMENT.md)
 - [Frontend prediction flow](docs/FRONTEND_PREDICTION_FLOW.md)
+- [Dataflow map](docs/DATAFLOW.md)
+- [Schedule and dataset schemas](docs/NFL_SCHEDULE_SCHEMAS.md)
+- [Prediction integration patch notes](docs/PREDICTION_INTEGRATION_PATCH.md)
 
 ## Verification
 

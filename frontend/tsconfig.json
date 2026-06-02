@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": [ "ES2022", "DOM" ],
+    "jsx": "react-jsx",
+    "allowJs": true,
+    "checkJs": false,
+    "strict": true,
+    "skipLibCheck": true,
+    "types": [ "vite/client", "react", "react-dom" ],
+    "baseUrl": ".",
+    "noEmit": true
+  },
+  "include": [ "src", "vite.config.*", "*.d.ts" ],
+  "exclude": [ "dist", "node_modules" ]
+}

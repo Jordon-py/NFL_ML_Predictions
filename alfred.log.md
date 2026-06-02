@@ -213,3 +213,31 @@ Verification result: Backend compile passed. Targeted diff hygiene passed. Backe
 Remaining issues: Scheduled retrain uploads model and report artifacts for review, but it does not auto-commit, deploy, or promote binaries into production. Chrome plugin browser-control tools were not exposed in this session, so browser verification used Playwright. Local production-preview calls to the live Heroku API can hit CORS from `127.0.0.1:4173`; browser UI smokes stubbed those backend calls.
 
 Recommended next step: Commit the verified source changes, deploy Heroku and Vercel, then run live `/health`, `/status/models`, `/schedule`, `/predict`, and deployed dashboard Premium chat smokes.
+
+## 2026-06-02 - Repo root cleanup and data-shape documentation pass
+
+Summary: Read `REPO-INFO.md` and `README.md`, then reorganized active backend utilities into `backend/scripts/`, moved durable markdown notes into `docs/`, relocated ignored legacy feature CSVs into `backend/data/datasets/legacy/`, and documented the expected data shapes for scripts that move data across file/API boundaries.
+
+Files changed: README.md, REPO-INFO.md, artifacts/important_info.md, docs/DATAFLOW.md, docs/NFL_SCHEDULE_SCHEMAS.md, docs/PREDICTION_INTEGRATION_PATCH.md, backend/scripts/audit_inference.py, backend/scripts/debug_entries.py, backend/scripts/sync_data.py, backend/scripts/sync_direct.py, backend/scripts/sync_season.py, backend/scripts/weekly_retrain.py, backend/scripts/promote_model.py, scripts/verify_api_cors.py, alfred.log.md. Ignored local CSVs moved from repo root to backend/data/datasets/legacy/.
+
+Commands run: `Get-Content -Raw REPO-INFO.md`; `Get-Content -Raw README.md`; `git ls-files`; root/backend/frontend file maps; targeted `rg` reference checks; `git mv ...`; `Move-Item` for ignored legacy CSVs; `python -m py_compile backend/scripts/audit_inference.py backend/scripts/debug_entries.py backend/scripts/sync_data.py backend/scripts/sync_direct.py backend/scripts/sync_season.py backend/scripts/weekly_retrain.py backend/scripts/promote_model.py scripts/verify_api_cors.py`; `git diff --check`; `git diff --cached --check`; `backend\.venv\Scripts\python.exe -m pytest backend\tests -q -o addopts=''`; `git diff --stat`; `git diff --name-status`.
+
+Verification result: Focused Python compile passed. Diff whitespace checks passed. Backend tests passed: 10 passed. Root tracked source/docs are now limited to deploy/test/project metadata plus README/REPO-INFO/alfred log. Backend utility scripts resolve the repo root from their new `backend/scripts/` location and include concise data-shape notes. README and REPO-INFO now document the cleaned backend/frontend/docs ownership split.
+
+Remaining issues: `git status` still reports pre-existing permission warnings under `artifacts/pytest_codex_schedule*` and the pre-existing untracked `backend/model_registry.py`. Ignored local files such as `.env`, `.env.local`, root `node_modules`, build outputs, runtime DBs, and temp folders were not deleted because cleanup was limited to safe moves and source/docs updates.
+
+Recommended next step: Decide whether to remove ignored local artifact folders such as root `node_modules`, `__pycache__`, `.pytest_cache`, and empty root `data/` in a separate explicitly approved filesystem cleanup pass.
+
+## 2026-06-02 - Ollama modular split and deploy prep
+
+Summary: Split the Premium AI Ollama implementation into a smaller public agent facade, client helpers, and dataset memory module. Added safe frontend env documentation, explicitly unignored frontend config files, and kept private env files ignored.
+
+Files changed: backend/ollama/llm_ollama.py, backend/ollama/client.py, backend/ollama/memory.py, backend/model_registry.py, .gitignore, frontend/.env.example, frontend/tsconfig.json, docs/DATAFLOW.md, REPO-INFO.md, alfred.log.md.
+
+Commands run: `git check-ignore -v ...`; `git ls-files -o --exclude-standard`; `backend\.venv\Scripts\python.exe -m py_compile backend\ollama\client.py backend\ollama\memory.py backend\ollama\llm_ollama.py backend\ollama\__init__.py backend\main.py backend\scripts\*.py scripts\verify_api_cors.py`; `backend\.venv\Scripts\python.exe -c "from backend.ollama.llm_ollama import NFLAgent, chat_messages, explain_prediction; agent = NFLAgent(); ..."`; `backend\.venv\Scripts\python.exe -m pytest backend\tests -q -o addopts=''`; `cd frontend && npm test -- --run`; `cd frontend && npm run build`.
+
+Verification result: Compile passed. Ollama import smoke loaded `NFLAgent` with 2,499 dataset rows without contacting Ollama. Backend tests passed: 10 passed. Frontend tests passed: 9 passed. Frontend production build passed. `frontend/.env.example` and `frontend/tsconfig.json` are no longer hidden by ignore rules; private `.env` files remain ignored.
+
+Remaining issues: Live deploy and production smoke still need to run after commit/push. Local `artifacts/pytest_codex_schedule*` directories still produce Git permission warnings.
+
+Recommended next step: Commit all intended repo-structure, Ollama, env-template, and documentation changes, push `master`, then deploy Heroku backend and Vercel frontend.

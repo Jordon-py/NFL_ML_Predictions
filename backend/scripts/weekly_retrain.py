@@ -1,4 +1,14 @@
 #!/usr/bin/env python3
+"""Run the weekly dataset build, model training, and report-writing workflow.
+
+Data shape:
+- Dataset input/output: CSV feature tables with one row per game, identity
+  columns (`season`, `week`, `game_id`, teams), model features, and nullable
+  target columns for future games.
+- Report output: JSON objects under `backend/reports/` describing dataset
+  versioning, drift, command results, and selected artifact paths.
+"""
+
 from __future__ import annotations
 
 import argparse

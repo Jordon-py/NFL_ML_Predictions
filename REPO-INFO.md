@@ -2,15 +2,15 @@
 
 ## Scan Metadata
 
-- Scan date: 2026-06-01
+- Scan date: 2026-06-02
 - Repo root: `C:\Users\goku\Documents\NFL_ML_Predictions`
 - HEAD at scan start: `54697421f`
 - Current branch: `master`
 - GitHub remote: `https://github.com/Jordon-py/NFL_ML_Predictions.git`
 - Backend deploy remote: `https://git.heroku.com/nfl-predict.git`
 - Frontend deploy project: Vercel project `nfl-ml-predictions`
-- Scan method: memory check, root file map, targeted backend/frontend/deploy inspection, focused compile/test/build checks, and two read-only sub-agent reviews.
-- Working tree note: the tree was already dirty before this dossier update. Source changes, generated artifacts, runtime DBs, build output, and temp permission folders were present together, so staging must stay selective.
+- Scan method: memory check, README review, root file map, targeted backend/frontend/deploy inspection, and focused cleanup verification.
+- Working tree note: the tree was already dirty before this cleanup. Runtime DBs, build output, ignored env files, and temp permission folders were present together, so staging must stay selective.
 
 ## Executive Summary
 
@@ -30,9 +30,10 @@ The biggest engineering risk is source-of-truth drift: active code, archived cod
 
 | Path | Role | Status |
 | --- | --- | --- |
-| `backend/` | FastAPI app, prediction helpers, training/data scripts, tests, runtime data | Active but mixed with generated artifacts |
+| Root files | Project metadata, deployment entrypoints, pytest config, README, and repo dossier | Keep intentionally small |
+| `backend/` | FastAPI app, prediction helpers, training/data scripts, tests, runtime data | Active; owns backend scripts and generated feature data |
 | `frontend/` | React/Vite app, client adapter, shared hook, dashboard/history/stats UI | Active |
-| `docs/` | Environment and frontend flow docs | Active |
+| `docs/` | Environment, dataflow, schema, and integration docs | Active |
 | `scripts/` | Repo-level operational checks | Active, small |
 | `.github/workflows/` | CI and deploy automation | Active but secret-dependent |
 | `archive/` | Historical repo snapshots and old docs/scripts | Historical, not runtime |
@@ -96,6 +97,13 @@ Frontend:
 | `backend/builddataset.py` | Canonical dataset build wrapper | Active | CLI, cleaning, manifest write | Produces `backend/data/datasets/*` |
 | `backend/train_models.py` | Training, evaluation, staging/promotion | Active, complex | model pipelines, reports, metadata | Must stay aligned with serving bundle contract |
 | `backend/scripts/weekly_retrain.py` | Dataset rebuild + train automation | Active | CLI orchestration | Good operator entrypoint |
+| `backend/ollama/llm_ollama.py` | Premium AI agent facade | Active | `NFLAgent`, CLI `chat` | Delegates memory and client behavior |
+| `backend/ollama/memory.py` | Premium AI dataset memory | Active | `NFLMemory` | Loads feature CSV and builds bounded prompt context |
+| `backend/ollama/client.py` | Premium AI Ollama client helpers | Active | `OllamaClient`, `chat_messages`, `explain_prediction` | Owns env config, auth headers, timeout, and model fallbacks |
+| `backend/scripts/audit_inference.py` | Manual inference-row audit | Active utility | sample game diagnostics | Reads legacy/current feature CSVs and model bundles |
+| `backend/scripts/sync_data.py` | Schedule and score sync helper | Active utility | schedule CSV writes, score-sync job | Backend-owned because it writes backend data |
+| `backend/scripts/sync_direct.py` | nflverse schedule CSV fetcher | Active utility | yearly schedule CSV writes | Backend-owned because it writes backend data |
+| `backend/scripts/sync_season.py` | Completed-score backfill helper | Active utility | ESPN date scan, SQLite upsert | Backend-owned because it writes backend score state |
 | `frontend/src/api/client.js` | Frontend transport and normalization | Active | `fetchJson`, `getOffseasonStatus`, `getScheduleForWeek`, `predictGame`, history helpers | Compatibility layer for old deployments |
 | `frontend/src/hooks/usePredictionState.js` | Shared dashboard/history state owner | Active | init hydration, `refreshHistory`, `loadScheduleForWeek`, `setPrediction`, `pushHistory` | Main frontend state contract |
 | `frontend/src/App.jsx` | Router/auth/app shell | Active | protected shell, route wiring | Creates one shared hook instance |
@@ -226,6 +234,8 @@ python -m pip install -r requirements.txt
 uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000
 python backend/builddataset.py --start 2018 --end 2025 --out-dir backend/data/datasets
 python backend/train_models.py
+python backend/scripts/audit_inference.py
+python backend/scripts/sync_data.py
 python -m backend.services.schedule_ingestion --season 2025 --season-types 2,3 --out-csv backend/data/Nfl_schedule_2025.csv --out-parquet backend/data/schedules/nfl_schedule_2025.parquet
 python scripts/verify_api_cors.py --backend-url https://nfl-predict-ecf5a5bd34fe.herokuapp.com
 ```
@@ -261,6 +271,7 @@ heroku logs --tail -a nfl-predict
 - `backend/predictions.db` is runtime state and should not be part of normal deploy commits.
 - `backend/data/Nfl_schedule_2026.csv` is now a populated curated runtime asset.
 - Root `requirements.txt` and `backend/requirements.txt` differ. Heroku uses the root file; CI currently installs `backend/requirements.txt`.
+- Root is intentionally limited to project/deploy/test metadata plus README/REPO-INFO; backend operations live under `backend/scripts/`, frontend code under `frontend/`, and durable docs under `docs/`.
 - `.slugignore` excludes docs/tests from Heroku, which is fine for slug size but means deploy debugging must rely on source locally/GitHub.
 - Multiple temp folders currently produce Windows permission warnings during git/pytest scans.
 - `archive/` contains many old files with names similar to active files. Do not use archive code as runtime evidence unless a current import path proves it.
@@ -308,7 +319,8 @@ heroku logs --tail -a nfl-predict
 2. Refactor `StatsPage.jsx` to consume shared season/schedule context or a shared schedule service.
 3. Keep generated `frontend/dist/*`, `backend/predictions.db`, and local artifact screenshots out of Git.
 4. Add backend tests specifically for `/offseason/status` matching an available `/schedule?season=&week=` response.
-5. Align Heroku and CI dependency surfaces by resolving the root `requirements.txt` versus `backend/requirements.txt` split.
+5. Keep future scripts and docs in their owner directories: backend data/runtime helpers in `backend/scripts/`, repo-level external verifiers in `scripts/`, and durable markdown in `docs/`.
+6. Align Heroku and CI dependency surfaces by resolving the root `requirements.txt` versus `backend/requirements.txt` split.
 
 ## Open Questions / Uncertainties
 

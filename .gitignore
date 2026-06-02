@@ -47,6 +47,7 @@ frontend/.vercel/
 backend/.env
 !backend/.env.example
 frontend/.env*
+!frontend/.env.example
 
 ## IDE & OS noise
 .vscode/*
@@ -101,6 +102,7 @@ MANIFEST
 *.json
 *.jsonl
 *.db
+!frontend/tsconfig.json
 !backend/data/datasets/latest_*.json
 !backend/data/team_logos.csv
 !backend/data/team_logo.csv

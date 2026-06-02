@@ -1,23 +1,41 @@
+"""Audit model inference rows against a small hand-picked slate.
+
+Data shape:
+- Input CSV: one game per row with identity columns (`season`, `week`,
+  `home_team`, `away_team`) plus the raw feature columns expected by the model
+  bundle.
+- Model input: single-row pandas DataFrames returned by
+  `build_model_input_row`.
+- Output: console-only diagnostics with selected raw features, transformed
+  feature shape, predicted scores, and home-win probability.
+"""
+
+from __future__ import annotations
+
 import sys
 from pathlib import Path
-import pandas as pd
-import joblib
 
-sys.path.append(str(Path(__file__).parent.parent))
+REPO_ROOT = Path(__file__).resolve().parents[2]
+BACKEND_DIR = REPO_ROOT / "backend"
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 from backend.main_helpers import load_inference_bundle, load_dataset_df
 from backend.services.inference_row import build_model_input_row
 
+
 def audit():
+    """Load a model bundle and print inference diagnostics for sample games."""
     print("Auditing Model Predictions...")
-    backend_dir = Path("backend")
-    models_dir = backend_dir / "20260115" / "models"
+    models_dir = BACKEND_DIR / "20260115" / "models"
     
     if not models_dir.exists():
-        models_dir = backend_dir / "models"
+        models_dir = BACKEND_DIR / "models"
         
     bundle = load_inference_bundle(models_dir)
-    data_path = backend_dir / "data" / "datasets" / "game_features_20260213.csv"
+    data_path = BACKEND_DIR / "data" / "datasets" / "legacy" / "game_features_20260213.csv"
+    if not data_path.exists():
+        data_path = BACKEND_DIR / "data" / "datasets" / "game_features_20260531_clean.csv"
     df = load_dataset_df(data_path, bundle.raw_feature_columns)
     
     games = [

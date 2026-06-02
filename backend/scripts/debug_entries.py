@@ -1,11 +1,28 @@
+"""Debug ESPN scoreboard event parsing into canonical game IDs.
+
+Data shape:
+- Input: ESPN scoreboard `events` JSON list. Each event should include
+  `season.year`, `week.number`, `competitions[0].competitors`, and final status
+  metadata.
+- Output: list of canonical game ID strings shaped as `YYYY_WW_AWAY_HOME`.
+"""
+
+from __future__ import annotations
+
 import sys
 from pathlib import Path
-sys.path.append(str(Path.cwd()))
-from backend.main import _normalize_team_code, _parse_score_value, _build_game_id
-from datetime import datetime, timezone
+
 import httpx
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from backend.main import _build_game_id, _normalize_team_code, _parse_score_value
+
+
 def debug_entries(events):
+    """Convert final ESPN scoreboard events into canonical game IDs."""
     entries = []
     print(f"Num events: {len(events)}")
     for i, event in enumerate(events):
@@ -38,8 +55,8 @@ def debug_entries(events):
         away_team = _normalize_team_code(
             away.get("team", {}).get("abbreviation") or away.get("team", {}).get("shortDisplayName")
         )
-        home_score = _parse_score_value(home.get("score"))
-        away_score = _parse_score_value(away.get("score"))
+        _home_score = _parse_score_value(home.get("score"))
+        _away_score = _parse_score_value(away.get("score"))
         
         status = event.get("status", {})
         status_type = status.get("type", {})
@@ -59,5 +76,17 @@ def debug_entries(events):
         
     return entries
 
-events = httpx.get('https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=20250907').json().get('events', [])
-debug_entries([events[0]])
+
+def main() -> None:
+    """Fetch one sample scoreboard event and print parser diagnostics."""
+    events = httpx.get(
+        "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=20250907",
+        timeout=30,
+    ).json().get("events", [])
+    if not events:
+        raise SystemExit("No ESPN events returned for sample date")
+    debug_entries([events[0]])
+
+
+if __name__ == "__main__":
+    main()

@@ -4,6 +4,10 @@
 
 This application is a full-stack NFL forecasting tool that uses a shared-state pattern for data distribution.
 
+## Data Shape Standard
+
+Files that move data across a boundary should document the shape at the top of the file or on the main function. Keep it concise: name the input rows or JSON objects, the key columns/fields, and the output rows, JSON, or side effect.
+
 ### Frontend
 
 - **State Initialization**: `App.jsx` orchestrates global routing and initializes `usePredictionState.js`.
@@ -17,7 +21,7 @@ This application is a full-stack NFL forecasting tool that uses a shared-state p
 ### Backend
 
 - **API (FastAPI)**: Serves endpoints for fetching schedules, making predictions, reading prediction history, and Premium AI explain/chat.
-- **LLM Agent**: `NFLAgent` in `backend/ollama/llm_ollama.py` handles dataset-aware prompts, Ollama authentication headers, model fallback, and legacy `explain_prediction` / `chat_messages` helpers.
+- **LLM Agent**: `backend/ollama/llm_ollama.py` exposes the `NFLAgent` facade, `backend/ollama/memory.py` owns dataset memory/context, and `backend/ollama/client.py` owns Ollama authentication, chat calls, model fallback, and legacy `explain_prediction` / `chat_messages` helpers.
 - **History safety**: Premium endpoints call the prediction path with request-scoped persistence disabled so AI enrichment does not create duplicate history records.
 
 ## Key Data Transformations

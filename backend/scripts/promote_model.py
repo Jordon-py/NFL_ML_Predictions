@@ -3,6 +3,9 @@
 # File: backend/scripts/promote_model.py
 # Role: Safe promotion of model bundles to production.
 # Logic: Validates bundle integrity and dataset hash before updating production symlink.
+# Data shape: Reads model-bundle directories containing JSON metadata/report
+# files plus joblib model/preprocessor artifacts. Writes a validated production
+# bundle directory with the same artifact shape.
 # ==========================================
 
 import argparse

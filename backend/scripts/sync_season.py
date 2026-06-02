@@ -1,14 +1,29 @@
-import sys
+"""Backfill completed game scores for a season window.
+
+Data shape:
+- Input: date strings shaped as `YYYYMMDD` for ESPN scoreboard requests.
+- Intermediate: lists of score-entry dictionaries from
+  `_fetch_remote_scores_for_date`.
+- Output: SQLite score rows written through `upsert_game_scores`.
+"""
+
+from __future__ import annotations
+
 import asyncio
 from datetime import date, timedelta
+import sys
 from pathlib import Path
 
-sys.path.append(str(Path(__file__).parent))
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 from backend.main import _fetch_remote_scores_for_date
 from backend.sqlite_store import upsert_game_scores
 
+
 async def fetch_season():
+    """Fetch completed scores over the configured season date range."""
     start_date = date(2025, 9, 1)
     end_date = date(2026, 2, 28)
     
