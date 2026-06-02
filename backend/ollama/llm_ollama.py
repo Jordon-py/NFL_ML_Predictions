@@ -61,6 +61,20 @@ OLLAMA_TIMEOUT = _env_float("OLLAMA_TIMEOUT_S", 15.0)
 FALLBACK_MODEL = "gemma4:e4b"  # Always available locally
 
 
+def _ollama_unavailable_reply(errors: List[str]) -> str:
+    detail = " ".join(errors).lower()
+    if "failed to connect" in detail or "connection" in detail:
+        return (
+            "Premium AI analysis is temporarily unavailable because the Ollama runtime "
+            "could not be reached. The matchup prediction context was still prepared; "
+            "configure OLLAMA_BASE_URL, OLLAMA_MODEL, and optional OLLAMA_API_KEY for live AI commentary."
+        )
+    return (
+        "Premium AI analysis is temporarily unavailable because all configured Ollama models failed. "
+        "Check OLLAMA_MODEL and the Ollama service logs before retrying."
+    )
+
+
 class OllamaClient:
     """Small compatibility wrapper around ollama.AsyncClient."""
 
@@ -195,7 +209,7 @@ class NFLAgent:
                     log.info("Trying next Ollama model: %s", models_to_try[idx + 1])
                 continue
 
-        return "All Ollama models failed:\n" + "\n".join(errors)
+        return _ollama_unavailable_reply(errors)
 
     def _get_relevant_context(self, question: str) -> str:
         """
