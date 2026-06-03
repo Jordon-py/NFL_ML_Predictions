@@ -169,6 +169,8 @@ def _add_kickoff_utc_datetime(df: pd.DataFrame) -> pd.DataFrame:
                 )
             return df
 
+    return df
+
 
 
 def _coerce_season_week(df: pd.DataFrame) -> pd.DataFrame:

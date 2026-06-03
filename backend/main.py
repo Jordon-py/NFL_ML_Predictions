@@ -266,6 +266,22 @@ def _to_pandas_schedule_safe(table: Any) -> pd.DataFrame:
         return pd.DataFrame()
 
 
+def _schedule_csv_looks_usable(path: Path) -> bool:
+    """Return True when a fallback schedule CSV has a plausible header row."""
+    try:
+        if not path.exists() or not path.is_file():
+            return False
+        with path.open("r", encoding="utf-8") as fh:
+            header = fh.readline().strip()
+        if not header or header.startswith("<<<<<<<"):
+            return False
+        columns = {col.strip() for col in header.split(",")}
+        required = {"season", "week", "home_team", "away_team"}
+        return required.issubset(columns)
+    except Exception:
+        return False
+
+
 def _schedule_csv_year(path: Path) -> Optional[int]:
     """Infer a season year from a schedule CSV filename when possible."""
     matches = re.findall(r"(?:19|20|21)\d{2}", path.stem)
@@ -328,27 +344,24 @@ def _find_schedule_paths(requested_season: Optional[int] = None) -> List[Path]:
         candidates.append(path)
 
     # 1) explicit path
-    add(SCHEDULE_PATH)
+    if SCHEDULE_PATH.exists():
+        return SCHEDULE_PATH
 
     # 2) search backend/data for schedule-like CSVs
     for p in DATA_DIR.glob("*.csv"):
-        if _looks_like_schedule_csv(p):
-            add(p)
+        name = p.name.lower()
+        if "schedule" in name or name.startswith("nfl"):
+            candidates.append(p)
+    if candidates:
+        # Prefer most recently modified
+        return sorted(candidates, key=lambda p: p.stat().st_mtime, reverse=True)[0]
 
-    # 3) local dev fallbacks under frontend/public
-    frontend_public = BASE_DIR.parent / "frontend" / "public"
-    for p in (frontend_public / "schedules").glob("*.csv"):
-        if _looks_like_schedule_csv(p):
-            add(p)
-    add(frontend_public / "nflSchedule.csv")
+    # 3) local dev fallback: frontend/public
+    frontend_sched = BASE_DIR.parent / "frontend" / "public" / "nflSchedule.csv"
+    if frontend_sched.exists():
+        return frontend_sched
 
-    return sorted(candidates, key=lambda p: _schedule_path_sort_key(p, requested_season))
-
-
-def _find_schedule_path() -> Optional[Path]:
-    """Backward-compatible single-path helper for older internal callers."""
-    paths = _find_schedule_paths()
-    return paths[0] if paths else None
+    return None
 
 
 def _models_dir_has_required_artifacts(models_dir: Path) -> bool:
@@ -1480,6 +1493,11 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+
+def create_app() -> FastAPI:
+    """Return the module-level FastAPI application."""
+    return app
 
 
 # CORS configuration
@@ -3381,59 +3399,13 @@ def _load_schedule_dataframe(requested_season: Optional[int] = None) -> pd.DataF
     df = _normalize_team_columns(
         df, cols=["home_abbr", "away_abbr", "home_team", "away_team"]
     )
-    dedupe_cols = [
-        col
-        for col in ("season", "week", "home_team", "away_team", "home_abbr", "away_abbr")
-        if col in df.columns
-    ]
-    if {"season", "week"}.issubset(dedupe_cols) and len(dedupe_cols) >= 4:
-        df = df.drop_duplicates(subset=dedupe_cols, keep="first")
-    df = _add_kickoff_utc_datetime(df)
-    return df
+    # Attach logos if we have a mapping file. This is optional; missing logo
+    logo_map = _load_team_logo_map()
+    df = _add_kickoff_utc_datetime(df)  # uses 'gameday' column if present
 
-
-def _select_schedule_slice(
-    df: pd.DataFrame,
-    season: Optional[int] = None,
-    week: Optional[int] = None,
-    now_utc: Optional[pd.Timestamp] = None,
-) -> Tuple[pd.DataFrame, Optional[int], Optional[int]]:
-    """Choose the requested slate or the backend's best "next slate".
-
-    Rules:
-    - If `season` and `week` are provided, return that exact slice.
-    - If only `season` is provided, return the next upcoming week inside that season.
-    - If no future games remain and a current/future season is bundled, return
-      that upcoming season's earliest week instead of a stale archived slate.
-    - If no current/future season exists, fall back to the latest available week.
-    """
-    if df is None or df.empty:
-        return pd.DataFrame(), season, week
-
-    s_col = "season_num" if "season_num" in df.columns else "season"
-    w_col = "week_num" if "week_num" in df.columns else "week"
-    working = df
-    now_ts = pd.Timestamp.now(tz="UTC") if now_utc is None else pd.Timestamp(now_utc)
-    if now_ts.tzinfo is None:
-        now_ts = now_ts.tz_localize("UTC")
-    else:
-        now_ts = now_ts.tz_convert("UTC")
-
-    if season is not None:
-        working = working[pd.to_numeric(working[s_col], errors="coerce") == int(season)]
-    if working.empty:
-        return pd.DataFrame(), season, week
-
-    if week is not None:
-        week_df = working[pd.to_numeric(working[w_col], errors="coerce") == int(week)]
-        return week_df, season, week
-
-    if "dt" in working.columns:
-        future = working[working["dt"].notna() & (working["dt"] > now_ts)].sort_values(
-            by=["dt", s_col, w_col]
-        )
-    else:
-        future = pd.DataFrame()
+    # Decide which (season, week) is "next"
+    now_utc = pd.Timestamp.now(tz="UTC")
+    future = df[df["dt"].notna() & (df["dt"] > now_utc)].sort_values(by=["dt", "season", "week"])
 
     if not future.empty:
         next_row = future.iloc[0]
