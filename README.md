@@ -43,7 +43,7 @@ Deploy intent:
 
 ## What This Repo Actually Does
 
-- Serves NFL schedule, health, status, prediction, and history endpoints from `backend/main.py`.
+- Serves NFL schedule, health, status, prediction, and history endpoints through `backend/routes/api.py`, with route-facing workflows in `backend/services/api_runtime.py` and app bootstrap in `backend/main.py`.
 - Stores user-scoped prediction history in SQLite first, with JSON files as a fallback.
 - Builds cleaned training datasets into `backend/data/datasets/`.
 - Trains score and win-probability models and promotes bundles for serving.
@@ -131,7 +131,7 @@ The backend now boots even if models are missing or incompatible.
 ### Runtime Enhancements (May 2026)
 
 - Model hot-reload: the backend starts a lightweight background `model-watcher` thread that monitors the active models directory and reloads promoted bundles without requiring a full process restart. This improves promotion workflows and reduces downtime.
-- In-process LRU cache: prediction responses are cached in-memory with TTL and max-items controlled by `PREDICT_CACHE_TTL_SEC` and `PREDICT_CACHE_MAX_ITEMS` (see `backend/main.py`) to reduce repeated identical inference cost during heavy UI refreshes.
+- In-process LRU cache: prediction responses are cached in-memory with TTL and max-items controlled by `PREDICT_CACHE_TTL_SEC` and `PREDICT_CACHE_MAX_ITEMS` (see `backend/services/api_runtime.py`) to reduce repeated identical inference cost during heavy UI refreshes.
 
 ### Premium reliability hardening (May 2026)
 

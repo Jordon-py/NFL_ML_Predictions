@@ -41,6 +41,16 @@ PREDICTION_HISTORY_PATH = BACKEND_DIR / "Predictions" / "prediction_history.json
 
 @dataclass(frozen=True)
 class InferenceBundle:
+    """Loaded model-bundle artifacts for the legacy prediction service.
+
+    Data shape:
+        Metadata/report dictionaries plus preprocessor, home/away regressors,
+        and optional historical win classifier.
+    Methods:
+        ``raw_feature_columns`` resolves the ordered raw feature list from
+        metadata across legacy and current metadata shapes.
+    """
+
     meta: Dict[str, Any]
     report: Dict[str, Any]
     preprocessor: Any

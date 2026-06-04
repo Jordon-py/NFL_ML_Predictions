@@ -19,6 +19,15 @@ from backend.contracts.model_bundle_contract import (
 
 
 class RuntimeContractValidation(BaseModel):
+    """Combined runtime contract validation for dataset and model bundle.
+
+    Data shape:
+        Top-level readiness plus bundle validation and per-model feature-frame
+        validation for the ``win`` and ``score`` model families.
+    Methods:
+        Pydantic validation only.
+    """
+
     ok: bool
     blockers: List[str] = Field(default_factory=list)
     warnings: List[str] = Field(default_factory=list)

@@ -4,7 +4,7 @@
 
 Your stack already has most of the right pieces:
 
-1. `PredictionService` caches:
+1. The route-facing prediction runtime and inference-row helpers cache:
    - team history
    - exact-match index
    - numeric medians

@@ -54,21 +54,14 @@ import pydantic
 import pandas as pd
 import requests
 
+from backend.utils.team_codes import normalize_team_code as _normalize_team_code
+
 log = logging.getLogger(__name__)
 
 ESPN_SCOREBOARD_URL = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
 
 REGULAR_SEASON = 2
 POSTSEASON = 3
-
-TEAM_ABBR_MAP = {
-    "LA": "LAR",
-    "STL": "LAR",
-    "SD": "LAC",
-    "OAK": "LV",
-    "WSH": "WAS",
-    "JAC": "JAX",
-}
 
 # ESPN site API postseason week numbers can differ from nflverse/model week IDs.
 # Your dataset builder already uses 19-22 for playoff rounds, so normalize here.
@@ -117,6 +110,16 @@ SCHEDULE_COLUMNS = [
 
 @dataclass(frozen=True)
 class ScheduleRow:
+    """Normalized one-row-per-game schedule record.
+
+    Data shape:
+        Canonical season/week/game ids, kickoff timestamps, home/away teams,
+        scores only for completed games, venue, odds, source, and ingestion
+        timestamp.
+    Methods:
+        Dataclass container only; serialization is handled with ``asdict``.
+    """
+
     season: int
     season_type: int
     game_type: str
@@ -157,7 +160,7 @@ def normalize_team_code(value: Any) -> str:
     code = str(value).strip().upper()
     if code in {"", "TBD", "TBA", "NA", "N/A"}:
         return ""
-    return TEAM_ABBR_MAP.get(code, code)
+    return _normalize_team_code(code)
 
 
 def parse_espn_datetime(value: Any) -> Optional[datetime]:

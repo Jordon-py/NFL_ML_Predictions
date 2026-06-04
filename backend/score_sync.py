@@ -15,20 +15,7 @@ from typing import Any, Dict, Iterable, Optional
 
 import pandas as pd
 
-_TEAM_ALIASES = {
-    "LA": "LAR",
-    "STL": "LAR",
-    "SD": "LAC",
-    "OAK": "LV",
-    "WSH": "WAS",
-}
-
-
-def normalize_team_code(value: Any) -> str:
-    raw = (value or "").__str__().strip().upper()
-    if not raw:
-        return ""
-    return _TEAM_ALIASES.get(raw, raw)
+from backend.utils.team_codes import normalize_team_code
 
 
 def build_score_game_id(season: Any, week: Any, home_team: Any, away_team: Any) -> str:

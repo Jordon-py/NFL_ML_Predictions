@@ -11,22 +11,24 @@ Updated: 2026-03-28
 
 ## Live Backend Path
 
-- `backend/main.py`: Live FastAPI application and route definitions.
+- `backend/main.py`: Live FastAPI application bootstrap and router mounting.
+- `backend/routes/api.py`: Canonical public route registration.
+- `backend/services/api_runtime.py`: Route-facing business workflows, app state, lifespan, prediction, schedule, history, and admin logic.
 - `main.py`: Repo-root ASGI shim for `backend.main:app`.
 - `backend/app/core/settings.py`: Environment, CORS, model path, and schedule path resolution.
-- `backend/utils/functions_for_main.py`: Prediction, schedule, and feature-prep helpers used by `backend/main.py`.
+- `backend/utils/functions_for_main.py`: Prediction, schedule, and feature-prep helpers used by `backend/services/api_runtime.py`.
 - `backend/utils/ops_reporting.py`: Dataset/version/drift helpers used by serving and retraining flows.
 
 ## Feature Map
 
 | Status | Feature | Key files | Notes |
 | --- | --- | --- | --- |
-| `done` | App bootstrap and runtime config | `backend/main.py`, `main.py`, `backend/app/core/settings.py` | `backend/main.py` is the live app; the repo-root `main.py` is only a compatibility launcher. |
-| `done` | Health, status, debug, and drift APIs | `backend/main.py`, `backend/tests/test_routes_smoke.py`, `backend/tests/test_api_endpoints.py`, `backend/tests/test_endpoints.py` | Covers `/health`, `/status`, `/status/overview`, `/status/runtime`, `/status/dataset-versioning`, `/status/performance-drift`, `/debug`, `/debug/dataset`, and `/debug/predict-input`. |
-| `done` | Schedule loading and next-week slate | `backend/main.py`, `backend/utils/functions_for_main.py` | Uses `nflreadpy` first, then falls back to local CSV paths and logo lookup files. |
-| `done` | Prediction inference | `backend/main.py`, `backend/utils/functions_for_main.py`, `backend/tests/test_predict_two_stage.py` | Current live path for `/predict`, `/api/predict`, `/predict/next-week`, and `/api/predict/next-week`. |
-| `done` | In-memory prediction history | `backend/main.py`, `backend/tests/test_endpoints.py` | `/history` is currently backed by `state.history`, not the SQLite/history sidecar files. |
-| `done` | Admin retrain and promotion flow | `backend/main.py`, `backend/scripts/weekly_retrain.py`, `backend/utils/ops_reporting.py` | Background retrain jobs, gating, and staged model promotion are wired in the live app. |
+| `done` | App bootstrap and runtime config | `backend/main.py`, `backend/routes/api.py`, `main.py`, `backend/app/core/settings.py` | `backend/main.py` creates the app and mounts routers; route declarations live under `backend/routes/`. |
+| `done` | Health, status, debug, and drift APIs | `backend/routes/api.py`, `backend/services/api_runtime.py`, `backend/tests/test_routes_smoke.py`, `backend/tests/test_api_endpoints.py`, `backend/tests/test_endpoints.py` | Covers `/health`, `/status`, `/status/overview`, `/status/runtime`, `/status/dataset-versioning`, `/status/performance-drift`, `/debug`, `/debug/dataset`, and `/debug/predict-input`. |
+| `done` | Schedule loading and next-week slate | `backend/routes/api.py`, `backend/services/api_runtime.py`, `backend/utils/functions_for_main.py` | Uses `nflreadpy` first, then falls back to local CSV paths and logo lookup files. |
+| `done` | Prediction inference | `backend/routes/api.py`, `backend/services/api_runtime.py`, `backend/utils/functions_for_main.py`, `backend/tests/test_predict_two_stage.py` | Current live path for `/predict`, `/api/predict`, `/predict/next-week`, and `/api/predict/next-week`. |
+| `done` | In-memory prediction history | `backend/routes/api.py`, `backend/services/api_runtime.py`, `backend/tests/test_endpoints.py` | `/history` uses the persistent history facade first, with in-memory fallback for degraded runtime. |
+| `done` | Admin retrain and promotion flow | `backend/routes/api.py`, `backend/services/api_runtime.py`, `backend/scripts/weekly_retrain.py`, `backend/utils/ops_reporting.py` | Background retrain jobs, gating, and staged model promotion are wired in the live app. |
 | `done` | Model training stack | `backend/train_models.py`, `backend/tests/test_train_models_stack.py` | Current trainer writes staged/promoted bundles, metadata, and reports. |
 | `needs work` | Dataset build path | `backend/builddataset.py`, `backend/build_csv_datasetsv3.py`, `backend/build_csv_datasets_v3.py` | The typed wrapper looks current, but there are two similarly named builders and one duplicate file has merge markers. |
 | `needs work` | Startup coverage | `backend/tests/test_startup_checks.py` | This test file is effectively empty, so lifespan/startup behavior has weak direct coverage. |
@@ -36,12 +38,10 @@ Updated: 2026-03-28
 
 ### Legacy or Competing Backend Stacks
 
-- `backend/routes.py`: Older parallel router layer. No current `include_router(...)` call was found in the live app.
-- `backend/services/prediction_service.py`
 - `backend/services/inference_row.py`
-- `backend/schemas.py`
 
-These files form an alternate prediction stack that is not wired into `backend/main.py`.
+This file is retained because scripts and the live runtime still use it for
+feature-row construction.
 
 ### Dormant Persistence Experiments
 

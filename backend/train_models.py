@@ -130,6 +130,13 @@ CLF_PARAM_DISTS: Dict[str, Sequence[Any]] = {
 
 @dataclass
 class RegressionMetrics:
+    """Regression validation metrics.
+
+    Data shape: mean absolute error, root mean squared error, and optional
+    R-squared.
+    Methods: Dataclass container only.
+    """
+
     mae: float
     rmse: float
     r2: Optional[float]
@@ -137,6 +144,12 @@ class RegressionMetrics:
 
 @dataclass
 class ClassificationMetrics:
+    """Classifier validation metrics.
+
+    Data shape: accuracy, Brier score, optional ROC AUC, and optional log loss.
+    Methods: Dataclass container only.
+    """
+
     accuracy: float
     brier: float
     roc_auc: Optional[float]

@@ -7,6 +7,16 @@ from pydantic import BaseModel, Field
 
 
 class FeatureContract(BaseModel):
+    """Expected feature-frame contract for one model family.
+
+    Data shape:
+        Built from model metadata. ``expected_features`` is the ordered raw
+        inference schema; numeric/categorical lists describe type expectations;
+        ``generated_features`` documents inference-time columns.
+    Methods:
+        ``generated_feature_names`` returns generated feature names as strings.
+    """
+
     model_key: str
     expected_features: List[str] = Field(default_factory=list)
     numeric_features: List[str] = Field(default_factory=list)
@@ -21,6 +31,15 @@ class FeatureContract(BaseModel):
 
 
 class FeatureValidationResult(BaseModel):
+    """Validation result for one feature frame against a contract.
+
+    Data shape:
+        Counts, missing/unexpected columns, order/type/null diagnostics, and
+        separate blocker/warning lists for readiness decisions.
+    Methods:
+        Pydantic validation only.
+    """
+
     ok: bool
     model_key: str
     expected_count: int = 0

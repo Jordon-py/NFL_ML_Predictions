@@ -18,11 +18,12 @@ This repository is a full-stack NFL prediction app with a FastAPI backend, React
 
 The active runtime is simpler than the repo history suggests:
 
-1. `backend/main.py` is the live FastAPI app and public API surface.
-2. `backend/app/core/settings.py` is the authoritative env, CORS, and path-resolution layer.
-3. `frontend/src/api/client.js` is the frontend transport adapter.
-4. `frontend/src/hooks/usePredictionState.js` is the dashboard/history shared state owner.
-5. `backend/builddataset.py`, `backend/train_models.py`, and `backend/scripts/weekly_retrain.py` are the main ML ops entrypoints.
+1. `backend/main.py` is the live FastAPI bootstrap; public route registration lives in `backend/routes/api.py`.
+2. `backend/services/api_runtime.py` owns the route-facing business workflows.
+3. `backend/app/core/settings.py` is the authoritative env, CORS, and path-resolution layer.
+4. `frontend/src/api/client.js` is the frontend transport adapter.
+5. `frontend/src/hooks/usePredictionState.js` is the dashboard/history shared state owner.
+6. `backend/builddataset.py`, `backend/train_models.py`, and `backend/scripts/weekly_retrain.py` are the main ML ops entrypoints.
 
 The biggest engineering risk is source-of-truth drift: active code, archived code, generated datasets, local runtime DBs, tracked build output, and permission-broken pytest temp directories all live near each other. Future changes should start from the active runtime map below, not from the archive folder or older service abstractions unless the code path is verified.
 
@@ -50,7 +51,9 @@ The backend serves one FastAPI app from `backend.main:app`. It loads dataset/mod
 
 Primary layers:
 
-- Runtime API and orchestration: `backend/main.py`
+- App bootstrap and router mounting: `backend/main.py`
+- Route registration: `backend/routes/api.py`
+- Route-facing workflows and runtime state: `backend/services/api_runtime.py`
 - Environment and path settings: `backend/app/core/settings.py`
 - Inference helpers: `backend/utils/functions_for_main.py`
 - User prediction history: `backend/prediction_store.py` and `backend/sqlite_store.py`
@@ -88,7 +91,9 @@ Frontend:
 | --- | --- | --- | --- | --- |
 | `README.md` | Operator quick start and repo map | Active | deploy targets, quick start, endpoints | Keep this aligned with real deploy targets |
 | `REPO-INFO.md` | Durable repo intelligence dossier | Active | architecture map, risk map, safe-edit map | Update after meaningful runtime/deploy changes |
-| `backend/main.py` | FastAPI app and runtime source of truth | Active, dense | `AppState`, `lifespan`, `/health`, `/status/*`, `/offseason/status`, `/schedule*`, `/history*`, `/predict`, `/admin/*` | Highest-risk edit zone |
+| `backend/main.py` | FastAPI app bootstrap and router mounting | Active, small | `app`, `create_app`, router include, exception handlers | Keep deployment-focused |
+| `backend/routes/api.py` | Canonical route registration | Active | `/health`, `/status/*`, `/offseason/status`, `/schedule*`, `/history*`, `/predict`, `/admin/*` | Route map only; no business logic |
+| `backend/services/api_runtime.py` | Route-facing runtime workflows | Active, dense | `AppState`, `lifespan`, prediction, schedule, history, admin, premium AI handlers | Highest-risk edit zone |
 | `backend/app/core/settings.py` | Env, CORS, deploy-mode, path resolution | Active | `Settings`, `allowed_origins`, `effective_allow_origin_regex`, `resolved_*` properties | Start here for config/deploy bugs |
 | `backend/utils/functions_for_main.py` | Schedule time parsing, row lookup, model prep, prediction helpers | Active | `_add_kickoff_utc_datetime`, `_get_game_row_with_source`, `_prepare_inputs`, `_predict_score`, `_roll_forward_missing_player_stats` | Fixed to parse both naive and UTC schedule times |
 | `backend/services/schedule_ingestion.py` | ESPN scoreboard schedule ingestion | New active tool | `ingest_schedule`, `clean_schedule_frame`, `validate_schedule_frame`, `save_schedule` | Produces leak-safe future rows |

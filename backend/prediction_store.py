@@ -26,8 +26,14 @@ from pathlib import Path
 from threading import Lock
 from typing import Iterable
 
-from .pipeline_models import PredictionStorageProfile, PredictionUserContext
-from .schemas import HistoryEntry, HistoryResponse, PredictionRequest, StoredPredictionRecord
+from .pipeline_models import (
+    PredictionHistoryEntry,
+    PredictionHistoryResponse,
+    PredictionStorageProfile,
+    PredictionUserContext,
+    StoredPredictionRecord,
+    StoredPredictionRequest,
+)
 
 from .sqlite_store import (
     clear_user_history,
@@ -109,7 +115,7 @@ def _dump_records(records: Iterable[StoredPredictionRecord]) -> list[dict]:
 
 def append_prediction_record(
     context: PredictionUserContext,
-    request_payload: PredictionRequest,
+    request_payload: StoredPredictionRequest,
     prediction_payload: dict,
 ) -> StoredPredictionRecord:
     """Persist a validated prediction record for one user."""
@@ -153,7 +159,7 @@ def append_prediction_record(
     return record
 
 
-def get_prediction_history(context: PredictionUserContext, limit: int = 100) -> HistoryResponse:
+def get_prediction_history(context: PredictionUserContext, limit: int = 100) -> PredictionHistoryResponse:
     """Load one user's prediction history from disk."""
 
     bounded_limit = max(1, min(int(limit or 100), PREDICTION_HISTORY_MAX))
@@ -161,14 +167,14 @@ def get_prediction_history(context: PredictionUserContext, limit: int = 100) -> 
 
     sqlite_entries = get_user_history(context, limit=bounded_limit)
     if sqlite_entries:
-        entries = [HistoryEntry.model_validate(entry) for entry in sqlite_entries]
-        return HistoryResponse(entries=entries, total=len(sqlite_entries), user_id=context.user_id)
+        entries = [PredictionHistoryEntry.model_validate(entry) for entry in sqlite_entries]
+        return PredictionHistoryResponse(entries=entries, total=len(sqlite_entries), user_id=context.user_id)
 
     with _prediction_store_lock:
         records = _read_history_records(history_path)
 
-    entries = [HistoryEntry.model_validate(record.model_dump()) for record in records[:bounded_limit]]
-    return HistoryResponse(entries=entries, total=len(records), user_id=context.user_id)
+    entries = [PredictionHistoryEntry.model_validate(record.model_dump()) for record in records[:bounded_limit]]
+    return PredictionHistoryResponse(entries=entries, total=len(records), user_id=context.user_id)
 
 
 def get_prediction_history_count(context: PredictionUserContext) -> int:

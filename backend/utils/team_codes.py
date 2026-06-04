@@ -35,6 +35,7 @@ TEAM_ABBR_ALIASES: Dict[str, str] = {
     "COMMANDERS": "WAS",
     "REDSKINS": "WAS",
     # Jaguars
+    "JAC": "JAX",
     "JAGUARS": "JAX",
 }
 

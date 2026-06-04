@@ -222,3 +222,57 @@ class PredictionStorageProfile(BaseModel):
 
     total_predictions_all_time: int = Field(default=0, ge=0)
 
+
+class StoredPredictionRequest(BaseModel):
+
+    """Prediction request shape persisted with one history record."""
+
+    home_team: str
+    away_team: str
+    season: int
+    week: int
+
+
+class PredictionHistoryEntry(BaseModel):
+
+    """Flattened prediction record returned by history storage."""
+
+    home_score: float
+    away_score: float
+    point_diff: float
+    home_win_probability: float
+    away_win_probability: float
+    prediction_source: str
+    win_classifier_used: bool
+    simulation_metrics: Optional[dict[str, Any]] = None
+    game_id: str
+    season: int
+    week: int
+    home_team: str
+    away_team: str
+    home_name: Optional[str] = None
+    away_name: Optional[str] = None
+    ts: str
+    user_id: Optional[str] = None
+    storage_key: Optional[str] = None
+    final_home_score: Optional[int] = None
+    final_away_score: Optional[int] = None
+    game_status: Optional[str] = None
+    score_updated_at: Optional[str] = None
+
+
+class PredictionHistoryResponse(BaseModel):
+
+    """User-scoped prediction history response from the persistence layer."""
+
+    entries: list[PredictionHistoryEntry]
+    total: int
+    user_id: Optional[str] = None
+
+
+class StoredPredictionRecord(PredictionHistoryEntry):
+
+    """Persisted prediction record plus the request that produced it."""
+
+    request: StoredPredictionRequest
+
