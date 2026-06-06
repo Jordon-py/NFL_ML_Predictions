@@ -132,6 +132,7 @@ The backend now boots even if models are missing or incompatible.
 
 - Model hot-reload: the backend starts a lightweight background `model-watcher` thread that monitors the active models directory and reloads promoted bundles without requiring a full process restart. This improves promotion workflows and reduces downtime.
 - In-process LRU cache: prediction responses are cached in-memory with TTL and max-items controlled by `PREDICT_CACHE_TTL_SEC` and `PREDICT_CACHE_MAX_ITEMS` (see `backend/services/api_runtime.py`) to reduce repeated identical inference cost during heavy UI refreshes.
+- Model-quality pass (June 2026): the dataset builder now adds recent-form margin trend features, and the win-model training path uses balanced sample weighting to reduce imbalance sensitivity on sparse inference rows.
 
 ### Premium reliability hardening (May 2026)
 

@@ -15,13 +15,20 @@ import json
 import logging
 import os
 import time
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import ollama
 from dotenv import find_dotenv, load_dotenv
 
+from backend.ollama.memory import NFLMemory
 
-load_dotenv(find_dotenv())
+
+BACKEND_ENV_PATH = Path(__file__).resolve().parents[1] / ".env"
+if BACKEND_ENV_PATH.exists():
+    load_dotenv(BACKEND_ENV_PATH)
+else:
+    load_dotenv(find_dotenv())
 
 log = logging.getLogger(__name__)
 
@@ -34,8 +41,73 @@ def _env_float(name: str, default: float) -> float:
         return default
 
 
-OLLAMA_HOST = os.getenv("OLLAMA_BASE_URL") or os.getenv("OLLAMA_HOST", "http://localhost:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gemma4:e4b").split(",")[0].strip()
+def _split_env_list(raw: Optional[str]) -> List[str]:
+    """Split comma-separated env values while dropping blanks and quotes."""
+    values: List[str] = []
+    for part in (raw or "").split(","):
+        value = part.strip().strip('"').strip("'")
+        if value and value not in values:
+            values.append(value)
+    return values
+
+
+def _normalize_ollama_host(raw: Optional[str]) -> Optional[str]:
+    """Normalize an Ollama SDK host value.
+
+    The Python SDK appends `/api/...` request paths itself, so cloud base URLs
+    configured as `https://ollama.com/api` must be reduced to `https://ollama.com`.
+    """
+    value = (raw or "").strip().strip('"').strip("'").rstrip("/")
+    if not value:
+        return None
+    if value.lower().endswith("/api"):
+        value = value[:-4].rstrip("/")
+    return value
+
+
+def _is_cloud_host(host: str) -> bool:
+    return "ollama.com" in (host or "").lower()
+
+
+def _is_cloud_model(model: str) -> bool:
+    return "-cloud" in (model or "").lower()
+
+
+def _prefer_cloud_hosts(model: Optional[str] = None) -> bool:
+    env_model = model or os.getenv("OLLAMA_MODEL", "")
+    return bool(os.getenv("OLLAMA_API_KEY")) and _is_cloud_model(env_model)
+
+
+def ollama_host_candidates(primary_host: Optional[str] = None, model: Optional[str] = None) -> List[str]:
+    """Return normalized Ollama hosts, preferring cloud for cloud models."""
+    raw_hosts: List[str] = []
+    if primary_host:
+        raw_hosts.extend(_split_env_list(primary_host))
+    if _prefer_cloud_hosts(model):
+        raw_hosts.append("https://ollama.com")
+    raw_hosts.extend(_split_env_list(os.getenv("OLLAMA_BASE_URL")))
+    raw_hosts.extend(_split_env_list(os.getenv("OLLAMA_HOST")))
+    if not raw_hosts:
+        raw_hosts.append("http://localhost:11434")
+
+    candidates: List[str] = []
+    for raw in raw_hosts:
+        host = _normalize_ollama_host(raw)
+        if host and host not in candidates:
+            candidates.append(host)
+
+    if _prefer_cloud_hosts(model):
+        candidates.sort(key=lambda host: 0 if _is_cloud_host(host) else 1)
+
+    return candidates or ["http://localhost:11434"]
+
+
+def _primary_model() -> str:
+    return (os.getenv("OLLAMA_MODEL", "gemma4:e4b").split(",")[0].strip() or "gemma4:e4b")
+
+
+OLLAMA_HOST = ollama_host_candidates(model=_primary_model())[0]
+OLLAMA_MODEL = _primary_model()
 OLLAMA_TIMEOUT = _env_float("OLLAMA_TIMEOUT_S", 15.0)
 FALLBACK_MODEL = "gemma4:e4b"
 
@@ -63,11 +135,17 @@ class OllamaClient:
         host: Optional[str] = None,
         model: Optional[str] = None,
         timeout_s: Optional[float] = None,
+        api_key: Optional[str] = None,
     ):
-        self.host = host or OLLAMA_HOST
+        explicit_hosts = [
+            normalized
+            for normalized in (_normalize_ollama_host(raw) for raw in _split_env_list(host))
+            if normalized
+        ]
+        api_key = api_key or os.getenv("OLLAMA_API_KEY")
+        self.host = explicit_hosts[0] if explicit_hosts else ollama_host_candidates(model=model)[0]
         self.model = model or OLLAMA_MODEL
         self.timeout_s = float(timeout_s) if timeout_s is not None else OLLAMA_TIMEOUT
-        api_key = os.getenv("OLLAMA_API_KEY")
         headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
         self.client = ollama.AsyncClient(host=self.host, timeout=self.timeout_s, headers=headers)
 
@@ -89,8 +167,16 @@ def build_explanation_prompt(pred: Dict[str, Any]) -> str:
     """Create the JSON-only prompt used by prediction explanation calls."""
     home = str(pred.get("home_team", "")).upper()
     away = str(pred.get("away_team", "")).upper()
+    season = str(pred.get("season", "unknown"))
+    memory = NFLMemory()
+    if not memory.df.empty:
+        data_context = memory.df.to_dict(orient="records")[0]
+    else:
+        data_context = memory.get_relevant_context(
+            f"What are the key stats for {home} vs {away}, {season} for this game and matchup?"
+        )
     return f"""
-You are explaining an NFL game prediction to a regular sports fan.
+You are explaining an NFL game prediction to a regular sports fan use the provided dataset to inform your response and say why the prediction is good or bad {memory.df}.
 Be concise, avoid claiming you saw injuries/weather unless provided.
 
 Return ONLY valid JSON with keys:
@@ -105,12 +191,13 @@ Game:
   predicted_away_score: {pred.get("away_score")}
   home_win_probability: {pred.get("home_win_probability")}
   prediction_source: {pred.get("prediction_source", "model")}
+  {data_context}
 """.strip()
 
 
 def model_candidates(primary_model: str) -> List[str]:
     """Return primary, env-configured, and local fallback models in order."""
-    candidates = [primary_model]
+    candidates = [primary_model] if primary_model else []
     for model in os.getenv("OLLAMA_MODEL", "").split(","):
         model = model.strip()
         if model and model not in candidates:
@@ -128,32 +215,36 @@ async def chat_once(
     timeout_s: Optional[float] = None,
 ) -> Dict[str, Any]:
     """Send one normalized chat payload to Ollama with model fallbacks."""
-    active_host = host or OLLAMA_HOST
     active_model = model or OLLAMA_MODEL
     active_timeout = float(timeout_s) if timeout_s is not None else OLLAMA_TIMEOUT
-    client = OllamaClient(host=active_host, model=active_model, timeout_s=active_timeout).client
     errors: List[str] = []
 
-    for candidate in model_candidates(active_model):
-        try:
-            response = await asyncio.wait_for(
-                client.chat(model=candidate, messages=messages),
-                timeout=active_timeout + 0.25,
-            )
-            return {
-                "ok": True,
-                "model": candidate,
-                "host": active_host,
-                "content": (response.message.content or "").strip(),
-            }
-        except Exception as exc:
-            errors.append(f"{candidate}: {exc}")
-            log.warning("Ollama chat failed for model %s: %s", candidate, exc)
+    for active_host in ollama_host_candidates(host, model=active_model):
+        for candidate in model_candidates(active_model):
+            try:
+                client = OllamaClient(
+                    host=active_host,
+                    model=candidate,
+                    timeout_s=active_timeout,
+                ).client
+                response = await asyncio.wait_for(
+                    client.chat(model=candidate, messages=messages),
+                    timeout=active_timeout + 0.25,
+                )
+                return {
+                    "ok": True,
+                    "model": candidate,
+                    "host": active_host,
+                    "content": (response.message.content or "").strip(),
+                }
+            except Exception as exc:
+                errors.append(f"{active_host} {candidate}: {exc}")
+                log.warning("Ollama chat failed for host %s model %s: %s", active_host, candidate, exc)
 
     return {
         "ok": False,
         "model": active_model,
-        "host": active_host,
+        "host": host or OLLAMA_HOST,
         "error": "; ".join(errors) or "ollama chat failed",
     }
 
@@ -217,6 +308,11 @@ async def chat_messages(
 ) -> Dict[str, Any]:
     """Chat with Ollama using a list of role/content messages."""
     chat_payload: List[Dict[str, str]] = []
+    if system_prompt is None:
+        try:
+            system_prompt = NFLMemory().system_prompt
+        except Exception as exc:
+            log.warning("NFL memory system prompt unavailable: %s", exc)
     if system_prompt:
         chat_payload.append({"role": "system", "content": system_prompt})
 

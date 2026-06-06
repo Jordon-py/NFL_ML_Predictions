@@ -20,6 +20,66 @@ function textResponse(body, status = 200) {
   };
 }
 
+function neverResolvingFetch() {
+  return vi.fn((url, init = {}) =>
+    new Promise((resolve, reject) => {
+      init.signal?.addEventListener(
+        "abort",
+        () => reject(init.signal.reason || new DOMException("signal is aborted without reason", "AbortError")),
+        { once: true },
+      );
+    }),
+  );
+}
+
+describe("API base URL resolution", () => {
+  it("uses the local backend when a production preview runs on localhost", async () => {
+    const { resolveApiBaseUrl } = await import("./client.js");
+
+    expect(
+      resolveApiBaseUrl(
+        {
+          DEV: false,
+          VITE_API_DEV: "http://127.0.0.1:8000/",
+          VITE_API_BASE_URL: "https://prod.example.com/",
+        },
+        "localhost",
+      ),
+    ).toBe("http://127.0.0.1:8000");
+  });
+
+  it("can force localhost preview to use the deployed backend", async () => {
+    const { resolveApiBaseUrl } = await import("./client.js");
+
+    expect(
+      resolveApiBaseUrl(
+        {
+          DEV: false,
+          VITE_API_DEV: "http://127.0.0.1:8000",
+          VITE_API_BASE_URL: "https://prod.example.com/",
+          VITE_FORCE_PROD_API: "true",
+        },
+        "localhost",
+      ),
+    ).toBe("https://prod.example.com");
+  });
+
+  it("uses the deployed backend away from localhost", async () => {
+    const { resolveApiBaseUrl } = await import("./client.js");
+
+    expect(
+      resolveApiBaseUrl(
+        {
+          DEV: false,
+          VITE_API_DEV: "http://127.0.0.1:8000",
+          VITE_API_BASE_URL: "https://prod.example.com/",
+        },
+        "new-nfl-predict.vercel.app",
+      ),
+    ).toBe("https://prod.example.com");
+  });
+});
+
 describe("client compatibility fallbacks", () => {
   beforeEach(() => {
     vi.resetModules();
@@ -171,4 +231,65 @@ it("retries transient server failures and eventually succeeds", async () => {
 
   expect(result.status).toBe("ok");
   expect(fetchMock).toHaveBeenCalledTimes(2);
+});
+
+it("converts request timeout aborts into readable HTTP errors", async () => {
+  vi.resetModules();
+  vi.useFakeTimers();
+  vi.stubGlobal("fetch", neverResolvingFetch());
+
+  try {
+    const { fetchJson } = await import("./client.js");
+    const request = fetchJson("/health", { timeoutMs: 1000, retryAttempts: 0 });
+    const assertion = expect(request).rejects.toMatchObject({
+      name: "HttpError",
+      status: 408,
+      message: "Request timed out after 1s",
+    });
+
+    await vi.advanceTimersByTimeAsync(1000);
+    await assertion;
+  } finally {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  }
+});
+
+it("keeps premium explain requests open past the default API timeout", async () => {
+  vi.resetModules();
+  vi.useFakeTimers();
+  const fetchMock = neverResolvingFetch();
+  vi.stubGlobal("fetch", fetchMock);
+
+  try {
+    const { getPremiumExplanation } = await import("./client.js");
+    const request = getPremiumExplanation({
+      home_team: "KC",
+      away_team: "BUF",
+      season: 2026,
+      week: 1,
+    });
+    const settled = vi.fn();
+    request.then(settled, settled);
+
+    await vi.advanceTimersByTimeAsync(12000);
+    await Promise.resolve();
+
+    expect(settled).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(168000);
+
+    await expect(request).rejects.toMatchObject({
+      name: "HttpError",
+      status: 408,
+      message: "Request timed out after 180s",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  } finally {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  }
 });

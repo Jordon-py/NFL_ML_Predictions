@@ -945,6 +945,24 @@ def _add_prior_rolls(long: pd.DataFrame, cols: Sequence[str], windows: Sequence[
     return out
 
 
+def _add_recent_margin_trend_features(frame: pd.DataFrame) -> pd.DataFrame:
+    """Add a simple recent-form trend signal based on prior scoring margins."""
+    out = frame.copy()
+
+    home_margin = pd.to_numeric(out.get("home_prior_pf_avg_3", 0), errors="coerce") - pd.to_numeric(
+        out.get("home_prior_pa_avg_3", 0), errors="coerce"
+    )
+    away_margin = pd.to_numeric(out.get("away_prior_pf_avg_3", 0), errors="coerce") - pd.to_numeric(
+        out.get("away_prior_pa_avg_3", 0), errors="coerce"
+    )
+
+    out["home_recent_margin_trend_3"] = home_margin
+    out["away_recent_margin_trend_3"] = away_margin
+    out["recent_margin_edge_3"] = home_margin - away_margin
+
+    return out
+
+
 
 def add_features(
     sch: pd.DataFrame,
@@ -1061,6 +1079,7 @@ def add_features(
     wide = _ffill_rolling_features(wide)
     # Final neutral imputation for any remaining prior_* NaNs
     wide = _impute_remaining_prior_nans(wide)
+    wide = _add_recent_margin_trend_features(wide)
     final_cols = ordered_cols + prior_feature_cols + diff_feature_cols
 
 
@@ -1129,6 +1148,9 @@ def add_features(
 
     final_cols.extend(
         [
+            "home_recent_margin_trend_3",
+            "away_recent_margin_trend_3",
+            "recent_margin_edge_3",
             "game_type",
             "home_moneyline_prob",
             "away_moneyline_prob",

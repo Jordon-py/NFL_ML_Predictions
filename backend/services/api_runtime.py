@@ -273,30 +273,28 @@ def _find_schedule_paths(requested_season: Optional[int] = None) -> List[Path]:
             resolved = path.resolve()
         except Exception:
             resolved = path
-        if resolved in seen or not path.exists() or not path.is_file():
+        if resolved in seen or not _schedule_csv_looks_usable(path):
             return
         seen.add(resolved)
         candidates.append(path)
 
     # 1) explicit path
-    if SCHEDULE_PATH.exists():
-        return SCHEDULE_PATH
+    add(SCHEDULE_PATH)
 
     # 2) search backend/data for schedule-like CSVs
     for p in DATA_DIR.glob("*.csv"):
-        name = p.name.lower()
-        if "schedule" in name or name.startswith("nfl"):
-            candidates.append(p)
-    if candidates:
-        # Prefer most recently modified
-        return sorted(candidates, key=lambda p: p.stat().st_mtime, reverse=True)[0]
+        if _looks_like_schedule_csv(p):
+            add(p)
 
     # 3) local dev fallback: frontend/public
     frontend_sched = BASE_DIR.parent / "frontend" / "public" / "nflSchedule.csv"
-    if frontend_sched.exists():
-        return frontend_sched
+    add(frontend_sched)
+    frontend_schedule_dir = BASE_DIR.parent / "frontend" / "public" / "schedules"
+    for p in frontend_schedule_dir.glob("*.csv"):
+        if _looks_like_schedule_csv(p):
+            add(p)
 
-    return None
+    return sorted(candidates, key=lambda p: _schedule_path_sort_key(p, requested_season))
 
 
 def _models_dir_has_required_artifacts(models_dir: Path) -> bool:
@@ -681,6 +679,16 @@ def _calculate_win_probability(
                 logging.warning("[Predict] win_clf predict_proba failed on numeric_df; falling back: %s", e)
 
     return _fallback_probability(), False
+
+
+def _finalize_home_win_probability(win_prob_raw: float, point_diff: float, *, clf_used: bool) -> float:
+    """Blend classifier probability with score margin for UI-facing confidence."""
+    try:
+        return float(_smooth_win_probability(win_prob_raw, point_diff, clf_used=clf_used))
+    except Exception:
+        raw = float(np.clip(float(win_prob_raw), 0.0, 1.0))
+        diff_prob = float(np.clip(1.0 / (1.0 + np.exp(-0.28 * float(point_diff))), 0.02, 0.98))
+        return raw if clf_used else diff_prob
 
 
 def _augment_with_win_probability_feature(
@@ -3495,45 +3503,91 @@ def _load_schedule_dataframe(requested_season: Optional[int] = None) -> pd.DataF
     logo_map = _load_team_logo_map()
     df = _add_kickoff_utc_datetime(df)  # uses 'gameday' column if present
 
-    # Decide which (season, week) is "next"
-    now_utc = pd.Timestamp.now(tz="UTC")
-    future = df[df["dt"].notna() & (df["dt"] > now_utc)].sort_values(by=["dt", "season", "week"])
+    return df
 
-    if not future.empty:
-        next_row = future.iloc[0]
-        current_year = int(now_ts.year)
-        target_season = int(next_row.get(s_col, next_row.get("season", current_year)))
-        target_week = int(next_row.get(w_col, next_row.get("week", 1)))
-    else:
-        season_values = (
-            pd.to_numeric(working[s_col], errors="coerce")
-            .dropna()
-            .astype(int)
-            .sort_values()
-        )
-        current_or_future_seasons = [
-            int(value) for value in season_values.unique().tolist() if int(value) >= int(now_ts.year)
-        ]
-        if season is None and current_or_future_seasons:
-            target_season = min(current_or_future_seasons)
-        elif season is not None and int(season) >= int(now_ts.year):
-            target_season = int(season)
-        else:
-            target_season = int(season_values.max())
-        season_rows = working[pd.to_numeric(working[s_col], errors="coerce") == target_season]
-        week_values = pd.to_numeric(season_rows[w_col], errors="coerce").dropna().astype(int)
-        positive_weeks = week_values[week_values > 0]
-        if positive_weeks.empty:
-            return pd.DataFrame(), target_season, None
-        if target_season >= int(now_ts.year):
-            target_week = int(positive_weeks.min())
-        else:
-            target_week = int(positive_weeks.max())
 
-    week_df = working[
-        (pd.to_numeric(working[s_col], errors="coerce") == target_season)
-        & (pd.to_numeric(working[w_col], errors="coerce") == target_week)
-    ]
+def _select_schedule_slice(
+    df: pd.DataFrame,
+    season: Optional[int] = None,
+    week: Optional[int] = None,
+) -> Tuple[pd.DataFrame, Optional[int], Optional[int]]:
+    """Choose the requested slate or the next available schedule week."""
+    if df is None or df.empty:
+        return pd.DataFrame(), None, None
+
+    working = _coerce_season_week(df.copy())
+    s_col = "season" if "season" in working.columns else "season_num" if "season_num" in working.columns else None
+    w_col = "week" if "week" in working.columns else "week_num" if "week_num" in working.columns else None
+    if not s_col or not w_col:
+        logging.warning("[Schedule] Missing season/week columns in schedule data.")
+        return pd.DataFrame(), None, None
+
+    working[s_col] = pd.to_numeric(working[s_col], errors="coerce")
+    working[w_col] = pd.to_numeric(working[w_col], errors="coerce")
+    working = working[working[s_col].notna() & working[w_col].notna()].copy()
+    if working.empty:
+        return pd.DataFrame(), None, None
+
+    working[s_col] = working[s_col].astype(int)
+    working[w_col] = working[w_col].astype(int)
+    if "dt" not in working.columns:
+        working = _add_kickoff_utc_datetime(working)
+
+    now_ts = pd.Timestamp.now(tz="UTC")
+    target_season: Optional[int] = int(season) if season is not None else None
+    target_week: Optional[int] = int(week) if week is not None else None
+
+    if target_season is not None:
+        season_rows = working[working[s_col] == target_season]
+        if season_rows.empty:
+            return pd.DataFrame(), target_season, target_week
+        if target_week is None:
+            future_rows = season_rows[
+                season_rows["dt"].notna() & (season_rows["dt"] > now_ts)
+            ].sort_values(by=["dt", s_col, w_col])
+            if not future_rows.empty:
+                target_week = int(future_rows.iloc[0][w_col])
+            else:
+                positive_weeks = season_rows[w_col][season_rows[w_col] > 0].sort_values()
+                if positive_weeks.empty:
+                    return pd.DataFrame(), target_season, None
+                target_week = (
+                    int(positive_weeks.min())
+                    if target_season >= int(now_ts.year)
+                    else int(positive_weeks.max())
+                )
+    elif target_week is None:
+        future_rows = working[
+            working["dt"].notna() & (working["dt"] > now_ts)
+        ].sort_values(by=["dt", s_col, w_col])
+        if not future_rows.empty:
+            next_row = future_rows.iloc[0]
+            target_season = int(next_row[s_col])
+            target_week = int(next_row[w_col])
+        else:
+            season_values = working[s_col].dropna().astype(int).sort_values()
+            current_or_future_seasons = [
+                int(value) for value in season_values.unique().tolist() if int(value) >= int(now_ts.year)
+            ]
+            target_season = (
+                min(current_or_future_seasons)
+                if current_or_future_seasons
+                else int(season_values.max())
+            )
+            season_rows = working[working[s_col] == target_season]
+            positive_weeks = season_rows[w_col][season_rows[w_col] > 0].sort_values()
+            if positive_weeks.empty:
+                return pd.DataFrame(), target_season, None
+            target_week = (
+                int(positive_weeks.min())
+                if target_season >= int(now_ts.year)
+                else int(positive_weeks.max())
+            )
+
+    if target_season is None or target_week is None:
+        return pd.DataFrame(), target_season, target_week
+
+    week_df = working[(working[s_col] == target_season) & (working[w_col] == target_week)]
     return week_df, target_season, target_week
 
 
@@ -4149,10 +4203,35 @@ async def predict_game(payload: PredictRequest, request: Request) -> Dict[str, A
 
     point_diff = float(h_score - a_score)
 
-    if clf_used:
-        win_prob = float(np.clip(win_prob_raw, 1e-6, 1 - 1e-6))
-    else:
-        win_prob = float(np.clip(1.0 / (1.0 + np.exp(-0.28 * point_diff)), 0.02, 0.98))
+    win_prob = _finalize_home_win_probability(win_prob_raw, point_diff, clf_used=clf_used)
+
+    # Ensure regression scores and classifier win probability work together.
+    # If classifier favors home team (win_prob > 0.5) but scores predict away win or tie,
+    # or if classifier favors away team (win_prob < 0.5) but scores predict home win or tie,
+    # adjust the scores to match the classifier winner while preserving the predicted total points.
+    predicted_total = h_score + a_score
+    aligned_scores = False
+    if win_prob > 0.5 and h_score <= a_score:
+        expected_margin = max(1.0, np.log(win_prob / (1.0 - win_prob)) / 0.28)
+        h_score = (predicted_total + expected_margin) / 2.0
+        a_score = (predicted_total - expected_margin) / 2.0
+        h_score = _clamp_score(h_score)
+        a_score = _clamp_score(a_score)
+        point_diff = float(h_score - a_score)
+        aligned_scores = True
+        logging.info("[Predict] Aligned scores with home classifier winner: %.1f - %.1f (margin=%.2f)", h_score, a_score, expected_margin)
+    elif win_prob < 0.5 and a_score <= h_score:
+        expected_margin = max(1.0, np.log((1.0 - win_prob) / win_prob) / 0.28)
+        h_score = (predicted_total - expected_margin) / 2.0
+        a_score = (predicted_total + expected_margin) / 2.0
+        h_score = _clamp_score(h_score)
+        a_score = _clamp_score(a_score)
+        point_diff = float(h_score - a_score)
+        aligned_scores = True
+        logging.info("[Predict] Aligned scores with away classifier winner: %.1f - %.1f (margin=%.2f)", h_score, a_score, expected_margin)
+
+    if aligned_scores:
+        win_prob = _finalize_home_win_probability(win_prob_raw, point_diff, clf_used=clf_used)
 
     # ----- Build response -----
     game_id = f"{season}_{week}_{home_team}_{away_team}"

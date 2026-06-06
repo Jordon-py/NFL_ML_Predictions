@@ -23,7 +23,7 @@
  *   in Vercel Project Settings → Environment Variables.
  *
  * Required env:
- *   - Local dev:    VITE_API_DEV=http://127.0.0.1:8000
+ *   - Local dev/preview: VITE_API_DEV=http://127.0.0.1:8000
  *   - Vercel prod:  VITE_API_BASE_URL=https://<your-heroku-app>.herokuapp.com
  *
  * Notes:
@@ -69,24 +69,35 @@ export class HttpError extends Error {
  *   - If you intentionally use a Vite proxy in DEV, you can set VITE_API_DEV=""
  *     (empty string) and call "/api/..." paths.
  */
-const DEV_BASE_URL =
-  import.meta.env.VITE_API_DEV ??
-  import.meta.env.VITE_DEV_ENV ??
-  import.meta.env.VITE_API_BASE_URL ??
-  import.meta.env.VITE_API_BASE ??
-  import.meta.env.VITE_API_URL;
-
-const PROD_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ??
-  import.meta.env.VITE_API_BASE ??
-  import.meta.env.VITE_API_URL;
-
-const RAW_BASE_URL = import.meta.env.DEV ? DEV_BASE_URL : PROD_BASE_URL;
+const LOCAL_BROWSER_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 const CANONICAL_PROD_API_URL = "https://nfl-predict-ecf5a5bd34fe.herokuapp.com";
-const FALLBACK_BASE_URL = import.meta.env.DEV ? "http://127.0.0.1:8000" : CANONICAL_PROD_API_URL;
 
-// If not set, default to localhost in DEV and the documented Heroku backend in PROD.
-const BASE_URL = (String(RAW_BASE_URL ?? "").trim() || FALLBACK_BASE_URL).replace(/\/+$/, "");
+function isTrueEnvValue(value) {
+  return value === true || String(value ?? "").toLowerCase() === "true";
+}
+
+export function resolveApiBaseUrl(env = import.meta.env, browserHostname = "") {
+  const devBaseUrl =
+    env.VITE_API_DEV ??
+    env.VITE_DEV_ENV ??
+    env.VITE_API_BASE_URL ??
+    env.VITE_API_BASE ??
+    env.VITE_API_URL;
+
+  const prodBaseUrl = env.VITE_API_BASE_URL ?? env.VITE_API_BASE ?? env.VITE_API_URL;
+
+  const forceProdApi = isTrueEnvValue(env.VITE_FORCE_PROD_API);
+  const shouldUseLocalApi =
+    isTrueEnvValue(env.DEV) || (LOCAL_BROWSER_HOSTS.has(browserHostname) && !forceProdApi);
+  const rawBaseUrl = shouldUseLocalApi ? devBaseUrl : prodBaseUrl;
+  const fallbackBaseUrl = shouldUseLocalApi ? "http://127.0.0.1:8000" : CANONICAL_PROD_API_URL;
+
+  // If not set, default to localhost in local runs and the documented Heroku backend in production.
+  return (String(rawBaseUrl ?? "").trim() || fallbackBaseUrl).replace(/\/+$/, "");
+}
+
+const BROWSER_HOSTNAME = typeof window !== "undefined" ? window.location.hostname : "";
+const BASE_URL = resolveApiBaseUrl(import.meta.env, BROWSER_HOSTNAME);
 
 export const API_BASE = BASE_URL;
 const APP_BASE_PATH = import.meta.env.BASE_URL || "/";
@@ -99,7 +110,12 @@ const ENDPOINT_SUPPORT = {
   nextWeekSchedule: null,
 };
 
-const REQUEST_TIMEOUT_MS = Number(import.meta.env.VITE_API_TIMEOUT_MS ?? 12000);
+const DEFAULT_REQUEST_TIMEOUT_MS = 12000;
+const DEFAULT_PREMIUM_REQUEST_TIMEOUT_MS = 180000;
+const REQUEST_TIMEOUT_MS = Number(import.meta.env.VITE_API_TIMEOUT_MS ?? DEFAULT_REQUEST_TIMEOUT_MS);
+const PREMIUM_REQUEST_TIMEOUT_MS = Number(
+  import.meta.env.VITE_PREMIUM_API_TIMEOUT_MS ?? DEFAULT_PREMIUM_REQUEST_TIMEOUT_MS,
+);
 const RETRY_ATTEMPTS = Number(import.meta.env.VITE_API_RETRY_ATTEMPTS ?? 1);
 const RETRYABLE_STATUS_CODES = new Set([408, 425, 429, 500, 502, 503, 504]);
 
@@ -115,6 +131,26 @@ function isRetryableNetworkError(error) {
   return error instanceof TypeError || error?.name === "AbortError";
 }
 
+function normalizeTimeoutMs(value, fallback = DEFAULT_REQUEST_TIMEOUT_MS) {
+  return Number.isFinite(value) ? Math.max(1000, Number(value)) : fallback;
+}
+
+function normalizeRetryAttempts(value) {
+  return Number.isFinite(value) ? Math.max(0, Math.floor(Number(value))) + 1 : 1;
+}
+
+function requestTimeoutError(url, timeoutMs) {
+  const seconds = Math.round(timeoutMs / 1000);
+  return new HttpError(`Request timed out after ${seconds}s`, {
+    status: 408,
+    url,
+    body: {
+      detail: {
+        message: `The backend did not respond within ${seconds} seconds. Try again after Premium AI finishes warming up.`,
+      },
+    },
+  });
+}
 
 async function safeReadJson(res) {
   try {
@@ -611,7 +647,7 @@ function buildUserHeaders(userId) {
 /**
  * fetchJson(path, options)
  * - path: "/health" | "/predict" | "/schedule/next-week" ...
- * - options: { method, headers, body, signal }
+ * - options: { method, headers, body, signal, timeoutMs, retryAttempts }
  */
 export async function fetchJson(path, options = {}) {
   // Fail fast in production if the base URL wasn't configured on Vercel.
@@ -625,25 +661,38 @@ export async function fetchJson(path, options = {}) {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
   const url = `${BASE_URL}${normalizedPath}`;
 
-  const maxAttempts = Number.isFinite(RETRY_ATTEMPTS) ? Math.max(0, Math.floor(RETRY_ATTEMPTS)) + 1 : 1;
+  const {
+    timeoutMs: requestTimeoutMs,
+    retryAttempts: requestRetryAttempts,
+    signal,
+    headers,
+    ...fetchOptions
+  } = options;
+  const timeoutMs = normalizeTimeoutMs(requestTimeoutMs ?? REQUEST_TIMEOUT_MS);
+  const maxAttempts = normalizeRetryAttempts(requestRetryAttempts ?? RETRY_ATTEMPTS);
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     const controller = new AbortController();
-    const timeoutMs = Number.isFinite(REQUEST_TIMEOUT_MS) ? Math.max(1000, REQUEST_TIMEOUT_MS) : 12000;
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    let timeoutFired = false;
+    const timeout = signal
+      ? null
+      : setTimeout(() => {
+        timeoutFired = true;
+        controller.abort();
+      }, timeoutMs);
 
     try {
       const res = await fetch(url, {
         method: "GET",
-        ...options,
+        ...fetchOptions,
         credentials: "omit",
-        signal: options.signal ?? controller.signal,
+        signal: signal ?? controller.signal,
         headers: {
           "Content-Type": "application/json",
-          ...(options.headers || {}),
+          ...(headers || {}),
         },
       });
-      clearTimeout(timeout);
+      if (timeout) clearTimeout(timeout);
 
       // Parse body even for errors (helps UI show backend detail)
       const body = await safeReadJson(res);
@@ -658,9 +707,11 @@ export async function fetchJson(path, options = {}) {
 
       return body;
     } catch (error) {
-      clearTimeout(timeout);
-      const canRetry = attempt < maxAttempts && (isRetryableHttpError(error) || isRetryableNetworkError(error));
-      if (!canRetry) throw error;
+      if (timeout) clearTimeout(timeout);
+      const requestError = timeoutFired ? requestTimeoutError(url, timeoutMs) : error;
+      const canRetry =
+        attempt < maxAttempts && (isRetryableHttpError(requestError) || isRetryableNetworkError(requestError));
+      if (!canRetry) throw requestError;
       await delay(150 * attempt);
     }
   }
@@ -874,6 +925,8 @@ export async function getPremiumExplanation(payload, userId = null) {
   return fetchJson("/premium/explain", {
     method: "POST",
     body: JSON.stringify(body),
+    retryAttempts: 0,
+    timeoutMs: PREMIUM_REQUEST_TIMEOUT_MS,
     ...(buildUserHeaders(userId) ? { headers: buildUserHeaders(userId) } : {}),
   });
 }
@@ -888,6 +941,8 @@ export async function premiumChat(message, season = null, week = null, userId = 
   return fetchJson("/premium/chat", {
     method: "POST",
     body: JSON.stringify(body),
+    retryAttempts: 0,
+    timeoutMs: PREMIUM_REQUEST_TIMEOUT_MS,
     ...(buildUserHeaders(userId) ? { headers: buildUserHeaders(userId) } : {}),
   });
 }

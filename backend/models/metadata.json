@@ -1,12 +1,12 @@
 {
-  "timestamp": "2026-05-31T13:01:38.964572+00:00",
-  "training_timestamp_utc": "2026-05-31T13:01:38.964572+00:00",
-  "bundle_timestamp_utc": "2026-05-31T13:01:38.964572+00:00",
-  "bundle_version": "20260531T124903Z-prod-2026",
+  "timestamp": "2026-06-04T21:16:55.724480+00:00",
+  "training_timestamp_utc": "2026-06-04T21:16:55.724480+00:00",
+  "bundle_timestamp_utc": "2026-06-04T21:16:55.724480+00:00",
+  "bundle_version": "v1",
   "bundle_contract_version": 2,
   "sklearn_version": "1.7.2",
   "training_script": "backend/train_models.py",
-  "dataset_path": "C:\\Users\\goku\\Documents\\NFL_ML_Predictions\\backend\\data\\datasets\\game_features_20260531_clean.csv",
+  "dataset_path": "C:\\Users\\iProg\\Documents\\NFL_ML_Predictions\\backend\\data\\datasets\\game_features_20260531_clean.csv",
   "dataset_hash": "94bd8ca5e7e47ac5db5d4d583daaa93265313be24a20bf909848db68a18f188b",
   "feature_manifest_path": "feature_manifest.json",
   "rows_total": 2227,
@@ -1531,22 +1531,22 @@
   "metrics": {
     "regression": {
       "home": {
-        "mae": 6.912108635015916,
-        "rmse": 8.772821848906213,
-        "r2": 0.24262607222196475
+        "mae": 6.904888854799517,
+        "rmse": 8.785339852211619,
+        "r2": 0.24046312542727222
       },
       "away": {
-        "mae": 7.041374948384866,
-        "rmse": 8.606750964601101,
-        "r2": 0.21780852518035776
+        "mae": 7.146109489768531,
+        "rmse": 8.728160485353287,
+        "r2": 0.19558520328967677
       },
-      "combined_mae": 6.976741791700391
+      "combined_mae": 7.025499172284023
     },
     "classification": {
-      "accuracy": 0.6621923937360179,
-      "brier": 0.2119299013803873,
-      "roc_auc": 0.7522933926045665,
-      "log_loss": 0.6124458191619153
+      "accuracy": 0.6778523489932886,
+      "brier": 0.21011185675966,
+      "roc_auc": 0.7460295009092746,
+      "log_loss": 0.609506968680076
     },
     "calibration": {
       "bins": [
@@ -1572,55 +1572,55 @@
           "bin": 2,
           "lower": 0.2,
           "upper": 0.30000000000000004,
-          "count": 92,
-          "avg_predicted_probability": 0.2934260720080094,
-          "empirical_home_win_rate": 0.21739130434782608,
-          "absolute_error": 0.07603476766018333
+          "count": 0,
+          "avg_predicted_probability": null,
+          "empirical_home_win_rate": null,
+          "absolute_error": null
         },
         {
           "bin": 3,
           "lower": 0.30000000000000004,
           "upper": 0.4,
-          "count": 87,
-          "avg_predicted_probability": 0.3368782801169666,
-          "empirical_home_win_rate": 0.47126436781609193,
-          "absolute_error": 0.13438608769912536
+          "count": 166,
+          "avg_predicted_probability": 0.31582108958217464,
+          "empirical_home_win_rate": 0.3253012048192771,
+          "absolute_error": 0.00948011523710246
         },
         {
           "bin": 4,
           "lower": 0.4,
           "upper": 0.5,
           "count": 32,
-          "avg_predicted_probability": 0.4464079074676326,
-          "empirical_home_win_rate": 0.59375,
-          "absolute_error": 0.1473420925323674
+          "avg_predicted_probability": 0.4516700084021446,
+          "empirical_home_win_rate": 0.5,
+          "absolute_error": 0.04832999159785539
         },
         {
           "bin": 5,
           "lower": 0.5,
           "upper": 0.6000000000000001,
-          "count": 21,
-          "avg_predicted_probability": 0.5452784484159287,
-          "empirical_home_win_rate": 0.5238095238095238,
-          "absolute_error": 0.021468924606404816
+          "count": 27,
+          "avg_predicted_probability": 0.561095646140041,
+          "empirical_home_win_rate": 0.4444444444444444,
+          "absolute_error": 0.11665120169559662
         },
         {
           "bin": 6,
           "lower": 0.6000000000000001,
           "upper": 0.7000000000000001,
-          "count": 36,
-          "avg_predicted_probability": 0.6574581652881561,
-          "empirical_home_win_rate": 0.4722222222222222,
-          "absolute_error": 0.18523594306593394
+          "count": 33,
+          "avg_predicted_probability": 0.6439851169528994,
+          "empirical_home_win_rate": 0.5454545454545454,
+          "absolute_error": 0.09853057149835398
         },
         {
           "bin": 7,
           "lower": 0.7000000000000001,
           "upper": 0.8,
-          "count": 179,
-          "avg_predicted_probability": 0.7567768035348276,
-          "empirical_home_win_rate": 0.7653631284916201,
-          "absolute_error": 0.008586324956792568
+          "count": 189,
+          "avg_predicted_probability": 0.7481708765125709,
+          "empirical_home_win_rate": 0.7671957671957672,
+          "absolute_error": 0.01902489068319635
         },
         {
           "bin": 8,
@@ -1641,15 +1641,15 @@
           "absolute_error": null
         }
       ],
-      "expected_calibration_error": 0.07171818512297656,
-      "max_calibration_error": 0.18523594306593394
+      "expected_calibration_error": 0.029344640950427922,
+      "max_calibration_error": 0.11665120169559662
     },
     "score_win_agreement": {
       "method": "logistic_home_minus_away_score_scale_7_5",
-      "avg_abs_probability_delta": 0.12365091466618619,
-      "p90_abs_probability_delta": 0.2586025398996246,
-      "disagreement_rate_over_0_20": 0.18120805369127516,
-      "side_conflict_rate": 0.21252796420581654
+      "avg_abs_probability_delta": 0.12741776054618603,
+      "p90_abs_probability_delta": 0.27083116454497047,
+      "disagreement_rate_over_0_20": 0.19910514541387025,
+      "side_conflict_rate": 0.23937360178970918
     }
   },
   "gate": {
@@ -1657,12 +1657,12 @@
     "passed": true,
     "failures": [],
     "current": {
-      "brier": 0.2119299013803873,
-      "combined_mae": 6.976741791700391
+      "brier": 0.21011185675966,
+      "combined_mae": 7.025499172284023
     },
     "previous": {
-      "brier": 0.2175767373025059,
-      "combined_mae": 7.034720020817689
+      "brier": 0.2119299013803873,
+      "combined_mae": 6.976741791700391
     },
     "previous_comparison": "compared",
     "thresholds": {

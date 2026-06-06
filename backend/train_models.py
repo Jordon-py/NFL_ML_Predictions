@@ -171,11 +171,10 @@ def _log_feature_importance(model, feature_names, target_name, log: logging.Logg
         log.warning(f"Could not extract feature importance for {target_name}: {e}")
 
 
-def _plot_training_metrics(report: Dict[str, Any], out_dir: Path):
-    """Generate a compact training metrics chart when matplotlib is available."""
+def _plot_training_metrics(report: Dict[str, Any], out_dir: Path, stage_dir: Optional[Path] = None):
+    """Generate a premium multi-panel training metrics visualization when matplotlib is available."""
     try:
         import matplotlib
-
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
     except Exception as e:
@@ -186,25 +185,138 @@ def _plot_training_metrics(report: Dict[str, Any], out_dir: Path):
         metrics = report.get("metrics", {})
         reg = metrics.get("regression", {})
         cls = metrics.get("classification", {})
+        baselines = report.get("baselines", {})
+        
+        fig, axes = plt.subplots(1, 3, figsize=(18, 5.5))
+        
+        # Color palette
+        c_model = "#1a73e8"      # Google blue
+        c_baseline = "#70757a"   # Grey
+        c_accent = "#d93025"     # Red/coral
+        
+        # Panel 1: Regression MAE (Lower is better)
+        ax = axes[0]
+        home_mae = reg.get("home", {}).get("mae")
+        away_mae = reg.get("away", {}).get("mae")
+        comb_mae = reg.get("combined_mae")
+        
+        base_reg = baselines.get("score_train_mean", {}) if isinstance(baselines, dict) else {}
+        base_mae = base_reg.get("combined_mae") if isinstance(base_reg, dict) else None
+        
+        labels = []
+        values = []
+        colors = []
+        
+        if home_mae is not None:
+            labels.append("Home MAE")
+            values.append(home_mae)
+            colors.append(c_model)
+        if away_mae is not None:
+            labels.append("Away MAE")
+            values.append(away_mae)
+            colors.append(c_model)
+        if comb_mae is not None:
+            labels.append("Combined MAE")
+            values.append(comb_mae)
+            colors.append("#8ab4f8") # Light blue
+        if base_mae is not None:
+            labels.append("Baseline MAE")
+            values.append(base_mae)
+            colors.append(c_baseline)
+            
+        if values:
+            ax.bar(labels, values, color=colors, edgecolor="black", alpha=0.85)
+            ax.set_title("Score Regression MAE\n(Lower is Better)", fontsize=12, fontweight="bold")
+            ax.set_ylabel("Mean Absolute Error (Points)")
+            ax.grid(axis='y', linestyle='--', alpha=0.5)
+            for i, v in enumerate(values):
+                ax.text(i, v + 0.1, f"{v:.2f}", ha='center', va='bottom', fontweight='bold')
+            
+        # Panel 2: Classification Brier Score & Accuracy
+        ax = axes[1]
+        clf_acc = cls.get("accuracy")
+        clf_brier = cls.get("brier")
+        
+        base_win_rate = baselines.get("win_train_rate", {}) if isinstance(baselines, dict) else {}
+        base_acc = base_win_rate.get("accuracy") if isinstance(base_win_rate, dict) else None
+        base_brier = base_win_rate.get("brier") if isinstance(base_win_rate, dict) else None
+        
+        base_market = baselines.get("win_market_or_train_rate", {}) if isinstance(baselines, dict) else {}
+        market_acc = base_market.get("accuracy") if isinstance(base_market, dict) else None
+        market_brier = base_market.get("brier") if isinstance(base_market, dict) else None
+        
+        x = np.arange(2)
+        width = 0.25
+        
+        model_vals = [clf_acc if clf_acc is not None else 0.0, clf_brier if clf_brier is not None else 0.0]
+        base_vals = [base_acc if base_acc is not None else 0.0, base_brier if base_brier is not None else 0.0]
+        market_vals = [market_acc if market_acc is not None else 0.0, market_brier if market_brier is not None else 0.0]
+        
+        rects1 = ax.bar(x - width, model_vals, width, label='Model', color=c_model, edgecolor="black")
+        rects2 = ax.bar(x, base_vals, width, label='Prior Baseline', color=c_baseline, edgecolor="black")
+        rects3 = ax.bar(x + width, market_vals, width, label='Market Baseline', color="#f2994a", edgecolor="black")
+        
+        ax.set_title("Classifier Comparison\n(Brier Lower / Acc Higher)", fontsize=12, fontweight="bold")
+        ax.set_xticks(x)
+        ax.set_xticklabels(["Accuracy", "Brier Score"])
+        ax.legend(loc="upper right")
+        ax.grid(axis='y', linestyle='--', alpha=0.5)
+        
+        def autolabel(rects):
+            for rect in rects:
+                h = rect.get_height()
+                if h > 0:
+                    ax.text(rect.get_x() + rect.get_width()/2., h + 0.02, f"{h:.3f}", ha='center', va='bottom', fontsize=8)
+        
+        autolabel(rects1)
+        autolabel(rects2)
+        autolabel(rects3)
 
-        plt.figure(figsize=(10, 6))
-        labels = ["Combined MAE", "Brier Score"]
-        values = [reg.get("combined_mae"), cls.get("brier")]
-        valid = [(l, v) for l, v in zip(labels, values) if v is not None]
-        if not valid:
-            plt.close()
-            return
-        l_final, v_final = zip(*valid)
-        plt.bar(l_final, v_final, color=["skyblue", "salmon"])
+        # Panel 3: Calibration Curve (Reliability Diagram)
+        ax = axes[2]
+        cal = metrics.get("calibration", {}) if isinstance(metrics, dict) else {}
+        bins_data = cal.get("bins", []) if isinstance(cal, dict) else []
+        
+        pred_probs = []
+        emp_rates = []
+        
+        if bins_data:
+            for b in bins_data:
+                if not isinstance(b, dict):
+                    continue
+                ap = b.get("avg_predicted_probability")
+                er = b.get("empirical_home_win_rate")
+                if ap is not None and er is not None:
+                    pred_probs.append(ap)
+                    emp_rates.append(er)
+                
+        if pred_probs:
+            sorted_pairs = sorted(zip(pred_probs, emp_rates))
+            pred_probs, emp_rates = zip(*sorted_pairs)
+            ax.plot(pred_probs, emp_rates, marker='o', linewidth=2, color=c_accent, label='Model')
+            
+        ax.plot([0, 1], [0, 1], linestyle='--', color='black', alpha=0.7, label='Perfect Calibration')
+        ax.set_title("Win Classifier Calibration\n(Reliability Diagram)", fontsize=12, fontweight="bold")
+        ax.set_xlabel("Average Predicted Probability")
+        ax.set_ylabel("Empirical Win Rate")
+        ax.set_xlim([0.0, 1.0])
+        ax.set_ylim([0.0, 1.0])
+        ax.legend(loc="lower right")
+        ax.grid(True, linestyle='--', alpha=0.5)
+        
         generated_at = str(report.get("generated_at", ""))[:10]
-        plt.title(f"Training Performance Summary - {generated_at}")
-        plt.ylabel("Error Metric (Lower is Better)")
-        plot_path = out_dir / "training_metrics_plot.png"
-        plt.savefig(plot_path)
+        plt.suptitle(f"NFL Prediction ML Model Performance Dashboard - {generated_at}", fontsize=14, fontweight="bold", y=1.02)
+        plt.tight_layout()
+        
+        # Save plots
+        for directory in filter(None, [out_dir, stage_dir]):
+            plot_path = directory / "training_metrics_plot.png"
+            plt.savefig(plot_path, bbox_inches="tight")
+            logging.info(f"Enhanced training metrics plot saved to {plot_path}")
+            
         plt.close()
-        logging.info(f"Training metrics plot saved to {plot_path}")
     except Exception as e:
-        logging.warning(f"Failed to generate training plot: {e}")
+        logging.warning(f"Failed to generate enhanced training plot: {e}")
 
 def _setup_logging() -> logging.Logger:
     logging.basicConfig(
@@ -636,6 +748,18 @@ def _fit_classifier_base(
     }
 
 
+def _compute_balanced_sample_weights(y: np.ndarray) -> np.ndarray:
+    """Return sample weights that emphasize under-represented win/loss classes."""
+    y_arr = np.asarray(y, dtype=int).reshape(-1)
+    if y_arr.size == 0:
+        return np.ones(0, dtype=float)
+
+    counts = np.bincount(y_arr, minlength=max(2, int(y_arr.max()) + 1)).astype(float)
+    counts[counts == 0] = 1.0
+    weights = np.array([1.0 / counts[int(label)] for label in y_arr], dtype=float)
+    return weights * (y_arr.size / float(weights.sum()))
+
+
 def _clone_classifier_for_fit(
     base_clf: BaseEstimator,
     y_fit: np.ndarray,
@@ -688,6 +812,7 @@ def _calibrate_classifier(
         and len(np.unique(y_train[-calib_size:])) == 2
     ):
         fit_end = len(y_train) - calib_size
+        fit_weights = _compute_balanced_sample_weights(y_train[:fit_end])
         prefitted = _clone_classifier_for_fit(
             base_clf,
             y_train[:fit_end],
@@ -695,15 +820,22 @@ def _calibrate_classifier(
         ).fit(
             X_train[:fit_end],
             y_train[:fit_end],
+            sample_weight=fit_weights,
         )
         calibrated = _make_calibrator(prefitted, cv="prefit")
-        calibrated.fit(X_train[fit_end:], y_train[fit_end:])
+        calibrated.fit(
+            X_train[fit_end:],
+            y_train[fit_end:],
+            sample_weight=_compute_balanced_sample_weights(y_train[fit_end:]),
+        )
         return calibrated, {
             "mode": "prefit_tail",
             "fit_rows": int(fit_end),
             "calibration_rows": int(calib_size),
             "algorithm": type(base_clf).__name__,
         }
+
+    sample_weight = _compute_balanced_sample_weights(y_train)
 
     # Fallback CV calibration when class counts support it.
     if min_class >= 3:
@@ -718,7 +850,7 @@ def _calibrate_classifier(
             base_clf,
             y_train,
             disable_early_stopping=True,
-        ).fit(X_train, y_train)
+        ).fit(X_train, y_train, sample_weight=sample_weight)
         return fitted, {
             "mode": "uncalibrated",
             "reason": "insufficient_minority_class_examples",
@@ -734,7 +866,7 @@ def _calibrate_classifier(
         ),
         cv=cv,
     )
-    calibrated.fit(X_train, y_train)
+    calibrated.fit(X_train, y_train, sample_weight=sample_weight)
     return calibrated, {
         "mode": "cv",
         "cv_folds": int(cv),
@@ -1785,7 +1917,7 @@ def main() -> int:
         _write_json(out_dir / "run_summary.json", summary_payload)
 
     # Generate training metrics plot
-    _plot_training_metrics(report, out_dir)
+    _plot_training_metrics(report, out_dir, stage_dir=stage_dir)
 
     log.info(
         "Training finished. status=%s gate_passed=%s stage=%s out=%s",

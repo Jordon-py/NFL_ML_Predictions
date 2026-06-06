@@ -198,14 +198,19 @@ tech_debt:
 
 Changelog (Append Only)
 changelog:
-  - date: "YYYY-MM-DD"
-    change: "What changed"
-    reason: "Why it changed"
+  - date: "2026-06-06"
+    change: "Added recent-form trend features to the dataset builder and balanced sample weighting to the win-model training/calibration path, with regression coverage for both improvements."
+    reason: "Improve robustness on sparse/imbalanced inference rows and capture recent momentum signals without changing the serving contract."
     impact:
       endpoints: []
       contracts: []
-      files: []
+      files:
+        - "backend/build_csv_datasets_v3.py"
+        - "backend/train_models.py"
+        - "backend/tests/test_training_and_dataset_enhancements.py"
     verification:
-      commands: []
-      result: "pass|fail|partial"
-    risks: []
+      commands:
+        - "C:\Users\iProg\Documents\NFL_ML_Predictions\.venv\Scripts\pytest.exe -q backend/tests/test_training_and_dataset_enhancements.py backend/tests"
+      result: "pass"
+    risks:
+      - "Model behavior remains dependent on the active bundle and dataset version in production."
