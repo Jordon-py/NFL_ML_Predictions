@@ -1,9 +1,9 @@
-# Project metadata used by Python tooling and Vercel's Python runtime selector.
-# Data shape: TOML [project] metadata plus deployment-compatible Python bounds.
+# Project metadata used by Python tooling and version-gated automation.
+# Keep this aligned with .python-version, backend/.python-version, and GitHub Actions.
+# Data shape: TOML [project] metadata plus Python runtime bounds.
 # Syntax: PEP 621 keys; no functions live here, so there are no function line numbers.
-# Possible bug: widening requires-python can make Vercel choose a newer runtime before
-# compiled ML/data wheels exist. Extend by moving runtime deps into dependencies or
-# adding optional dependency groups for dev/test tooling.
+# Possible bug: widening requires-python can let local or CI automation run ahead of
+# compiled ML/data wheels. Extend only after dependency wheels and model runtime checks pass.
 [project]
 name = "nfl-ml-predictions"
 version = "0.1.0"
