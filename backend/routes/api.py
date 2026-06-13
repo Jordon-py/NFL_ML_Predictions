@@ -71,6 +71,10 @@ _route("/status/overview", svc.get_status_overview, ["GET"], response_model=svc.
 _route("/health/pipeline", svc.get_pipeline_health, ["GET"], response_model=PipelineStatusResponse)
 _route("/metadata/dataset", svc.get_dataset_metadata, ["GET"], response_model=DatasetQualityStatus)
 _route("/metadata/model-bundle", svc.get_model_bundle_metadata, ["GET"], response_model=ModelBundleStatus)
+_route("/metadata/model-learning", svc.get_model_learning_metadata, ["GET"])
+_route("/api/metadata/model-learning", svc.get_model_learning_metadata, ["GET"])
+_route("/artifacts/models/training-metrics-plot.png", svc.get_training_metrics_plot, ["GET"])
+_route("/api/artifacts/models/training-metrics-plot.png", svc.get_training_metrics_plot, ["GET"])
 _route(
     "/history/summary/memory",
     svc.get_memory_history_summary,

@@ -40,7 +40,7 @@ import joblib
 import pandas as pd
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 from backend.app.core.settings import get_settings
 from backend.prediction_store import (
@@ -1607,6 +1607,14 @@ class PredictionResponse(BaseModel):
     predicted_away_points: Optional[float] = None
     predicted_total: Optional[float] = None
     home_win_prob: Optional[float] = None
+    predicted_winner: Optional[str] = None
+    confidence_score: Optional[float] = None
+    confidence_tier: Optional[str] = None
+    slate: Dict[str, Any] = Field(default_factory=dict)
+    matchup: Dict[str, Any] = Field(default_factory=dict)
+    dataset_access: Dict[str, Any] = Field(default_factory=dict)
+    model_learning: Dict[str, Any] = Field(default_factory=dict)
+    ai_payload: Dict[str, Any] = Field(default_factory=dict)
     prediction_source: str = "pipeline_primary"
     explanation_fields: Dict[str, Any] = Field(default_factory=dict)
     generated_at: datetime
@@ -2226,6 +2234,527 @@ def _load_json(path: Path) -> Dict[str, Any]:
         return json.loads(path.read_text(encoding="utf-8"))
     except Exception:
         return {}
+
+
+def _api_url(request: Optional[Request], path: str) -> str:
+    """Return an absolute API URL when request context exists, else a route path."""
+    normalized = path if path.startswith("/") else f"/{path}"
+    if request is None:
+        return normalized
+    try:
+        return f"{str(request.base_url).rstrip('/')}{normalized}"
+    except Exception:
+        return normalized
+
+
+def _slate_payload(
+    *,
+    season: Optional[int],
+    week: Optional[int],
+    request: Optional[Request] = None,
+    scope: str = "single_game",
+    game_count: Optional[int] = None,
+) -> Dict[str, Any]:
+    label = (
+        f"{int(season)} Week {int(week)}"
+        if season is not None and week is not None
+        else "Unknown slate"
+    )
+    schedule_path = (
+        f"/schedule?season={int(season)}&week={int(week)}"
+        if season is not None and week is not None
+        else "/schedule/next-week"
+    )
+    payload: Dict[str, Any] = {
+        "season": int(season) if season is not None else None,
+        "week": int(week) if week is not None else None,
+        "label": label,
+        "scope": scope,
+        "schedule_url": _api_url(request, schedule_path),
+    }
+    if game_count is not None:
+        payload["game_count"] = int(game_count)
+    return payload
+
+
+def _confidence_tier(confidence_score: Optional[float]) -> str:
+    try:
+        score = float(confidence_score)
+    except (TypeError, ValueError):
+        return "UNKNOWN"
+    if score >= 0.75:
+        return "HIGH_CONVICTION"
+    if score >= 0.65:
+        return "STRONG_EDGE"
+    if score >= 0.58:
+        return "MODERATE_EDGE"
+    return "LEAN"
+
+
+def _prediction_display_fields(prediction: Dict[str, Any]) -> Dict[str, Any]:
+    home_team = str(prediction.get("home_team") or "").upper()
+    away_team = str(prediction.get("away_team") or "").upper()
+    try:
+        home_prob = float(prediction.get("home_win_probability", 0.5))
+    except (TypeError, ValueError):
+        home_prob = 0.5
+    away_prob = 1.0 - home_prob
+    try:
+        away_prob = float(prediction.get("away_win_probability", away_prob))
+    except (TypeError, ValueError):
+        pass
+
+    predicted_winner = home_team if home_prob >= away_prob else away_team
+    confidence_score = max(home_prob, away_prob)
+    try:
+        home_score = float(prediction.get("home_score"))
+    except (TypeError, ValueError):
+        home_score = None
+    try:
+        away_score = float(prediction.get("away_score"))
+    except (TypeError, ValueError):
+        away_score = None
+    try:
+        point_diff = float(prediction.get("point_diff"))
+    except (TypeError, ValueError):
+        point_diff = None
+
+    score_display = None
+    if home_score is not None and away_score is not None:
+        score_display = f"{away_team} {away_score:.1f} - {home_score:.1f} {home_team}"
+
+    return {
+        "predicted_winner": predicted_winner or None,
+        "confidence_score": float(confidence_score),
+        "confidence_tier": _confidence_tier(confidence_score),
+        "matchup_label": f"{away_team} @ {home_team}".strip(),
+        "score_display": score_display,
+        "projected_margin": abs(point_diff) if point_diff is not None else None,
+        "favorite_win_probability": float(confidence_score),
+    }
+
+
+def _training_metric_summary(report: Dict[str, Any]) -> Dict[str, Any]:
+    metrics = report.get("metrics", {}) if isinstance(report, dict) else {}
+    reg = metrics.get("regression", {}) if isinstance(metrics, dict) else {}
+    cls = metrics.get("classification", {}) if isinstance(metrics, dict) else {}
+    cal = metrics.get("calibration", {}) if isinstance(metrics, dict) else {}
+    rows = report.get("rows", {}) if isinstance(report, dict) else {}
+    return {
+        "rows": rows if isinstance(rows, dict) else {},
+        "score_combined_mae": reg.get("combined_mae") if isinstance(reg, dict) else None,
+        "home_score_mae": (reg.get("home") or {}).get("mae") if isinstance(reg, dict) else None,
+        "away_score_mae": (reg.get("away") or {}).get("mae") if isinstance(reg, dict) else None,
+        "win_accuracy": cls.get("accuracy") if isinstance(cls, dict) else None,
+        "win_brier": cls.get("brier") if isinstance(cls, dict) else None,
+        "win_roc_auc": cls.get("roc_auc") if isinstance(cls, dict) else None,
+        "calibration_ece": (
+            cal.get("expected_calibration_error") if isinstance(cal, dict) else None
+        ),
+    }
+
+
+def _dataset_access_payload(request: Optional[Request] = None) -> Dict[str, Any]:
+    rows = int(len(state.dataset)) if state.dataset is not None else 0
+    columns = int(len(state.dataset.columns)) if state.dataset is not None else 0
+    return {
+        "dataset_path": str(state.dataset_path) if state.dataset_path else None,
+        "dataset_hash": state.dataset_hash,
+        "rows": rows,
+        "columns": columns,
+        "metadata_url": _api_url(request, "/metadata/dataset"),
+        "preview_url": _api_url(request, "/debug/dataset?limit=25"),
+        "predict_input_debug_url": _api_url(request, "/debug/predict-input"),
+        "access_note": (
+            "AI clients should use metadata_url for provenance, preview_url for bounded rows, "
+            "and predict_input_debug_url for one matchup's model-ready feature row."
+        ),
+    }
+
+
+def _model_learning_payload(
+    request: Optional[Request] = None,
+    *,
+    include_report: bool = False,
+) -> Dict[str, Any]:
+    plot_path = MODELS_DIR / "training_metrics_plot.png"
+    report_path = MODELS_DIR / "training_report.json"
+    summary_path = MODELS_DIR / "training_summary.md"
+    metadata_path = MODELS_DIR / "metadata.json"
+    report = _load_json(report_path) if report_path.exists() else {}
+
+    payload: Dict[str, Any] = {
+        "plot": {
+            "title": "NFL model learning dashboard",
+            "description": (
+                "Three-panel PNG: score regression MAE, win-classifier accuracy/Brier, "
+                "and calibration reliability."
+            ),
+            "url": _api_url(request, "/artifacts/models/training-metrics-plot.png"),
+            "path": str(plot_path),
+            "exists": plot_path.exists(),
+            "available": plot_path.exists() or report_path.exists(),
+            "source": "png_artifact" if plot_path.exists() else "training_report_json",
+        },
+        "metrics_summary": _training_metric_summary(report),
+        "artifacts": {
+            "metadata_path": str(metadata_path) if metadata_path.exists() else None,
+            "training_report_path": str(report_path) if report_path.exists() else None,
+            "training_summary_path": str(summary_path) if summary_path.exists() else None,
+            "model_bundle_url": _api_url(request, "/metadata/model-bundle"),
+            "model_learning_url": _api_url(request, "/metadata/model-learning"),
+        },
+    }
+    if include_report:
+        payload["training_report"] = report
+        payload["model_metadata"] = _load_json(metadata_path) if metadata_path.exists() else {}
+    return payload
+
+
+def _ensure_training_metrics_plot() -> Path:
+    """Return an existing plot path or generate one from training_report.json."""
+    plot_path = MODELS_DIR / "training_metrics_plot.png"
+    if plot_path.exists():
+        return plot_path
+
+    report_path = MODELS_DIR / "training_report.json"
+    report = _load_json(report_path) if report_path.exists() else {}
+    if not report:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "message": "Training metrics plot is not available.",
+                "expected_path": str(plot_path),
+                "training_report_path": str(report_path),
+                "hint": "Run backend/train_models.py or include training_report.json in the model bundle.",
+            },
+        )
+
+    try:
+        import matplotlib
+
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "message": "Training metrics plot cannot be generated because matplotlib is unavailable.",
+                "reason": str(exc).splitlines()[0],
+            },
+        ) from exc
+
+    metrics = report.get("metrics", {}) if isinstance(report, dict) else {}
+    baselines = report.get("baselines", {}) if isinstance(report, dict) else {}
+    reg = metrics.get("regression", {}) if isinstance(metrics, dict) else {}
+    cls = metrics.get("classification", {}) if isinstance(metrics, dict) else {}
+    cal = metrics.get("calibration", {}) if isinstance(metrics, dict) else {}
+
+    home_mae = (reg.get("home") or {}).get("mae") if isinstance(reg, dict) else None
+    away_mae = (reg.get("away") or {}).get("mae") if isinstance(reg, dict) else None
+    combined_mae = reg.get("combined_mae") if isinstance(reg, dict) else None
+    baseline_mae = None
+    baseline_reg = baselines.get("score_train_mean", {}) if isinstance(baselines, dict) else {}
+    if isinstance(baseline_reg, dict):
+        baseline_mae = baseline_reg.get("combined_mae")
+
+    fig, axes = plt.subplots(1, 3, figsize=(15, 4.8))
+
+    ax = axes[0]
+    mae_labels: List[str] = []
+    mae_values: List[float] = []
+    for label, value in (
+        ("Home MAE", home_mae),
+        ("Away MAE", away_mae),
+        ("Combined", combined_mae),
+        ("Baseline", baseline_mae),
+    ):
+        try:
+            if value is not None:
+                mae_labels.append(label)
+                mae_values.append(float(value))
+        except (TypeError, ValueError):
+            continue
+    if mae_values:
+        ax.bar(mae_labels, mae_values, color=["#2563eb", "#2563eb", "#60a5fa", "#6b7280"][: len(mae_values)])
+        ax.set_ylabel("Points")
+        ax.tick_params(axis="x", rotation=20)
+    ax.set_title("Score Error MAE\nLower is better")
+    ax.grid(axis="y", alpha=0.25)
+
+    ax = axes[1]
+    cls_labels: List[str] = []
+    cls_values: List[float] = []
+    for label, value in (
+        ("Accuracy", cls.get("accuracy") if isinstance(cls, dict) else None),
+        ("Brier", cls.get("brier") if isinstance(cls, dict) else None),
+        ("ROC AUC", cls.get("roc_auc") if isinstance(cls, dict) else None),
+    ):
+        try:
+            if value is not None:
+                cls_labels.append(label)
+                cls_values.append(float(value))
+        except (TypeError, ValueError):
+            continue
+    if cls_values:
+        ax.bar(cls_labels, cls_values, color=["#16a34a", "#f59e0b", "#0ea5e9"][: len(cls_values)])
+        ax.set_ylim(0, max(1.0, max(cls_values) * 1.15))
+    ax.set_title("Win Classifier\nAccuracy higher, Brier lower")
+    ax.grid(axis="y", alpha=0.25)
+
+    ax = axes[2]
+    bins = cal.get("bins", []) if isinstance(cal, dict) else []
+    points: List[Tuple[float, float]] = []
+    for item in bins if isinstance(bins, list) else []:
+        if not isinstance(item, dict):
+            continue
+        predicted = item.get("avg_predicted_probability")
+        empirical = item.get("empirical_home_win_rate")
+        try:
+            if predicted is not None and empirical is not None:
+                points.append((float(predicted), float(empirical)))
+        except (TypeError, ValueError):
+            continue
+    if points:
+        points = sorted(points)
+        ax.plot([x for x, _ in points], [y for _, y in points], marker="o", color="#dc2626", label="Model")
+    ax.plot([0, 1], [0, 1], linestyle="--", color="#111827", alpha=0.7, label="Perfect")
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    ax.set_title("Calibration\nReliability")
+    ax.set_xlabel("Predicted")
+    ax.set_ylabel("Observed")
+    ax.grid(alpha=0.25)
+    ax.legend(loc="lower right")
+
+    generated_at = str(report.get("generated_at", ""))[:10]
+    fig.suptitle(f"NFL ML Model Learning Dashboard {generated_at}".strip(), fontsize=14)
+    fig.tight_layout()
+    plot_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(plot_path, bbox_inches="tight")
+    plt.close(fig)
+    return plot_path
+
+
+def _prediction_ai_payload(
+    prediction: Dict[str, Any],
+    request: Optional[Request] = None,
+) -> Dict[str, Any]:
+    display = _prediction_display_fields(prediction)
+    season = prediction.get("season")
+    week = prediction.get("week")
+    try:
+        season = int(season)
+        week = int(week)
+    except (TypeError, ValueError):
+        season = None
+        week = None
+
+    return {
+        "schema_version": "prediction-ai-v1",
+        "purpose": "AI-readable prediction payload for analyst agents and frontend clients.",
+        "slate": _slate_payload(season=season, week=week, request=request),
+        "matchup": {
+            "label": display["matchup_label"],
+            "home_team": prediction.get("home_team"),
+            "away_team": prediction.get("away_team"),
+            "home_name": prediction.get("home_name"),
+            "away_name": prediction.get("away_name"),
+        },
+        "prediction": {
+            "game_id": prediction.get("game_id"),
+            "predicted_winner": display["predicted_winner"],
+            "score": display["score_display"],
+            "home_score": prediction.get("home_score"),
+            "away_score": prediction.get("away_score"),
+            "point_diff": prediction.get("point_diff"),
+            "home_win_probability": prediction.get("home_win_probability"),
+            "away_win_probability": prediction.get("away_win_probability"),
+            "favorite_win_probability": display["favorite_win_probability"],
+            "confidence_tier": display["confidence_tier"],
+            "prediction_source": prediction.get("prediction_source"),
+            "mode": prediction.get("mode"),
+            "win_classifier_used": prediction.get("win_classifier_used"),
+        },
+        "quality": prediction.get("explanation_fields") or {},
+        "dataset_access": _dataset_access_payload(request),
+        "model_learning": _model_learning_payload(request),
+    }
+
+
+def _attach_prediction_access_fields(
+    prediction: Dict[str, Any],
+    request: Optional[Request] = None,
+    *,
+    scope: str = "single_game",
+    game_count: Optional[int] = 1,
+) -> Dict[str, Any]:
+    """Attach AI-readable access metadata to a prediction payload."""
+    display = _prediction_display_fields(prediction)
+    try:
+        season = int(prediction.get("season"))
+        week = int(prediction.get("week"))
+    except (TypeError, ValueError):
+        season = None
+        week = None
+
+    prediction.update(
+        {
+            "predicted_winner": display["predicted_winner"],
+            "confidence_score": display["confidence_score"],
+            "confidence_tier": display["confidence_tier"],
+            "slate": _slate_payload(
+                season=season,
+                week=week,
+                request=request,
+                scope=scope,
+                game_count=game_count,
+            ),
+            "matchup": {
+                "label": display["matchup_label"],
+                "home_team": prediction.get("home_team"),
+                "away_team": prediction.get("away_team"),
+                "home_name": prediction.get("home_name"),
+                "away_name": prediction.get("away_name"),
+            },
+            "dataset_access": _dataset_access_payload(request),
+            "model_learning": _model_learning_payload(request),
+        }
+    )
+    prediction["ai_payload"] = _prediction_ai_payload(prediction, request)
+    return prediction
+
+
+def _summarize_prediction_for_slate(prediction: Dict[str, Any]) -> Dict[str, Any]:
+    display = _prediction_display_fields(prediction)
+    return {
+        "game_id": prediction.get("game_id"),
+        "matchup": display["matchup_label"],
+        "predicted_winner": display["predicted_winner"],
+        "projected_score": display["score_display"],
+        "favorite_win_probability": display["favorite_win_probability"],
+        "confidence_tier": display["confidence_tier"],
+        "projected_margin": display["projected_margin"],
+        "prediction_source": prediction.get("prediction_source"),
+        "row_quality_score": (prediction.get("explanation_fields") or {}).get("row_quality_score"),
+    }
+
+
+def _looks_like_slate_request(message: str) -> bool:
+    text = str(message or "").lower()
+    slate_terms = (
+        "next week",
+        "this week",
+        "upcoming",
+        "slate",
+        "favorites",
+        "favourites",
+        "picks",
+        "full week",
+    )
+    return any(term in text for term in slate_terms)
+
+
+def _schedule_team_code(game: Dict[str, Any], side: Literal["home", "away"]) -> str:
+    raw = game.get(f"{side}_abbr") or game.get(f"{side}_team")
+    return _normalize_team_code(str(raw or ""))
+
+
+async def _build_slate_prediction_context(
+    payload: PremiumChatRequest,
+    request: Request,
+) -> Dict[str, Any]:
+    """Build bounded prediction context for full-slate premium chat prompts."""
+    games = _schedule_response(season=payload.season, week=payload.week)
+    target_season = int(games[0]["season"]) if games else payload.season
+    target_week = int(games[0]["week"]) if games else payload.week
+
+    predictions: List[Dict[str, Any]] = []
+    errors: List[Dict[str, Any]] = []
+    for game in games:
+        home_team = _schedule_team_code(game, "home")
+        away_team = _schedule_team_code(game, "away")
+        if not home_team or not away_team:
+            errors.append({"game": game.get("game_id"), "error": "missing team code"})
+            continue
+        try:
+            prediction = await _predict_without_persist(
+                PredictRequest(
+                    home_team=home_team,
+                    away_team=away_team,
+                    season=int(game.get("season", target_season or 0)),
+                    week=int(game.get("week", target_week or 0)),
+                ),
+                request,
+            )
+            predictions.append(prediction)
+        except HTTPException as exc:
+            errors.append(
+                {
+                    "game": game.get("game_id"),
+                    "home_team": home_team,
+                    "away_team": away_team,
+                    "error": exc.detail,
+                }
+            )
+        except Exception as exc:
+            errors.append(
+                {
+                    "game": game.get("game_id"),
+                    "home_team": home_team,
+                    "away_team": away_team,
+                    "error": str(exc).splitlines()[0],
+                }
+            )
+
+    favorites = sorted(
+        [_summarize_prediction_for_slate(prediction) for prediction in predictions],
+        key=lambda row: float(row.get("favorite_win_probability") or 0.0),
+        reverse=True,
+    )
+    slate = _slate_payload(
+        season=target_season,
+        week=target_week,
+        request=request,
+        scope="weekly_slate",
+        game_count=len(games),
+    )
+    return {
+        "slate": slate,
+        "games": games,
+        "favorites": favorites,
+        "prediction_payloads": [
+            prediction.get("ai_payload") or _prediction_ai_payload(prediction, request)
+            for prediction in predictions
+        ],
+        "prediction_errors": errors,
+        "dataset_access": _dataset_access_payload(request),
+        "model_learning": _model_learning_payload(request),
+    }
+
+
+def _slate_chat_prompt(message: str, context: Dict[str, Any]) -> str:
+    slate_label = ((context.get("slate") or {}).get("label")) or "Unknown slate"
+    llm_context = {
+        "slate": context.get("slate"),
+        "favorites": context.get("favorites"),
+        "prediction_errors": context.get("prediction_errors"),
+        "dataset_access": context.get("dataset_access"),
+        "model_learning": context.get("model_learning"),
+    }
+    return (
+        "Answer the user's NFL slate request using only the structured JSON below. "
+        f"Start with this exact line: Slate: {slate_label}. "
+        "Then return one compact Markdown table with columns: Matchup, Favorite, "
+        "Projected Score, Win Probability, Confidence. "
+        "Sort by strongest favorite first. Keep the analyst summary to 2 sentences. "
+        "Mention the dataset hash and model-learning plot URL in one short Data Access line. "
+        "Do not say 'based on payloads processed in this session'; refer to the slate explicitly. "
+        "Do not invent games, injuries, stats, odds, or records.\n\n"
+        f"USER_REQUEST:\n{message}\n\n"
+        "STRUCTURED_CONTEXT_JSON:\n"
+        f"{json.dumps(llm_context, default=str, indent=2)}"
+    )
 
 
 def _extract_run_metrics(run_models_dir: Path) -> Dict[str, Any]:
@@ -3152,6 +3681,9 @@ def get_model_status() -> Dict[str, Any]:
         "score_preprocessor": (MODELS_DIR / "score_preprocessor.joblib").exists(),
         "win_preprocessor": (MODELS_DIR / "win_preprocessor.joblib").exists(),
         "metadata": (MODELS_DIR / "metadata.json").exists(),
+        "training_report": (MODELS_DIR / "training_report.json").exists(),
+        "training_summary": (MODELS_DIR / "training_summary.md").exists(),
+        "training_metrics_plot": (MODELS_DIR / "training_metrics_plot.png").exists(),
     }
 
     dataset_hash = metadata.get("dataset_hash") or state.dataset_hash
@@ -3181,6 +3713,26 @@ def get_model_status() -> Dict[str, Any]:
         },
         "dataset_path": str(state.dataset_path) if state.dataset_path else None,
     }
+
+
+def get_model_learning_metadata(request: Request) -> Dict[str, Any]:
+    """Return model-learning metrics and the dashboard plot location for AI/UI clients."""
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "models_dir": str(MODELS_DIR),
+        "dataset_access": _dataset_access_payload(request),
+        "model_learning": _model_learning_payload(request, include_report=True),
+    }
+
+
+def get_training_metrics_plot() -> FileResponse:
+    """Serve or generate the model-learning PNG for UI and AI clients."""
+    plot_path = _ensure_training_metrics_plot()
+    return FileResponse(
+        path=plot_path,
+        media_type="image/png",
+        filename="training_metrics_plot.png",
+    )
 
 
 def get_runtime_status() -> RuntimeStatusResponse:
@@ -3680,9 +4232,27 @@ def get_next_week_schedule() -> List[Dict[str, Any]]:
     return _schedule_response()
 
 
-def get_next_week_prediction_inputs() -> Dict[str, Any]:
+def get_next_week_prediction_inputs(request: Request) -> Dict[str, Any]:
     """Backward-compatible wrapper around the next-week schedule route."""
-    return {"games": get_next_week_schedule()}
+    games = get_next_week_schedule()
+    if games:
+        season = int(games[0]["season"])
+        week = int(games[0]["week"])
+    else:
+        season = None
+        week = None
+    return {
+        "slate": _slate_payload(
+            season=season,
+            week=week,
+            request=request,
+            scope="weekly_slate_inputs",
+            game_count=len(games),
+        ),
+        "games": games,
+        "dataset_access": _dataset_access_payload(request),
+        "model_learning": _model_learning_payload(request),
+    }
 
 
 def get_team_logo_metadata() -> TeamLogosResponse:
@@ -3769,7 +4339,7 @@ def get_nfl_agent() -> Any:
     global _nfl_agent
     if _nfl_agent is None:
         try:
-            from backend.ollama.llm_ollama import NFLAgent
+            from backend.ollama.ollama_core import NFLAgent
 
             dataset_path = os.getenv("NFL_DATASET_PATH")
             _nfl_agent = NFLAgent(csv_path=dataset_path)
@@ -3854,16 +4424,20 @@ async def explain_prediction_with_ai(payload: PremiumExplainRequest, request: Re
     home_prob = prediction.get("home_win_probability", 0.5)
     away_prob = prediction.get("away_win_probability", 0.5)
     source = prediction.get("prediction_source", "model")
+    prediction_ai_payload = prediction.get("ai_payload") or _prediction_ai_payload(prediction, request)
+    slate_label = (prediction.get("slate") or {}).get("label") or f"{payload.season} Week {payload.week}"
 
     question = (
-        f"Provide a premium analyst game breakdown for {payload.away_team} at {payload.home_team} "
-        f"in Season {payload.season}, Week {payload.week}.\n"
+        f"Provide a concise premium analyst game breakdown for {payload.away_team} at {payload.home_team}.\n"
+        f"Start with this exact slate line: Slate: {slate_label}.\n"
         f"Our machine learning model predicts a final score of: "
         f"{payload.away_team} {away_score:.1f} - {payload.home_team} {home_score:.1f}.\n"
         f"Predicted home win probability: {home_prob * 100:.1f}%, away win probability: {away_prob * 100:.1f}%.\n"
         f"This is an ensemble ML prediction (source: {source}).\n"
-        f"Highlight the statistical keys to the game (e.g. EPA averages, win records), "
-        f"explain why the model favors the predicted winner, and suggest any high-value caveats for fans."
+        "Use only the structured prediction payload below. Do not invent injuries, records, odds, or stats. "
+        "Return one compact prediction card, 2 to 3 key drivers from available fields, and 1 to 2 caveats.\n\n"
+        "PREDICTION_AI_PAYLOAD_JSON:\n"
+        f"{json.dumps(prediction_ai_payload, default=str, indent=2)}"
     )
 
     # 4. Generate the explanation
@@ -3872,6 +4446,10 @@ async def explain_prediction_with_ai(payload: PremiumExplainRequest, request: Re
     return {
         "reply": reply,
         "prediction": prediction,
+        "ai_payload": prediction_ai_payload,
+        "slate": prediction.get("slate"),
+        "dataset_access": prediction.get("dataset_access"),
+        "model_learning": prediction.get("model_learning"),
         "model_used": agent.model,
         "host_used": agent.host,
     }
@@ -3895,6 +4473,23 @@ async def chat_with_premium_ai(payload: PremiumChatRequest, request: Request) ->
 
     prediction_info = None
     enriched_context = ""
+
+    if _looks_like_slate_request(message) and not (home_team and away_team):
+        slate_context = await _build_slate_prediction_context(payload, request)
+        reply = await agent.ask(_slate_chat_prompt(message, slate_context))
+        return {
+            "reply": reply,
+            "has_prediction": bool(slate_context.get("prediction_payloads")),
+            "prediction": None,
+            "slate": slate_context.get("slate"),
+            "favorites": slate_context.get("favorites"),
+            "prediction_payloads": slate_context.get("prediction_payloads"),
+            "prediction_errors": slate_context.get("prediction_errors"),
+            "dataset_access": slate_context.get("dataset_access"),
+            "model_learning": slate_context.get("model_learning"),
+            "model_used": agent.model,
+            "host_used": agent.host,
+        }
 
     # If two teams are found, try to run an ML prediction for the matchup to enrich the chat context!
     if home_team and away_team:
@@ -3932,12 +4527,15 @@ async def chat_with_premium_ai(payload: PremiumChatRequest, request: Request) ->
             prediction_info = prediction
 
             # Build context
+            prediction_ai_payload = prediction.get("ai_payload") or _prediction_ai_payload(prediction, request)
+            slate_label = (prediction.get("slate") or {}).get("label") or f"{season} Week {week}"
             enriched_context = (
                 f"\n[SYSTEM NOTICE: Our ML model predicted the matchup {away_team} at {home_team} "
-                f"for Season {season} Week {week} as: "
+                f"for {slate_label} as: "
                 f"{away_team} {prediction.get('away_score', 0.0):.1f} - {home_team} {prediction.get('home_score', 0.0):.1f} "
                 f"with a home win probability of {prediction.get('home_win_probability', 0.5)*100:.1f}%. "
-                f"Use this prediction data in your response to explain the game!]"
+                f"Start with `Slate: {slate_label}`. Use this structured prediction payload and do not invent unavailable facts:\n"
+                f"{json.dumps(prediction_ai_payload, default=str)}]"
             )
         except Exception as e:
             logging.warning("Premium context enrichment failed: %s", e)
@@ -3953,7 +4551,15 @@ async def chat_with_premium_ai(payload: PremiumChatRequest, request: Request) ->
         "reply": reply,
         "has_prediction": prediction_info is not None,
         "prediction": prediction_info,
+        "slate": prediction_info.get("slate") if isinstance(prediction_info, dict) else None,
+        "dataset_access": (
+            prediction_info.get("dataset_access") if isinstance(prediction_info, dict) else _dataset_access_payload(request)
+        ),
+        "model_learning": (
+            prediction_info.get("model_learning") if isinstance(prediction_info, dict) else _model_learning_payload(request)
+        ),
         "model_used": agent.model,
+        "host_used": agent.host,
     }
 
 
@@ -4012,6 +4618,7 @@ async def predict_game(payload: PredictRequest, request: Request) -> Dict[str, A
     )
     cached = state.get_cached_prediction(cache_key)
     if cached is not None:
+        cached = _attach_prediction_access_fields(dict(cached), request)
         state.last_prediction_at = datetime.now(timezone.utc)
         if _prediction_persistence_enabled(request):
             _persist_prediction_for_request(request, payload, cached)
@@ -4278,6 +4885,7 @@ async def predict_game(payload: PredictRequest, request: Request) -> Dict[str, A
         "mode": "production",
         "win_classifier_used": bool(clf_used),
     }
+    _attach_prediction_access_fields(result, request)
 
     state.last_prediction_at = generated_at
     state.store_cached_prediction(cache_key, result)

@@ -233,6 +233,9 @@ def build_model_bundle_status(
     artifacts_raw = artifacts_raw if isinstance(artifacts_raw, dict) else {}
     artifact_names = {
         "metadata": "metadata.json",
+        "training_report": "training_report.json",
+        "training_summary": "training_summary.md",
+        "training_metrics_plot": "training_metrics_plot.png",
         "home_pipe": "home_pipe.joblib",
         "away_pipe": "away_pipe.joblib",
         "win_pipe": "win_pipe.joblib",
