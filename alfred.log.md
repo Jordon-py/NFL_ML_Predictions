@@ -409,3 +409,17 @@ Verification result: Clean backend restart loaded `C:\Users\goku\Documents\NFL_M
 Remaining issues: The stale `backend\data\models\current` bundle still exists on disk for historical/admin-promotion workflows, but it no longer wins when a hash-matching `backend\models` bundle is available. If an external shell explicitly sets `MODELS_DIR=backend\data\models\current`, the app will still serve that explicit path and report the mismatch.
 
 Recommended next step: Keep local backend starts at repo root using `backend\.venv\Scripts\python.exe -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload`, and avoid setting a shell-level `MODELS_DIR` unless intentionally testing another bundle.
+
+## 2026-06-13 - Heroku dependency resolver repair
+
+Summary: Fixed the Heroku backend build failure introduced by the upstream dependency bump. `fastapi==0.124.2` requires `starlette>=0.40.0,<0.51.0`, so the deploy-compatible pin is `starlette==0.50.0` rather than `starlette==1.0.1`.
+
+Files changed: requirements.txt, alfred.log.md.
+
+Commands run: `git push heroku master:main`; `rg -n "fastapi|starlette" requirements.txt`; `backend\.venv\Scripts\python.exe -m pip index versions starlette`; `backend\.venv\Scripts\python.exe -m pip install --dry-run -r requirements.txt`.
+
+Verification result: Initial Heroku build failed during `pip install -r requirements.txt` with `ResolutionImpossible` because `starlette==1.0.1` conflicts with FastAPI's `<0.51.0` Starlette requirement. After changing the pin to `starlette==0.50.0`, the local pip dry-run resolved successfully and reported it would install the expected package set.
+
+Remaining issues: GitHub still reports one high Dependabot alert on the default branch; this dependency repair only addresses the Heroku resolver blocker and preserves FastAPI compatibility.
+
+Recommended next step: Redeploy the backend to Heroku from the new commit and rerun production `/health`, `/status/models`, `/schedule`, and `/predict` smoke checks.
