@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 import os
 import hashlib
+import asyncio
 import re
 import time
 import sys
@@ -47,7 +48,8 @@ from backend.prediction_store import (
     get_prediction_history_count,
     get_prediction_history_summary as load_prediction_history_summary,
 )
-from backend.score_sync import extract_score_entries_from_dataframe
+# Comment 1: Import score sync utilities from backend.scripts.score_sync following structural organization.
+from backend.scripts.score_sync import extract_score_entries_from_dataframe
 from backend.schemas import PredictionRequest as StoredPredictionRequest
 from backend.services.inference_row import build_model_input_row
 from backend.schemas_pipeline_status import (
@@ -154,7 +156,7 @@ METRICS_HISTORY_PATH = REPORTS_DIR / "drift" / "metrics_history.csv"
 
 # Allow overriding the schedule CSV via env; default to backend/data
 schedule_env_path = SETTINGS.resolved_schedule_path
-SCHEDULE_PATH = schedule_env_path if schedule_env_path else (DATA_DIR / "Nfl_schedule_2025.csv")
+SCHEDULE_PATH = schedule_env_path if schedule_env_path else (DATA_DIR / "Nfl_schedule_2026.csv")
 
 # Required model keys for /predict to be "ready"
 REQUIRED_MODELS: Tuple[str, ...] = ("home", "away", "win")
@@ -292,12 +294,6 @@ def _find_schedule_paths(requested_season: Optional[int] = None) -> List[Path]:
     add(frontend_public / "nflSchedule.csv")
 
     return sorted(candidates, key=lambda p: _schedule_path_sort_key(p, requested_season))
-
-
-def _find_schedule_path() -> Optional[Path]:
-    """Backward-compatible single-path helper for older internal callers."""
-    paths = _find_schedule_paths()
-    return paths[0] if paths else None
 
 
 def _models_dir_has_required_artifacts(models_dir: Path) -> bool:
@@ -565,14 +561,6 @@ def _load_team_metadata_map() -> Dict[str, Dict[str, Any]]:
     except Exception as exc:
         logging.warning("[Logos] Failed reading %s: %s", path, exc)
         return {}
-
-
-def _load_team_logo_map() -> Dict[str, str]:
-    return {
-        team_code: str(meta.get("logoUrl") or "").strip()
-        for team_code, meta in _load_team_metadata_map().items()
-        if str(meta.get("logoUrl") or "").strip()
-    }
 
 
 def _calculate_win_probability(
@@ -1428,6 +1416,7 @@ async def lifespan(app: FastAPI):
     logging.info("[App] Shutdown complete.")
 
 
+# Comment 2: Mount FastAPI application with custom CORS middleware and routing rules.
 app = FastAPI(lifespan=lifespan)
 
 
@@ -1446,10 +1435,6 @@ app = FastAPI(lifespan=lifespan)
 #                         Example (recommended):
 #                           (?i)^https://(?:[a-z0-9-]+\.)+vercel\.app$
 #
-def _env_flag(name: str, default: str = "true") -> bool:
-    """Parse boolean-ish env vars safely."""
-    return str(os.getenv(name, default)).strip().lower() in ("1", "true", "yes", "y", "on")
-
 ALLOWED_ORIGINS: List[str] = SETTINGS.allowed_origins
 ALLOW_ORIGIN_REGEX = SETTINGS.effective_allow_origin_regex
 
