@@ -31,4 +31,4 @@ nflreadpy
 # Explicit CORS middleware (Starlette provides CORSMiddleware used by FastAPI)
 # FastAPI already depends on Starlette, but pinning here makes CORS explicit
 # and helps Heroku/Pipfiles resolve compatible versions during deployments.
-starlette>=0.27.0,<2.0.0
+starlette>=1.0.1,<2.0.0
