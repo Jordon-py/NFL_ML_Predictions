@@ -42,11 +42,7 @@ _route("/health", svc.get_health_status, ["GET"], response_model=svc.HealthRespo
 _route("/status", svc.get_status_summary, ["GET"], response_model=svc.StatusResponse)
 _route("/debug", svc.get_debug_snapshot, ["GET"])
 
-_route(
-    "/api/debug/predict-input",
-    svc.inspect_prediction_input,
-    ["POST"],
-    response_model=svc.DebugPredictInputResponse,
+_route("/api/debug/predict-input", svc.inspect_prediction_input, ["POST"], response_model=svc.DebugPredictInputResponse,
 )
 _route(
     "/debug/predict-input",

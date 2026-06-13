@@ -90,6 +90,9 @@ TEAM_ABBR_MAP = getattr(fn_main, "TEAM_ABBR_MAP", {})
 _roll_forward_missing_player_stats = fn_main._roll_forward_missing_player_stats
 _get_game_row_with_source = fn_main._get_game_row_with_source
 
+if "LA" in TEAM_ABBR_MAP:
+    TEAM_ABBR_MAP["LA"] = "LAR"
+
 # -------------------------------------------------------------------
 # Logging
 # -------------------------------------------------------------------
@@ -140,7 +143,7 @@ METRICS_HISTORY_PATH = REPORTS_DIR / "drift" / "metrics_history.csv"
 
 # Allow overriding the schedule CSV via env; default to backend/data
 schedule_env_path = SETTINGS.resolved_schedule_path
-SCHEDULE_PATH = schedule_env_path if schedule_env_path else (DATA_DIR / "Nfl_schedule_2025.csv")
+SCHEDULE_PATH = schedule_env_path if schedule_env_path else (DATA_DIR / "Nfl_schedule_2026.csv")
 
 # Required model keys for /predict to be "ready"
 REQUIRED_MODELS: Tuple[str, ...] = ("home", "away", "win")

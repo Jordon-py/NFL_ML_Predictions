@@ -423,3 +423,17 @@ Verification result: Initial Heroku build failed during `pip install -r requirem
 Remaining issues: GitHub still reports one high Dependabot alert on the default branch; this dependency repair only addresses the Heroku resolver blocker and preserves FastAPI compatibility.
 
 Recommended next step: Redeploy the backend to Heroku from the new commit and rerun production `/health`, `/status/models`, `/schedule`, and `/predict` smoke checks.
+
+## 2026-06-13 - Backend 2026 schedule default alignment
+
+Summary: Aligned backend runtime defaults with the active 2026 dataset/schedule surface. The API runtime now falls back to `Nfl_schedule_2026.csv` when no schedule env override is present, and normalizes the legacy `LA` team alias to `LAR` when that alias is available.
+
+Files changed: backend/services/api_runtime.py, backend/routes/api.py, alfred.log.md.
+
+Commands run: inspected the final backend route/runtime diff; `backend\.venv\Scripts\python.exe -m py_compile backend\services\api_runtime.py backend\routes\api.py`.
+
+Verification result: Compile passed for the touched backend runtime and route modules.
+
+Remaining issues: The backend should be redeployed after this commit so Heroku matches the local 2026 runtime default.
+
+Recommended next step: Run the backend test suite, commit the runtime alignment, redeploy Heroku, and repeat production API smoke checks.
