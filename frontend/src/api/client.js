@@ -151,6 +151,26 @@ function isRetryableNetworkError(error) {
   return error instanceof TypeError;
 }
 
+function asFiniteNumber(value, fallback) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : fallback;
+}
+
+function formatTimeoutDuration(timeoutMs) {
+  const seconds = timeoutMs / 1000;
+  return Number.isInteger(seconds) ? `${seconds}s` : `${seconds.toFixed(1)}s`;
+}
+
+function timeoutHttpError(error, url, timeoutMs) {
+  return new HttpError(`Request timed out after ${formatTimeoutDuration(timeoutMs)}`, {
+    status: 408,
+    url,
+    body: {
+      detail: error?.message || "Request timed out",
+    },
+  });
+}
+
 function abortReason(signal, fallbackMessage = "Request aborted") {
   return signal?.reason ?? makeAbortError(fallbackMessage, "AbortError");
 }
@@ -212,9 +232,27 @@ function normalizeHeadersForRequestKey(headers) {
 function inFlightGetKey(url, options = {}) {
   const method = String(options.method || "GET").toUpperCase();
   if (method !== "GET" || options.body || options.signal) return null;
-  return `${method} ${url} ${normalizeHeadersForRequestKey(options.headers)}`;
+  const timeoutKey = options.timeoutMs == null ? "" : ` timeout:${options.timeoutMs}`;
+  const retryKey = options.retryAttempts == null ? "" : ` retry:${options.retryAttempts}`;
+  return `${method} ${url} ${normalizeHeadersForRequestKey(options.headers)}${timeoutKey}${retryKey}`;
 }
 
+function buildJsonHeaders(headers) {
+  if (typeof Headers === "undefined") {
+    return {
+      "Content-Type": "application/json",
+      ...(headers && !Array.isArray(headers) ? headers : {}),
+    };
+  }
+
+  const merged = new Headers({ "Content-Type": "application/json" });
+  if (headers) {
+    new Headers(headers).forEach((value, key) => {
+      merged.set(key, value);
+    });
+  }
+  return merged;
+}
 
 async function safeReadJson(res) {
   try {
@@ -741,16 +779,23 @@ export async function fetchJson(path, options = {}) {
 }
 
 async function fetchJsonWithRetries(url, options = {}) {
-  const maxAttempts = Number.isFinite(RETRY_ATTEMPTS) ? Math.max(0, Math.floor(RETRY_ATTEMPTS)) + 1 : 1;
+  const {
+    headers,
+    retryAttempts = RETRY_ATTEMPTS,
+    signal: externalSignal,
+    timeoutMs: requestedTimeoutMs = REQUEST_TIMEOUT_MS,
+    ...fetchOptions
+  } = options;
+  const maxAttempts = Math.max(0, Math.floor(asFiniteNumber(retryAttempts, 0))) + 1;
+  const timeoutMs = Math.max(1000, asFiniteNumber(requestedTimeoutMs, DEFAULT_REQUEST_TIMEOUT_MS));
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     const controller = new AbortController();
-    const timeoutMs = Number.isFinite(REQUEST_TIMEOUT_MS) ? Math.max(1000, REQUEST_TIMEOUT_MS) : 12000;
     const timeout = setTimeout(
       () => controller.abort(makeAbortError(`Request timed out after ${timeoutMs}ms`, "TimeoutError")),
       timeoutMs
     );
-    const signal = composeAbortSignal(options.signal, controller.signal);
+    const signal = composeAbortSignal(externalSignal, controller.signal);
 
     try {
       const res = await fetch(url, {
@@ -758,10 +803,7 @@ async function fetchJsonWithRetries(url, options = {}) {
         ...fetchOptions,
         credentials: "omit",
         signal,
-        headers: {
-          "Content-Type": "application/json",
-          ...(headers || {}),
-        },
+        headers: buildJsonHeaders(headers),
       });
       if (timeout) clearTimeout(timeout);
 
@@ -779,9 +821,12 @@ async function fetchJsonWithRetries(url, options = {}) {
       return body;
     } catch (error) {
       clearTimeout(timeout);
-      if (isAbortError(error)) throw error;
-      const canRetry = attempt < maxAttempts && (isRetryableHttpError(error) || isRetryableNetworkError(error));
-      if (!canRetry) throw error;
+      const normalizedError = isTimeoutError(error) ? timeoutHttpError(error, url, timeoutMs) : error;
+      if (isAbortError(normalizedError)) throw normalizedError;
+      const canRetry =
+        attempt < maxAttempts &&
+        (isRetryableHttpError(normalizedError) || isRetryableNetworkError(normalizedError));
+      if (!canRetry) throw normalizedError;
       await delay(150 * attempt);
     }
   }

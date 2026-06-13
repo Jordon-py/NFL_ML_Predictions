@@ -94,6 +94,39 @@ def _set_ready_basics(monkeypatch, tmp_path):
     return models_dir
 
 
+def _write_minimal_model_bundle(path, dataset_hash):
+    path.mkdir(parents=True, exist_ok=True)
+    for artifact in ("home_pipe.joblib", "away_pipe.joblib", "win_pipe.joblib"):
+        (path / artifact).write_text("placeholder", encoding="utf-8")
+    (path / "metadata.json").write_text(
+        json.dumps(
+            {
+                "bundle_contract_version": 2,
+                "dataset_hash": dataset_hash,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def test_model_dir_selection_prefers_active_dataset_hash(monkeypatch, tmp_path):
+    data_dir = tmp_path / "data"
+    manifest_dir = data_dir / "datasets"
+    manifest_dir.mkdir(parents=True, exist_ok=True)
+    (manifest_dir / "latest_dataset.json").write_text(
+        json.dumps({"dataset_hash": "active-dataset-hash"}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(main, "DATA_DIR", data_dir)
+
+    stale_current = tmp_path / "data" / "models" / "current"
+    matching_default = tmp_path / "models"
+    _write_minimal_model_bundle(stale_current, "old-dataset-hash")
+    _write_minimal_model_bundle(matching_default, "active-dataset-hash")
+
+    assert main._pick_best_models_dir([stale_current, matching_default]) == matching_default
+
+
 def test_player_stats_preserve_available_seasons_when_future_season_missing(monkeypatch):
     monkeypatch.setattr(csv_builder, "nfl", _PartialStatsBackend())
     monkeypatch.setattr(csv_builder, "NFL_BACKEND", "nflreadpy")

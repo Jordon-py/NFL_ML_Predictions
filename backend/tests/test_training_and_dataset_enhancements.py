@@ -1,8 +1,8 @@
 import numpy as np
 import pandas as pd
 
-from backend import build_csv_datasets_v3 as builder
-from backend.train_models import _compute_balanced_sample_weights
+from backend.scripts import build_csv_datasets_v3 as builder
+from backend.scripts.train_models import _compute_balanced_sample_weights
 
 
 def test_recent_margin_trend_features_are_added_for_model_inputs():

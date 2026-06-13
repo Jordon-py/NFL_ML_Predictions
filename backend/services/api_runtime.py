@@ -336,7 +336,34 @@ def _models_dir_metadata_tier(models_dir: Path) -> int:
         return 0
 
 
+def _active_dataset_hash() -> Optional[str]:
+    manifest_path = DATA_DIR / "datasets" / "latest_dataset.json"
+    try:
+        if not manifest_path.exists():
+            return None
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        dataset_hash = manifest.get("dataset_hash")
+        return str(dataset_hash).strip() if dataset_hash else None
+    except Exception:
+        return None
+
+
+def _models_dir_dataset_hash(models_dir: Path) -> Optional[str]:
+    metadata_path = models_dir / "metadata.json"
+    try:
+        if not metadata_path.exists():
+            return None
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+        dataset_hash = metadata.get("dataset_hash")
+        return str(dataset_hash).strip() if dataset_hash else None
+    except Exception:
+        return None
+
+
 def _pick_best_models_dir(candidates: List[Path]) -> Optional[Path]:
+    active_hash = _active_dataset_hash()
+    matching_strict: List[Path] = []
+    matching_legacy: List[Path] = []
     strict: List[Path] = []
     legacy_with_metadata: List[Path] = []
     metadata_less: List[Path] = []
@@ -352,14 +379,15 @@ def _pick_best_models_dir(candidates: List[Path]) -> Optional[Path]:
         seen.add(resolved)
 
         tier = _models_dir_metadata_tier(candidate)
+        matches_active_dataset = bool(active_hash and _models_dir_dataset_hash(candidate) == active_hash)
         if tier >= 2:
-            strict.append(candidate)
+            (matching_strict if matches_active_dataset else strict).append(candidate)
         elif tier == 1:
-            legacy_with_metadata.append(candidate)
+            (matching_legacy if matches_active_dataset else legacy_with_metadata).append(candidate)
         else:
             metadata_less.append(candidate)
 
-    for bucket in (strict, legacy_with_metadata, metadata_less):
+    for bucket in (matching_strict, matching_legacy, strict, legacy_with_metadata, metadata_less):
         if bucket:
             return bucket[0]
     return None
@@ -399,9 +427,7 @@ def _find_models_dir() -> Path:
     candidates: List[Path] = []
 
     # Promoted runtime bundle produced by admin/retrain flows.
-    promoted_current = CURRENT_MODELS_DIR
-    if _models_dir_has_required_artifacts(promoted_current):
-        return promoted_current
+    candidates.append(CURRENT_MODELS_DIR)
 
     # Repository-local shared bundle used by older deployment packaging.
     packaged_data_models = DATA_DIR / "models"

@@ -367,3 +367,45 @@ Verification result: Backend `/health` returned HTTP 200 with `status=healthy` a
 Remaining issues: `agent-browser` was requested but was not installed on PATH, so rendered validation used the repo's Playwright dependency. Vite dev still reports the expected Material Web/Lit dev-mode warning; this is dependency/dev-mode noise, not an app runtime failure. The frontend production preview uses `VITE_API_BASE_URL` and will call Heroku by design; use `npm run dev` for local backend testing.
 
 Recommended next step: Keep using `backend\.venv\Scripts\python.exe -m uvicorn backend.main:app --host 127.0.0.1 --port 8000` for local backend work, and use `cd frontend; npm run dev -- --host 127.0.0.1 --port 3000` for local frontend/backend verification.
+
+## 2026-06-13 - Local Uvicorn port/import diagnosis
+
+Summary: Diagnosed the local Uvicorn startup failure. Port `8000` was already held by an existing Python/Uvicorn process, and the current checkout had a stale `backend.main` import that referenced missing `backend.schemas`. Aligned `backend/main.py` with the active runtime service by importing `StoredPredictionRequest` from `backend.pipeline_models`.
+
+Files changed: backend/main.py, alfred.log.md.
+
+Commands run: checked port `8000` with `Get-NetTCPConnection`; checked bind availability for ports `8000`, `8001`, `8010`, `8080`, and `5000`; inspected Uvicorn process command line; checked `/health` and `/status/models`; validated `backend\models\metadata.json` JSON; `backend\.venv\Scripts\python.exe -m py_compile backend\main.py`; import-smoked `backend.main`; started a temporary Uvicorn server on `127.0.0.1:8001`; TestClient smoke for `/health`, `/status/models`, `/schedule?season=2026&week=1`, and `/predict`.
+
+Verification result: Compile passed. Import smoke passed with 40 routes. Temporary Uvicorn on port `8001` responded with `health_status=healthy`, `production_ready=true`, `models_ready=true`, 16 schedule games for 2026 Week 1, and `/predict` returned 200 with `win_classifier_used=true`. TestClient verified the same health/model/schedule/predict path.
+
+Remaining issues: Existing process PID 20972 is still listening on `127.0.0.1:8000` and was started before this import/readiness repair, so a second Uvicorn process must use another port or that old process must be stopped first.
+
+Recommended next step: Start from the repo root with `backend\.venv\Scripts\python.exe -m uvicorn backend.main:app --host 127.0.0.1 --port 8001 --reload`, or stop PID 20972 before reusing port `8000`.
+
+## 2026-06-13 - Frontend API fetchOptions console fix
+
+Summary: Fixed the rendered React console failure from `frontend/src/api/client.js`: `ReferenceError: fetchOptions is not defined`. The shared fetch wrapper now derives browser fetch options from the caller's `options`, keeps client-only controls like `timeoutMs` and `retryAttempts` out of the fetch init, preserves method/body/custom headers, includes timeout/retry controls in GET de-dupe keys, and normalizes request timeouts to the expected `HttpError` 408 shape.
+
+Files changed: frontend/src/api/client.js, frontend/src/api/client.test.js, alfred.log.md.
+
+Commands run: read the attached browser console log; inspected `frontend/src/api/client.js`, `frontend/src/api/client.test.js`, `frontend/src/hooks/usePredictionState.js`, and auth/session routing; `cd frontend; npm test -- --run src/api/client.test.js`; `cd frontend; npm test -- --run`; `cd frontend; npm run build`; attempted Browser plugin validation and received `Browser is not available: iab`; used Playwright fallback against `http://127.0.0.1:3000/app` and mobile viewport.
+
+Verification result: Targeted API client tests passed: 10 passed. Full frontend tests passed: 15 passed across 4 files. Production Vite build passed. Playwright rendered smoke loaded `/app`, navigated to `/history`, verified desktop and mobile pages were nonblank, and found no relevant console warnings/errors, page errors, or `fetchOptions is not defined`/`ReferenceError` messages. Screenshots were saved outside the repo at `%TEMP%\nfl-client-fix-dashboard.png` and `%TEMP%\nfl-client-fix-mobile.png`.
+
+Remaining issues: The current backend process on port `8000` returns `/health` with `status=unhealthy` because of a dataset/model contract mismatch. The frontend now handles the response correctly and shows the degraded-service banner; the backend bundle mismatch is separate from this client console fix.
+
+Recommended next step: Repair or reload the active backend model bundle so `/health` reports `production_ready=true`, then rerun the same Playwright dashboard smoke and a prediction interaction.
+
+## 2026-06-13 - Backend dataset/model hash mismatch repair
+
+Summary: Repaired the local `/predict` 503 caused by a stale runtime model bundle. The failing process was serving `backend\data\models\current` with metadata hash `76b08e81...798cefe6` while the active dataset was `backend\data\datasets\game_features_20260531_clean.csv` with hash `94bd8ca5...a18f188b`. Restarted the backend from the repo root with `backend\.venv`, verified it loads `backend\models`, then hardened model-directory selection so stale strict bundles do not outrank a bundle whose metadata hash matches `latest_dataset.json`.
+
+Files changed: backend/main.py, backend/services/api_runtime.py, backend/tests/test_backend_regression.py, backend/tests/test_training_and_dataset_enhancements.py, backend/scripts/train_models.py, alfred.log.md.
+
+Commands run: inspected the attached 503 payload; checked `backend\.env` and `.env` model settings without exposing secrets; compared `backend\models\metadata.json`, `backend\data\models\current\metadata.json`, and `backend\data\datasets\latest_dataset.json`; restarted Uvicorn with `backend\.venv\Scripts\python.exe -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload`; `backend\.venv\Scripts\python.exe -m py_compile backend\main.py backend\services\api_runtime.py backend\scripts\train_models.py backend\tests\test_backend_regression.py backend\tests\test_training_and_dataset_enhancements.py`; `backend\.venv\Scripts\python.exe -m pytest backend\tests\test_backend_regression.py -q -o addopts=''`; `backend\.venv\Scripts\python.exe -m pytest backend\tests -q -o addopts=''`; live `/health`, `/status/models`, `/schedule?season=2026&week=1`, and `/predict` smokes.
+
+Verification result: Clean backend restart loaded `C:\Users\goku\Documents\NFL_ML_Predictions\backend\models` with dataset hash `94bd8ca5e7e47ac5db5d4d583daaa93265313be24a20bf909848db68a18f188b`. Compile passed. Focused backend regression passed: 18 passed. Full backend tests passed: 35 passed. Live `/health` returned `status=healthy` and `production_ready=true`; `/status/models` returned `ready=true`; `/predict` for LAC vs ARI season 2026 week 1 returned 200 with `home_score=23.79`, `away_score=19.66`, `prediction_source=pipeline_primary`, `selected_row_source=dataset_exact`, `row_quality=100.0`, and `win_classifier_used=true`.
+
+Remaining issues: The stale `backend\data\models\current` bundle still exists on disk for historical/admin-promotion workflows, but it no longer wins when a hash-matching `backend\models` bundle is available. If an external shell explicitly sets `MODELS_DIR=backend\data\models\current`, the app will still serve that explicit path and report the mismatch.
+
+Recommended next step: Keep local backend starts at repo root using `backend\.venv\Scripts\python.exe -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload`, and avoid setting a shell-level `MODELS_DIR` unless intentionally testing another bundle.

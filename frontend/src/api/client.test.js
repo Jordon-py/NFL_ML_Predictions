@@ -235,6 +235,41 @@ it("retries transient server failures and eventually succeeds", async () => {
   expect(fetchMock).toHaveBeenCalledTimes(2);
 });
 
+it("passes fetch options through without leaking client-only controls", async () => {
+  vi.resetModules();
+
+  const fetchMock = vi.fn(async () => jsonResponse({ ok: true }, 200));
+  vi.stubGlobal("fetch", fetchMock);
+
+  try {
+    const { fetchJson } = await import("./client.js");
+    const result = await fetchJson("/predict", {
+      method: "POST",
+      headers: { "X-User-Id": "tester" },
+      body: JSON.stringify({ home_team: "KC", away_team: "BUF", season: 2026, week: 1 }),
+      retryAttempts: 0,
+      timeoutMs: 5000,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect(init.method).toBe("POST");
+    expect(init.credentials).toBe("omit");
+    expect(init.body).toContain('"home_team":"KC"');
+    expect(init.retryAttempts).toBeUndefined();
+    expect(init.timeoutMs).toBeUndefined();
+
+    const headers = new Headers(init.headers);
+    expect(headers.get("content-type")).toBe("application/json");
+    expect(headers.get("x-user-id")).toBe("tester");
+  } finally {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  }
+});
+
 it("converts request timeout aborts into readable HTTP errors", async () => {
   vi.resetModules();
   vi.useFakeTimers();

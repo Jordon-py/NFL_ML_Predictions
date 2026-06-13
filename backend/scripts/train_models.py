@@ -530,6 +530,34 @@ def _coerce_binary_label(y: pd.Series) -> pd.Series:
     return mapped.astype("Int64")
 
 
+def _compute_balanced_sample_weights(y: np.ndarray) -> np.ndarray:
+    """Return inverse-frequency sample weights normalized to mean 1.0."""
+    labels = np.asarray(y)
+    if labels.size == 0:
+        return np.asarray([], dtype=float)
+
+    valid_mask = ~pd.isna(labels)
+    if not np.any(valid_mask):
+        return np.ones(labels.shape[0], dtype=float)
+
+    valid_labels = labels[valid_mask]
+    classes, counts = np.unique(valid_labels, return_counts=True)
+    if classes.size <= 1:
+        return np.ones(labels.shape[0], dtype=float)
+
+    class_weights = {
+        cls: valid_labels.size / (classes.size * count)
+        for cls, count in zip(classes, counts)
+    }
+    weights = np.ones(labels.shape[0], dtype=float)
+    for idx, label in enumerate(labels):
+        if not pd.isna(label):
+            weights[idx] = float(class_weights.get(label, 1.0))
+
+    mean_weight = float(np.mean(weights)) if weights.size else 1.0
+    return weights / mean_weight if mean_weight > 0 else weights
+
+
 def _infer_feature_columns(df: pd.DataFrame) -> Tuple[List[str], List[str]]:
     ignore = set(LEAK_BLOCKLIST) | {TARGET_HOME, TARGET_AWAY, TARGET_WIN}
     numeric_cols: List[str] = []
