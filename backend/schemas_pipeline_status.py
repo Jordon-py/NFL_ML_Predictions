@@ -6,6 +6,12 @@ from pydantic import BaseModel, Field
 
 
 class FileStatus(BaseModel):
+    """Filesystem status for one expected file.
+
+    Data shape: path, existence flag, size, and modified timestamp.
+    Methods: Pydantic validation only.
+    """
+
     path: Optional[str] = None
     exists: bool = False
     size_bytes: Optional[int] = None
@@ -13,6 +19,13 @@ class FileStatus(BaseModel):
 
 
 class FeatureGroupStatus(BaseModel):
+    """Coverage summary for one feature group.
+
+    Data shape: group name, column count, coverage/null rates, and sample
+    columns.
+    Methods: Pydantic validation only.
+    """
+
     group: str
     columns: int = 0
     coverage: Optional[float] = None
@@ -21,6 +34,13 @@ class FeatureGroupStatus(BaseModel):
 
 
 class DataSourceStatus(BaseModel):
+    """Runtime data-source availability summary.
+
+    Data shape: selected NFL data backend, cache status, schedule coverage,
+    and degradation reasons.
+    Methods: Pydantic validation only.
+    """
+
     selected_nfl_backend: str = "unknown"
     nflreadpy_available: bool = False
     fallback_reason: Optional[str] = None
@@ -32,6 +52,13 @@ class DataSourceStatus(BaseModel):
 
 
 class DatasetQualityStatus(BaseModel):
+    """Dataset quality and freshness summary.
+
+    Data shape: dataset identity, size, season/week ranges, future/completed
+    row counts, manifest/metadata, feature groups, and null rates.
+    Methods: Pydantic validation only.
+    """
+
     dataset_path: Optional[str] = None
     dataset_hash: Optional[str] = None
     rows: int = 0
@@ -52,6 +79,12 @@ class DatasetQualityStatus(BaseModel):
 
 
 class ContractStatus(BaseModel):
+    """Generic contract validation status.
+
+    Data shape: readiness flag, blockers, warnings, and summary details.
+    Methods: Pydantic validation only.
+    """
+
     ok: bool = False
     blockers: List[str] = Field(default_factory=list)
     warnings: List[str] = Field(default_factory=list)
@@ -59,6 +92,13 @@ class ContractStatus(BaseModel):
 
 
 class ModelBundleStatus(BaseModel):
+    """Model-bundle readiness summary.
+
+    Data shape: model directory, metadata path, loaded/missing models, load
+    errors, artifact statuses, contract status, and provenance.
+    Methods: Pydantic validation only.
+    """
+
     models_dir: Optional[str] = None
     metadata_path: Optional[str] = None
     loaded_models: List[str] = Field(default_factory=list)
@@ -70,6 +110,13 @@ class ModelBundleStatus(BaseModel):
 
 
 class PipelineStatusResponse(BaseModel):
+    """Full pipeline status response.
+
+    Data shape: generated timestamp, readiness/degradation flags, blockers,
+    warnings, data-source status, dataset quality, and model-bundle status.
+    Methods: Pydantic validation only.
+    """
+
     generated_at: str
     production_ready: bool = False
     warning_only: bool = False

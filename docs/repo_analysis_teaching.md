@@ -12,10 +12,10 @@ Verification:
 
 ## Major Parts Of The App
 
-1. `backend/main.py`, `backend/config.py`, `backend/schemas.py`
-   Backend API, startup lifecycle, CORS, admin endpoints, health/status routes
-2. `backend/main_helpers.py`, `backend/services/prediction_service.py`, `backend/services/inference_row.py`
-   Model loading, dataset/history access, feature-row assembly, prediction orchestration
+1. `backend/main.py`, `backend/routes/api.py`, `backend/services/api_runtime.py`, `backend/config.py`
+   Backend API bootstrap, route registration, CORS, admin endpoints, health/status routes
+2. `backend/main_helpers.py`, `backend/services/inference_row.py`, `backend/pipeline_models.py`
+   Model loading, dataset/history access, feature-row assembly, prediction orchestration, persistence contracts
 3. `backend/build_csv_datasets_v3.py`, `backend/utils/*`
    Dataset construction, feature engineering, export metadata and quality reports
 4. `backend/train_models.py`, `backend/models/metadata.json`
@@ -85,7 +85,7 @@ Critique:
 
 ### Suggestion 1: Turn row assembly into explicit stages with a named result object
 
-- References: `backend/services/prediction_service.py:119`, `backend/services/prediction_service.py:138`, `backend/services/inference_row.py:377`, `backend/services/inference_row.py:389`, `backend/services/inference_row.py:421`, `backend/services/inference_row.py:457`
+- References: `backend/services/api_runtime.py`, `backend/services/inference_row.py`
 - Problem: `build_model_input_row()` returns either a 2-tuple or a 3-tuple depending on `debug`, which makes callers rely on positional unpacking and mode-specific behavior.
 - Enhancement: return one named result object every time, for example a dataclass holding `row_df`, `source`, and optional `debug_info`.
 - How to do it:
@@ -200,7 +200,7 @@ Critique:
   1. Create a tiny fixture dataset with just enough columns to exercise the pipeline.
   2. Run the trainer against that fixture into a temp directory.
   3. Call `load_inference_bundle()` on the produced directory.
-  4. Instantiate `PredictionService` and assert one request returns the expected response shape.
+  4. Exercise the route-facing prediction workflow and assert one request returns the expected response shape.
 - Syntax explanation:
   - The dataclasses in `backend/train_models.py:171-190` are structured records. They are good inputs for report writing and test assertions because `asdict(...)` serializes them predictably.
   - A smoke test is not a full statistical test. It simply proves the interfaces still fit together.
@@ -286,7 +286,7 @@ Critique:
 
 ### Suggestion 2: Align history/status DTOs across pages and simplify state ownership
 
-- References: `frontend/src/pages/StatsPage.jsx`, `frontend/src/components/HistoryChart.jsx`, `frontend/src/utils/predictionContextUtils.js`, `backend/main.py`, `backend/schemas.py`
+- References: `frontend/src/pages/StatsPage.jsx`, `frontend/src/components/HistoryChart.jsx`, `frontend/src/utils/predictionContextUtils.js`, `backend/services/api_runtime.py`, `backend/pipeline_models.py`
 - Problem: different pages still normalize overlapping history and status data in slightly different ways, which makes the UI harder to reason about as the API evolves.
 - Enhancement: define one shared history/status normalization contract for all pages.
 - How to do it:

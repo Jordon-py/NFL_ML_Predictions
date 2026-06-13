@@ -9,12 +9,31 @@ from .feature_contract import build_feature_contract
 
 
 class ArtifactContractStatus(BaseModel):
+    """Filesystem status for one model-bundle artifact.
+
+    Data shape:
+        ``key`` is the semantic artifact name, ``path`` is the resolved path,
+        and ``exists`` reflects current filesystem availability.
+    Methods:
+        Pydantic validation only.
+    """
+
     key: str
     path: str
     exists: bool
 
 
 class ModelBundleContractResult(BaseModel):
+    """Model-bundle validation summary.
+
+    Data shape:
+        Bundle readiness, strict/legacy mode, blockers, warnings, artifact
+        statuses, dataset-hash match, calibration presence, and feature
+        contract summaries.
+    Methods:
+        Pydantic validation only.
+    """
+
     ok: bool
     strict: bool = False
     blockers: List[str] = Field(default_factory=list)

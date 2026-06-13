@@ -2,329 +2,271 @@
 
 ## Scan Metadata
 
-- Scan date: 2026-06-02
-- Repo root: `C:\Users\goku\Documents\NFL_ML_Predictions`
-- HEAD at scan start: `54697421f`
+- Scan date: 2026-06-06
+- Repo root: `C:\Users\iProg\Documents\NFL_ML_Predictions`
 - Current branch: `master`
+- HEAD: `c69f8815b` (`docs: record enhancement verification`)
+- Working tree at final refresh: modified workflow/package/docs/toolchain files plus an unrelated modified `backend/ollama/chat.ipynb`.
 - GitHub remote: `https://github.com/Jordon-py/NFL_ML_Predictions.git`
-- Backend deploy remote: `https://git.heroku.com/nfl-predict.git`
-- Frontend deploy project: Vercel project `nfl-ml-predictions`
-- Scan method: memory check, README review, root file map, targeted backend/frontend/deploy inspection, and focused cleanup verification.
-- Working tree note: the tree was already dirty before this cleanup. Runtime DBs, build output, ignored env files, and temp permission folders were present together, so staging must stay selective.
+- Heroku remote: `https://git.heroku.com/nfl-predict.git`
+- Frontend deploy project in docs: Vercel project `nfl-ml-predictions`
+- Scan method: repo-info scanner, README review, git status/remotes, backend route inspection, frontend route inspection, manifest/config reads, runtime asset reads, CI/deploy workflow reads, official GitHub Actions release checks, and local verification.
+- Scope: current operational refresh after CI/toolchain updates. Intentional edited surfaces are `.github/workflows/*.yml`, `frontend/package*.json`, `pyproject.toml`, `backend/pyproject.toml`, and this file.
 
 ## Executive Summary
 
-This repository is a full-stack NFL prediction app with a FastAPI backend, React/Vite frontend, schedule ingestion tooling, dataset/model training scripts, and deployment wiring for Heroku plus Vercel.
+This is a full-stack NFL forecasting app: FastAPI backend, React/Vite frontend, dataset build scripts, model training/promotion scripts, Heroku backend deployment, and Vercel frontend deployment.
 
-The active runtime is simpler than the repo history suggests:
+The active runtime is smaller than the repository history suggests:
 
-1. `backend/main.py` is the live FastAPI app and public API surface.
-2. `backend/app/core/settings.py` is the authoritative env, CORS, and path-resolution layer.
-3. `frontend/src/api/client.js` is the frontend transport adapter.
-4. `frontend/src/hooks/usePredictionState.js` is the dashboard/history shared state owner.
-5. `backend/builddataset.py`, `backend/train_models.py`, and `backend/scripts/weekly_retrain.py` are the main ML ops entrypoints.
+1. `backend/main.py` creates `backend.main:app`, configures CORS, exception handlers, and mounts the API router.
+2. `backend/routes/api.py` is the canonical backend route registry.
+3. `backend/services/api_runtime.py` owns route-facing runtime state, schedule/model loading, prediction, history, admin, and premium AI workflows.
+4. `frontend/src/App.jsx` owns the SPA shell and route wiring.
+5. `frontend/src/hooks/usePredictionState.js` owns shared dashboard/history state.
+6. `frontend/src/api/client.js` owns API base resolution, request timeout/retry behavior, response normalization, and frontend compatibility fallbacks.
+7. `backend/builddataset.py` and `backend/train_models.py` are the main dataset/model lifecycle entrypoints.
 
-The biggest engineering risk is source-of-truth drift: active code, archived code, generated datasets, local runtime DBs, tracked build output, and permission-broken pytest temp directories all live near each other. Future changes should start from the active runtime map below, not from the archive folder or older service abstractions unless the code path is verified.
+The main repo risk is source-of-truth drift: `archive/` still contains old code and docs, dependency manifests diverge between local/Heroku and CI, schedule defaults still mention 2025 in some deploy/docs surfaces while the active data snapshot includes 2026, and the frontend client has schedule CSV fallback code even though `frontend/public/schedules/` is not present in this checkout.
 
-## Top-Level Structure
+## Repo Snapshot
 
-| Path | Role | Status |
-| --- | --- | --- |
-| Root files | Project metadata, deployment entrypoints, pytest config, README, and repo dossier | Keep intentionally small |
-| `backend/` | FastAPI app, prediction helpers, training/data scripts, tests, runtime data | Active; owns backend scripts and generated feature data |
-| `frontend/` | React/Vite app, client adapter, shared hook, dashboard/history/stats UI | Active |
-| `docs/` | Environment, dataflow, schema, and integration docs | Active |
-| `scripts/` | Repo-level operational checks | Active, small |
-| `.github/workflows/` | CI and deploy automation | Active but secret-dependent |
-| `archive/` | Historical repo snapshots and old docs/scripts | Historical, not runtime |
-| `artifacts/` | Planning/task notes and generated QA assets | Supporting, not runtime |
-| `.vercel/` | Linked Vercel project metadata | Active frontend deploy metadata |
-| `.heroku/`, `Procfile`, `app.json` | Heroku/backend deploy metadata | Active backend deploy metadata |
-| `tmp_pytest*`, `.runtime_*`, `pytest_basetemp_*` | Local pytest/temp folders | Local-only, currently permission-prone |
+- Scanner result: 643 files, about 205 MB.
+- Largest drift zone: `archive/` has 257 files and about 60.71 MB. Treat it as historical unless a current import path proves runtime use.
+- Top-level active areas:
+  - `backend/` - FastAPI app, runtime services, tests, data/model assets, ML scripts.
+  - `frontend/` - React/Vite SPA, frontend tests, Vercel config.
+  - `docs/` - 8 active markdown docs.
+  - `scripts/` - repo-level operational checks, currently including `scripts/verify_api_cors.py`.
+  - `.github/workflows/` - CI, Heroku deploy, and scheduled retrain automation.
 
-## Architecture Overview
+## Active Runtime Map
 
 ### Backend
 
-The backend serves one FastAPI app from `backend.main:app`. It loads dataset/model state during lifespan startup, keeps health/status endpoints available even when prediction readiness is degraded, and returns structured `503` blockers from `/predict` when the model bundle is not ready.
+| Path | Role | Notes |
+| --- | --- | --- |
+| `backend/main.py` | FastAPI app bootstrap | Small by design; mounts `api_router` and delegates runtime behavior. |
+| `backend/routes/api.py` | Canonical public route map | Declarative route registration only. |
+| `backend/services/api_runtime.py` | Runtime workflows | Dense, high-risk owner for app state, models, schedules, predictions, history, admin, premium AI. |
+| `backend/app/core/settings.py` | Env/CORS/path settings | Reads `SCHEDULE_PATH`, `MODELS_DIR`, `ENABLE_ADMIN`, CORS env aliases. |
+| `backend/builddataset.py` | Dataset build entrypoint | Writes clean/completed/future datasets and manifests. |
+| `backend/train_models.py` | Training and promotion entrypoint | Writes model bundles, metadata, reports, and staging/promotion artifacts. |
+| `backend/ollama/client.py` | Premium AI client config | Handles cloud/local Ollama host selection, bearer auth, timeout, model fallback. |
 
-Primary layers:
+Backend route groups registered in `backend/routes/api.py`:
 
-- Runtime API and orchestration: `backend/main.py`
-- Environment and path settings: `backend/app/core/settings.py`
-- Inference helpers: `backend/utils/functions_for_main.py`
-- User prediction history: `backend/prediction_store.py` and `backend/sqlite_store.py`
-- Dataset/model operations: `backend/builddataset.py`, `backend/train_models.py`, `backend/scripts/weekly_retrain.py`
-- Schedule ingestion: `backend/services/schedule_ingestion.py`
+- Health/status: `GET /health`, `/status`, `/status/overview`, `/health/pipeline`, `/status/models`, `/status/runtime`, `/status/dataset-versioning`, `/status/performance-drift`.
+- Metadata/debug: `GET /debug`, `/metadata/dataset`, `/metadata/model-bundle`, `/debug/dataset`, `POST /debug/predict-input`, plus `/api/*` debug aliases.
+- Schedule/teams: `GET /schedule`, `/schedule/next-week`, `/predict/next-week`, `/api/predict/next-week`, `/teams/logos`, `/api/teams/logos`.
+- History: `GET /history`, `GET /history/summary`, `DELETE /history`, `GET /history/summary/memory`.
+- Premium AI: `POST /premium/explain`, `/api/premium/explain`, `/premium/chat`, `/api/premium/chat`.
+- Prediction: `POST /predict`, `/api/predict`.
+- Admin: `POST /admin/retrain`, `GET /admin/retrain/{job_id}`, `POST /admin/promote/{job_id}`. Routes are mounted; access is controlled in runtime code and `ENABLE_ADMIN`/request checks.
 
 ### Frontend
 
-The frontend is a Vite SPA. `App.jsx` owns routing/auth shell setup, while `usePredictionState.js` hydrates shared schedule, history, health, logos, summary, prediction maps, and season context for the dashboard and history page.
-
-The dashboard now follows a backend-owned offseason contract:
-
-`/offseason/status` -> explicit `/schedule?season=<season>&week=<week>` during offseason, otherwise `/schedule/next-week`.
-
-`StatsPage.jsx` remains an exception because it fetches its own snapshot directly instead of consuming the shared hook.
-
-### Deployment
-
-Backend:
-
-- Target: Heroku app `nfl-predict`
-- Entrypoint: `Procfile` -> `uvicorn backend.main:app --host 0.0.0.0 --port $PORT --workers 1`
-- Canonical backend origin in docs: `https://nfl-predict-ecf5a5bd34fe.herokuapp.com`
-
-Frontend:
-
-- Target: Vercel project `nfl-ml-predictions`
-- Canonical alias: `https://new-nfl-predict.vercel.app`
-- Build root: `frontend/`
-- Build command: `npm run build`
-
-## Important Files and Modules
-
-| Path | Role / Purpose | Completeness | Important Units | Notes |
-| --- | --- | --- | --- | --- |
-| `README.md` | Operator quick start and repo map | Active | deploy targets, quick start, endpoints | Keep this aligned with real deploy targets |
-| `REPO-INFO.md` | Durable repo intelligence dossier | Active | architecture map, risk map, safe-edit map | Update after meaningful runtime/deploy changes |
-| `backend/main.py` | FastAPI app and runtime source of truth | Active, dense | `AppState`, `lifespan`, `/health`, `/status/*`, `/offseason/status`, `/schedule*`, `/history*`, `/predict`, `/admin/*` | Highest-risk edit zone |
-| `backend/app/core/settings.py` | Env, CORS, deploy-mode, path resolution | Active | `Settings`, `allowed_origins`, `effective_allow_origin_regex`, `resolved_*` properties | Start here for config/deploy bugs |
-| `backend/utils/functions_for_main.py` | Schedule time parsing, row lookup, model prep, prediction helpers | Active | `_add_kickoff_utc_datetime`, `_get_game_row_with_source`, `_prepare_inputs`, `_predict_score`, `_roll_forward_missing_player_stats` | Fixed to parse both naive and UTC schedule times |
-| `backend/services/schedule_ingestion.py` | ESPN scoreboard schedule ingestion | New active tool | `ingest_schedule`, `clean_schedule_frame`, `validate_schedule_frame`, `save_schedule` | Produces leak-safe future rows |
-| `backend/prediction_store.py` | User-scoped history facade | Active | context builder, append/load/summary helpers | SQLite-first, JSON fallback |
-| `backend/sqlite_store.py` | SQLite prediction history and score persistence | Active | DB setup, persist/query/upsert functions | `backend/predictions.db` is runtime state |
-| `backend/builddataset.py` | Canonical dataset build wrapper | Active | CLI, cleaning, manifest write | Produces `backend/data/datasets/*` |
-| `backend/train_models.py` | Training, evaluation, staging/promotion | Active, complex | model pipelines, reports, metadata | Must stay aligned with serving bundle contract |
-| `backend/scripts/weekly_retrain.py` | Dataset rebuild + train automation | Active | CLI orchestration | Good operator entrypoint |
-| `backend/ollama/llm_ollama.py` | Premium AI agent facade | Active | `NFLAgent`, CLI `chat` | Delegates memory and client behavior |
-| `backend/ollama/memory.py` | Premium AI dataset memory | Active | `NFLMemory` | Loads feature CSV and builds bounded prompt context |
-| `backend/ollama/client.py` | Premium AI Ollama client helpers | Active | `OllamaClient`, `chat_messages`, `explain_prediction` | Owns env config, auth headers, timeout, and model fallbacks |
-| `backend/scripts/audit_inference.py` | Manual inference-row audit | Active utility | sample game diagnostics | Reads legacy/current feature CSVs and model bundles |
-| `backend/scripts/sync_data.py` | Schedule and score sync helper | Active utility | schedule CSV writes, score-sync job | Backend-owned because it writes backend data |
-| `backend/scripts/sync_direct.py` | nflverse schedule CSV fetcher | Active utility | yearly schedule CSV writes | Backend-owned because it writes backend data |
-| `backend/scripts/sync_season.py` | Completed-score backfill helper | Active utility | ESPN date scan, SQLite upsert | Backend-owned because it writes backend score state |
-| `frontend/src/api/client.js` | Frontend transport and normalization | Active | `fetchJson`, `getOffseasonStatus`, `getScheduleForWeek`, `predictGame`, history helpers | Compatibility layer for old deployments |
-| `frontend/src/hooks/usePredictionState.js` | Shared dashboard/history state owner | Active | init hydration, `refreshHistory`, `loadScheduleForWeek`, `setPrediction`, `pushHistory` | Main frontend state contract |
-| `frontend/src/App.jsx` | Router/auth/app shell | Active | protected shell, route wiring | Creates one shared hook instance |
-| `frontend/src/components/DashBoard/Dashboard.jsx` | Main prediction UI | Active | slate controls, predict one/all actions | User-facing primary workflow |
-| `frontend/src/pages/StatsPage.jsx` | Status/history/schedule view | Active but drift-prone | independent fetch hydration | Should eventually reuse shared hook or shared service |
-| `scripts/verify_api_cors.py` | Live API/CORS verifier | Active | health/status/predict/CORS probes | Use after deploy |
-| `.github/workflows/ci.yml` | GitHub CI | Active | backend tests, frontend tests/build, optional CORS check | CI uses `backend/requirements.txt` |
-| `.github/workflows/deploy.yml` | GitHub deploy workflow | Active but secret-dependent | Heroku git push, Vercel action | Requires GitHub secrets |
-
-## Backend Map
-
-### Public API Surface
-
-- `GET /health`
-- `GET /status`
-- `GET /status/overview`
-- `GET /status/models`
-- `GET /status/runtime`
-- `GET /status/dataset-versioning`
-- `GET /status/performance-drift`
-- `GET /offseason/status` and `/api/offseason/status`
-- `GET /schedule`
-- `GET /schedule/next-week`
-- `GET /predict/next-week` and `/api/predict/next-week`
-- `GET /teams/logos` and `/api/teams/logos`
-- `GET /history`
-- `GET /history/summary`
-- `POST /predict` and `/api/predict`
-- Admin-only when enabled: `POST /admin/retrain`, `GET /admin/retrain/{job_id}`, `POST /admin/promote/{job_id}`
-
-### Runtime Data Boundaries
-
-| Path | Meaning | Edit Policy |
+| Path | Role | Notes |
 | --- | --- | --- |
-| `backend/data/datasets/` | Promoted clean datasets and manifests | Generated; commit only intentional curated artifacts |
-| `backend/data/models/` | Packaged runtime model bundle | Generated/model artifact; do not hand-edit |
-| `backend/data/Nfl_schedule_2025.csv` | Current packaged schedule CSV | Curated runtime asset |
-| `backend/data/Nfl_schedule_2026.csv` | Current packaged 2026 schedule CSV | Curated runtime asset |
-| `backend/data/schedules/*.parquet` | Schedule ingestion parquet outputs | Generated evidence/possible future runtime asset |
-| `backend/predictions.db` | SQLite runtime prediction history | Runtime state; avoid committing |
-| `backend/Predictions/` | JSON fallback history | Runtime state; avoid committing |
+| `frontend/src/App.jsx` | SPA shell and route wiring | Uses `BrowserRouter`, protected shell, lazy pages, and one shared prediction hook instance. |
+| `frontend/src/hooks/usePredictionState.js` | Shared app state | Owns schedule, week, predictions, history, summary, logos, health, season context. |
+| `frontend/src/api/client.js` | API transport | Resolves local/prod backend base URL, retries transient failures, applies premium timeout. |
+| `frontend/src/components/DashBoard/Dashboard.jsx` | Primary prediction UI | Consumes shared state and calls prediction/premium actions. |
+| `frontend/src/components/HistoryPage.jsx` | History UI | Consumes shared history state. |
+| `frontend/src/pages/StatsPage.jsx` | Stats/status page | Still fetches its own snapshot; keep this on the drift watchlist. |
+| `frontend/src/pages/LandingPage.jsx` | Public landing/sign-in page | Root route. |
 
-### Schedule Selection Contract
+Frontend routes registered in `App.jsx`:
 
-`backend/main.py` tries live `nflreadpy` schedule loading first, then non-empty packaged CSV fallbacks. It should prefer future playoff games, then a current/future season if rows exist, and only then fall back to the latest archived slate.
+- `/` - landing page.
+- `/*` - protected app shell; unauthenticated users redirect to `/`.
+- `/app` - dashboard.
+- `/history` - prediction history.
+- `/stats` - stats/status.
+- `/settings` - local account/session settings.
+- Protected wildcard - signed-in 404 page.
 
-`/offseason/status` must not advertise a season/week that the schedule endpoint cannot populate. If the only available slate is archived, it should point the frontend at that actual archived season/week and mark offseason mode as true.
+## Data And Model State
 
-## Frontend Map
+Current dataset manifest: `backend/data/datasets/latest_dataset.json`
 
-### Active Flow
+- Run id: `20260531T124903Z`
+- Seasons: 2018-2026
+- Rows/columns: 2499 rows, 242 columns
+- Completed/future rows: 2227 completed, 272 future
+- Clean dataset: `backend/data/datasets/game_features_20260531_clean.csv`
+- Dataset hash: `94bd8ca5e7e47ac5db5d4d583daaa93265313be24a20bf909848db68a18f188b`
 
-1. `App.jsx` creates the local auth session and protected routes.
-2. `usePredictionState.js` calls `/offseason/status`.
-3. During offseason, the hook calls `/schedule?season=<current_season>&week=<current_week>`.
-4. During normal season/postseason, the hook calls `/schedule/next-week`.
-5. `client.js` normalizes schedule/history/prediction responses.
-6. `Dashboard.jsx` renders games and calls `predictGame`.
-7. `/predict` responses update per-card prediction maps and user-scoped history.
-8. `HistoryPage.jsx` reads the same shared state.
+Current schedules under `backend/data/`:
 
-### Frontend Compatibility Fallbacks
+- `Nfl_schedule_2025.csv`
+- `Nfl_schedule_2026.csv`
 
-- If `/history/summary` is unavailable, `client.js` derives metrics from `/history`.
-- If `/schedule?season=&week=` is unavailable, `client.js` falls back to public schedule CSVs.
-- If `/schedule/next-week` is unavailable, `client.js` also tries local schedule assets.
-- If `/offseason/status` is unavailable, `client.js` returns a safe non-offseason fallback.
+Current model bundle under `backend/models/`:
 
-## Data Flow / Lifecycle Map
+- Pipeline artifacts: `home_pipe.joblib`, `away_pipe.joblib`, `win_pipe.joblib`
+- Legacy/estimator artifacts: `home_model.joblib`, `away_model.joblib`, `win_clf_calibrated.joblib`
+- Preprocessors: `preprocessor.joblib`, `score_preprocessor.joblib`, `win_preprocessor.joblib`
+- Metadata/reports: `metadata.json`, `feature_manifest.json`, `training_report.json`, `run_summary.json`
+- `metadata.json` reports scikit-learn `1.7.2`, training timestamp `2026-06-04T21:16:55.724480+00:00`, and the same dataset hash as `latest_dataset.json`.
+- `run_summary.json` reports status `PROMOTED` and a passed model gate.
 
-### Schedule Lifecycle
+Important drift note: `frontend/src/api/client.js` can fall back to bundled public schedule CSVs, but `frontend/public/` currently contains only `nfl_ham2.png` and `nfl_pic.png`; there is no `frontend/public/schedules/` directory in this checkout.
 
-ESPN scoreboard API
--> `backend/services/schedule_ingestion.py`
--> `ScheduleRow` dataclass records
--> `clean_schedule_frame`
--> CSV/parquet schedule artifacts
--> `backend/main.py` schedule loader
--> `_add_kickoff_utc_datetime`
--> `_select_schedule_slice`
--> `/schedule*` JSON rows
--> `frontend/src/api/client.js`
--> `usePredictionState.js`
--> dashboard cards.
+## Manifest And Deploy Surfaces
 
-### Prediction Lifecycle
+| Path | Observed role | Current note |
+| --- | --- | --- |
+| `requirements.txt` | Root Python dependency surface, used by Heroku-style root builds | Fully pinned package list, includes FastAPI `0.124.2`, scikit-learn `1.7.2`, Ollama `0.6.1`. |
+| `backend/requirements.txt` | CI backend dependency surface | Range-pinned production deps, includes FastAPI `>=0.104.0,<0.110.0`; this diverges materially from root requirements. |
+| `pyproject.toml` | Root Python metadata and uv workspace | Python `~=3.12.0`, no declared deps, `backend` workspace member. |
+| `backend/pyproject.toml` | Backend package metadata | Python `~=3.12.0`, no declared deps; aligned with root metadata. |
+| `frontend/package.json` | Frontend scripts and npm deps | Scripts: `dev`, `start`, `build`, `preview`, `test`; engines allow Node `>=22.12.0 <23`, aligned with CI and `frontend/.nvmrc`. |
+| `frontend/package-lock.json` | Locked npm dependency graph | Root package engine metadata is aligned with `frontend/package.json`. |
+| `Procfile` | Heroku ASGI entrypoint | `uvicorn backend.main:app --host 0.0.0.0 --port $PORT --workers 1`. |
+| `app.json` | Heroku app metadata/default env | Defaults still show `SCHEDULE_PATH=data/Nfl_schedule_2025.csv` and `MODELS_DIR=models`. |
+| `frontend/vercel.json` | Vercel SPA config | Vite framework, `dist` output, `npm ci`, SPA rewrite to `/index.html`. |
+| `.slugignore` | Heroku slug pruning | Excludes docs/tests/frontend build noise; explicitly keeps `backend/models/**` and `backend/data/datasets/**`. |
 
-Dashboard game row
--> `buildPredictPayload`
--> `client.predictGame`
--> `POST /predict`
--> readiness gate in `backend/main.py`
--> `_get_game_row_with_source`
--> `_roll_forward_missing_player_stats`
--> `_prepare_inputs`
--> `_predict_score` and win-probability logic
--> `PredictionResponse`
--> SQLite/JSON history persistence
--> frontend prediction map and history refresh.
+No root `vercel.json` exists. Vercel config is in `frontend/vercel.json`.
 
-### Dataset / Model Lifecycle
+## Test And Build Expectations
 
-Raw NFL data and schedule assets
--> `backend/builddataset.py`
--> clean dataset and `latest_dataset.json`
--> `backend/train_models.py`
--> model artifacts, metadata, reports, staging bundle
--> optional promotion to runtime models directory
--> `backend/main.py` startup model loading
--> `/status/models` and `/predict`.
-
-### History Lifecycle
-
-Browser local session email
--> `X-User-Id`
--> `prediction_store.build_prediction_user_context`
--> SQLite `user_predictions`
--> score backfill from completed schedule rows
--> `/history` and `/history/summary`
--> dashboard/history/stats UI.
-
-## Command Surface Map
-
-### Backend
+README recommended checks:
 
 ```powershell
-python -m pip install -r requirements.txt
-uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000
-python backend/builddataset.py --start 2018 --end 2025 --out-dir backend/data/datasets
-python backend/train_models.py
-python backend/scripts/audit_inference.py
-python backend/scripts/sync_data.py
-python -m backend.services.schedule_ingestion --season 2025 --season-types 2,3 --out-csv backend/data/Nfl_schedule_2025.csv --out-parquet backend/data/schedules/nfl_schedule_2025.parquet
-python scripts/verify_api_cors.py --backend-url https://nfl-predict-ecf5a5bd34fe.herokuapp.com
-```
-
-### Tests
-
-```powershell
-python -m py_compile backend/main.py backend/utils/functions_for_main.py backend/services/schedule_ingestion.py
-.\nflenv\Scripts\python.exe -m pytest backend\tests -q -o addopts=''
+.venv\Scripts\python.exe -m pytest backend/tests -q
 cd frontend
 npm test -- --run
 npm run build
+python scripts/verify_api_cors.py --backend-url https://nfl-predict-ecf5a5bd34fe.herokuapp.com
 ```
 
-Local Windows note: pytest temp folders in this checkout can raise `PermissionError: [WinError 5] Access is denied`. When that happens, rerun focused tests with `-o addopts=''` and report the temp-ACL blocker honestly.
+`pytest.ini`:
 
-### Deployment
+- `testpaths = backend/tests backend`
+- `addopts = --basetemp=tmp_pytest`
 
-```powershell
-git push origin master
-git push heroku main
-heroku config:get SCHEDULE_PATH -a nfl-predict
-heroku config:get MODELS_DIR -a nfl-predict
-heroku logs --tail -a nfl-predict
-```
+GitHub Actions CI (`.github/workflows/ci.yml`):
 
-## Risk / Debt / Confusion Hotspots
+- Runs on pushes to `main` and `master`, plus pull requests.
+- Uses `actions/checkout@v6`, `actions/setup-python@v6`, and `actions/setup-node@v6`.
+- Backend job uses `PYTHON_VERSION=3.12`, installs `backend/requirements.txt`, installs pytest `>=9,<10`, verifies `backend/models/metadata.json` scikit-learn version matches installed runtime, then runs `python -m pytest backend/tests -q`.
+- Frontend job uses `NODE_VERSION=22`, npm cache against `frontend/package-lock.json`, then runs `npm ci`, `npm test -- --run`, and `npm run build` from `frontend/`.
+- CORS job runs `scripts/verify_api_cors.py` against `CI_BACKEND_URL` or the documented Heroku fallback.
 
-- `backend/main.py` is too large and owns too many responsibilities.
-- `StatsPage.jsx` bypasses shared prediction state and can drift from dashboard behavior.
-- `frontend/package-lock.json` can pick up accidental churn from dirty `node_modules`; inspect before staging.
-- `frontend/dist/index.html` should remain ignored build output and should not be part of normal deploy commits.
-- `backend/predictions.db` is runtime state and should not be part of normal deploy commits.
-- `backend/data/Nfl_schedule_2026.csv` is now a populated curated runtime asset.
-- Root `requirements.txt` and `backend/requirements.txt` differ. Heroku uses the root file; CI currently installs `backend/requirements.txt`.
-- Root is intentionally limited to project/deploy/test metadata plus README/REPO-INFO; backend operations live under `backend/scripts/`, frontend code under `frontend/`, and durable docs under `docs/`.
-- `.slugignore` excludes docs/tests from Heroku, which is fine for slug size but means deploy debugging must rely on source locally/GitHub.
-- Multiple temp folders currently produce Windows permission warnings during git/pytest scans.
-- `archive/` contains many old files with names similar to active files. Do not use archive code as runtime evidence unless a current import path proves it.
+GitHub Actions deploy (`.github/workflows/deploy.yml`):
 
-## Change-Safety Map
+- Runs on `master` push and manual dispatch.
+- Uses `actions/checkout@v6` and `actions/setup-python@v6`.
+- Deploys backend to Heroku by pushing `HEAD:main`.
+- Verifies required model bundle files before deploy.
+- After deploy, polls `/status/models` and sends a sample `/predict` request.
+- It does not deploy Vercel; Vercel appears to rely on the linked frontend project/config.
 
-### Safer Edit Zones
+Scheduled retrain (`.github/workflows/scheduled-retrain.yml`):
 
-- `docs/*.md`
-- `README.md`
-- `scripts/verify_api_cors.py`
-- Focused frontend presentational components
-- Narrow tests under `backend/tests/` or `frontend/src/**/*.test.*`
-- Small compatibility additions inside `frontend/src/api/client.js`
+- Uses `actions/checkout@v6`, `actions/setup-python@v6`, and `actions/upload-artifact@v7`.
+- Runs focused contract tests before rebuilding the dataset/model bundle.
+- Uploads retrain reports, dataset manifests, and model artifacts without auto-promoting.
 
-### Medium-Risk Edit Zones
+Current friction to keep visible:
 
-- `frontend/src/hooks/usePredictionState.js`
-- `frontend/src/api/client.js`
-- `backend/app/core/settings.py`
-- `backend/services/schedule_ingestion.py`
-- `backend/utils/functions_for_main.py`
+- Root `requirements.txt` and `backend/requirements.txt` disagree on backend dependency versions. That can let CI pass under one FastAPI/Starlette surface while Heroku runs another.
+- Local `.venv` is Python 3.11.6 while project metadata and CI target Python 3.12. `.venv312` is an ignored Python 3.12 environment created for release-confidence local backend checks.
+- Local Node is currently v25.0.0, which is outside the strict frontend engine range. Frontend checks can run if `engine-strict` is not enabled, but release-confidence frontend verification should use Node 22.
 
-### High-Risk Edit Zones
+## Runtime Versus Archive Drift
 
-- `backend/main.py`
-- `backend/train_models.py`
-- `backend/builddataset.py`
-- model artifact directories
-- runtime history DB/files
-- deploy config files (`Procfile`, `app.json`, `.github/workflows/deploy.yml`, `.slugignore`)
+Use active files first:
 
-## Likely Incomplete or Placeholder Areas
+- Backend runtime: `backend/main.py`, `backend/routes/api.py`, `backend/services/api_runtime.py`, `backend/app/core/settings.py`.
+- Frontend runtime: `frontend/src/App.jsx`, `frontend/src/api/client.js`, `frontend/src/hooks/usePredictionState.js`, route page/component files.
+- Data/model runtime: `backend/data/datasets/latest_dataset.json`, `backend/data/Nfl_schedule_2025.csv`, `backend/data/Nfl_schedule_2026.csv`, `backend/models/*`.
+- Deploy/runtime config: `Procfile`, `app.json`, `.slugignore`, `frontend/vercel.json`, `.github/workflows/*.yml`.
 
-- Real authentication is not implemented. `useAuthSession.js` is local-device identity only.
-- 2026 schedule CSV/parquet files are populated curated runtime assets.
-- Admin retrain/promote endpoints exist but require careful production token/config handling.
-- Frontend public schedule fallback assets are compatibility-only; backend schedule assets are the runtime source of truth.
-- Stats page does not yet share the dashboard hook's offseason routing behavior.
-- Schedule ingestion produces good clean schedule rows, but feature-dataset exact-match coverage still needs verification after ingestion changes.
+Treat these as historical unless verified by current imports or deploy config:
+
+- `archive/**`
+- old test files under `archive/**`
+- archived backend copies under `archive/backend/**`
+- old planning outputs under `artifacts/**` and `review/**`
+
+Do not use archive code to infer current route behavior. The active route registry is `backend/routes/api.py`.
+
+## Known Watch Items
+
+1. Dependency source split: align or document why root `requirements.txt` and `backend/requirements.txt` intentionally diverge.
+2. Local Python runtime split: `.venv` is currently Python 3.11.6 while metadata and CI require Python 3.12.
+3. Schedule default split: README and active data emphasize 2026, but `app.json` and docs examples still default `SCHEDULE_PATH` to 2025. Runtime sibling-schedule scanning reduces the risk, but docs/deploy defaults still look stale.
+4. Frontend schedule fallback split: either add the expected public schedule CSVs or document that local CSV fallback is code-only and unavailable in this checkout.
+5. `StatsPage.jsx` still fetches independently; dashboard/history share `usePredictionState.js`.
+6. Admin routes are mounted; keep production access checks and `ENABLE_ADMIN` behavior explicit when changing them.
+7. Heroku slug excludes docs/tests, so production debugging must use local checkout, GitHub, logs, and live endpoint probes.
 
 ## Recommended Next Steps
 
-1. Keep `master` as the canonical GitHub source branch and GitHub Actions deploy trigger.
-2. Refactor `StatsPage.jsx` to consume shared season/schedule context or a shared schedule service.
-3. Keep generated `frontend/dist/*`, `backend/predictions.db`, and local artifact screenshots out of Git.
-4. Add backend tests specifically for `/offseason/status` matching an available `/schedule?season=&week=` response.
-5. Keep future scripts and docs in their owner directories: backend data/runtime helpers in `backend/scripts/`, repo-level external verifiers in `scripts/`, and durable markdown in `docs/`.
-6. Align Heroku and CI dependency surfaces by resolving the root `requirements.txt` versus `backend/requirements.txt` split.
+1. Resolve the dependency split before backend feature work: decide whether CI should install root `requirements.txt`, or whether Heroku should build from `backend/requirements.txt`.
+2. Recreate the default `.venv` with Python 3.12 once it is safe to replace the existing Python 3.11 environment; until then, `.venv312` is available for backend verification.
+3. Refresh `docs/ENVIRONMENT.md` and `app.json` schedule examples if 2026 is now the intended packaged default.
+4. Decide whether `frontend/public/schedules/` should exist; if not, remove or clearly label schedule CSV fallback assumptions in docs.
+5. Keep route changes focused in `backend/routes/api.py` plus `backend/services/api_runtime.py`, then verify `backend/tests` and frontend client tests.
 
-## Open Questions / Uncertainties
+## Command Log
 
-- Should the repo commit generated parquet schedule artifacts, or keep only canonical CSV schedules in Git?
-- Should `origin/main` remain as a compatibility branch for any external deploy integration, or can it be deleted after `master` deployments are verified?
-- Is the current Heroku config still `SCHEDULE_PATH=data/Nfl_schedule_2025.csv`, or has it moved to the populated 2026 schedule?
-- Should GitHub Actions deploy both frontend and backend on every `master` push, or should backend deploy remain a manual Heroku push?
+Material commands/facts used for this refresh:
+
+```powershell
+git rev-parse --show-toplevel
+git status --short --branch
+git log -1 --oneline --decorate
+git remote get-url origin
+git remote get-url heroku
+python C:\Users\iProg\.codex\skills\repo-info\scripts\repo_scan.py --repo C:\Users\iProg\Documents\NFL_ML_Predictions --format markdown
+Get-Content -Raw README.md
+Get-Content -Raw REPO-INFO.md
+Get-Content -Raw frontend\package.json
+Get-Content -Raw pyproject.toml
+Get-Content -Raw backend\pyproject.toml
+Get-Content -Raw requirements.txt
+Get-Content -Raw backend\requirements.txt
+rg -n "APIRouter|@router\.|@app\.|include_router|FastAPI\(" backend -g "*.py" -g "!archive/**"
+rg -n "BrowserRouter|Routes|Route|Navigate|react-router|createBrowserRouter|path=|NavLink|Link" frontend\src -g "*.jsx" -g "*.js"
+Get-Content -Raw backend\main.py
+Get-Content -Raw backend\routes\api.py
+Get-Content -Raw frontend\src\App.jsx
+Get-Content -Raw frontend\src\api\client.js
+Get-Content -Raw frontend\src\hooks\usePredictionState.js
+Get-Content -Raw pytest.ini
+Get-Content -Raw .github\workflows\ci.yml
+Get-Content -Raw .github\workflows\deploy.yml
+Get-Content -Raw Procfile
+Get-Content -Raw app.json
+Get-Content -Raw frontend\vercel.json
+Get-Content -Raw .slugignore
+rg --files backend\tests frontend\src -g "*test*" -g "!**/node_modules/**"
+Get-ChildItem backend\data\datasets -File
+Get-ChildItem backend\data -File -Filter "Nfl_schedule_*.csv"
+Get-ChildItem backend\models -File
+Get-ChildItem frontend\public -Force
+Get-ChildItem archive -Recurse -File -ErrorAction SilentlyContinue | Measure-Object
+Get-ChildItem archive -Recurse -File -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum
+Get-Content -Raw backend\data\datasets\latest_dataset.json
+Get-Content -Raw backend\models\metadata.json
+Get-Content -Raw backend\models\run_summary.json
+gh --version
+gh auth status
+node --version
+npm --version
+.venv312\Scripts\python.exe -m pytest -q backend\tests
+npm --prefix frontend test -- --run
+npm --prefix frontend run build
+git diff --check
+```
+
+Commands attempted but corrected to tighter reads:
+
+- `Get-Content -Raw vercel.json` failed because no root `vercel.json` exists; the active file is `frontend/vercel.json`.
+- A broad `rg --files backend\data frontend\public ...` scan timed out on the large data/model tree; targeted `Get-ChildItem` reads were used instead.
+
+Verification completed after the CI/toolchain update: workflow YAML parsed with PyYAML, Python 3.12 backend tests passed from `.venv312` (`25 passed`), frontend tests passed (`14 passed`), Vite production build passed, and `git diff --check` returned success with only line-ending warnings.

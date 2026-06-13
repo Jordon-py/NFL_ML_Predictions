@@ -82,6 +82,16 @@ def _split_origins(raw: str) -> List[str]:
 
 
 class Settings(BaseSettings):
+    """Environment-backed runtime configuration.
+
+    Data shape:
+        Raw environment strings are normalized into CORS settings, admin flags,
+        cache settings, and resolved dataset/schedule/model paths.
+    Methods:
+        Properties expose production mode, allowed origins, CORS regex, and
+        resolved filesystem paths.
+    """
+
     model_config = SettingsConfigDict(
         env_file=None if IS_HEROKU else str(BACKEND_DIR / ".env"),
         env_file_encoding="utf-8",

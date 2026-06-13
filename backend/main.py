@@ -1,70 +1,18 @@
 # ==========================================
 # File: backend/main.py
-# Role: FastAPI backend for the NFL prediction dashboard.
-# Input Data: HTTP requests (JSON payloads), Model artifacts, Dataset CSVs.
-# Output Data: JSON responses (Health, Status, Schedule, Predictions, History).
-# Dependencies: fastapi, pydantic, pandas, numpy, joblib, nflreadpy, uvicorn
-# Notes: Highest-risk edit zone; manages the full runtime lifecycle and API surface.
+# Role: FastAPI application bootstrap for the NFL prediction dashboard.
+# Input Data: HTTP requests, process environment, app startup lifecycle.
+# Output Data: Mounted FastAPI application at ``backend.main:app``.
+# Dependencies: fastapi, backend.routes, backend.services.api_runtime
+# Notes: Route declarations live in backend/routes; business workflows live in
+# backend/services so this file stays small and deployment-focused.
 # ==========================================
 
-# -*- coding: utf-8 -*-
-"""
-File: backend/main.py
+from __future__ import annotations
 
-Purpose:
-    FastAPI backend for the NFL prediction dashboard.
-
-    Exposes endpoints for:
-    - /health            : service + components health
-    - /status/overview   : lightweight dashboard summary
-    - /schedule/next-week: upcoming week schedule
-    - /history           : recent prediction history
-    - /predict           : single-game prediction (scores + win probabilities)
-
-Key design points:
-    - Loads latest game_features*.csv dataset + trained models at startup.
-    - Normalizes team codes (home/away, abbr/name) to uppercase for stable matching.
-    - Uses Pydantic models for request/response typing where it matters
-      (health + prediction).
-    - Keeps in-memory prediction history bounded for the /history endpoint.
-
-Notes:
-    - The prediction contract is aligned with the current React client:
-        - Request body: { home_team, away_team, season, week }
-        - Response: PredictionResponse with home_score, away_score,
-          home_win_probability, away_win_probability, point_diff, etc.
-
-Data shapes:
-    - Schedule input rows are pandas DataFrames with season/week/team columns,
-      optional gameday/gametime columns, and a derived UTC dt column.
-    - Schedule responses are List[ScheduleGameResponse] dictionaries consumed
-      by frontend/src/api/client.js.
-
-Syntax notes:
-    - FastAPI decorators expose route functions directly.
-    - Pydantic models below define public JSON contracts.
-
-Important functions (line numbers last refreshed 2026-04-30):
-    - _load_schedule_dataframe: around line 2925
-    - _select_schedule_slice: around line 3023
-    - _schedule_response: around line 3161
-
-Possible bugs:
-    - Upstream nflreadpy/network outages can force CSV fallback behavior.
-    - A stale SCHEDULE_PATH can hide newer packaged schedules if fallback
-      discovery is not allowed to scan sibling schedule CSVs.
-
-Enhancement ideas:
-    - Cache normalized schedule frames with a short TTL.
-    - Add a season-release job that refreshes packaged schedule CSVs after the
-      official NFL schedule release.
-"""
-
-import json
 import logging
 import os
 import hashlib
-import asyncio
 import re
 import time
 import sys
@@ -99,8 +47,7 @@ from backend.prediction_store import (
     get_prediction_history_count,
     get_prediction_history_summary as load_prediction_history_summary,
 )
-# Comment 1: Import score sync utilities from backend.scripts.score_sync following structural organization.
-from backend.scripts.score_sync import extract_score_entries_from_dataframe
+from backend.score_sync import extract_score_entries_from_dataframe
 from backend.schemas import PredictionRequest as StoredPredictionRequest
 from backend.services.inference_row import build_model_input_row
 from backend.schemas_pipeline_status import (
@@ -207,7 +154,7 @@ METRICS_HISTORY_PATH = REPORTS_DIR / "drift" / "metrics_history.csv"
 
 # Allow overriding the schedule CSV via env; default to backend/data
 schedule_env_path = SETTINGS.resolved_schedule_path
-SCHEDULE_PATH = schedule_env_path if schedule_env_path else (DATA_DIR / "Nfl_schedule_2026.csv")
+SCHEDULE_PATH = schedule_env_path if schedule_env_path else (DATA_DIR / "Nfl_schedule_2025.csv")
 
 # Required model keys for /predict to be "ready"
 REQUIRED_MODELS: Tuple[str, ...] = ("home", "away", "win")
@@ -345,6 +292,12 @@ def _find_schedule_paths(requested_season: Optional[int] = None) -> List[Path]:
     add(frontend_public / "nflSchedule.csv")
 
     return sorted(candidates, key=lambda p: _schedule_path_sort_key(p, requested_season))
+
+
+def _find_schedule_path() -> Optional[Path]:
+    """Backward-compatible single-path helper for older internal callers."""
+    paths = _find_schedule_paths()
+    return paths[0] if paths else None
 
 
 def _models_dir_has_required_artifacts(models_dir: Path) -> bool:
@@ -612,6 +565,14 @@ def _load_team_metadata_map() -> Dict[str, Dict[str, Any]]:
     except Exception as exc:
         logging.warning("[Logos] Failed reading %s: %s", path, exc)
         return {}
+
+
+def _load_team_logo_map() -> Dict[str, str]:
+    return {
+        team_code: str(meta.get("logoUrl") or "").strip()
+        for team_code, meta in _load_team_metadata_map().items()
+        if str(meta.get("logoUrl") or "").strip()
+    }
 
 
 def _calculate_win_probability(
@@ -1467,7 +1428,6 @@ async def lifespan(app: FastAPI):
     logging.info("[App] Shutdown complete.")
 
 
-# Comment 2: Mount FastAPI application with custom CORS middleware and routing rules.
 app = FastAPI(lifespan=lifespan)
 
 
@@ -1486,6 +1446,10 @@ app = FastAPI(lifespan=lifespan)
 #                         Example (recommended):
 #                           (?i)^https://(?:[a-z0-9-]+\.)+vercel\.app$
 #
+def _env_flag(name: str, default: str = "true") -> bool:
+    """Parse boolean-ish env vars safely."""
+    return str(os.getenv(name, default)).strip().lower() in ("1", "true", "yes", "y", "on")
+
 ALLOWED_ORIGINS: List[str] = SETTINGS.allowed_origins
 ALLOW_ORIGIN_REGEX = SETTINGS.effective_allow_origin_regex
 
@@ -1500,8 +1464,8 @@ if ALLOW_ORIGIN_REGEX:
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,          # ✅ list (string here breaks CORS matching)
-    allow_origin_regex=ALLOW_ORIGIN_REGEX,  # ✅ supports Vercel preview deployments
+    allow_origins=runtime.ALLOWED_ORIGINS,
+    allow_origin_regex=runtime.ALLOW_ORIGIN_REGEX,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -4406,5 +4370,7 @@ async def predict(payload: PredictRequest, request: Request) -> Dict[str, Any]:
 # -------------------------------------------------------------------
 
 if __name__ == "__main__":
+    import uvicorn
+
     port = int(os.environ.get("PORT", "8000"))
     uvicorn.run(app, host="0.0.0.0", port=port)

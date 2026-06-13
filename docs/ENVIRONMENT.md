@@ -25,6 +25,10 @@ The goal of this document is to explain the active configuration behavior, not e
 | `PREDICT_CACHE_MAX_ITEMS` | Prediction cache max entries | `1000` | `1000` |
 | `ENABLE_ADMIN` | Expose `/admin/*` routes | `false` | `true` |
 | `ADMIN_TOKEN` | Token for admin routes | empty | `<secret>` |
+| `OLLAMA_MODEL` | Premium AI model name | `gemma4:e4b` fallback in code | `gemma4:31b-cloud` |
+| `OLLAMA_API_KEY` | Bearer token for direct Ollama Cloud API access | empty; required for `https://ollama.com` | `<secret>` |
+| `OLLAMA_BASE_URL` | Comma-separated Ollama SDK hosts | local daemon unless configured | `https://ollama.com,http://localhost:11434` |
+| `OLLAMA_TIMEOUT_S` | Premium AI request timeout seconds | `15` in code, `300` in env example | `300` |
 
 ## Runtime Path Resolution
 
@@ -73,15 +77,29 @@ Operational rule:
 
 - If you upgrade scikit-learn or change training features, retrain and republish the serving bundle before treating the deployment as production-ready.
 
+### Ollama Cloud
+
+Ollama's Python SDK should be configured with `host="https://ollama.com"` for
+direct cloud access. The SDK adds `/api` internally, while raw REST calls use
+`https://ollama.com/api`. Direct cloud calls require
+`Authorization: Bearer $OLLAMA_API_KEY`.
+
+When `OLLAMA_MODEL` contains a cloud model such as `gemma4:31b-cloud` and
+`OLLAMA_API_KEY` is set, the backend automatically tries `https://ollama.com`
+before the local daemon. Keep the API key only in `backend/.env` or deployment
+secrets, not in frontend env files.
+
 ## Frontend Variables
 
 | Name | Purpose | Default behavior | Example |
 | --- | --- | --- | --- |
-| `VITE_API_BASE_URL` | Backend origin used by production frontend builds | empty locally unless you intentionally test a remote API | `https://nfl-predict-ecf5a5bd34fe.herokuapp.com` |
+| `VITE_API_BASE_URL` | Backend origin used by deployed production frontend builds | empty locally unless you intentionally test a remote API | `https://nfl-predict-ecf5a5bd34fe.herokuapp.com` |
 | `VITE_API_BASE` | Older alias still honored by `client.js` | empty | `https://example.com` |
 | `VITE_API_URL` | Older alias still honored by `client.js` | empty | `https://example.com` |
-| `VITE_API_DEV` | Preferred local dev backend origin for the active client and legacy helper | empty | `http://127.0.0.1:8000` |
+| `VITE_API_DEV` | Preferred local backend origin for dev and localhost preview | empty | `http://127.0.0.1:8000` |
 | `VITE_DEV_ENV` | Legacy alias for local builds | empty | `http://127.0.0.1:8000` |
+| `VITE_FORCE_PROD_API` | Force a localhost preview build to call the deployed backend | `false` | `true` |
+| `VITE_PREMIUM_API_TIMEOUT_MS` | Longer timeout for Premium AI explain/chat requests | `180000` | `180000` |
 
 Important frontend note:
 
@@ -114,7 +132,15 @@ Recommended local value:
 ```env
 VITE_API_DEV=http://127.0.0.1:8000
 VITE_API_BASE_URL=https://nfl-predict-ecf5a5bd34fe.herokuapp.com
+VITE_PREMIUM_API_TIMEOUT_MS=180000
+VITE_FORCE_PROD_API=false
 ```
+
+`npm run preview` serves the production bundle from `http://localhost:4173`, but
+the frontend still treats localhost as a local browser host. With `VITE_API_DEV`
+set, preview calls `http://127.0.0.1:8000` instead of Heroku. Set
+`VITE_FORCE_PROD_API=true` only when you intentionally want preview to exercise
+the deployed backend.
 
 ## Production Setup
 

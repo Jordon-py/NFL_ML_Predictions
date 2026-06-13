@@ -20,7 +20,11 @@ import pandas as pd
 from dotenv import find_dotenv, load_dotenv
 
 
-load_dotenv(find_dotenv())
+BACKEND_ENV_PATH = Path(__file__).resolve().parents[1] / ".env"
+if BACKEND_ENV_PATH.exists():
+    load_dotenv(BACKEND_ENV_PATH)
+else:
+    load_dotenv(find_dotenv())
 
 log = logging.getLogger(__name__)
 
@@ -38,7 +42,9 @@ class NFLMemory:
 
         self.df = pd.read_csv(self.csv_path)
         log.info("Loaded %s NFL games from %s", f"{len(self.df):,}", self.csv_path.name)
+        log.info("Columns: %s", ", ".join(self.df.columns[:]) + (f", ... ({len(self.df.columns)} total)"))
         self.data_summary = self.summarize_data()
+        self.system_prompt = self.build_system_prompt()
 
     def summarize_data(self) -> str:
         """Build a concise schema and key-stat summary for the system prompt."""
@@ -69,12 +75,22 @@ class NFLMemory:
     def build_system_prompt(self) -> str:
         """System prompt that turns the LLM into an NFL data analyst."""
         return (
-            "You are an NFL data analyst. You have access to a dataset of NFL games.\n"
-            "Answer questions using ONLY the data described below.\n"
+            f"You are an expert NFL data analyst. You have access to a dataset of NFL games.{self.df}\n"
+            "Answer questions using the data described below you may use other data you have been trained on but your main source of information is the provided dataset.\n"
             "Be concise, use numbers and stats when possible.\n"
+            "You may NOT make up any information\n"
+            "You may perform calculations based on the data and compare values, columns, but do not infer anything that isn't directly supported.\n"
             "If a question can't be answered from this data, say so.\n\n"
             f"{self.data_summary}"
         )
+
+    def get_system_prompt(self) -> str:
+        """Return the system prompt with dataset summary."""
+        return self.system_prompt
+
+    def get_relevant_context(self, question: str) -> str:
+        """Return a small row preview filtered by mentioned team and season."""
+        return self.relevant_context(question)
 
     def relevant_context(self, question: str) -> str:
         """Return a small row preview filtered by mentioned team and season."""
@@ -101,8 +117,12 @@ class NFLMemory:
             "season", "week", "home_team", "away_team",
             "home_points_for", "away_points_for", "winner",
         ]
-        display_cols = [column for column in display_cols if column in filtered.columns]
+        available_cols = [col for col in display_cols if col in filtered.columns]
+        averages = self.df.describe().to_json(indent=2)
+        team_averages = filtered.groupby("home_team").aggregate(home_points_for=('home_points_for', 'mean')).to_json(indent=2) if "home_team" in filtered.columns else "{}"
+        away_averages = filtered.groupby("away_team").aggregate(away_points_for=('away_points_for', 'mean')).to_json(indent=2) if "away_team" in filtered.columns else "{}"
 
-        preview = filtered[display_cols].head(30)
+
+        preview = filtered[display_cols]
         summary = f"Showing {len(preview)} of {len(filtered)} matching games:\n"
-        return summary + preview.to_string(index=False)
+        return summary + preview.to_json(index=False) + f"\n\nOverall averages: {averages}\nTeam averages: {team_averages}\nAway team averages: {away_averages}"

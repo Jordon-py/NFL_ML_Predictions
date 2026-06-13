@@ -10,6 +10,7 @@ Data shape:
 
 from __future__ import annotations
 
+import os
 import asyncio
 import logging
 from typing import Any, Dict, Optional
@@ -19,9 +20,10 @@ from backend.ollama.client import (
     OLLAMA_HOST,
     OLLAMA_MODEL,
     OllamaClient,
+    chat_once,
     chat_messages,
     explain_prediction,
-    model_candidates,
+    ollama_host_candidates,
     ollama_unavailable_reply,
 )
 from backend.ollama.memory import NFLMemory
@@ -43,10 +45,12 @@ class NFLAgent:
         csv_path: Optional[str] = None,
         model: Optional[str] = None,
         host: Optional[str] = None,
+        api_key: Optional[str] = None
     ):
+        api_key = api_key or os.getenv("OLLAMA_API_KEY")
         self.model = model or OLLAMA_MODEL
-        self.host = host or OLLAMA_HOST
-        self.client = OllamaClient(host=self.host, model=self.model).client
+        self.host = ollama_host_candidates(host, model=self.model)[0]
+        self.client = OllamaClient(host=self.host, model=self.model, api_key=api_key).client
         self.memory = NFLMemory(csv_path=csv_path)
 
         self.csv_path = self.memory.csv_path
@@ -74,27 +78,21 @@ class NFLAgent:
         are tried in order.
         """
         messages = [
-            {"role": "system", "content": self._build_system_prompt()},
+            {
+                "role": "system",
+                "content": self._build_system_prompt()
+            },
             {
                 "role": "user",
                 "content": f"{question}\n\nRelevant data:\n{self._get_relevant_context(question)}",
             },
         ]
 
-        errors = []
-        for idx, model in enumerate(model_candidates(self.model)):
-            try:
-                response = await self.client.chat(model=model, messages=messages)
-                return (response.message.content or "").strip()
-            except Exception as exc:
-                err_msg = f"Model '{model}' failed: {exc}"
-                errors.append(err_msg)
-                log.warning(err_msg)
-                candidates = model_candidates(self.model)
-                if idx < len(candidates) - 1:
-                    log.info("Trying next Ollama model: %s", candidates[idx + 1])
+        result = await chat_once(host=self.host, model=self.model, messages=messages)
+        if result.get("ok"):
+            return str(result.get("content") or "").strip()
 
-        return ollama_unavailable_reply(errors)
+        return ollama_unavailable_reply([str(result.get("error") or "ollama chat failed")])
 
     async def explain_prediction(self, pred: Dict[str, Any]) -> Dict[str, Any]:
         """Generate a structured prediction explanation with this agent config."""

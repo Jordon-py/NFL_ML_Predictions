@@ -28,6 +28,24 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const localStorageMock = (() => {
+  const store = new Map();
+  return {
+    getItem: vi.fn((key) => (store.has(String(key)) ? store.get(String(key)) : null)),
+    setItem: vi.fn((key, value) => {
+      store.set(String(key), String(value));
+    }),
+    removeItem: vi.fn((key) => {
+      store.delete(String(key));
+    }),
+    clear: vi.fn(() => {
+      store.clear();
+    }),
+  };
+})();
+
+vi.stubGlobal("localStorage", localStorageMock);
+
 const clientMocks = vi.hoisted(() => ({
   mockGetNextWeekSchedule: vi.fn(async () => ([
     { season: 2025, week: 1, home_abbr: "buf", away_abbr: "kc", home_team: "BUF", away_team: "KC" },

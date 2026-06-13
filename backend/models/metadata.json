@@ -1588,10 +1588,10 @@
       }
     },
     "classification": {
-      "accuracy": 0.6621923937360179,
-      "brier": 0.2119299013803873,
-      "roc_auc": 0.7522933926045665,
-      "log_loss": 0.6124458191619153
+      "accuracy": 0.6778523489932886,
+      "brier": 0.21011185675966,
+      "roc_auc": 0.7460295009092746,
+      "log_loss": 0.609506968680076
     },
     "calibration": {
       "bins": [
@@ -1617,19 +1617,19 @@
           "bin": 2,
           "lower": 0.2,
           "upper": 0.30000000000000004,
-          "count": 92,
-          "avg_predicted_probability": 0.2934260720080094,
-          "empirical_home_win_rate": 0.21739130434782608,
-          "absolute_error": 0.07603476766018333
+          "count": 0,
+          "avg_predicted_probability": null,
+          "empirical_home_win_rate": null,
+          "absolute_error": null
         },
         {
           "bin": 3,
           "lower": 0.30000000000000004,
           "upper": 0.4,
-          "count": 87,
-          "avg_predicted_probability": 0.3368782801169666,
-          "empirical_home_win_rate": 0.47126436781609193,
-          "absolute_error": 0.13438608769912536
+          "count": 166,
+          "avg_predicted_probability": 0.31582108958217464,
+          "empirical_home_win_rate": 0.3253012048192771,
+          "absolute_error": 0.00948011523710246
         },
         {
           "bin": 4,
@@ -1644,19 +1644,19 @@
           "bin": 5,
           "lower": 0.5,
           "upper": 0.6000000000000001,
-          "count": 21,
-          "avg_predicted_probability": 0.5452784484159287,
-          "empirical_home_win_rate": 0.5238095238095238,
-          "absolute_error": 0.021468924606404816
+          "count": 27,
+          "avg_predicted_probability": 0.561095646140041,
+          "empirical_home_win_rate": 0.4444444444444444,
+          "absolute_error": 0.11665120169559662
         },
         {
           "bin": 6,
           "lower": 0.6000000000000001,
           "upper": 0.7000000000000001,
-          "count": 36,
-          "avg_predicted_probability": 0.6574581652881561,
-          "empirical_home_win_rate": 0.4722222222222222,
-          "absolute_error": 0.18523594306593394
+          "count": 33,
+          "avg_predicted_probability": 0.6439851169528994,
+          "empirical_home_win_rate": 0.5454545454545454,
+          "absolute_error": 0.09853057149835398
         },
         {
           "bin": 7,
@@ -1702,6 +1702,10 @@
     "passed": true,
     "failures": [],
     "current": {
+      "brier": 0.21011185675966,
+      "combined_mae": 7.025499172284023
+    },
+    "previous": {
       "brier": 0.2119299013803873,
       "combined_mae": 6.899823802388376
     },

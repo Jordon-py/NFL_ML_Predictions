@@ -23,6 +23,7 @@ Files that move data across a boundary should document the shape at the top of t
 - **API (FastAPI)**: Serves endpoints for fetching schedules, making predictions, reading prediction history, and Premium AI explain/chat.
 - **LLM Agent**: `backend/ollama/llm_ollama.py` exposes the `NFLAgent` facade, `backend/ollama/memory.py` owns dataset memory/context, and `backend/ollama/client.py` owns Ollama authentication, chat calls, model fallback, and legacy `explain_prediction` / `chat_messages` helpers.
 - **History safety**: Premium endpoints call the prediction path with request-scoped persistence disabled so AI enrichment does not create duplicate history records.
+- **Antigravity Interactive CLI**: `scripts/interactive_loop.py` uses the `google-antigravity` SDK to run terminal-based interactive agent sessions (`run_interactive_loop`) and stateful conversational stream flows (`Conversation.create`).
 
 ## Key Data Transformations
 
@@ -32,3 +33,4 @@ Files that move data across a boundary should document the shape at the top of t
 - `TeamGrid.jsx`: `(games, predictions, loading, errors, local filters) -> filteredGames` controls visible cards and the target list passed into bulk prediction.
 - `HistoryChart.jsx`: `(historyArray) -> normalizeHistoryRow()` formats timestamps and calculates spread deltas before filtering and sorting.
 - `StatsPage.jsx`: `(schedule, history, status overview, history summary) -> overview metrics` shows backend readiness, dataset rows, upcoming slate count, and forecast history quality.
+- `interactive_loop.py`: `(CLI mode / input) -> conversation.chat() / run_interactive_loop() -> ToolRunner / LocalConnectionStrategy` drives agent steps, executes tool calls, and outputs text results.
