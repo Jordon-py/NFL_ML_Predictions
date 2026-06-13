@@ -107,12 +107,60 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function makeAbortError(message, name = "AbortError") {
+  if (typeof DOMException !== "undefined") {
+    return new DOMException(message, name);
+  }
+  const error = new Error(message);
+  error.name = name;
+  return error;
+}
+
+function isAbortError(error) {
+  return error?.name === "AbortError";
+}
+
+function isTimeoutError(error) {
+  return error?.name === "TimeoutError";
+}
+
 function isRetryableHttpError(error) {
   return error instanceof HttpError && RETRYABLE_STATUS_CODES.has(error.status);
 }
 
 function isRetryableNetworkError(error) {
-  return error instanceof TypeError || error?.name === "AbortError";
+  return error instanceof TypeError || isTimeoutError(error);
+}
+
+function abortReason(signal, fallbackMessage = "Request aborted") {
+  return signal?.reason ?? makeAbortError(fallbackMessage, "AbortError");
+}
+
+function composeAbortSignal(externalSignal, timeoutSignal) {
+  if (!externalSignal) return timeoutSignal;
+  if (typeof AbortSignal !== "undefined" && typeof AbortSignal.any === "function") {
+    return AbortSignal.any([externalSignal, timeoutSignal]);
+  }
+
+  const controller = new AbortController();
+  const abortFrom = (signal) => {
+    if (!controller.signal.aborted) {
+      controller.abort(abortReason(signal));
+    }
+  };
+
+  if (externalSignal.aborted) abortFrom(externalSignal);
+  else externalSignal.addEventListener("abort", () => abortFrom(externalSignal), { once: true });
+
+  if (timeoutSignal.aborted) abortFrom(timeoutSignal);
+  else timeoutSignal.addEventListener("abort", () => abortFrom(timeoutSignal), { once: true });
+
+  return controller.signal;
+}
+
+function warnUnlessAbort(message, error) {
+  if (isAbortError(error)) return;
+  console.warn(message, error);
 }
 
 
@@ -630,14 +678,18 @@ export async function fetchJson(path, options = {}) {
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     const controller = new AbortController();
     const timeoutMs = Number.isFinite(REQUEST_TIMEOUT_MS) ? Math.max(1000, REQUEST_TIMEOUT_MS) : 12000;
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    const timeout = setTimeout(
+      () => controller.abort(makeAbortError(`Request timed out after ${timeoutMs}ms`, "TimeoutError")),
+      timeoutMs
+    );
+    const signal = composeAbortSignal(options.signal, controller.signal);
 
     try {
       const res = await fetch(url, {
         method: "GET",
         ...options,
         credentials: "omit",
-        signal: options.signal ?? controller.signal,
+        signal,
         headers: {
           "Content-Type": "application/json",
           ...(options.headers || {}),
@@ -659,6 +711,7 @@ export async function fetchJson(path, options = {}) {
       return body;
     } catch (error) {
       clearTimeout(timeout);
+      if (isAbortError(error)) throw error;
       const canRetry = attempt < maxAttempts && (isRetryableHttpError(error) || isRetryableNetworkError(error));
       if (!canRetry) throw error;
       await delay(150 * attempt);
@@ -705,8 +758,8 @@ export async function getStatusOverview(userId = null) {
     }
 
     return createStatusOverviewFallback();
-  } catch {
-    console.warn("[client] Status overview unavailable; using fallback");
+  } catch (error) {
+    warnUnlessAbort("[client] Status overview unavailable; using fallback", error);
     return createStatusOverviewFallback();
   }
 }
@@ -714,8 +767,8 @@ export async function getStatusOverview(userId = null) {
 export async function getHealthStatus() {
   try {
     return await fetchJson("/health");
-  } catch {
-    console.warn("[client] Health endpoint unavailable; using fallback");
+  } catch (error) {
+    warnUnlessAbort("[client] Health endpoint unavailable; using fallback", error);
     return { status: "unknown", reason: "unavailable" };
   }
 }
@@ -726,8 +779,8 @@ export const health = getHealthStatus;
 export async function getOffseasonStatus() {
   try {
     return await fetchJson("/offseason/status");
-  } catch {
-    console.warn("[client] Offseason status unavailable; using fallback");
+  } catch (error) {
+    warnUnlessAbort("[client] Offseason status unavailable; using fallback", error);
     return {
       offseason_mode: false,
       current_season: null,
@@ -820,8 +873,8 @@ export async function getTeamLogos() {
     }
 
     return out;
-  } catch {
-    console.warn("[client] Team logos endpoint unavailable; using empty map");
+  } catch (error) {
+    warnUnlessAbort("[client] Team logos endpoint unavailable; using empty map", error);
     return {};
   }
 }
@@ -830,7 +883,8 @@ export async function getSeasonContext(scheduleRows = null, statusOverview = nul
   try {
     const rows = Array.isArray(scheduleRows) ? scheduleRows : await getNextWeekSchedule();
     return deriveSeasonContext(rows, statusOverview);
-  } catch {
+  } catch (error) {
+    warnUnlessAbort("[client] Season context unavailable; using fallback", error);
     return deriveSeasonContext([]);
   }
 }
@@ -898,8 +952,8 @@ export async function getPredictionHistory(limit = 100, userId = null) {
     const headers = buildUserHeaders(userId);
     const res = await fetchJson(`/history?limit=${safeLimit}`, headers ? { headers } : {});
     return normalizeHistoryResponse(res);
-  } catch {
-    console.warn("[client] History endpoint unavailable; using empty list");
+  } catch (error) {
+    warnUnlessAbort("[client] History endpoint unavailable; using empty list", error);
     return normalizeHistoryResponse(null);
   }
 }
@@ -921,7 +975,7 @@ export async function getHistorySummary(userId = null) {
       return normalizeHistorySummaryResponse(res);
     } catch (error) {
       if (!isHttpNotFound(error)) {
-        console.warn("[client] History summary endpoint unavailable; using empty summary");
+        warnUnlessAbort("[client] History summary endpoint unavailable; using empty summary", error);
         return normalizeHistorySummaryResponse(null);
       }
       ENDPOINT_SUPPORT.historySummary = false;
@@ -933,8 +987,8 @@ export async function getHistorySummary(userId = null) {
     // when the backend has not been redeployed with `/history/summary` yet.
     const history = await getPredictionHistory(250, userId);
     return buildHistorySummaryFromEntries(history.entries, history.total);
-  } catch {
-    console.warn("[client] History summary endpoint unavailable; using empty summary");
+  } catch (error) {
+    warnUnlessAbort("[client] History summary endpoint unavailable; using empty summary", error);
     return normalizeHistorySummaryResponse(null);
   }
 }

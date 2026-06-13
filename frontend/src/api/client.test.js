@@ -26,7 +26,9 @@ describe("client compatibility fallbacks", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
     vi.restoreAllMocks();
   });
 
@@ -171,4 +173,63 @@ it("retries transient server failures and eventually succeeds", async () => {
 
   expect(result.status).toBe("ok");
   expect(fetchMock).toHaveBeenCalledTimes(2);
+});
+
+it("uses an explicit TimeoutError reason when the request timeout aborts fetch", async () => {
+  vi.resetModules();
+  vi.useFakeTimers();
+  vi.stubEnv("VITE_API_TIMEOUT_MS", "1000");
+  vi.stubEnv("VITE_API_RETRY_ATTEMPTS", "0");
+
+  const fetchMock = vi.fn((_url, init = {}) => (
+    new Promise((_resolve, reject) => {
+      init.signal.addEventListener("abort", () => reject(init.signal.reason), { once: true });
+    })
+  ));
+
+  vi.stubGlobal("fetch", fetchMock);
+
+  const { fetchJson } = await import("./client.js");
+  const request = fetchJson("/health");
+  const assertion = expect(request).rejects.toMatchObject({
+    name: "TimeoutError",
+    message: "Request timed out after 1000ms",
+  });
+
+  await vi.advanceTimersByTimeAsync(1000);
+
+  await assertion;
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+});
+
+it("does not retry or warn for intentional AbortError cancellations", async () => {
+  vi.resetModules();
+  vi.stubEnv("VITE_API_RETRY_ATTEMPTS", "3");
+  const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+  const controller = new AbortController();
+
+  const fetchMock = vi.fn((_url, init = {}) => (
+    new Promise((_resolve, reject) => {
+      init.signal.addEventListener("abort", () => reject(init.signal.reason), { once: true });
+    })
+  ));
+
+  vi.stubGlobal("fetch", fetchMock);
+
+  const { fetchJson, getPredictionHistory } = await import("./client.js");
+  const directRequest = fetchJson("/history", { signal: controller.signal });
+  const abortAssertion = expect(directRequest).rejects.toMatchObject({
+    name: "AbortError",
+    message: "component unmounted",
+  });
+  controller.abort(new DOMException("component unmounted", "AbortError"));
+
+  await abortAssertion;
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+
+  fetchMock.mockRejectedValueOnce(new DOMException("component unmounted", "AbortError"));
+  const history = await getPredictionHistory(100, "tester");
+
+  expect(history.entries).toEqual([]);
+  expect(warnSpy).not.toHaveBeenCalled();
 });
