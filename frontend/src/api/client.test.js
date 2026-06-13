@@ -179,7 +179,7 @@ it("uses an explicit TimeoutError reason when the request timeout aborts fetch",
   vi.resetModules();
   vi.useFakeTimers();
   vi.stubEnv("VITE_API_TIMEOUT_MS", "1000");
-  vi.stubEnv("VITE_API_RETRY_ATTEMPTS", "0");
+  vi.stubEnv("VITE_API_RETRY_ATTEMPTS", "3");
 
   const fetchMock = vi.fn((_url, init = {}) => (
     new Promise((_resolve, reject) => {
@@ -200,6 +200,56 @@ it("uses an explicit TimeoutError reason when the request timeout aborts fetch",
 
   await assertion;
   expect(fetchMock).toHaveBeenCalledTimes(1);
+});
+
+it("shares concurrent GET requests so startup hydration does not fan out duplicate fetches", async () => {
+  vi.resetModules();
+
+  let resolveFetch;
+  const fetchMock = vi.fn()
+    .mockImplementationOnce(() => (
+      new Promise((resolve) => {
+        resolveFetch = () => resolve(jsonResponse({ status: "ok" }, 200));
+      })
+    ))
+    .mockResolvedValueOnce(jsonResponse({ status: "ok" }, 200));
+
+  vi.stubGlobal("fetch", fetchMock);
+
+  const { fetchJson } = await import("./client.js");
+  const first = fetchJson("/health");
+  const second = fetchJson("/health");
+
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+  resolveFetch();
+
+  await expect(first).resolves.toEqual({ status: "ok" });
+  await expect(second).resolves.toEqual({ status: "ok" });
+
+  await fetchJson("/health");
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+});
+
+it("reports timeout fallbacks as throttled info instead of warning spam", async () => {
+  vi.resetModules();
+  const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+  const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+  const timeout = new DOMException("Request timed out after 12000ms", "TimeoutError");
+
+  const fetchMock = vi.fn()
+    .mockRejectedValueOnce(timeout)
+    .mockRejectedValueOnce(timeout);
+
+  vi.stubGlobal("fetch", fetchMock);
+
+  const { getHealthStatus } = await import("./client.js");
+  const first = await getHealthStatus();
+  const second = await getHealthStatus();
+
+  expect(first).toEqual({ status: "unknown", reason: "unavailable" });
+  expect(second).toEqual({ status: "unknown", reason: "unavailable" });
+  expect(warnSpy).not.toHaveBeenCalled();
+  expect(infoSpy).toHaveBeenCalledTimes(1);
 });
 
 it("does not retry or warn for intentional AbortError cancellations", async () => {

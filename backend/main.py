@@ -64,6 +64,7 @@ import json
 import logging
 import os
 import hashlib
+import asyncio
 import re
 import time
 import sys
@@ -98,7 +99,8 @@ from backend.prediction_store import (
     get_prediction_history_count,
     get_prediction_history_summary as load_prediction_history_summary,
 )
-from backend.score_sync import extract_score_entries_from_dataframe
+# Comment 1: Import score sync utilities from backend.scripts.score_sync following structural organization.
+from backend.scripts.score_sync import extract_score_entries_from_dataframe
 from backend.schemas import PredictionRequest as StoredPredictionRequest
 from backend.services.inference_row import build_model_input_row
 from backend.schemas_pipeline_status import (
@@ -205,7 +207,7 @@ METRICS_HISTORY_PATH = REPORTS_DIR / "drift" / "metrics_history.csv"
 
 # Allow overriding the schedule CSV via env; default to backend/data
 schedule_env_path = SETTINGS.resolved_schedule_path
-SCHEDULE_PATH = schedule_env_path if schedule_env_path else (DATA_DIR / "Nfl_schedule_2025.csv")
+SCHEDULE_PATH = schedule_env_path if schedule_env_path else (DATA_DIR / "Nfl_schedule_2026.csv")
 
 # Required model keys for /predict to be "ready"
 REQUIRED_MODELS: Tuple[str, ...] = ("home", "away", "win")
@@ -343,12 +345,6 @@ def _find_schedule_paths(requested_season: Optional[int] = None) -> List[Path]:
     add(frontend_public / "nflSchedule.csv")
 
     return sorted(candidates, key=lambda p: _schedule_path_sort_key(p, requested_season))
-
-
-def _find_schedule_path() -> Optional[Path]:
-    """Backward-compatible single-path helper for older internal callers."""
-    paths = _find_schedule_paths()
-    return paths[0] if paths else None
 
 
 def _models_dir_has_required_artifacts(models_dir: Path) -> bool:
@@ -616,14 +612,6 @@ def _load_team_metadata_map() -> Dict[str, Dict[str, Any]]:
     except Exception as exc:
         logging.warning("[Logos] Failed reading %s: %s", path, exc)
         return {}
-
-
-def _load_team_logo_map() -> Dict[str, str]:
-    return {
-        team_code: str(meta.get("logoUrl") or "").strip()
-        for team_code, meta in _load_team_metadata_map().items()
-        if str(meta.get("logoUrl") or "").strip()
-    }
 
 
 def _calculate_win_probability(
@@ -1479,6 +1467,7 @@ async def lifespan(app: FastAPI):
     logging.info("[App] Shutdown complete.")
 
 
+# Comment 2: Mount FastAPI application with custom CORS middleware and routing rules.
 app = FastAPI(lifespan=lifespan)
 
 
@@ -1497,10 +1486,6 @@ app = FastAPI(lifespan=lifespan)
 #                         Example (recommended):
 #                           (?i)^https://(?:[a-z0-9-]+\.)+vercel\.app$
 #
-def _env_flag(name: str, default: str = "true") -> bool:
-    """Parse boolean-ish env vars safely."""
-    return str(os.getenv(name, default)).strip().lower() in ("1", "true", "yes", "y", "on")
-
 ALLOWED_ORIGINS: List[str] = SETTINGS.allowed_origins
 ALLOW_ORIGIN_REGEX = SETTINGS.effective_allow_origin_regex
 
@@ -1998,14 +1983,6 @@ def _prediction_user_context_from_request(request: Optional[Request]):
     return build_prediction_user_context(user_id)
 
 
-def _history_total_for_request(request: Optional[Request]) -> int:
-    try:
-        return int(get_prediction_history_count(_prediction_user_context_from_request(request)))
-    except Exception:
-        logging.exception("[History] Failed to count persistent history; falling back to memory.")
-        return len(state.history)
-
-
 def _history_summary_for_request(request: Optional[Request]) -> Dict[str, Any]:
     """Return normalized per-user history metrics.
 
@@ -2040,22 +2017,283 @@ def _history_summary_for_request(request: Optional[Request]) -> Dict[str, Any]:
     }
 
 
-def _prediction_readiness_payload() -> Dict[str, Any]:
-    state._refresh_runtime_readiness()
-    blockers = list(state.production_blockers)
-    if state.dataset is None and "dataset not loaded" not in blockers:
-        blockers.append("dataset not loaded")
-    if not blockers:
-        missing = [m for m in REQUIRED_MODELS if m not in state.models]
-        if missing:
-            blockers.append(f"missing models: {', '.join(sorted(missing))}")
+def _unique_strings(values: List[Any]) -> List[str]:
+    out: List[str] = []
+    seen: Set[str] = set()
+    for value in values:
+        text = str(value).strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        out.append(text)
+    return out
+
+
+def _compact_hash(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    if len(text) <= 16:
+        return text
+    return f"{text[:8]}...{text[-8:]}"
+
+
+def _prediction_dataset_summary() -> Dict[str, Any]:
+    manifest = state.dataset_manifest if isinstance(state.dataset_manifest, dict) else {}
+    return {
+        "loaded": state.dataset is not None,
+        "path": str(state.dataset_path) if state.dataset_path else None,
+        "rows": int(len(state.dataset)) if state.dataset is not None else 0,
+        "active_hash": state.dataset_hash,
+        "active_hash_short": _compact_hash(state.dataset_hash),
+        "manifest_hash": manifest.get("dataset_hash"),
+        "manifest_hash_short": _compact_hash(manifest.get("dataset_hash")),
+        "manifest_run_id": manifest.get("run_id"),
+    }
+
+
+def _prediction_model_bundle_summary() -> Dict[str, Any]:
+    meta = state.models_metadata if isinstance(state.models_metadata, dict) else {}
+    missing_models = [name for name in REQUIRED_MODELS if name not in state.models]
+    metadata_path = MODELS_DIR / "metadata.json"
+    return {
+        "models_dir": str(MODELS_DIR),
+        "metadata_path": str(metadata_path) if metadata_path.exists() else None,
+        "loaded_models": sorted(state.models.keys()),
+        "missing_models": sorted(missing_models),
+        "metadata_dataset_hash": meta.get("dataset_hash"),
+        "metadata_dataset_hash_short": _compact_hash(meta.get("dataset_hash")),
+        "bundle_version": meta.get("bundle_version"),
+        "bundle_timestamp_utc": _bundle_timestamp(meta),
+        "strict_contract": _requires_strict_bundle_contract(meta),
+        "sklearn_version": meta.get("sklearn_version"),
+    }
+
+
+def _prediction_contract_summary() -> Dict[str, Any]:
+    contract = state.runtime_contract_validation if isinstance(state.runtime_contract_validation, dict) else {}
+    bundle = contract.get("bundle") if isinstance(contract.get("bundle"), dict) else {}
+    raw_dataset_features = (
+        contract.get("dataset_features")
+        if isinstance(contract.get("dataset_features"), dict)
+        else {}
+    )
+    dataset_features: Dict[str, Dict[str, Any]] = {}
+    for model_key, result in raw_dataset_features.items():
+        result = result if isinstance(result, dict) else {}
+        missing_columns = [str(col) for col in result.get("missing_columns", [])]
+        null_counts = result.get("null_counts") if isinstance(result.get("null_counts"), dict) else {}
+        dataset_features[str(model_key)] = {
+            "ok": bool(result.get("ok", False)),
+            "expected_count": int(result.get("expected_count") or 0),
+            "observed_count": int(result.get("observed_count") or 0),
+            "missing_count": len(missing_columns),
+            "missing_columns": missing_columns[:25],
+            "missing_columns_truncated": len(missing_columns) > 25,
+            "null_column_count": len(null_counts),
+            "warnings": list(result.get("warnings") or []),
+            "blockers": list(result.get("blockers") or []),
+        }
 
     return {
-        "message": "Prediction service unavailable.",
-        "blockers": sorted(set(blockers)),
-        "loaded_models": sorted(state.models.keys()),
-        "warnings": list(state.production_warnings),
+        "ok": bool(contract.get("ok", False)),
+        "blockers": list(contract.get("blockers") or []),
+        "warnings": list(contract.get("warnings") or []),
+        "bundle": {
+            "strict": bool(bundle.get("strict", False)),
+            "dataset_hash_match": bundle.get("dataset_hash_match"),
+            "calibration_metadata_present": bool(bundle.get("calibration_metadata_present", False)),
+        },
+        "dataset_features": dataset_features,
     }
+
+
+def _disk_prediction_readiness_snapshot() -> Dict[str, Any]:
+    snapshot: Dict[str, Any] = {
+        "dataset_path": None,
+        "dataset_hash": None,
+        "manifest_hash": None,
+        "model_metadata_path": None,
+        "model_metadata_hash": None,
+        "disk_hashes_match": None,
+        "process_state_matches_disk": None,
+        "errors": [],
+    }
+
+    try:
+        selected_dataset = resolve_latest_dataset(DATA_DIR, explicit_path=SETTINGS.dataset_path)
+        snapshot["dataset_path"] = str(selected_dataset)
+        snapshot["dataset_hash"] = file_sha256(selected_dataset)
+    except Exception as exc:
+        snapshot["errors"].append(f"dataset snapshot failed: {str(exc).splitlines()[0]}")
+
+    try:
+        manifest = load_latest_dataset_manifest(DATA_DIR)
+        snapshot["manifest_hash"] = manifest.get("dataset_hash")
+    except Exception as exc:
+        snapshot["errors"].append(f"dataset manifest snapshot failed: {str(exc).splitlines()[0]}")
+
+    metadata_path = MODELS_DIR / "metadata.json"
+    snapshot["model_metadata_path"] = str(metadata_path)
+    try:
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8")) if metadata_path.exists() else {}
+        if isinstance(metadata, dict):
+            snapshot["model_metadata_hash"] = metadata.get("dataset_hash")
+    except Exception as exc:
+        snapshot["errors"].append(f"model metadata snapshot failed: {str(exc).splitlines()[0]}")
+
+    dataset_hash = snapshot.get("dataset_hash")
+    metadata_hash = snapshot.get("model_metadata_hash")
+    if dataset_hash and metadata_hash:
+        snapshot["disk_hashes_match"] = dataset_hash == metadata_hash
+
+    process_dataset_hash = state.dataset_hash
+    process_metadata_hash = (
+        state.models_metadata.get("dataset_hash")
+        if isinstance(state.models_metadata, dict)
+        else None
+    )
+    if dataset_hash or metadata_hash:
+        snapshot["process_state_matches_disk"] = (
+            process_dataset_hash == dataset_hash
+            and process_metadata_hash == metadata_hash
+        )
+
+    return snapshot
+
+
+def _feature_contract_blocker_message(raw_message: str, contract: Dict[str, Any]) -> Optional[str]:
+    match = re.search(r"dataset\s+(\w+)\s+feature contract missing", raw_message)
+    if not match:
+        return None
+    model_key = match.group(1)
+    feature_info = contract.get("dataset_features", {}).get(model_key, {})
+    missing_columns = list(feature_info.get("missing_columns") or [])
+    count = int(feature_info.get("missing_count") or len(missing_columns))
+    sample = ", ".join(missing_columns[:8])
+    suffix = f": {sample}" if sample else ""
+    if count > 8:
+        suffix += f", ... {count - 8} more"
+    return (
+        f"Feature contract mismatch for {model_key}: active dataset is missing "
+        f"{count} expected column(s){suffix}."
+    )
+
+
+def _readable_prediction_blockers(
+    raw_blockers: List[str],
+    *,
+    dataset: Dict[str, Any],
+    model_bundle: Dict[str, Any],
+    contract: Dict[str, Any],
+) -> List[str]:
+    readable: List[str] = []
+    for raw in raw_blockers:
+        if raw == "active dataset hash does not match model bundle training dataset hash":
+            readable.append(
+                "Dataset/model hash mismatch: loaded dataset hash "
+                f"{dataset.get('active_hash_short') or 'unknown'}, model was trained on "
+                f"{model_bundle.get('metadata_dataset_hash_short') or 'unknown'}."
+            )
+            continue
+        feature_message = _feature_contract_blocker_message(raw, contract)
+        if feature_message:
+            readable.append(feature_message)
+            continue
+        readable.append(raw)
+    return _unique_strings(readable)
+
+
+def _prediction_next_actions(
+    blockers: List[str],
+    warnings_out: List[str],
+    *,
+    disk_snapshot: Optional[Dict[str, Any]],
+) -> List[str]:
+    actions: List[str] = []
+    raw_text = " | ".join([*blockers, *warnings_out]).lower()
+
+    if "dataset not loaded" in raw_text:
+        actions.append("Verify DATASET_PATH/latest_dataset.json and rebuild the dataset if the selected CSV is missing.")
+    if "missing models" in raw_text or "missing artifact" in raw_text:
+        actions.append("Verify MODELS_DIR points to the promoted model bundle and that home/away/win artifacts exist.")
+    if "hash mismatch" in raw_text or "dataset hash does not match" in raw_text:
+        actions.append("Retrain or promote a model bundle from the currently selected clean dataset, or roll back the dataset.")
+    if "feature contract mismatch" in raw_text or "feature contract missing" in raw_text:
+        actions.append("Rebuild the dataset and retrain the bundle from the same feature contract.")
+    if "calibration metadata missing" in raw_text:
+        actions.append("Retrain with calibration reporting enabled before promoting the next strict bundle.")
+
+    if disk_snapshot:
+        if (
+            disk_snapshot.get("disk_hashes_match") is True
+            and disk_snapshot.get("process_state_matches_disk") is False
+        ):
+            actions.insert(
+                0,
+                "Runtime process may be stale: disk dataset and model metadata now match. Restart Uvicorn.",
+            )
+        for error in disk_snapshot.get("errors") or []:
+            actions.append(f"Inspect readiness snapshot error: {error}")
+
+    if not actions and blockers:
+        actions.append("Inspect /status/models and /health/pipeline for the full readiness report.")
+    return _unique_strings(actions)
+
+
+def _prediction_readiness_payload(
+    *,
+    include_disk_snapshot: Optional[bool] = None,
+) -> Dict[str, Any]:
+    state._refresh_runtime_readiness()
+    raw_blockers = list(state.production_blockers)
+    if state.dataset is None and "dataset not loaded" not in raw_blockers:
+        raw_blockers.append("dataset not loaded")
+    if not raw_blockers:
+        missing = [m for m in REQUIRED_MODELS if m not in state.models]
+        if missing:
+            raw_blockers.append(f"missing models: {', '.join(sorted(missing))}")
+
+    raw_warnings = list(state.production_warnings)
+    dataset = _prediction_dataset_summary()
+    model_bundle = _prediction_model_bundle_summary()
+    contract = _prediction_contract_summary()
+    blockers = _readable_prediction_blockers(
+        sorted(set(raw_blockers)),
+        dataset=dataset,
+        model_bundle=model_bundle,
+        contract=contract,
+    )
+    warnings_out = _unique_strings(raw_warnings)
+    ready = not blockers
+
+    if include_disk_snapshot is None:
+        include_disk_snapshot = not ready
+    disk_snapshot = _disk_prediction_readiness_snapshot() if include_disk_snapshot else None
+    next_actions = _prediction_next_actions(
+        blockers,
+        warnings_out,
+        disk_snapshot=disk_snapshot,
+    )
+
+    payload: Dict[str, Any] = {
+        "message": "Prediction service ready." if ready else "Prediction service unavailable.",
+        "ready": ready,
+        "blockers": blockers,
+        "raw_blockers": sorted(set(raw_blockers)),
+        "warnings": warnings_out,
+        "next_actions": next_actions,
+        "loaded_models": model_bundle["loaded_models"],
+        "dataset": dataset,
+        "model_bundle": model_bundle,
+        "contract": contract,
+    }
+    if disk_snapshot is not None:
+        payload["disk"] = disk_snapshot
+        payload["process_state_matches_disk"] = disk_snapshot.get("process_state_matches_disk")
+    return payload
 
 
 def _persist_prediction_for_request(
@@ -2567,23 +2805,18 @@ def health() -> HealthResponse:
 
     Returns component readiness + a timestamp and human-friendly reason.
     """
+    readiness = _prediction_readiness_payload(include_disk_snapshot=False)
     has_dataset = state.dataset is not None
     models_ok = all(m in state.models for m in REQUIRED_MODELS)
-    production_ready = has_dataset and models_ok and not state.production_blockers
+    production_ready = bool(readiness["ready"])
 
     status: Literal["healthy", "unhealthy"]
     status = "healthy" if production_ready else "unhealthy"
 
-    reasons: List[str] = []
-    if not has_dataset:
-        reasons.append("dataset not loaded")
-    if not models_ok:
-        missing = [m for m in REQUIRED_MODELS if m not in state.models]
-        reasons.append(f"missing models: {', '.join(missing)}")
-    reasons.extend(state.production_blockers)
-    warning_sample = list(state.production_warnings[:5])
-    if len(state.production_warnings) > 5:
-        warning_sample.append(f"... {len(state.production_warnings) - 5} additional startup warnings")
+    reasons = list(readiness["blockers"])
+    warning_sample = list(readiness["warnings"][:5])
+    if len(readiness["warnings"]) > 5:
+        warning_sample.append(f"... {len(readiness['warnings']) - 5} additional startup warnings")
 
     reason_str = ", ".join(dict.fromkeys(reasons)) if reasons else None
 
@@ -2596,7 +2829,7 @@ def health() -> HealthResponse:
             models=models_ok,
             loaded_models=list(state.models.keys()),
             ready_for_production=production_ready,
-            blockers=list(state.production_blockers),
+            blockers=list(readiness["blockers"]),
             warnings=warning_sample,
         ),
     )
@@ -3860,21 +4093,13 @@ async def premium_chat(payload: PremiumChatRequest, request: Request) -> Dict[st
 async def predict(payload: PredictRequest, request: Request) -> Dict[str, Any]:
     """
     Predict home/away score and win probability for a single game.
-
-    Enhancements:
-      - Cleaner structure (helpers instead of nested functions)
-      - Robust row matching (team code OR abbr columns)
-      - Stable imputation using dataset medians (computed once)
-      - Feature alignment for non-pipeline estimators (feature_names_in_)
-      - Output smoothing for probability + sanity clamping for scores
     """
-    # ----- Readiness -----
+    # Comment 3: Run full game predictions (scores + win probabilities) via scikit-learn models.
     state.refresh_dataset_if_changed()
     readiness = _prediction_readiness_payload()
     if readiness["blockers"]:
         raise HTTPException(status_code=503, detail=readiness)
 
-    # ----- Validate request -----
     season = int(payload.season)
     week = int(payload.week)
 

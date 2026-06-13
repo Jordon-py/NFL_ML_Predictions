@@ -16,13 +16,15 @@ from threading import Lock
 from typing import Dict, Iterable, List, Optional
 
 from .pipeline_models import PredictionUserContext
-from .score_sync import build_score_game_id, normalize_team_code
+# Comment 1: Import core score sync utilities from backend/scripts/score_sync.py after reorganization.
+from backend.scripts.score_sync import build_score_game_id, normalize_team_code
 
 DB_PATH = Path(__file__).resolve().parent / "predictions.db"
 _DB_LOCK = Lock()
 
 
 def _ensure_db() -> None:
+    # Comment 2: Guarantee that local SQLite database and required tables (game_scores, user_predictions) exist.
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     with _get_connection() as conn:
         conn.execute(
@@ -127,7 +129,7 @@ def _normalize_score_entry(raw_entry: Dict[str, object]) -> Optional[Dict[str, o
 
 def persist_prediction(context: PredictionUserContext, payload: Dict[str, object]) -> None:
     """Store a user's prediction snapshot and seed it with any final score we already know."""
-
+    # Comment 3: Deduplicate user prediction record based on game identifier and commit to database.
     game_id = payload.get("game_id")
     if not game_id:
         return

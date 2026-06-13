@@ -22,6 +22,7 @@ from typing import Dict, List
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+# Comment 1: Use absolute sys.path inclusion to allow execution from the scripts subfolder.
 BACKEND_DIR = REPO_ROOT / "backend"
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
@@ -43,10 +44,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Skip dataset rebuild and use existing latest dataset only.",
     )
+    # Comment 2: Point to the new scripts subfolder for dataset building after reorganization.
     parser.add_argument(
         "--dataset-build-script",
         type=str,
-        default=str((BACKEND_DIR / "builddataset.py").resolve()),
+        default=str((BACKEND_DIR / "scripts" / "builddataset.py").resolve()),
         help="Canonical dataset build script entrypoint.",
     )
     parser.add_argument(
@@ -85,10 +87,11 @@ def parse_args() -> argparse.Namespace:
         default=str((BACKEND_DIR / "reports").resolve()),
         help="Report output directory.",
     )
+    # Comment 3: Resolve the training script location inside the scripts directory.
     parser.add_argument(
         "--train-script",
         type=str,
-        default=str((BACKEND_DIR / "train_models.py").resolve()),
+        default=str((BACKEND_DIR / "scripts" / "train_models.py").resolve()),
         help="Training script entrypoint.",
     )
     parser.add_argument(

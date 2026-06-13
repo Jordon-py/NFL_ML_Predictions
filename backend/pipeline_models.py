@@ -88,12 +88,15 @@ class DatasetArtifactManifest(BaseModel):
     schema_report_path: Optional[str] = None
     missingness_report_path: Optional[str] = None
     duplicate_report_path: Optional[str] = None
+    training_readiness_report_path: Optional[str] = None
 
     score_snapshot_path: Optional[str] = None
 
     log_path: Optional[str] = None
 
     dataset_hash: Optional[str] = None
+    training_ready: Optional[bool] = None
+    training_blockers: list[str] = Field(default_factory=list)
 
     cleaning_stats: dict[str, Any] = Field(
 

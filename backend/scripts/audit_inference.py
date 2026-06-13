@@ -20,13 +20,15 @@ BACKEND_DIR = REPO_ROOT / "backend"
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from backend.main_helpers import load_inference_bundle, load_dataset_df
+# Comment 1: Import load functions from the reorganized backend/utils/main_helpers.py file.
+from backend.utils.main_helpers import load_inference_bundle, load_dataset_df
 from backend.services.inference_row import build_model_input_row
 
 
 def audit():
     """Load a model bundle and print inference diagnostics for sample games."""
     print("Auditing Model Predictions...")
+    # Comment 2: Fallback path handling to ensure model directory resolution works in local/production environments.
     models_dir = BACKEND_DIR / "20260115" / "models"
     
     if not models_dir.exists():
@@ -95,6 +97,7 @@ def audit():
             print(f"Row shape: {row_processed.shape}")
             
             # Predict
+            # Comment 3: Run model predictions and calculate probabilities for the matched teams.
             home_score = bundle.home_model.predict(row_processed)[0]
             away_score = bundle.away_model.predict(row_processed)[0]
             

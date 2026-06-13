@@ -255,3 +255,115 @@ Verification result: GitHub push succeeded at commit `0d892e8a6`. Heroku release
 Remaining issues: GitHub reported one existing high Dependabot vulnerability after push. Local Git status still warns on permission-blocked `artifacts/pytest_codex_schedule*` folders.
 
 Recommended next step: Commit and push this deployment log entry, then redeploy so production and GitHub end on the same final commit.
+
+## 2026-06-13 - Neural score ensemble and dataset readiness reports
+
+Summary: Added neural-network score prediction support to the training pipeline by blending the existing histogram gradient boosting regressors with `MLPRegressor` learners. Hardened the moved script layout with root compatibility wrappers, fixed script-relative data/model paths, and added dataset training-readiness reporting before training.
+
+Files changed: README.md, backend/builddataset.py, backend/train_models.py, backend/score_sync.py, backend/scripts/builddataset.py, backend/scripts/train_models.py, backend/pipeline_models.py, backend/tests/test_training_pipeline_enhancements.py, alfred.log.md.
+
+Commands run: `python -m py_compile backend\scripts\train_models.py backend\scripts\builddataset.py backend\train_models.py backend\builddataset.py backend\score_sync.py backend\pipeline_models.py`; `python -m pytest backend\tests\test_training_pipeline_enhancements.py backend\tests\test_model_bundle_contract.py backend\tests\test_pipeline_contract.py -q -o addopts=''`; `python -m pytest backend\tests -q -o addopts=''`; `python backend\train_models.py --help`; `python backend\builddataset.py --help`; `python backend\train_models.py --data backend\data\datasets\game_features_20260531_clean.csv --out artifacts\codex_training_smoke_models --fast-dev --hp-niter 1 --splits 2 --embargo 1 --score-model ensemble --nn-weight 0.25 --no-promote --disable-gate`.
+
+Verification result: Compile passed. Focused backend tests passed: 7 passed. Full backend tests passed: 12 passed. Root wrapper help commands worked. Fast no-promote training smoke completed with status `STAGED_ONLY` in 43.69 seconds, trained against 2,227 labeled rows after dropping invalid/future targets, and confirmed the score ensemble path can stage artifacts without replacing `backend/models`.
+
+Remaining issues: The training smoke reported scikit-learn imputer warnings for several all-missing `home_minus_away_*_5` features in the selected train split. The new dataset readiness report makes this kind of missingness visible during dataset builds, but the current smoke did not rebuild the dataset. Existing unrelated dirty tree changes and permission warnings under `artifacts/pytest_codex_schedule*` remain.
+
+Recommended next step: Rebuild the canonical dataset, inspect the new `training_readiness_report.json`, then run a full production training pass without `--fast-dev` before promoting any new model bundle.
+
+## 2026-06-13 - Dataset builder script import repair
+
+Summary: Fixed `backend/scripts/build_csv_datasets_v3.py` so it can be run directly from `backend/scripts` after the script move. The script now adds the repository root to `sys.path`, imports shared feature helpers through `backend.utils`, and accepts `--embargo-days` as a compatibility no-op with a warning because embargo is a training concern.
+
+Files changed: backend/scripts/build_csv_datasets_v3.py, alfred.log.md.
+
+Commands run: `python -m py_compile backend\scripts\build_csv_datasets_v3.py`; `python build_csv_datasets_v3.py --help` from `backend\scripts`; `python -m backend.scripts.build_csv_datasets_v3 --help`; parser smoke for the pasted dataset-builder arguments; `git diff --check -- backend/scripts/build_csv_datasets_v3.py`.
+
+Verification result: Compile passed. Direct script help from `backend\scripts` passed. Module-style help from repo root passed. The pasted dataset-builder arguments parsed successfully, including `--embargo-days 7`.
+
+Remaining issues: The full 2016-2025 dataset rebuild was not run because the reported blocker was import/argument parsing and the full rebuild is expensive.
+
+Recommended next step: Run the dataset build from `backend\scripts` with `--out-dir ..\data\datasets` and `--dominance-log ..\data\dominance_log.txt`, then inspect the generated CSV and log before training.
+
+## 2026-06-13 - Prediction readiness diagnostics enhancement
+
+Summary: Enhanced the `/predict` readiness payload so 503 responses explain blockers, warnings, loaded dataset state, model bundle metadata, runtime contract details, and next actions. Added a failure-only disk snapshot that can identify stale Uvicorn state when disk dataset/model hashes now match but the process still reports old blockers.
+
+Files changed: backend/main.py, backend/tests/test_prediction_readiness.py, alfred.log.md.
+
+Commands run: `python -m py_compile backend\main.py backend\tests\test_prediction_readiness.py`; `python -m pytest backend\tests\test_prediction_readiness.py -q -o addopts=''`; `python -m pytest backend\tests\test_pipeline_status.py backend\tests\test_model_bundle_contract.py -q -o addopts=''`; `python -m pytest backend\tests -q -o addopts=''`.
+
+Verification result: Compile passed. New readiness tests passed: 4 passed. Focused pipeline/model contract tests passed: 3 passed. Full backend test suite passed: 16 passed.
+
+Remaining issues: This change improves diagnostics only. It does not retrain, promote, or restart the local Uvicorn process. If a running server still reports a hash mismatch while disk hashes match, restart Uvicorn so it reloads the current dataset and model metadata.
+
+Recommended next step: Restart the local backend, call `/health` and `/predict` again, and use the new `next_actions`, `dataset`, `model_bundle`, and `contract` fields if readiness still fails.
+
+## 2026-06-13 - Legacy routes async await repair
+
+Summary: Fixed incorrect async usage in `backend/routes.py`. Removed the invalid `await games.append(...)`, moved synchronous schedule loading behind `asyncio.to_thread(...)`, and made the legacy `/predict/next-week` route await the async schedule helper before looping over games.
+
+Files changed: backend/routes.py, alfred.log.md.
+
+Commands run: `python -m py_compile backend\routes.py`; async smoke for `schedule_next_week`; async smoke for `predict_next_week` with a dummy prediction service; `python -m pytest backend\tests -q -o addopts=''`.
+
+Verification result: Compile passed. Both async route smokes returned expected response models. Full backend test suite passed: 16 passed.
+
+Remaining issues: `backend/routes.py` is marked as a legacy compatibility router and is not the canonical API surface; the active runtime remains `backend/main.py`.
+
+Recommended next step: Prefer adding new production API behavior in `backend/main.py`; keep `backend/routes.py` limited to compatibility fixes unless it is mounted again.
+
+## 2026-06-13 - Backend test consolidation and training plot report
+
+Summary: Consolidated the backend pytest suite into one regression file, preserved the existing 16 checks, and added a plot-generation smoke test. Expanded the training metrics PNG from a two-bar chart into a four-panel report covering score error, win-model metrics, baseline comparison, and run context. Removed a single-use legacy route helper and an unused import, and fixed one async legacy route call that was wrapping an async function in `to_thread`.
+
+Files changed: backend/tests/test_backend_regression.py, backend/tests/test_dataset_partial_availability.py, backend/tests/test_feature_contract.py, backend/tests/test_model_bundle_contract.py, backend/tests/test_pipeline_contract.py, backend/tests/test_pipeline_status.py, backend/tests/test_prediction_readiness.py, backend/tests/test_training_pipeline_enhancements.py, backend/scripts/train_models.py, backend/routes.py, alfred.log.md.
+
+Commands run: `python -m py_compile backend\routes.py backend\scripts\train_models.py backend\tests\test_backend_regression.py`; legacy route async smoke for `predict_next_week`; `python -m pytest backend\tests\test_backend_regression.py -q -o addopts=''`; `python -m pytest backend\tests -q -o addopts=''`; `git diff -- backend\routes.py backend\scripts\train_models.py backend\tests --check`.
+
+Verification result: Compile passed. Legacy route async smoke passed. Consolidated backend regression suite passed: 17 passed. Full backend tests discovery now resolves to the same one-file suite and passed: 17 passed.
+
+Remaining issues: The repo still has unrelated pre-existing dirty/generated model and data changes. `backend/scripts/train_models.py` is currently untracked because of the earlier script reorganization, so remember to stage it explicitly if committing this plot change.
+
+Recommended next step: Generate a real training run artifact and inspect `training_metrics_plot.png` visually before promoting any model bundle.
+
+## 2026-06-13 - Backend main dead-code helper removal
+
+Summary: Ran a static reference scan across backend Python source/tests and removed only four unreferenced top-level private helpers from `backend/main.py`: `_find_schedule_path`, `_load_team_logo_map`, `_env_flag`, and `_history_total_for_request`. Kept decorator-registered FastAPI exception handlers even though normal name-reference scans report them as zero-reference.
+
+Files changed: backend/main.py, alfred.log.md.
+
+Commands run: static AST/reference scan for top-level private helpers in `backend/main.py`; exact `rg` check for removed helper names; `python -m py_compile backend\main.py`; `python -c "import backend.main as m; ..."` import/route-table smoke; FastAPI TestClient `/health` smoke; `python -m pytest backend\tests -q -o addopts=''`.
+
+Verification result: Compile passed. Import smoke passed with 40 app routes. `/health` returned HTTP 200 with the expected response keys. Full backend tests passed: 17 passed. A second static scan found no unreferenced top-level private helpers except `_http_exception_handler` and `_validation_exception_handler`, which are intentionally registered through `@app.exception_handler`.
+
+Remaining issues: `backend/main.py` remains a dense runtime module with many single-use orchestration helpers that are used by routes/startup jobs; those were not removed because they are not proven dead. Existing unrelated dirty/generated model and data changes remain in the worktree.
+
+Recommended next step: If further cleanup is desired, split `backend/main.py` by behavior behind tests first: readiness diagnostics, schedule routes, history routes, admin retrain jobs, and prediction execution.
+
+## 2026-06-13 - Frontend AbortSignal console cleanup
+
+Summary: Fixed noisy frontend `AbortError: signal is aborted without reason` behavior in `frontend/src/api/client.js`. The shared fetch wrapper now aborts timeouts with an explicit `TimeoutError`, composes caller-provided abort signals with the timeout signal, avoids retrying intentional `AbortError` cancellations, and suppresses fallback warnings for expected component/navigation aborts while still logging real endpoint failures with the error object.
+
+Files changed: frontend/src/api/client.js, frontend/src/api/client.test.js, alfred.log.md.
+
+Commands run: `npm test -- --run src/api/client.test.js`; `npm test -- --run`; `npm run build`; local Vite preview smoke at `http://127.0.0.1:4175`; Playwright render smoke for `/app`, `/history`, and `/stats`.
+
+Verification result: Targeted client tests passed: 6 passed. Full frontend tests passed: 11 passed across 4 files. Production Vite build passed. The rendered smoke found no uncaught AbortSignal/AbortError console errors, no page errors, and no `/history/summary` warnings on dashboard, history, or stats pages. The local preview was cleaned up afterward.
+
+Remaining issues: The Browser plugin runtime reported `iab` unavailable in this session, so validation used the repo's Playwright dependency as a fallback. During rapid reload/navigation, Heroku `/health`, `/history`, and `/history/summary` requests showed `net::ERR_ABORTED` network failures, but they did not surface as uncaught console errors or user-facing summary warnings.
+
+Recommended next step: Commit the frontend AbortSignal fix separately from the unrelated backend/model worktree changes.
+
+## 2026-06-13 - Local backend runtime and frontend API smoke repair
+
+Summary: Repaired the local runtime path after the browser console showed repeated API timeouts. The root cause was two stale Uvicorn reload processes on port 8000 and one process using the wrong Python/scikit-learn environment. Restarted the backend from `backend\.venv`, which matches the active model bundle's `scikit-learn==1.7.2` contract. Also reduced frontend API noise by deduping concurrent GET requests, avoiding retries after request timeouts, and throttling fallback logs.
+
+Files changed: frontend/src/api/client.js, frontend/src/api/client.test.js, alfred.log.md.
+
+Commands run: checked Uvicorn process command lines; checked Python/scikit-learn versions for shell Python and `backend\.venv`; stopped stale Uvicorn PIDs 12044 and 15076; started `backend\.venv\Scripts\python.exe -m uvicorn backend.main:app --host 127.0.0.1 --port 8000`; API smoke for `/health`, `/status/models`, `/offseason/status`, `/schedule/next-week`, and `/predict`; `npm test -- --run src/api/client.test.js`; `npm test -- --run`; `npm run build`; Vite dev smoke on `http://127.0.0.1:3000`; Playwright route and prediction smoke; `backend\.venv\Scripts\python.exe -m py_compile backend\main.py`; `git diff --check -- frontend/src/api/client.js frontend/src/api/client.test.js alfred.log.md`.
+
+Verification result: Backend `/health` returned HTTP 200 with `status=healthy` and loaded models `home`, `away`, and `win`. `/status/models` returned `ready=true`. `/offseason/status` returned season 2026 week 1. `/schedule/next-week` returned 16 games. `/predict` returned HTTP 200 for NE at SEA, season 2026 week 1. Frontend tests passed: 13 passed across 4 files. Vite production build passed. Browser smoke against Vite dev showed dashboard/history/stats loading from the local backend with API 200 responses, no page errors, no failed backend requests, and a dashboard prediction button calling `/predict` with HTTP 200 and rendering a forecast.
+
+Remaining issues: `agent-browser` was requested but was not installed on PATH, so rendered validation used the repo's Playwright dependency. Vite dev still reports the expected Material Web/Lit dev-mode warning; this is dependency/dev-mode noise, not an app runtime failure. The frontend production preview uses `VITE_API_BASE_URL` and will call Heroku by design; use `npm run dev` for local backend testing.
+
+Recommended next step: Keep using `backend\.venv\Scripts\python.exe -m uvicorn backend.main:app --host 127.0.0.1 --port 8000` for local backend work, and use `cd frontend; npm run dev -- --host 127.0.0.1 --port 3000` for local frontend/backend verification.

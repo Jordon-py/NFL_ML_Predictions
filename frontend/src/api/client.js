@@ -91,6 +91,8 @@ const BASE_URL = (String(RAW_BASE_URL ?? "").trim() || FALLBACK_BASE_URL).replac
 export const API_BASE = BASE_URL;
 const APP_BASE_PATH = import.meta.env.BASE_URL || "/";
 const LOCAL_SCHEDULE_CACHE = new Map();
+const IN_FLIGHT_GET_REQUESTS = new Map();
+const RECENT_FALLBACK_LOGS = new Map();
 // Cache one-time endpoint capability checks so the app does not keep retrying
 // known-missing routes against older deployments on every render.
 const ENDPOINT_SUPPORT = {
@@ -101,6 +103,7 @@ const ENDPOINT_SUPPORT = {
 
 const REQUEST_TIMEOUT_MS = Number(import.meta.env.VITE_API_TIMEOUT_MS ?? 12000);
 const RETRY_ATTEMPTS = Number(import.meta.env.VITE_API_RETRY_ATTEMPTS ?? 1);
+const FALLBACK_LOG_THROTTLE_MS = 60000;
 const RETRYABLE_STATUS_CODES = new Set([408, 425, 429, 500, 502, 503, 504]);
 
 function delay(ms) {
@@ -129,7 +132,7 @@ function isRetryableHttpError(error) {
 }
 
 function isRetryableNetworkError(error) {
-  return error instanceof TypeError || isTimeoutError(error);
+  return error instanceof TypeError;
 }
 
 function abortReason(signal, fallbackMessage = "Request aborted") {
@@ -160,7 +163,40 @@ function composeAbortSignal(externalSignal, timeoutSignal) {
 
 function warnUnlessAbort(message, error) {
   if (isAbortError(error)) return;
-  console.warn(message, error);
+  const summary = error?.name ? `${error.name}: ${error.message || "request failed"}` : String(error || "request failed");
+  const key = `${message}|${summary}`;
+  const now = Date.now();
+  const lastShownAt = RECENT_FALLBACK_LOGS.get(key) || 0;
+  if (now - lastShownAt < FALLBACK_LOG_THROTTLE_MS) return;
+  RECENT_FALLBACK_LOGS.set(key, now);
+
+  const log = isTimeoutError(error) ? console.info : console.warn;
+  log(`${message} (${summary})`, error);
+}
+
+function normalizeHeadersForRequestKey(headers) {
+  if (!headers) return "";
+  try {
+    const pairs =
+      typeof Headers !== "undefined" && headers instanceof Headers
+        ? Array.from(headers.entries())
+        : Array.isArray(headers)
+          ? headers
+          : Object.entries(headers);
+    return pairs
+      .map(([key, value]) => [String(key).toLowerCase(), String(value)])
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, value]) => `${key}:${value}`)
+      .join("|");
+  } catch {
+    return "";
+  }
+}
+
+function inFlightGetKey(url, options = {}) {
+  const method = String(options.method || "GET").toUpperCase();
+  if (method !== "GET" || options.body || options.signal) return null;
+  return `${method} ${url} ${normalizeHeadersForRequestKey(options.headers)}`;
 }
 
 
@@ -672,7 +708,23 @@ export async function fetchJson(path, options = {}) {
 
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
   const url = `${BASE_URL}${normalizedPath}`;
+  const getKey = inFlightGetKey(url, options);
+  if (getKey && IN_FLIGHT_GET_REQUESTS.has(getKey)) {
+    return IN_FLIGHT_GET_REQUESTS.get(getKey);
+  }
 
+  const request = fetchJsonWithRetries(url, options);
+  if (getKey) {
+    IN_FLIGHT_GET_REQUESTS.set(getKey, request);
+    request.then(
+      () => IN_FLIGHT_GET_REQUESTS.delete(getKey),
+      () => IN_FLIGHT_GET_REQUESTS.delete(getKey)
+    );
+  }
+  return request;
+}
+
+async function fetchJsonWithRetries(url, options = {}) {
   const maxAttempts = Number.isFinite(RETRY_ATTEMPTS) ? Math.max(0, Math.floor(RETRY_ATTEMPTS)) + 1 : 1;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {

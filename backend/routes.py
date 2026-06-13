@@ -10,14 +10,14 @@
 
 from __future__ import annotations
 import logging
-import os
+import asyncio
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 import pandas as pd
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from backend.main_helpers import (
+from backend.utils.main_helpers import (
     get_schedule,
     select_next_week_rows,
     _pick_col,
@@ -41,9 +41,6 @@ log = logging.getLogger(__name__)
 def _resolve_user_context(request: Request):
     return build_prediction_user_context(request.headers.get("X-User-Id"))
 
-
-def _build_schedule_key(season: int, week: int, home_team: str, away_team: str) -> str:
-    return f"{season}-{week}-{home_team}-{away_team}"
 
 # -------------------------
 # Legacy Schemas
@@ -126,7 +123,7 @@ class HistoryIntelligenceResponse(BaseModel):
 # -------------------------
 
 @router.get("/health", response_model=HealthResponse)
-def health(request: Request) -> HealthResponse:
+async def health(request: Request) -> HealthResponse:
     # Use service availability as health check
     service = getattr(request.app.state, "service", None)
     started_at = getattr(request.app.state, "started_at", None)
@@ -135,7 +132,7 @@ def health(request: Request) -> HealthResponse:
     return HealthResponse(status="healthy", reason="ok", started_at=started_at)
 
 @router.get("/debug", response_model=DebugResponse)
-def debug(request: Request) -> DebugResponse:
+async def debug(request: Request) -> DebugResponse:
     models = getattr(request.app.state, "models", None)
     ds: pd.DataFrame = getattr(request.app.state, "dataset", pd.DataFrame())
     started_at = getattr(request.app.state, "started_at", None)
@@ -149,8 +146,8 @@ def debug(request: Request) -> DebugResponse:
     )
 
 @router.get("/schedule/next-week", response_model=NextWeekGamesResponse)
-def schedule_next_week(request: Request, season: int = 2025) -> NextWeekGamesResponse:
-    df = get_schedule(season=season)
+async def schedule_next_week(request: Request, season: int = 2025) -> NextWeekGamesResponse:
+    df = await asyncio.to_thread(get_schedule, season=season)
     df_next, use_season, use_week = select_next_week_rows(df)
 
     home_col = _pick_col(df_next, _HOME_COLS)
@@ -164,7 +161,7 @@ def schedule_next_week(request: Request, season: int = 2025) -> NextWeekGamesRes
         if not home or not away:
             continue
         stadium = str(r.get(stadium_col, "") if stadium_col else r.get("stadium", "")).strip()
-        game_id = _build_schedule_key(int(use_season), int(use_week), home, away)
+        game_id = f"{int(use_season)}-{int(use_week)}-{home}-{away}"
 
         games.append(
             ScheduleGame(
@@ -181,7 +178,7 @@ def schedule_next_week(request: Request, season: int = 2025) -> NextWeekGamesRes
     return NextWeekGamesResponse(games=games)
 
 @router.get("/teams/logos", response_model=TeamLogosResponse)
-def team_logos(request: Request) -> TeamLogosResponse:
+async def team_logos(request: Request) -> TeamLogosResponse:
     cached = getattr(request.app.state, "team_logos", None)
     if isinstance(cached, dict) and cached:
         return TeamLogosResponse(teams=cached)
@@ -195,7 +192,7 @@ def team_logos(request: Request) -> TeamLogosResponse:
     return TeamLogosResponse(teams={})
 
 @router.post("/predict", response_model=PredictionResponse)
-def predict(req: PredictionRequest, request: Request) -> PredictionResponse:
+async def predict(req: PredictionRequest, request: Request) -> PredictionResponse:
     service: Optional[PredictionService] = getattr(request.app.state, "service", None)
     if not service:
         raise HTTPException(status_code=503, detail="Prediction service not initialized")
@@ -239,9 +236,9 @@ def predict(req: PredictionRequest, request: Request) -> PredictionResponse:
         raise HTTPException(status_code=400, detail=f"Prediction failed: {e}")
 
 @router.get("/predict/next-week", response_model=NextWeekPredictionsResponse)
-def predict_next_week(request: Request, season: int = 2025) -> NextWeekPredictionsResponse:
+async def predict_next_week(request: Request, season: int = 2025) -> NextWeekPredictionsResponse:
     # Re-use local schedule fetch
-    sched = schedule_next_week(request, season=season)
+    sched = await schedule_next_week(request, season=season)
     out: List[PredictedGame] = []
     
     # We can just loop and call our local predict for convenience/consistency
@@ -253,7 +250,7 @@ def predict_next_week(request: Request, season: int = 2025) -> NextWeekPredictio
                 season=g.season,
                 week=g.week
             )
-            pred = predict(p_req, request)
+            pred = await predict(p_req, request)
             out.append(PredictedGame(
                 season=g.season,
                 week=g.week,
@@ -270,7 +267,7 @@ def predict_next_week(request: Request, season: int = 2025) -> NextWeekPredictio
     return NextWeekPredictionsResponse(games=out)
 
 @router.get("/status/overview")
-def status_overview(request: Request):
+async def status_overview(request: Request):
     service = getattr(request.app.state, "service", None)
     ds = getattr(request.app.state, "dataset", None)
 
@@ -289,13 +286,13 @@ def status_overview(request: Request):
     }
 
 @router.get("/history")
-def history(request: Request, limit: int = 100):
-    return get_prediction_history(_resolve_user_context(request), limit=limit)
+async def history(request: Request, limit: int = 100):
+    return await asyncio.to_thread(get_prediction_history, _resolve_user_context(request), limit=limit)
 
 
 @router.get("/history/intelligence", response_model=HistoryIntelligenceResponse)
-def history_intelligence(request: Request, limit: int = 250) -> HistoryIntelligenceResponse:
-    records = get_prediction_history(_resolve_user_context(request), limit=limit)
+async def history_intelligence(request: Request, limit: int = 250) -> HistoryIntelligenceResponse:
+    records = await asyncio.to_thread(get_prediction_history, _resolve_user_context(request), limit=limit)
     if not records:
         return HistoryIntelligenceResponse(
             total_predictions=0,

@@ -83,6 +83,7 @@ What this writes:
 - A promoted clean CSV in `backend/data/datasets/`
 - Completed and future partitions in `backend/data/datasets/`
 - `backend/data/datasets/latest_dataset.json`
+- Schema, missingness, duplicate, and training-readiness reports in the run folder
 
 ### 4. Train models
 
@@ -90,11 +91,14 @@ What this writes:
 python backend/train_models.py --data backend/data/datasets/game_features_20260531_clean.csv --out backend/models --production
 ```
 
+Score prediction now defaults to `--score-model ensemble`, which blends the existing gradient-boosted regressor with an `MLPRegressor` neural network. Use `--score-model hgb` for a gradient-boosting-only comparison run, or tune the blend with `--nn-weight 0.35`.
+
 What this writes by default:
 
 - Promoted artifacts in `backend/models/`
 - A staging bundle in `backend/models/staging/<run_id>/`
 - `metadata.json`, `training_report.json`, and `run_summary.json`
+- Regression component metrics for the boosted score model, neural score model, and selected ensemble
 - A dated mirror in `backend/YYYYMMDD/models/` when training uses the default output directory
 
 Important runtime note:
