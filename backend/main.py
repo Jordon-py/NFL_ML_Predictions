@@ -52,6 +52,7 @@ from backend.prediction_store import (
 # Comment 1: Import score sync utilities from backend.scripts.score_sync following structural organization.
 from backend.scripts.score_sync import extract_score_entries_from_dataframe
 from backend.pipeline_models import StoredPredictionRequest
+from backend.services import api_runtime as svc_runtime
 from backend.services.inference_row import build_model_input_row
 from backend.schemas_pipeline_status import (
     DatasetQualityStatus,
@@ -1390,6 +1391,7 @@ class AppState:
 
 
 state = AppState()
+svc_runtime.state = state
 
 # -------------------------------------------------------------------
 # FastAPI App + Lifespan
@@ -3872,7 +3874,9 @@ def get_nfl_agent() -> Any:
             from backend.ollama.llm_ollama import NFLAgent
 
             dataset_path = os.getenv("NFL_DATASET_PATH")
-            _nfl_agent = NFLAgent(csv_path=dataset_path)
+            model = (os.getenv("OLLAMA_MODEL", "").split(",")[0].strip() or None)
+            host = os.getenv("OLLAMA_BASE_URL") or os.getenv("OLLAMA_HOST")
+            _nfl_agent = NFLAgent(csv_path=dataset_path, model=model, host=host)
         except Exception as exc:
             logging.exception("[PremiumAI] Failed to initialize NFLAgent")
             raise HTTPException(
@@ -4064,12 +4068,20 @@ async def premium_chat(payload: PremiumChatRequest, request: Request) -> Dict[st
 # -------------------------------------------------------------------
 # /predict (final enhanced)
 # -------------------------------------------------------------------
-@app.post("/api/predict", response_model=PredictionResponse)
-@app.post("/predict", response_model=PredictionResponse)
+@app.post("/api/predict", response_model=svc_runtime.PredictionResponse)
+@app.post("/predict", response_model=svc_runtime.PredictionResponse)
 async def predict(payload: PredictRequest, request: Request) -> Dict[str, Any]:
     """
     Predict home/away score and win probability for a single game.
     """
+    canonical_payload = svc_runtime.PredictRequest(
+        home_team=payload.home_team,
+        away_team=payload.away_team,
+        season=payload.season,
+        week=payload.week,
+    )
+    return await svc_runtime.predict_game(canonical_payload, request)
+
     # Comment 3: Run full game predictions (scores + win probabilities) via scikit-learn models.
     state.refresh_dataset_if_changed()
     readiness = _prediction_readiness_payload()

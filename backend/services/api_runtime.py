@@ -28,6 +28,7 @@ import subprocess
 import csv
 import uuid
 import warnings
+import asyncio
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from contextlib import asynccontextmanager
@@ -38,6 +39,7 @@ from dotenv import load_dotenv
 import numpy as np
 import joblib
 import pandas as pd
+import requests
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
@@ -75,6 +77,7 @@ from backend.utils.ops_reporting import (
     load_latest_dataset_manifest,
 )
 from backend.utils.cache import LRUCache
+
 
 _add_kickoff_utc_datetime = fn_main._add_kickoff_utc_datetime
 _coerce_season_week = fn_main._coerce_season_week
@@ -148,9 +151,50 @@ SCHEDULE_PATH = schedule_env_path if schedule_env_path else (DATA_DIR / "Nfl_sch
 # Required model keys for /predict to be "ready"
 REQUIRED_MODELS: Tuple[str, ...] = ("home", "away", "win")
 WIN_PROBA_FEATURE = "nn_home_win_proba"
+
+
+def _env_float_setting(name: str, default: float, *, minimum: Optional[float] = None) -> float:
+    raw = os.getenv(name)
+    if raw is None or str(raw).strip() == "":
+        value = default
+    else:
+        try:
+            value = float(raw)
+        except (TypeError, ValueError):
+            logging.warning("Invalid %s=%r; using default %s", name, raw, default)
+            value = default
+    return max(minimum, value) if minimum is not None else value
+
+
+def _env_int_setting(name: str, default: int, *, minimum: Optional[int] = None) -> int:
+    raw = os.getenv(name)
+    if raw is None or str(raw).strip() == "":
+        value = default
+    else:
+        try:
+            value = int(raw)
+        except (TypeError, ValueError):
+            logging.warning("Invalid %s=%r; using default %s", name, raw, default)
+            value = default
+    return max(minimum, value) if minimum is not None else value
+
+
 PREDICT_CACHE_TTL_SEC = max(0, int(SETTINGS.predict_cache_ttl_sec))
 PREDICT_CACHE_MAX_ITEMS = max(50, int(SETTINGS.predict_cache_max_items))
 GAME_SCORE_SYNC_TTL_SEC = 900
+EXPERT_CONTEXT_TIMEOUT_S = _env_float_setting("EXPERT_CONTEXT_TIMEOUT_S", 4.0, minimum=1.0)
+EXPERT_INJURY_LIMIT = _env_int_setting("EXPERT_INJURY_LIMIT", 4, minimum=0)
+EXPERT_OLLAMA_TIMEOUT_S = _env_float_setting(
+    "EXPERT_OLLAMA_TIMEOUT_S",
+    _env_float_setting("OLLAMA_TIMEOUT_S", 75.0, minimum=5.0),
+    minimum=5.0,
+)
+EXPERT_PREDICTION_ENABLED = str(os.getenv("EXPERT_PREDICTION_ENABLED", "true")).strip().lower() not in {
+    "0",
+    "false",
+    "no",
+    "off",
+}
 # Models directory is resolved at runtime by _find_models_dir().
 # Override in production with: MODELS_DIR=/absolute/or/repo-relative/path
 
@@ -1644,6 +1688,12 @@ class PredictionResponse(BaseModel):
     dataset_access: Dict[str, Any] = Field(default_factory=dict)
     model_learning: Dict[str, Any] = Field(default_factory=dict)
     ai_payload: Dict[str, Any] = Field(default_factory=dict)
+    model_prediction: Dict[str, Any] = Field(default_factory=dict)
+    expert_prediction: Dict[str, Any] = Field(default_factory=dict)
+    expert_context: Dict[str, Any] = Field(default_factory=dict)
+    expert_reasoning: Optional[str] = None
+    expert_model_used: Optional[str] = None
+    expert_host_used: Optional[str] = None
     prediction_source: str = "pipeline_primary"
     explanation_fields: Dict[str, Any] = Field(default_factory=dict)
     generated_at: datetime
@@ -2064,6 +2114,605 @@ def _json_safe_records(df: pd.DataFrame) -> List[Dict[str, Any]]:
         safe_row = {str(k): _json_safe_value(v) for k, v in row.items()}
         safe_rows.append(safe_row)
     return safe_rows
+
+
+ESPN_TEAM_IDS: Dict[str, str] = {
+    "ARI": "22",
+    "ATL": "1",
+    "BAL": "33",
+    "BUF": "2",
+    "CAR": "29",
+    "CHI": "3",
+    "CIN": "4",
+    "CLE": "5",
+    "DAL": "6",
+    "DEN": "7",
+    "DET": "8",
+    "GB": "9",
+    "HOU": "34",
+    "IND": "11",
+    "JAX": "30",
+    "KC": "12",
+    "LAC": "24",
+    "LAR": "14",
+    "LV": "13",
+    "MIA": "15",
+    "MIN": "16",
+    "NE": "17",
+    "NO": "18",
+    "NYG": "19",
+    "NYJ": "20",
+    "PHI": "21",
+    "PIT": "23",
+    "SEA": "26",
+    "SF": "25",
+    "TB": "27",
+    "TEN": "10",
+    "WAS": "28",
+}
+
+
+def _https_ref(raw: Any) -> Optional[str]:
+    value = str(raw or "").strip()
+    if not value:
+        return None
+    if value.startswith("http://"):
+        value = "https://" + value[len("http://") :]
+    return value
+
+
+@lru_cache(maxsize=512)
+def _espn_get_json(url: str) -> Dict[str, Any]:
+    response = requests.get(url, timeout=EXPERT_CONTEXT_TIMEOUT_S)
+    response.raise_for_status()
+    payload = response.json()
+    return payload if isinstance(payload, dict) else {}
+
+
+def _record_stat_map(record_item: Dict[str, Any]) -> Dict[str, Any]:
+    stats: Dict[str, Any] = {}
+    for stat in record_item.get("stats") or []:
+        if not isinstance(stat, dict):
+            continue
+        key = str(stat.get("name") or stat.get("type") or "").strip()
+        if not key:
+            continue
+        stats[key] = {
+            "display": stat.get("displayValue"),
+            "value": stat.get("value"),
+        }
+    return stats
+
+
+def _record_stat(stats: Dict[str, Any], name: str) -> Any:
+    value = stats.get(name) or {}
+    return value.get("display") if isinstance(value, dict) else None
+
+
+async def _fetch_team_record_context(team_code: str, season: int) -> Dict[str, Any]:
+    team_id = ESPN_TEAM_IDS.get(_normalize_team_code(team_code))
+    if not team_id:
+        return {"team": team_code, "season": season, "available": False, "reason": "missing ESPN team id"}
+
+    url = (
+        "https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/"
+        f"seasons/{int(season)}/types/2/teams/{team_id}/record?lang=en&region=us"
+    )
+    try:
+        data = await asyncio.to_thread(_espn_get_json, url)
+    except Exception as exc:
+        return {
+            "team": team_code,
+            "season": season,
+            "available": False,
+            "source": url,
+            "reason": str(exc).splitlines()[0],
+        }
+
+    items = [item for item in data.get("items") or [] if isinstance(item, dict)]
+    overall = next((item for item in items if str(item.get("name")).lower() == "overall"), None)
+    if not overall:
+        return {
+            "team": team_code,
+            "season": season,
+            "available": False,
+            "source": url,
+            "reason": "record not published",
+        }
+
+    stats = _record_stat_map(overall)
+    return {
+        "team": team_code,
+        "season": season,
+        "available": True,
+        "source": url,
+        "summary": overall.get("summary") or overall.get("displayValue"),
+        "win_percent": _record_stat(stats, "winPercent"),
+        "points_for_per_game": _record_stat(stats, "avgPointsFor"),
+        "points_against_per_game": _record_stat(stats, "avgPointsAgainst"),
+        "point_differential": _record_stat(stats, "pointDifferential") or _record_stat(stats, "differential"),
+        "playoff_seed_or_rank": _record_stat(stats, "playoffSeed"),
+        "division_record": _record_stat(stats, "divisionRecord"),
+        "conference_record": next(
+            (
+                item.get("summary") or item.get("displayValue")
+                for item in items
+                if str(item.get("name")).lower() == "vs. conf."
+            ),
+            None,
+        ),
+        "streak": _record_stat(stats, "streak"),
+    }
+
+
+async def _fetch_team_injury_context(team_code: str, season: int) -> Dict[str, Any]:
+    team_id = ESPN_TEAM_IDS.get(_normalize_team_code(team_code))
+    if not team_id:
+        return {"team": team_code, "season": season, "available": False, "reason": "missing ESPN team id"}
+
+    url = (
+        "https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/"
+        f"teams/{team_id}/injuries?lang=en&region=us"
+    )
+    try:
+        data = await asyncio.to_thread(_espn_get_json, url)
+    except Exception as exc:
+        return {
+            "team": team_code,
+            "season": season,
+            "available": False,
+            "source": url,
+            "reason": str(exc).splitlines()[0],
+        }
+
+    injuries: List[Dict[str, Any]] = []
+    for item in (data.get("items") or [])[:EXPERT_INJURY_LIMIT]:
+        ref = _https_ref((item or {}).get("$ref"))
+        if not ref:
+            continue
+        try:
+            injury = await asyncio.to_thread(_espn_get_json, ref)
+            athlete_ref = _https_ref((injury.get("athlete") or {}).get("$ref"))
+            athlete = await asyncio.to_thread(_espn_get_json, athlete_ref) if athlete_ref else {}
+        except Exception:
+            continue
+        details = injury.get("details") or {}
+        injuries.append(
+            {
+                "player": athlete.get("displayName") or athlete.get("fullName"),
+                "status": injury.get("status") or injury.get("shortComment"),
+                "type": details.get("type"),
+                "location": details.get("location"),
+                "return_date": details.get("returnDate"),
+                "updated_at": injury.get("date"),
+            }
+        )
+
+    return {
+        "team": team_code,
+        "season": season,
+        "available": True,
+        "source": url,
+        "listed_count": int(data.get("count") or len(injuries)),
+        "sampled_count": len(injuries),
+        "injuries": injuries,
+        "note": "ESPN listed injuries are bounded to the first recent entries for prompt safety.",
+    }
+
+
+def _dataset_matchup_context(row_df: pd.DataFrame, score_full_df: pd.DataFrame) -> Dict[str, Any]:
+    row = _json_safe_row(row_df)
+    score_row = _json_safe_row(score_full_df)
+    wanted = (
+        "home_prior_win_pct_3",
+        "home_prior_win_pct_5",
+        "away_prior_win_pct_3",
+        "away_prior_win_pct_5",
+        "home_minus_away_win_pct_3",
+        "home_minus_away_win_pct_5",
+        "home_elo_pre",
+        "away_elo_pre",
+        "elo_diff_pre",
+        "home_prior_pf_avg_5",
+        "home_prior_pa_avg_5",
+        "away_prior_pf_avg_5",
+        "away_prior_pa_avg_5",
+        "home_prior_off_epa_per_play_5",
+        "away_prior_off_epa_per_play_5",
+        "home_prior_def_epa_per_play_5",
+        "away_prior_def_epa_per_play_5",
+        "home_vs_away_prior_games",
+        "home_vs_away_prior_wins",
+        "home_vs_away_prior_losses",
+        "home_vs_away_prior_win_pct",
+        "away_vs_home_prior_games",
+        "away_vs_home_prior_wins",
+        "away_vs_home_prior_losses",
+        "away_vs_home_prior_win_pct",
+    )
+    context = {key: row.get(key) for key in wanted if row.get(key) is not None}
+    if score_row.get(WIN_PROBA_FEATURE) is not None:
+        context[WIN_PROBA_FEATURE] = score_row.get(WIN_PROBA_FEATURE)
+    return context
+
+
+def _truncate_prompt_text(value: Any, *, limit: int = 6000) -> str:
+    text = str(value or "").strip()
+    if len(text) <= limit:
+        return text
+    return f"{text[:limit].rstrip()}... [truncated]"
+
+
+def _build_nfl_memory_matchup_context(
+    *,
+    home_team: str,
+    away_team: str,
+    season: int,
+    week: int,
+) -> Dict[str, Any]:
+    try:
+        from backend.ollama.memory import NFLMemory
+
+        dataset_path = os.getenv("NFL_DATASET_PATH")
+        if not dataset_path and state.dataset_path:
+            dataset_path = str(state.dataset_path)
+        memory = NFLMemory(csv_path=dataset_path)
+        question = f"{away_team} at {home_team} {int(season)} week {int(week)} matchup prediction"
+        return {
+            "available": True,
+            "source": str(memory.csv_path),
+            "data_summary": _truncate_prompt_text(memory.data_summary, limit=2000),
+            "relevant_context": _truncate_prompt_text(memory.relevant_context(question), limit=6000),
+        }
+    except Exception as exc:
+        return {
+            "available": False,
+            "reason": str(exc).splitlines()[0],
+        }
+
+
+def _model_prediction_snapshot(prediction: Dict[str, Any]) -> Dict[str, Any]:
+    metrics = state.models_metadata.get("metrics", {}) if isinstance(state.models_metadata, dict) else {}
+    regression = metrics.get("regression", {}) if isinstance(metrics, dict) else {}
+    classification = metrics.get("classification", {}) if isinstance(metrics, dict) else {}
+    calibration = metrics.get("calibration", {}) if isinstance(metrics, dict) else {}
+    generated = state.models_metadata.get("generated_features", {}) if isinstance(state.models_metadata, dict) else {}
+    component_models = regression.get("component_models", {}) if isinstance(regression, dict) else {}
+    neural_network_used = bool(
+        WIN_PROBA_FEATURE in generated
+        or any("mlp" in (models or {}) for models in component_models.values() if isinstance(models, dict))
+    )
+    return {
+        "home_score": prediction.get("home_score"),
+        "away_score": prediction.get("away_score"),
+        "home_win_probability": prediction.get("home_win_probability"),
+        "away_win_probability": prediction.get("away_win_probability"),
+        "point_diff": prediction.get("point_diff"),
+        "predicted_winner": prediction.get("predicted_winner"),
+        "confidence_score": prediction.get("confidence_score"),
+        "confidence_tier": prediction.get("confidence_tier"),
+        "prediction_source": prediction.get("prediction_source"),
+        "win_classifier_used": prediction.get("win_classifier_used"),
+        "neural_network_used": neural_network_used,
+        "neural_signals": {
+            WIN_PROBA_FEATURE: generated.get(WIN_PROBA_FEATURE),
+            "score_regressor_components": component_models,
+        },
+        "calibrated_confidence_model": {
+            "classification": classification,
+            "calibration": {key: value for key, value in calibration.items() if key != "bins"}
+            if isinstance(calibration, dict)
+            else {},
+        },
+    }
+
+
+async def _build_expert_matchup_context(
+    *,
+    home_team: str,
+    away_team: str,
+    season: int,
+    week: int,
+    row_df: pd.DataFrame,
+    score_full_df: pd.DataFrame,
+) -> Dict[str, Any]:
+    previous_season = int(season) - 1
+    (
+        nfl_memory,
+        home_current_record,
+        away_current_record,
+        home_previous_record,
+        away_previous_record,
+        home_injuries,
+        away_injuries,
+    ) = await asyncio.gather(
+        asyncio.to_thread(
+            _build_nfl_memory_matchup_context,
+            home_team=home_team,
+            away_team=away_team,
+            season=season,
+            week=week,
+        ),
+        _fetch_team_record_context(home_team, season),
+        _fetch_team_record_context(away_team, season),
+        _fetch_team_record_context(home_team, previous_season),
+        _fetch_team_record_context(away_team, previous_season),
+        _fetch_team_injury_context(home_team, season),
+        _fetch_team_injury_context(away_team, season),
+    )
+    return {
+        "sources": ["backend dataset", "NFLMemory", "ESPN Core API"],
+        "dataset_matchup_context": _dataset_matchup_context(row_df, score_full_df),
+        "nfl_memory": nfl_memory,
+        "current_records": {
+            home_team: home_current_record,
+            away_team: away_current_record,
+        },
+        "previous_season_standings": {
+            home_team: home_previous_record,
+            away_team: away_previous_record,
+        },
+        "injuries": {
+            home_team: home_injuries,
+            away_team: away_injuries,
+        },
+    }
+
+
+def _bounded_probability(value: Any) -> Optional[float]:
+    try:
+        prob = float(value)
+    except (TypeError, ValueError):
+        return None
+    if prob > 1.0 and prob <= 100.0:
+        prob /= 100.0
+    return float(np.clip(prob, 0.01, 0.99))
+
+
+def _three_sentence_reasoning(raw: Any, fallback: str) -> str:
+    if isinstance(raw, list):
+        pieces = [str(item).strip() for item in raw if str(item).strip()]
+    else:
+        text = str(raw or "").replace("\n", " ").strip()
+        pieces = [part.strip() for part in re.split(r"(?<=[.!?])\s+", text) if part.strip()]
+    cleaned: List[str] = []
+    for piece in pieces:
+        sentence = piece.strip()
+        if not sentence:
+            continue
+        if sentence[-1] not in ".!?":
+            sentence += "."
+        cleaned.append(sentence)
+        if len(cleaned) == 3:
+            break
+    while len(cleaned) < 3:
+        cleaned.append(fallback)
+    return " ".join(cleaned[:3])
+
+
+def _parse_expert_prediction_json(
+    content: str,
+    *,
+    home_team: str,
+    away_team: str,
+    fallback_prediction: Dict[str, Any],
+) -> Dict[str, Any]:
+    from backend.ollama.client import strip_code_fences
+
+    parsed = json.loads(strip_code_fences(content))
+    if not isinstance(parsed, dict):
+        raise ValueError("expert response was not a JSON object")
+
+    home_score = _clamp_score(float(parsed.get("home_score")))
+    away_score = _clamp_score(float(parsed.get("away_score")))
+    predicted_winner = str(parsed.get("predicted_winner") or "").strip().upper()
+    confidence = _bounded_probability(parsed.get("confidence") or parsed.get("confidence_score"))
+    home_prob = _bounded_probability(parsed.get("home_win_probability"))
+
+    if home_prob is None and confidence is not None and predicted_winner in {home_team, away_team}:
+        home_prob = confidence if predicted_winner == home_team else 1.0 - confidence
+    if home_prob is None:
+        home_prob = _bounded_probability(fallback_prediction.get("home_win_probability")) or 0.5
+    away_prob = float(1.0 - home_prob)
+    confidence = float(confidence if confidence is not None else max(home_prob, away_prob))
+
+    if predicted_winner not in {home_team, away_team}:
+        predicted_winner = home_team if home_prob >= away_prob else away_team
+
+    fallback_reason = (
+        f"The final prediction keeps the ML model as the anchor and adjusts only when the supplied "
+        f"context supports the change."
+    )
+    reasoning = _three_sentence_reasoning(
+        parsed.get("reasoning") or parsed.get("explanation") or parsed.get("rationale"),
+        fallback_reason,
+    )
+    return {
+        "used_llm": True,
+        "home_score": float(home_score),
+        "away_score": float(away_score),
+        "home_win_probability": float(home_prob),
+        "away_win_probability": away_prob,
+        "confidence": float(np.clip(confidence, 0.01, 0.99)),
+        "confidence_percentage": int(round(float(np.clip(confidence, 0.01, 0.99)) * 100)),
+        "predicted_winner": predicted_winner,
+        "reasoning": reasoning,
+        "reasoning_sentences": [part.strip() for part in re.split(r"(?<=[.!?])\s+", reasoning) if part.strip()][:3],
+    }
+
+
+async def _generate_expert_prediction(
+    *,
+    prediction: Dict[str, Any],
+    model_prediction: Dict[str, Any],
+    external_context: Dict[str, Any],
+    request: Optional[Request],
+) -> Dict[str, Any]:
+    if not EXPERT_PREDICTION_ENABLED:
+        return {"used_llm": False, "reason": "EXPERT_PREDICTION_ENABLED is disabled"}
+
+    try:
+        from backend.ollama.client import chat_once
+    except Exception as exc:
+        return {"used_llm": False, "reason": f"Ollama client unavailable: {str(exc).splitlines()[0]}"}
+
+    home_team = str(prediction.get("home_team") or "").upper()
+    away_team = str(prediction.get("away_team") or "").upper()
+    model = (os.getenv("OLLAMA_MODEL", "gemma4:31b-cloud").split(",")[0].strip() or "gemma4:31b-cloud")
+    host = os.getenv("OLLAMA_BASE_URL") or os.getenv("OLLAMA_HOST") or "https://ollama.com"
+    prompt_payload = {
+        "task": (
+            "You are the final NFL prediction calibration layer. Use the ML model output, calibrated "
+            "classifier confidence, backend dataset context, ESPN records/standings, and ESPN injury "
+            "context to make the final displayed prediction."
+        ),
+        "rules": [
+            "Return ONLY valid JSON.",
+            "Do not invent injuries, records, standings, odds, or weather outside the supplied context.",
+            "Keep score adjustments conservative unless the supplied context strongly supports a change.",
+            "reasoning must be exactly 3 concise sentences for the frontend card.",
+        ],
+        "output_schema": {
+            "home_score": "number",
+            "away_score": "number",
+            "home_win_probability": "0-1 number",
+            "confidence": "0-1 number for the predicted winner",
+            "predicted_winner": f"{home_team} or {away_team}",
+            "reasoning": ["sentence 1", "sentence 2", "sentence 3"],
+        },
+        "matchup": {
+            "home_team": home_team,
+            "away_team": away_team,
+            "season": prediction.get("season"),
+            "week": prediction.get("week"),
+        },
+        "ml_model_output": model_prediction,
+        "ai_payload": prediction.get("ai_payload") or _prediction_ai_payload(prediction, request),
+        "external_context": external_context,
+    }
+    result = await chat_once(
+        host=host,
+        model=model,
+        timeout_s=EXPERT_OLLAMA_TIMEOUT_S,
+        messages=[
+            {
+                "role": "system",
+                "content": "You are a cautious NFL expert and probability calibration layer. Output JSON only.",
+            },
+            {"role": "user", "content": json.dumps(prompt_payload, default=str)},
+        ],
+    )
+    if not result.get("ok"):
+        return {
+            "used_llm": False,
+            "model": model,
+            "host": host,
+            "reason": result.get("error") or "Ollama expert prediction failed",
+        }
+
+    try:
+        expert = _parse_expert_prediction_json(
+            str(result.get("content") or ""),
+            home_team=home_team,
+            away_team=away_team,
+            fallback_prediction=prediction,
+        )
+    except Exception as exc:
+        return {
+            "used_llm": False,
+            "model": result.get("model") or model,
+            "host": result.get("host") or host,
+            "reason": f"Invalid expert JSON: {str(exc).splitlines()[0]}",
+            "raw_content": str(result.get("content") or "")[:500],
+        }
+
+    expert.update(
+        {
+            "model": result.get("model") or model,
+            "host": result.get("host") or host,
+            "context_sources": external_context.get("sources", []),
+        }
+    )
+    return expert
+
+
+def _fallback_expert_prediction(prediction: Dict[str, Any], reason: str) -> Dict[str, Any]:
+    display = _prediction_display_fields(prediction)
+    return {
+        "used_llm": False,
+        "reason": reason,
+        "home_score": prediction.get("home_score"),
+        "away_score": prediction.get("away_score"),
+        "home_win_probability": prediction.get("home_win_probability"),
+        "away_win_probability": prediction.get("away_win_probability"),
+        "confidence": display.get("confidence_score"),
+        "confidence_percentage": int(round(float(display.get("confidence_score") or 0.0) * 100)),
+        "predicted_winner": display.get("predicted_winner"),
+        "reasoning": (
+            "The displayed prediction is the ML model output because the expert LLM layer was unavailable. "
+            "The calibrated win classifier and neural score ensemble still produced the score and confidence. "
+            "Use the premium breakdown again after Ollama Cloud and context sources are reachable."
+        ),
+    }
+
+
+async def _apply_expert_prediction_layer(
+    prediction: Dict[str, Any],
+    *,
+    row_df: pd.DataFrame,
+    score_full_df: pd.DataFrame,
+    request: Optional[Request],
+) -> Dict[str, Any]:
+    model_prediction = _model_prediction_snapshot(prediction)
+    prediction["model_prediction"] = model_prediction
+
+    try:
+        external_context = await _build_expert_matchup_context(
+            home_team=str(prediction.get("home_team") or ""),
+            away_team=str(prediction.get("away_team") or ""),
+            season=int(prediction.get("season") or 0),
+            week=int(prediction.get("week") or 0),
+            row_df=row_df,
+            score_full_df=score_full_df,
+        )
+    except Exception as exc:
+        external_context = {
+            "sources": ["backend dataset"],
+            "dataset_matchup_context": _dataset_matchup_context(row_df, score_full_df),
+            "warning": str(exc).splitlines()[0],
+        }
+
+    expert = await _generate_expert_prediction(
+        prediction=prediction,
+        model_prediction=model_prediction,
+        external_context=external_context,
+        request=request,
+    )
+    if not expert.get("used_llm"):
+        expert = _fallback_expert_prediction(prediction, str(expert.get("reason") or "expert layer unavailable"))
+
+    prediction["expert_prediction"] = expert
+    prediction["expert_reasoning"] = expert.get("reasoning")
+    prediction["expert_model_used"] = expert.get("model")
+    prediction["expert_host_used"] = expert.get("host")
+    prediction["expert_context"] = external_context
+
+    if expert.get("used_llm"):
+        prediction.update(
+            {
+                "home_score": float(expert["home_score"]),
+                "away_score": float(expert["away_score"]),
+                "home_win_probability": float(expert["home_win_probability"]),
+                "away_win_probability": float(expert["away_win_probability"]),
+                "point_diff": float(expert["home_score"] - expert["away_score"]),
+                "predicted_home_points": float(expert["home_score"]),
+                "predicted_away_points": float(expert["away_score"]),
+                "predicted_total": float(expert["home_score"] + expert["away_score"]),
+                "home_win_prob": float(expert["home_win_probability"]),
+                "prediction_source": "gemma_cloud_expert_calibrated",
+            }
+        )
+    return prediction
 
 
 def _row_quality_details(
@@ -2579,6 +3228,7 @@ def _prediction_ai_payload(
         season = None
         week = None
 
+    _ensure_training_metrics_plot()
     return {
         "schema_version": "prediction-ai-v1",
         "purpose": "AI-readable prediction payload for analyst agents and frontend clients.",
@@ -4368,10 +5018,12 @@ def get_nfl_agent() -> Any:
     global _nfl_agent
     if _nfl_agent is None:
         try:
-            from backend.ollama.ollama_core import NFLAgent
+            from backend.ollama.llm_ollama import NFLAgent
 
             dataset_path = os.getenv("NFL_DATASET_PATH")
-            _nfl_agent = NFLAgent(csv_path=dataset_path)
+            model = (os.getenv("OLLAMA_MODEL", "").split(",")[0].strip() or None)
+            host = os.getenv("OLLAMA_BASE_URL") or os.getenv("OLLAMA_HOST")
+            _nfl_agent = NFLAgent(csv_path=dataset_path, model=model, host=host)
         except Exception as exc:
             logging.exception("[PremiumAI] Failed to initialize NFLAgent")
             raise HTTPException(
@@ -4914,6 +5566,13 @@ async def predict_game(payload: PredictRequest, request: Request) -> Dict[str, A
         "mode": "production",
         "win_classifier_used": bool(clf_used),
     }
+    _attach_prediction_access_fields(result, request)
+    result = await _apply_expert_prediction_layer(
+        result,
+        row_df=row,
+        score_full_df=score_full_df,
+        request=request,
+    )
     _attach_prediction_access_fields(result, request)
 
     state.last_prediction_at = generated_at

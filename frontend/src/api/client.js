@@ -289,8 +289,17 @@ function extractObjectPayload(payload, keys = []) {
   return {};
 }
 
+const TEAM_CODE_ALIASES = {
+  LA: "LAR",
+  STL: "LAR",
+  SD: "LAC",
+  OAK: "LV",
+  WSH: "WAS",
+};
+
 function normalizeTeamCode(value) {
-  return (value ?? "").toString().trim().toUpperCase();
+  const code = (value ?? "").toString().trim().toUpperCase();
+  return TEAM_CODE_ALIASES[code] || code;
 }
 
 function toNumberOrNull(value) {
@@ -333,8 +342,8 @@ function normalizeScheduleRows(rows) {
       week: week ?? game?.week,
       home_abbr: home || game?.home_abbr,
       away_abbr: away || game?.away_abbr,
-      home_team: game?.home_team || home,
-      away_team: game?.away_team || away,
+      home_team: home || game?.home_team,
+      away_team: away || game?.away_team,
     };
   });
 }

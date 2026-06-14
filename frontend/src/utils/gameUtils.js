@@ -12,6 +12,14 @@ function toNumberOrNull(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+const TEAM_CODE_ALIASES = {
+  LA: "LAR",
+  STL: "LAR",
+  SD: "LAC",
+  OAK: "LV",
+  WSH: "WAS",
+};
+
 /**
  * Normalize a team identifier into the uppercase code style expected by the API.
  *
@@ -19,7 +27,8 @@ function toNumberOrNull(value) {
  * so the UI normalizes early and then reuses that value everywhere.
  */
 export function normalizeTeamCode(value) {
-  return (value ?? "").toString().trim().toUpperCase();
+  const code = (value ?? "").toString().trim().toUpperCase();
+  return TEAM_CODE_ALIASES[code] || code;
 }
 
 /**
@@ -83,8 +92,8 @@ export function normalizeMatchup(gameLike = {}) {
     week: getGameWeek(gameLike),
     home_team: homeTeam,
     away_team: awayTeam,
-    home_abbr: gameLike?.home_abbr ?? homeTeam,
-    away_abbr: gameLike?.away_abbr ?? awayTeam,
+    home_abbr: homeTeam || gameLike?.home_abbr,
+    away_abbr: awayTeam || gameLike?.away_abbr,
     home_logo: gameLike?.home_logo ?? null,
     away_logo: gameLike?.away_logo ?? null,
     kickoff: gameLike?.kickoff ?? null,

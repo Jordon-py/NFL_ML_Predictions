@@ -437,3 +437,73 @@ Verification result: Compile passed for the touched backend runtime and route mo
 Remaining issues: The backend should be redeployed after this commit so Heroku matches the local 2026 runtime default.
 
 Recommended next step: Run the backend test suite, commit the runtime alignment, redeploy Heroku, and repeat production API smoke checks.
+
+## 2026-06-13 - Gemma Cloud expert prediction layer
+
+Summary: Fixed the broken `_prediction_ai_payload` flow, routed the active `/predict` path through the canonical API runtime, and added a Gemma Cloud expert layer that combines the ML output, neural score-model provenance, calibrated classifier metrics, ESPN record/injury context, and a three-sentence reasoning payload. The prediction card now displays the expert-adjusted score/confidence from `/predict` and uses the returned expert reasoning for the existing Premium AI Breakdown panel without a second request.
+
+Files changed: backend/main.py, backend/services/api_runtime.py, backend/ollama/client.py, backend/tests/test_ai_access_payloads.py, backend/tests/test_ollama_config.py, frontend/src/components/Card/Card.jsx, frontend/src/components/Card/TeamGrid.test.jsx, backend/.env.
+
+Commands run: `backend\.venv\Scripts\python.exe -m py_compile backend\services\api_runtime.py backend\ollama\client.py backend\ollama\llm_ollama.py backend\tests\test_ai_access_payloads.py backend\tests\test_ollama_config.py`; `backend\.venv\Scripts\python.exe -m py_compile backend\main.py backend\services\api_runtime.py backend\ollama\client.py backend\ollama\llm_ollama.py`; `backend\.venv\Scripts\python.exe -m pytest backend\tests\test_ai_access_payloads.py backend\tests\test_ollama_config.py backend\tests\test_backend_regression.py -q -o addopts=''`; `cd frontend; npm test -- --run src/components/Card/TeamGrid.test.jsx`; `cd frontend; npm run build`; local Uvicorn smoke on `http://127.0.0.1:8010`; live `/health`, `/openapi.json`, `/predict`, and `/premium/explain` checks; official Ollama Cloud docs check.
+
+Verification result: Backend compile passed. Focused backend tests passed: 31 passed. Card test passed: 3 passed. Frontend production build passed. Local `/health` returned `status=healthy` with models `home`, `away`, and `win`. Live `/openapi.json` exposes `model_prediction`, `expert_prediction`, and `expert_reasoning`. Live `/predict` for KC at BUF season 2025 week 1 returned `prediction_source=gemma_cloud_expert_calibrated`, `expert_used_llm=true`, `expert_model_used=gemma4:31b-cloud`, `expert_host_used=https://ollama.com`, and `model_prediction.neural_network_used=true`. Live `/premium/explain` also returned `model_used=gemma4:31b-cloud` and `host_used=https://ollama.com`.
+
+Remaining issues: Chrome browser verification is pending because Chrome is installed and the Codex Chrome Extension/native host are installed and enabled, but Chrome is not currently running. The Chrome workflow requires user approval before launching Chrome.
+
+Recommended next step: Launch or approve launching Chrome, then open `http://127.0.0.1:5173` and verify the card shows the Gemma expert layer badge, expert score/confidence, and three-sentence reasoning from `/predict`.
+
+## 2026-06-14 - LLM-adjusted predict flow repair
+
+Summary: Repaired the active LLM-adjusted `/predict` flow after a circular import broke focused backend tests. `llm_ollama.py` no longer imports the route package or Pydantic response model, `api_runtime.py` no longer imports Ollama facade code at module import time, the ML prediction remains preserved under `model_prediction`, and the expert layer now adds bounded NFLMemory plus ESPN context before optionally applying validated LLM-adjusted scores and probabilities. The legacy `backend/routes.py` predict route is now a plain compatibility route and no longer tries to return a `chat` field that conflicts with its response model.
+
+Files changed: backend/ollama/llm_ollama.py, backend/services/api_runtime.py, backend/routes.py, alfred.log.md.
+
+Commands run: `python -m py_compile backend\main.py backend\routes.py backend\routes\api.py backend\services\api_runtime.py backend\ollama\llm_ollama.py backend\ollama\client.py backend\ollama\memory.py`; `python -m pytest backend\tests\test_ollama_config.py backend\tests\test_ai_access_payloads.py -q -o addopts=''`; `python -m pytest backend\tests -q -o addopts=''`; `cd frontend; npm test -- --run TeamGrid.test.jsx`; `cd frontend; npm run build`; `backend\.venv\Scripts\python.exe -m pytest backend\tests\test_ollama_config.py backend\tests\test_ai_access_payloads.py -q -o addopts=''`; FastAPI TestClient smoke for `/predict` with SEA vs NE season 2026 week 1.
+
+Verification result: Compile passed. Focused backend tests passed in system Python and backend venv: 13 passed. Full backend suite passed: 39 passed. Frontend card test passed: 3 passed. Frontend production build passed. `/predict` smoke returned 200 from the backend venv with valid score/probability fields, `model_prediction` present, `expert_prediction.used_llm=false`, and a safe Ollama fallback reason instead of a 503.
+
+Remaining issues: System Python is `C:\Python313\python.exe` with scikit-learn 1.5.2 and cannot load the saved win model requiring scikit-learn 1.7.2, so runtime smokes should use `backend\.venv\Scripts\python.exe`. Ollama was not available for the local smoke, so the verified path is the intended ML fallback path rather than a live LLM-adjusted result.
+
+Recommended next step: Start the backend with `backend\.venv\Scripts\python.exe -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload`, make sure Ollama Cloud/local credentials are available, then click Predict in the UI and confirm `expert_prediction.used_llm=true` or the visible fallback reason.
+
+## 2026-06-14 - Chrome verification for LLM-adjusted predict button
+
+Summary: Verified the local browser prediction flow after starting the backend with `backend\.venv` and serving the Vite frontend. Chrome loaded the dashboard, signed in with a synthetic local test account, clicked the first Week 1 `Generate prediction` button, and rendered the Gemma Cloud expert prediction card for NE at SEA.
+
+Files changed: alfred.log.md.
+
+Commands run: started backend with `backend\.venv\Scripts\python.exe -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload`; started frontend with `npm run dev -- --host 127.0.0.1 --port 5173`; checked `/health`; posted a direct `/predict` smoke for SEA vs NE season 2026 week 1; opened Chrome at `http://127.0.0.1:5173/app`; clicked `Generate prediction`; checked `/history`; repeated the direct `/predict` smoke for the same matchup.
+
+Verification result: Backend `/health` returned `status=healthy`, `production_ready=true`, and loaded `home`, `away`, and `win` models. Direct `/predict` returned `prediction_source=gemma_cloud_expert_calibrated`, `expert_prediction.used_llm=true`, `expert_model_used=gemma4:31b-cloud`, `expert_host_used=https://ollama.com`, `fallback_reason=null`, and `model_prediction` present. Chrome showed the first prediction card with `Gemma Cloud Expert Layer`, confidence `66%`, `NE 23 - SEA 21`, and the expert reasoning text from the LLM response.
+
+Remaining issues: The next Week 1 card, SF at LAR, returned `Prediction unavailable` with `Unknown team code(s).`, which appears to be a separate team-alias handling issue for `LAR` and not an Ollama/expert-layer failure.
+
+Recommended next step: Fix team-code normalization for `LAR` in the prediction path so every loaded slate card can predict from the UI.
+
+## 2026-06-14 - Rams alias fix and three-card plausibility validation
+
+Summary: Fixed the `LA` schedule alias path so Rams games predict as `LAR` end to end. Backend team-code normalization now loads the repo dataset alias map from `backend/data`, keeps safe built-in relocation defaults, and handles full legacy team names. Frontend schedule/client/card state now canonicalizes relocated team aliases before display, prediction requests, bulk prediction, and reset actions. Rechecked the first three Week 1 card predictions against local dataset features, ESPN-derived context, and current official offseason news for plausibility.
+
+Files changed: backend/utils/functions_for_main.py, backend/tests/test_backend_regression.py, frontend/src/utils/gameUtils.js, frontend/src/api/client.js, frontend/src/api/client.test.js, frontend/src/hooks/usePredictionState.js, frontend/src/components/Card/TeamGrid.jsx, frontend/src/components/Card/TeamGrid.test.jsx, alfred.log.md.
+
+Commands run: `backend\.venv\Scripts\python.exe -m py_compile backend\utils\functions_for_main.py backend\services\api_runtime.py backend\main.py backend\tests\test_backend_regression.py`; `backend\.venv\Scripts\python.exe -m pytest backend\tests\test_backend_regression.py -q -o addopts=''`; `backend\.venv\Scripts\python.exe -m pytest backend\tests -q -o addopts=''`; `cd frontend; npm test -- --run src\components\Card\TeamGrid.test.jsx src\api\client.test.js`; `cd frontend; npm run build`; live `/predict` smoke for `LA` vs `SF`; live `/predict` smokes for NE at SEA, SF at LAR, and CHI at CAR; Chrome card smoke for the first three Week 1 cards; official team-news web research for Patriots, Seahawks, 49ers, Rams, Panthers, and Bears offseason context.
+
+Verification result: Backend compile passed. Focused backend regression passed: 20 passed. Full backend suite passed: 41 passed. Frontend card/API tests passed: 15 passed. Frontend production build passed. Live `/predict` for `LA` vs `SF` returned `home_team=LAR`, `away_team=SF`, `prediction_source=gemma_cloud_expert_calibrated`, `expert_prediction.used_llm=true`, `expert_model_used=gemma4:31b-cloud`, `expert_host_used=https://ollama.com`, and `model_prediction` present. Chrome rendered three generated card predictions without retry errors, all with Gemma expert badges and canonical `LAR` labels.
+
+Remaining issues: NE at SEA is plausible but lower-confidence than the displayed 66% away confidence because the local dataset still gives Seattle a large pregame Elo edge and better recent-form indicators. The LLM currently calibrates very close to the raw ML output rather than materially overriding it when news/context disagrees, which is safe but means reliability still depends heavily on dataset/model quality.
+
+Recommended next step: Add a small UI-facing reliability badge or explanation line that compares model output against dataset/news validation signals, especially when the model favorite conflicts with Elo, recent form, or prior-season context.
+
+## 2026-06-14 - Production env alignment before redeploy
+
+Summary: Prepared the expert-prediction release for backend and frontend deployment. Heroku config now points production at the 2026 schedule, packaged model bundle, and Ollama Cloud expert-layer settings. Vercel production env was checked from a temporary pulled env file and already points `VITE_API_BASE_URL` at the Heroku backend host. `app.json` now documents the 2026 schedule default and optional Ollama Cloud env keys, and `backend/requirements.txt` now matches the FastAPI/Starlette compatibility used by the root Heroku requirements.
+
+Files changed: app.json, backend/requirements.txt, alfred.log.md.
+
+Commands run: `git fetch --all --prune`; redacted `heroku config -a nfl-predict --json` inspection; redacted `backend/.env` key inspection; `heroku config:set -a nfl-predict SCHEDULE_PATH=data/Nfl_schedule_2026.csv MODELS_DIR=models OLLAMA_MODEL=gemma4:31b-cloud,gemma4:e4b OLLAMA_BASE_URL=https://ollama.com OLLAMA_TIMEOUT_S=120 EXPERT_OLLAMA_TIMEOUT_S=120`; redacted `heroku config:set` for `OLLAMA_API_KEY`; `vercel env ls`; `vercel env pull --environment=production` to a temp file; `backend\.venv\Scripts\python.exe -m py_compile backend\main.py backend\routes.py backend\routes\api.py backend\services\api_runtime.py backend\ollama\llm_ollama.py backend\ollama\client.py backend\ollama\memory.py backend\utils\functions_for_main.py`; `backend\.venv\Scripts\python.exe -m pip install --dry-run -r backend\requirements.txt`; `backend\.venv\Scripts\python.exe -m pip install --dry-run -r requirements.txt`; `backend\.venv\Scripts\python.exe -m pytest backend\tests -q -o addopts=''`; `cd frontend; npm test -- --run src\components\Card\TeamGrid.test.jsx src\api\client.test.js`; `cd frontend; npm run build`; `git diff --check`.
+
+Verification result: Local branch was even with `origin/master` before staging. Heroku config shows `SCHEDULE_PATH=data/Nfl_schedule_2026.csv`, `MODELS_DIR=models`, Ollama Cloud model/base URL, and `OLLAMA_API_KEY=[redacted present]`. Vercel production `VITE_API_BASE_URL` is present and resolves to the Heroku backend host. Compile passed. Both requirement dry-runs resolved. Backend tests passed: 41 passed. Frontend focused tests passed: 15 passed. Frontend production build passed. `git diff --check` reported no whitespace errors, only expected LF-to-CRLF warnings.
+
+Remaining issues: Production verification still needs to be repeated after the backend and frontend deploys finish from the new commit.
+
+Recommended next step: Commit, push to GitHub and Heroku, deploy the Vercel frontend, then verify production `/health`, `/status/models`, `/schedule`, `/predict`, and the deployed dashboard prediction card.

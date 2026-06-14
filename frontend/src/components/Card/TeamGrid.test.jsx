@@ -69,4 +69,59 @@ describe("TeamGrid slate filters", () => {
     expect(screen.queryByText("Buffalo Bills")).toBeNull();
     expect(screen.getByText("Philadelphia Eagles")).toBeTruthy();
   });
+
+  it("normalizes Rams schedule aliases before prediction", () => {
+    const onPredict = vi.fn();
+    const ramsGame = {
+      season: 2026,
+      week: 1,
+      away_team: "SF",
+      away_abbr: "SF",
+      home_team: "LA",
+      home_abbr: "LA",
+      home_name: "Los Angeles Rams",
+      away_name: "San Francisco 49ers",
+    };
+
+    render(<TeamGrid week={1} games={[ramsGame]} onPredict={onPredict} />);
+
+    expect(screen.getByText("LAR")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Generate prediction" }));
+
+    expect(onPredict).toHaveBeenCalledTimes(1);
+    expect(onPredict.mock.calls[0][0].home_team).toBe("LAR");
+    expect(onPredict.mock.calls[0][0].home_abbr).toBe("LAR");
+  });
+
+  it("renders Gemma expert reasoning from the prediction response", async () => {
+    const expertReasoning =
+      "Kansas City's road efficiency keeps this close. Buffalo's home win profile and healthier defensive context support the edge. The calibrated model projection is strongest at 27-23 with a 64% Bills confidence.";
+    const predictions = {
+      "2025-1-BUF-KC": {
+        game_id: "2025_01_KC_BUF",
+        home_score: 27,
+        away_score: 23,
+        home_win_probability: 0.64,
+        away_win_probability: 0.36,
+        prediction_source: "gemma_cloud_expert_calibrated",
+        expert_reasoning: expertReasoning,
+        expert_prediction: {
+          used_llm: true,
+          reasoning: expertReasoning,
+        },
+      },
+    };
+
+    render(<TeamGrid week={1} games={games} predictions={predictions} />);
+
+    expect(screen.getByText("Gemma Cloud Expert Layer")).toBeTruthy();
+    expect(await screen.findByText(/Buffalo's home win profile/)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /Hide Premium AI Breakdown/i }));
+    expect(screen.queryByText(/Buffalo's home win profile/)).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /View Premium AI Breakdown/i }));
+    expect(await screen.findByText(/calibrated model projection/)).toBeTruthy();
+  });
 });

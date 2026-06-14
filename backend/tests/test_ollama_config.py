@@ -11,6 +11,14 @@ class FakeMemory:
 def test_normalize_ollama_cloud_api_url_for_python_sdk():
     assert ollama_client._normalize_ollama_host("https://ollama.com/api") == "https://ollama.com"
     assert ollama_client._normalize_ollama_host("https://ollama.com/api/") == "https://ollama.com"
+    assert ollama_client._normalize_ollama_host("http://ollama.com") == "https://ollama.com"
+    assert ollama_client._normalize_ollama_host("http://ollama.com/api") == "https://ollama.com"
+
+
+def test_primary_model_defaults_to_gemma_cloud(monkeypatch):
+    monkeypatch.delenv("OLLAMA_MODEL", raising=False)
+
+    assert ollama_client._primary_model() == "gemma4:31b-cloud"
 
 
 def test_cloud_host_is_preferred_for_cloud_model_with_api_key(monkeypatch):
@@ -79,5 +87,22 @@ def test_nfl_agent_uses_cloud_host_from_current_env(monkeypatch):
 
     agent = llm_ollama.NFLAgent(model="gemma4:31b-cloud")
 
+    assert agent.host == "https://ollama.com"
+    assert str(agent.client._client.base_url).rstrip("/") == "https://ollama.com"
+
+
+def test_api_runtime_premium_agent_uses_cloud_aware_facade(monkeypatch):
+    from backend.ollama import llm_ollama
+    from backend.services import api_runtime
+
+    monkeypatch.setenv("OLLAMA_API_KEY", "test-key")
+    monkeypatch.setenv("OLLAMA_MODEL", "gemma4:31b-cloud,gemma4:e4b")
+    monkeypatch.setenv("OLLAMA_BASE_URL", "http://ollama.com/api,http://localhost:11434")
+    monkeypatch.setattr(llm_ollama, "NFLMemory", FakeMemory)
+    monkeypatch.setattr(api_runtime, "_nfl_agent", None)
+
+    agent = api_runtime.get_nfl_agent()
+
+    assert agent.model == "gemma4:31b-cloud"
     assert agent.host == "https://ollama.com"
     assert str(agent.client._client.base_url).rstrip("/") == "https://ollama.com"

@@ -60,19 +60,42 @@ from sklearn.base import BaseEstimator
 # Constants and helper functions
 # Team abbreviation normalization map (handles legacy/ambiguous codes like LA->LAR).
 # --------------------------------------------------------------------
-DATA_DIR = Path(os.getenv("DATA_DIR", "data"))
-TEAM_ABBR_MAP: Dict[str, str] = {}
+DATA_DIR = Path(os.getenv("DATA_DIR", Path(__file__).resolve().parents[1] / "data"))
+DEFAULT_TEAM_ABBR_MAP: Dict[str, str] = {
+    "LA": "LAR",
+    "STL": "LAR",
+    "SD": "LAC",
+    "OAK": "LV",
+    "WSH": "WAS",
+}
+TEAM_NAME_MAP: Dict[str, str] = {
+    "LOS ANGELES RAMS": "LAR",
+    "ST. LOUIS RAMS": "LAR",
+    "ST LOUIS RAMS": "LAR",
+    "LOS ANGELES CHARGERS": "LAC",
+    "SAN DIEGO CHARGERS": "LAC",
+    "LAS VEGAS RAIDERS": "LV",
+    "OAKLAND RAIDERS": "LV",
+    "WASHINGTON COMMANDERS": "WAS",
+    "WASHINGTON FOOTBALL TEAM": "WAS",
+    "WASHINGTON REDSKINS": "WAS",
+}
+TEAM_ABBR_MAP: Dict[str, str] = dict(DEFAULT_TEAM_ABBR_MAP)
 try:
-    _abbr_map_path = DATA_DIR / "team_abbr_map.json"
-    if _abbr_map_path.exists():
+    _abbr_map_candidates = [
+        DATA_DIR / "team_abbr_map.json",
+        DATA_DIR / "datasets" / "team_abbr_map.json",
+    ]
+    _abbr_map_path = next((path for path in _abbr_map_candidates if path.exists()), None)
+    if _abbr_map_path is not None:
         with open(_abbr_map_path, "r", encoding="utf-8") as fh:
             raw = json.load(fh) or {}
         if isinstance(raw, dict):
-            TEAM_ABBR_MAP = {
+            TEAM_ABBR_MAP.update({
                 str(k).strip().upper(): str(v).strip().upper()
                 for k, v in raw.items()
                 if str(k).strip() and str(v).strip()
-            }
+            })
             if TEAM_ABBR_MAP:
                 logging.info("[Teams] Loaded %d abbreviation aliases from %s", len(TEAM_ABBR_MAP), _abbr_map_path)
 except Exception as e:
@@ -219,8 +242,8 @@ def _normalize_team_code(team: str) -> str:
     - Applies TEAM_ABBR_MAP aliasing (LA -> LAR, etc.) when present
     """
     t = (team or "").strip().upper()
-    if TEAM_ABBR_MAP:
-        t = TEAM_ABBR_MAP.get(t, t)
+    t = TEAM_NAME_MAP.get(t, t)
+    t = TEAM_ABBR_MAP.get(t, t)
     return t
 
 

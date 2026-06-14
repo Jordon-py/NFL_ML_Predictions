@@ -59,12 +59,26 @@
     },
     "SCHEDULE_PATH": {
       "description": "Optional packaged schedule CSV override relative to backend/",
-      "value": "data/Nfl_schedule_2025.csv",
+      "value": "data/Nfl_schedule_2026.csv",
       "required": false
     },
     "MODELS_DIR": {
       "description": "Path to the canonical packaged model bundle relative to backend/",
       "value": "models",
+      "required": false
+    },
+    "OLLAMA_MODEL": {
+      "description": "Primary expert-layer Ollama model. Use a cloud model with OLLAMA_API_KEY for deployed expert predictions.",
+      "value": "gemma4:31b-cloud",
+      "required": false
+    },
+    "OLLAMA_BASE_URL": {
+      "description": "Comma-separated Ollama host candidates. Production should prefer Ollama Cloud.",
+      "value": "https://ollama.com",
+      "required": false
+    },
+    "OLLAMA_API_KEY": {
+      "description": "Ollama Cloud API key for expert predictions. Do not commit a value.",
       "required": false
     }
   },

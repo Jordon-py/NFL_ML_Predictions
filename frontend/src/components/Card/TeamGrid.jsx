@@ -172,7 +172,7 @@ export default function TeamGrid({
             className="team-grid__btn"
             onClick={
               typeof onPredictAll === 'function'
-                ? () => onPredictAll(filteredGames)
+                ? () => onPredictAll(filteredGames.map((game) => normalizeMatchup(game)))
                 : undefined
             }
             disabled={
@@ -266,8 +266,8 @@ export default function TeamGrid({
               loading={isGameLoading}
               error={errorMessage}
               index={index}
-              onClick={typeof onPredict === 'function' ? () => onPredict(game) : undefined}
-              onReset={typeof onReset === 'function' ? () => onReset(game) : undefined}
+              onClick={typeof onPredict === 'function' ? () => onPredict(matchup) : undefined}
+              onReset={typeof onReset === 'function' ? () => onReset(matchup) : undefined}
             />
           );
         })}

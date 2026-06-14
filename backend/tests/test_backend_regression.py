@@ -15,6 +15,7 @@ from backend.contracts.model_bundle_contract import validate_model_bundle_contra
 from backend.scripts import build_csv_datasets_v3 as csv_builder
 from backend.scripts import builddataset, train_models
 from backend.services.pipeline_status import build_pipeline_status
+from backend.utils import functions_for_main as fn_main
 from backend.utils.ops_reporting import file_sha256, resolve_latest_dataset
 
 
@@ -125,6 +126,34 @@ def test_model_dir_selection_prefers_active_dataset_hash(monkeypatch, tmp_path):
     _write_minimal_model_bundle(matching_default, "active-dataset-hash")
 
     assert main._pick_best_models_dir([stale_current, matching_default]) == matching_default
+
+
+def test_rams_aliases_normalize_to_dataset_code():
+    assert fn_main._normalize_team_code("LA") == "LAR"
+    assert fn_main._normalize_team_code("Los Angeles Rams") == "LAR"
+    assert fn_main._normalize_team_code("STL") == "LAR"
+
+
+def test_runtime_valid_team_codes_accept_rams_schedule_alias(monkeypatch):
+    monkeypatch.setattr(
+        main.state,
+        "dataset",
+        pd.DataFrame(
+            [
+                {
+                    "season": 2026,
+                    "week": 1,
+                    "home_team": "LAR",
+                    "away_team": "SF",
+                }
+            ]
+        ),
+    )
+
+    codes = main.state.valid_team_codes()
+
+    assert "LA" in codes
+    assert "LAR" in codes
 
 
 def test_player_stats_preserve_available_seasons_when_future_season_missing(monkeypatch):

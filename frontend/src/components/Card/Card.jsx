@@ -186,6 +186,19 @@ const extractPremiumErrorMessage = (error) => {
   return error?.message || 'Failed to load premium breakdown';
 };
 
+const getExpertReasoningText = (prediction) => {
+  const reasoning =
+    prediction?.expert_reasoning ??
+    prediction?.expert_prediction?.reasoning ??
+    prediction?.expert_prediction?.reasoning_sentences;
+
+  if (Array.isArray(reasoning)) {
+    return reasoning.map((line) => String(line).trim()).filter(Boolean).join(' ');
+  }
+
+  return typeof reasoning === 'string' ? reasoning.trim() : '';
+};
+
 /** Build the main card CSS class string. */
 const buildCardClassNames = ({ hasPrediction, loading, error, debugClicked }) =>
   [
@@ -367,6 +380,24 @@ export default function Card({
   const [loadingPremium, setLoadingPremium] = React.useState(false);
   const [premiumError, setPremiumError] = React.useState(null);
   const [showPremiumExplain, setShowPremiumExplain] = React.useState(false);
+  const expertReasoningText = React.useMemo(
+    () => getExpertReasoningText(prediction),
+    [prediction]
+  );
+  const expertLayerUsed = prediction?.expert_prediction?.used_llm === true;
+  const premiumDisplayText = premiumExplain || expertReasoningText;
+
+  React.useEffect(() => {
+    setPremiumExplain(null);
+    setPremiumError(null);
+    setShowPremiumExplain(Boolean(expertReasoningText));
+  }, [
+    expertReasoningText,
+    prediction?.game_id,
+    prediction?.prediction_source,
+    homeTeam,
+    awayTeam,
+  ]);
 
   const { hasScoreDetails, classifierUsed, isExpert, maxConfidence, sim, homeScore, awayScore, homePct, awayPct } =
     derivePredictionMeta(prediction);
@@ -407,6 +438,11 @@ export default function Card({
     try {
       event?.stopPropagation?.();
       if (loadingPremium) return;
+      if (expertReasoningText) {
+        setPremiumError(null);
+        setShowPremiumExplain((current) => !current);
+        return;
+      }
       if (premiumExplain) {
         setShowPremiumExplain(!showPremiumExplain);
         return;
@@ -577,7 +613,11 @@ export default function Card({
 
               <div className={styles.predictionBody}>
                 <div className={styles.badgeRow}>
-                  {isExpert ? (
+                  {expertLayerUsed ? (
+                    <span className={`${styles.badge} ${styles.expertBadge}`}>
+                      Gemma Cloud Expert Layer
+                    </span>
+                  ) : isExpert ? (
                     <span className={`${styles.badge} ${styles.expertBadge}`}>
                       Ensemble Mixture (ML + MC)
                     </span>
@@ -675,13 +715,13 @@ export default function Card({
                     </div>
                   )}
 
-                  {showPremiumExplain && premiumExplain && (
+                  {showPremiumExplain && premiumDisplayText && (
                     <div className={styles.premiumContent}>
                       <div className={styles.premiumContentHeader}>
-                        <span>🤖 Premium AI Analyst Report</span>
+                        <span>{expertReasoningText ? 'Gemma Cloud Expert Reasoning' : '🤖 Premium AI Analyst Report'}</span>
                       </div>
                       <div className={styles.premiumText}>
-                        {premiumExplain.split('\n').map((line, idx) => {
+                        {premiumDisplayText.split('\n').map((line, idx) => {
                           const trimmed = line.trim();
                           if (trimmed.startsWith('###')) {
                             return <h4 key={idx} className={styles.premiumH4}>{trimmed.replace('###', '')}</h4>;

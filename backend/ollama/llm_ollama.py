@@ -57,6 +57,42 @@ class NFLAgent:
         self.df = self.memory.df
         self._data_summary = self.memory.data_summary
 
+    async def predict(self, payload: Dict[str, Any], df: Optional[Any] = None) -> Dict[str, Any]:
+        """Return a JSON-like expert prediction without importing FastAPI schemas."""
+        context = self._get_relevant_context(
+            f"{payload.get('away_team', '')} at {payload.get('home_team', '')} "
+            f"{payload.get('season', '')} week {payload.get('week', '')}"
+        )
+        messages = [
+            {"role": "system", "content": self._build_system_prompt()},
+            {
+                "role": "user",
+                "content": (
+                    "Return ONLY valid JSON with any adjusted score/probability fields you can support.\n"
+                    f"ML prediction payload:\n{payload}\n\n"
+                    f"NFLMemory context:\n{context}"
+                ),
+            },
+        ]
+        try:
+            response = await self.client.chat(
+                model=self.model,
+                messages=messages,
+                format="json",
+            )
+            content = (response.message.content or "").strip()
+        except Exception as exc:
+            log.warning("NFLAgent prediction chat failed: %s", exc)
+            return {"used_llm": False, "reason": str(exc).splitlines()[0]}
+
+        try:
+            import json
+
+            parsed = json.loads(content)
+            return parsed if isinstance(parsed, dict) else {"raw": parsed}
+        except Exception:
+            return {"raw": content}
+
     def _summarize_data(self) -> str:
         """Compatibility wrapper for callers that used the old private method."""
         return self.memory.summarize_data()

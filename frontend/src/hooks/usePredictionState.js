@@ -78,8 +78,18 @@ const toNumberOrNull = (value) => {
   return Number.isFinite(n) ? n : null;
 };
 
-const normalizeTeamCode = (value) =>
-  (value ?? "").toString().trim().toUpperCase();
+const TEAM_CODE_ALIASES = {
+  LA: "LAR",
+  STL: "LAR",
+  SD: "LAC",
+  OAK: "LV",
+  WSH: "WAS",
+};
+
+const normalizeTeamCode = (value) => {
+  const code = (value ?? "").toString().trim().toUpperCase();
+  return TEAM_CODE_ALIASES[code] || code;
+};
 
 function dedupeGamesByKey(rows) {
   if (!Array.isArray(rows)) return [];
@@ -119,8 +129,8 @@ function normalizeSchedule(rows) {
       week: week ?? game?.week,
       home_abbr: home || game?.home_abbr,
       away_abbr: away || game?.away_abbr,
-      home_team: game?.home_team || home,
-      away_team: game?.away_team || away,
+      home_team: home || game?.home_team,
+      away_team: away || game?.away_team,
       home_name: game?.home_name || game?.home_team || home,
       away_name: game?.away_name || game?.away_team || away,
       game_id: gameId,

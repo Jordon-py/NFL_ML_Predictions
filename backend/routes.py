@@ -26,13 +26,14 @@ from backend.utils.main_helpers import (
     _AWAY_COLS,
     _STADIUM_COLS,
 )
+
 from backend.prediction_store import (
     append_prediction_record,
     build_prediction_user_context,
     get_prediction_history,
     get_prediction_history_count,
 )
-from backend.services.prediction_service import PredictionService
+from backend.pipeline_models import StoredPredictionRequest
 
 router = APIRouter()
 log = logging.getLogger(__name__)
@@ -186,22 +187,21 @@ async def team_logos(request: Request) -> TeamLogosResponse:
     # Use main_helpers logic, essentially re-run but with cache intent
     # Note: main.py usually hydrates app.state.team_logos on startup
     # If not found, we try to load it
-    
+
     # We can try to reuse the global logic if we knew the path, but let's just return empty if not cached
     # to encourage main.py being the source of truth.
     return TeamLogosResponse(teams={})
 
 @router.post("/predict", response_model=PredictionResponse)
 async def predict(req: PredictionRequest, request: Request) -> PredictionResponse:
-    service: Optional[PredictionService] = getattr(request.app.state, "service", None)
+    """Legacy compatibility endpoint; the UI uses api_runtime.predict_game."""
+    service: Optional[Any] = getattr(request.app.state, "service", None)
     if not service:
         raise HTTPException(status_code=503, detail="Prediction service not initialized")
 
     try:
-        # Service returns a nested backend.schemas.PredictionResponse
-        # We need to flatten it to our local PredictionResponse
-        from backend.schemas import PredictionRequest as UnifiedRequest
-        
+        UnifiedRequest = PredictionRequest
+
         # Convert local legacy req to unified req
         unified_req = UnifiedRequest(
             home_team=req.home_team,
@@ -209,9 +209,9 @@ async def predict(req: PredictionRequest, request: Request) -> PredictionRespons
             season=req.season,
             week=req.week
         )
-        
+
         res = service.predict(unified_req)
-        
+
         # Flatten
         flat_pred = PredictionResponse(
             home_score=res.scores.home_score,
@@ -225,7 +225,11 @@ async def predict(req: PredictionRequest, request: Request) -> PredictionRespons
 
         # best-effort history append
         try:
-            append_prediction_record(_resolve_user_context(request), req, flat_pred.model_dump())
+            append_prediction_record(
+                _resolve_user_context(request),
+                StoredPredictionRequest(**req.model_dump()),
+                flat_pred.model_dump(),
+            )
         except Exception as exc:
             log.warning("Legacy prediction history append failed: %s", exc)
 
@@ -240,12 +244,12 @@ async def predict_next_week(request: Request, season: int = 2025) -> NextWeekPre
     # Re-use local schedule fetch
     sched = await schedule_next_week(request, season=season)
     out: List[PredictedGame] = []
-    
+
     # We can just loop and call our local predict for convenience/consistency
     for g in sched.games:
         try:
             p_req = PredictionRequest(
-                home_team=g.home_team, 
+                home_team=g.home_team,
                 away_team=g.away_team,
                 season=g.season,
                 week=g.week
@@ -263,7 +267,7 @@ async def predict_next_week(request: Request, season: int = 2025) -> NextWeekPre
         except Exception as e:
             log.warning(f"Skipping game {g.home_team} vs {g.away_team}: {e}")
             continue
-            
+
     return NextWeekPredictionsResponse(games=out)
 
 @router.get("/status/overview")

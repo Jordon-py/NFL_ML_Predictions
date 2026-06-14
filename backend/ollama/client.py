@@ -62,6 +62,8 @@ def _normalize_ollama_host(raw: Optional[str]) -> Optional[str]:
         return None
     if value.lower().endswith("/api"):
         value = value[:-4].rstrip("/")
+    if value.lower() == "http://ollama.com":
+        value = "https://ollama.com"
     return value
 
 
@@ -103,7 +105,7 @@ def ollama_host_candidates(primary_host: Optional[str] = None, model: Optional[s
 
 
 def _primary_model() -> str:
-    return (os.getenv("OLLAMA_MODEL", "gemma4:e4b").split(",")[0].strip() or "gemma4:e4b")
+    return (os.getenv("OLLAMA_MODEL", "gemma4:31b-cloud").split(",")[0].strip() or "gemma4:31b-cloud")
 
 
 OLLAMA_HOST = ollama_host_candidates(model=_primary_model())[0]

@@ -177,6 +177,36 @@ describe("client compatibility fallbacks", () => {
     expect(urls.filter((url) => url.includes("/schedules/Nfl_schedule_2024.csv"))).toHaveLength(1);
   });
 
+  it("normalizes relocated team aliases in schedule rows", async () => {
+    const fetchMock = vi.fn(async (url) => {
+      const target = String(url);
+      if (target.includes("/schedule?season=2026&week=1")) {
+        return jsonResponse([
+          {
+            season: 2026,
+            week: 1,
+            home_team: "LA",
+            away_team: "SF",
+            home_abbr: "LA",
+            away_abbr: "SF",
+          },
+        ]);
+      }
+      throw new Error(`Unexpected fetch: ${target}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { getScheduleForWeek } = await import("./client.js");
+
+    const rows = await getScheduleForWeek(2026, 1);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].home_team).toBe("LAR");
+    expect(rows[0].home_abbr).toBe("LAR");
+    expect(rows[0].away_abbr).toBe("SF");
+  });
+
   it("hides already-played rows from the default next-slate response", async () => {
     const fetchMock = vi.fn(async (url) => {
       const target = String(url);
